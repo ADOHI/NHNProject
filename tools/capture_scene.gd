@@ -10,6 +10,7 @@ extends SceneTree
 ##   zoom3      휠을 3번 굴린다 (음수면 축소: zoom-3)
 ##   debug      개발 정보 패널을 켠다
 ##   showcase   메인 씬 대신 스타일 확인용 씬을 띄운다
+##   sketch_a   방향 스케치를 띄운다 (a / b / c)
 ##   perf       수직동기를 끄고 프레임 시간을 잰다 (웹 60fps 제약 확인용)
 
 const _WARMUP_FRAMES := 12
@@ -40,7 +41,23 @@ func _initialize() -> void:
 		_perf = true
 		# 수직동기가 켜져 있으면 화면 주사율이 그대로 측정값이 되어 여유를 알 수 없다.
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	var sketch := _sketch_direction()
+	if not sketch.is_empty():
+		var node := Control.new()
+		node.set_script(load("res://src/ui/style/sketch/direction_sketch.gd"))
+		node.set("direction", sketch)
+		root.add_child(node)
+		return
 	root.add_child(load(scene).instantiate())
+
+
+## sketch_a / sketch_b / sketch_c 인자에서 방향 글자만 뽑는다.
+func _sketch_direction() -> String:
+	for argument in _room_path:
+		var text := argument as String
+		if text.begins_with("sketch_"):
+			return text.substr(7)
+	return ""
 
 
 func _process(_delta: float) -> bool:
@@ -58,7 +75,7 @@ func _process(_delta: float) -> bool:
 		for room_id in _room_path:
 			if room_id == "debug":
 				_press_debug_button()
-			elif room_id == "showcase":
+			elif room_id == "showcase" or room_id.begins_with("sketch_"):
 				continue
 			elif room_id.begins_with("zoom"):
 				_zoom_board(int(room_id.substr(4)))
