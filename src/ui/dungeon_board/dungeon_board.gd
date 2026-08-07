@@ -14,11 +14,20 @@ extends Control
 ## 플레이어가 실제로 행동했다. 화면 밖의 것들(개발 패널 등)이 갱신할 신호다.
 signal player_acted
 
-const RoomNodeScene := preload("res://src/ui/dungeon_board/room_node.tscn")
+## 지도의 위치와 배율이 바뀌었다. 배경(시설 바닥)이 같은 좌표를 따라가야 한다.
+##
+## 배경이 가만히 있으면 판을 끌어도 "지도를 움직인다"는 감각이 없다.
+## 바닥이 함께 흘러야 판이 그림이 아니라 장소로 읽힌다.
+signal view_changed(pan: Vector2, zoom: float)
 
-const _EDGE_COLOR := Color(0.30, 0.33, 0.40)
-const _EDGE_BLOCKED_COLOR := Color(0.46, 0.28, 0.30)
-const _EDGE_WIDTH := 3.0
+## 통로의 상태. **그리는 방식이 여기서 갈린다.**
+enum Link {
+	LIVE,  ## 지금 방에서 실제로 지나갈 수 있는 길
+	BLOCKED,  ## 길은 있으나 고도가 막는다
+	DARK,  ## 지금 내 판단과 무관한 길
+}
+
+const RoomNodeScene := preload("res://src/ui/dungeon_board/room_node.tscn")
 
 ## 방 사이의 목표 간격.
 ##
@@ -65,16 +74,25 @@ var _dragging := false
 ## 카메라가 저 혼자 흘러간다. 사용자가 지도를 만지기 전에는 가만히 있어야 한다.
 var _pointer_moved := false
 
+## 직전에 보여 준 인접 위험도 합. 변화량을 화면이 대신 기억하기 위한 값이다.
+## 음수는 "아직 보여 준 적 없음"이다.
+var _last_threat := -1
+
 @onready var _room_layer: Control = %RoomLayer
 @onready var _room_label: Label = %RoomLabel
+@onready var _elevation_label: Label = %ElevationLabel
 @onready var _threat_label: Label = %ThreatLabel
+@onready var _threat_delta_label: Label = %ThreatDeltaLabel
 @onready var _squad_label: Label = %SquadLabel
 @onready var _hint_label: Label = %HintLabel
+@onready var _turn_label: Label = %TurnLabel
 
 
 ## 판 하나를 이 화면에 붙인다.
 func setup(run: DungeonRun, layout_seed: int) -> void:
 	_run = run
+	_last_threat = -1
+	_threat_delta_label.text = ""
 	_positions = run.blueprint.layout(layout_seed, _SPACING)
 	_build_room_nodes()
 	redraw()
@@ -102,6 +120,7 @@ func _reposition() -> void:
 		node.scale = Vector2(_zoom, _zoom)
 		node.position = _map_to_screen(id) - node.custom_minimum_size * 0.5 * _zoom
 	queue_redraw()
+	view_changed.emit(_pan, _zoom)
 
 
 ## 스쿼드가 있는 방이 화면 가운데 오도록 지도를 옮긴다.
@@ -275,32 +294,49 @@ func _detail_level() -> RoomNode.Detail:
 	return RoomNode.Detail.FULL
 
 
+## 통로를 그린다.
+##
+## **통로는 이어진 선이 아니라 점선이다.** 근거는 세계관에 있다 —
+## 던전은 방송용 시설이고, **통로는 중계 구역이 아니다.**
+## 카메라가 없는 곳이라 그림이 안 나오고, 그래서 신호가 끊긴 것처럼 보여야 한다
+## (docs/design/02-overview.md §2.6.1).
+##
+## 지금 내가 실제로 지나갈 수 있는 길만 이어진 선으로 켜진다.
+## 그 순간 판 위에서 **내 선택지가 저절로 도드라진다** — 따로 표시를 붙일 필요가 없다.
 func _draw() -> void:
 	if _run == null:
 		return
 	# 방보다 먼저 그려져야 선이 방 아래로 깔린다. _room_layer 는 자식이라 나중에 그려진다.
 	var current_id := _run.player_room_id()
-	var width := maxf(1.0, _EDGE_WIDTH * _zoom)
+	var width := maxf(1.0, UiTokens.STROKE_RULE * _zoom)
+	var dash := UiTokens.DASH_LENGTH * _zoom
+	var gap := UiTokens.DASH_GAP * _zoom
 	for pair in _run.blueprint.connections():
 		var from_pos := _map_to_screen(pair[0])
 		var to_pos := _map_to_screen(pair[1])
-		draw_line(from_pos, to_pos, _edge_color(current_id, pair), width, true)
+		var link := _edge_link(current_id, pair)
+		if link == Link.LIVE:
+			draw_line(from_pos, to_pos, UiTokens.SIGNAL_DIM, width, true)
+			continue
+		var color := UiTokens.HAZARD_DIM if link == Link.BLOCKED else UiTokens.SEAM
+		for segment in UiShape.dash_segments(from_pos, to_pos, dash, gap):
+			draw_line(segment[0], segment[1], color, width, true)
 
 
-## 지금 서 있는 방에서 오를 수 없는 간선은 다르게 칠한다.
+## 지금 서 있는 방에서 오를 수 없는 간선은 다르게 그린다.
 ##
 ## 고도차로 막힌 길을 "연결이 없는 것"처럼 보이게 하면 안 된다.
 ## 길은 있고 내가 못 오르는 것이며, 민첩이 오르면 열린다.
-func _edge_color(current_id: String, pair: Array) -> Color:
+func _edge_link(current_id: String, pair: Array) -> Link:
 	if current_id.is_empty():
-		return _EDGE_COLOR
+		return Link.DARK
 	var touches_current: bool = pair[0] == current_id or pair[1] == current_id
 	if not touches_current:
-		return _EDGE_COLOR
+		return Link.DARK
 	var other: String = pair[1] if pair[0] == current_id else pair[0]
 	if _run.graph.can_traverse(current_id, other, _run.player.agility):
-		return _EDGE_COLOR
-	return _EDGE_BLOCKED_COLOR
+		return Link.LIVE
+	return Link.BLOCKED
 
 
 func _build_room_nodes() -> void:
@@ -346,22 +382,39 @@ func _refresh() -> void:
 			detail
 		)
 
-	var elevation := _run.blueprint.elevation_of(current_id)
-	_room_label.text = (
-		"현재 위치   %s   (고도 %d)" % [_run.blueprint.display_name_of(current_id), elevation]
-	)
-	_threat_label.text = "인접 위험도   %d" % _run.adjacent_threat()
-	_squad_label.text = ("전투력 %d   •   민첩 %d" % [_run.player.threat, _run.player.agility])
+	_room_label.text = _run.blueprint.display_name_of(current_id)
+	_elevation_label.text = "고도 %d" % _run.blueprint.elevation_of(current_id)
+	_squad_label.text = "전투력 %d      민첩 %d" % [_run.player.threat, _run.player.agility]
+	# 턴은 방송 진행 단위다(docs/design/02-overview.md §2.6.1). 그래서 송출 표시 쪽에 붙인다.
+	_turn_label.text = "%d 턴" % _run.turn
+	_update_threat()
 	_update_hint()
+
+
+## 인접 위험도 합과 그 변화량.
+##
+## **이 화면에서 가장 큰 글자는 이 숫자여야 한다.** 매 턴 "더 갈까 나갈까"를 묻는 게임에서
+## 그 판단의 근거가 화면 어딘가에 작게 적혀 있으면 안 된다 (docs/design/08-ui-ux.md §8.5).
+##
+## 변화량을 함께 띄우는 이유는 플레이어에게 이전 값을 외우게 하지 않기 위해서다
+## (docs/design/13-information-design.md §13.7).
+func _update_threat() -> void:
+	var threat := _run.adjacent_threat()
+	_threat_label.text = str(threat)
+	if _last_threat >= 0 and threat != _last_threat:
+		var difference := threat - _last_threat
+		_threat_delta_label.text = ("+%d" % difference) if difference > 0 else str(difference)
+		_threat_delta_label.add_theme_color_override("font_color", UiTokens.SIGNAL_HOT)
+		UiMotion.rise_and_fade(_threat_delta_label, UiTokens.SPACE_SNUG)
+		UiMotion.flash_color(_threat_label, Color(1.5, 1.5, 1.5), Color(1.0, 1.0, 1.0))
+	_last_threat = threat
 
 
 func _update_hint() -> void:
 	if reveal_everything:
 		_hint_label.text = "개발 모드 — 모든 방의 실제 값"
 		return
-	_hint_label.text = (
-		"끌거나 가장자리로 이동   •   휠 확대 %d%%   •   %d 턴" % [int(round(_zoom * 100.0)), _run.turn]
-	)
+	_hint_label.text = "끌거나 가장자리로 이동      휠 확대 %d%%" % int(round(_zoom * 100.0))
 
 
 ## 방에 붙일 고도 표시.
