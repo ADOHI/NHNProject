@@ -1,0 +1,67 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://src/proto/unit_move/unit_move_proto.gd" id="1_root"]
+[ext_resource type="Script" path="res://src/proto/unit_move/field_view.gd" id="2_view"]
+[ext_resource type="Script" path="res://src/proto/unit_move/debug_draw.gd" id="3_debug"]
+[ext_resource type="Script" path="res://src/proto/unit_move/tuning_panel.gd" id="4_panel"]
+[ext_resource type="Script" path="res://src/proto/unit_move/terrain_view.gd" id="5_terrain"]
+
+[node name="UnitMoveProto" type="Node2D"]
+script = ExtResource("1_root")
+
+[node name="Camera" type="Camera2D" parent="."]
+unique_name_in_owner = true
+position = Vector2(340, 544)
+
+[node name="TerrainView" type="Node2D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("5_terrain")
+
+[node name="FieldView" type="Node2D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("2_view")
+
+[node name="DebugDraw" type="Node2D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("3_debug")
+
+[node name="Ui" type="CanvasLayer" parent="."]
+
+[node name="StatsLabel" type="Label" parent="Ui"]
+unique_name_in_owner = true
+offset_left = 12.0
+offset_top = 8.0
+offset_right = 720.0
+offset_bottom = 100.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.86, 0.9, 0.96, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.05, 0.07, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 14
+
+[node name="HelpLabel" type="Label" parent="Ui"]
+unique_name_in_owner = true
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = -252.0
+offset_right = 700.0
+offset_bottom = -10.0
+grow_vertical = 0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.74, 0.78, 0.86, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.05, 0.07, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 13
+
+[node name="TuningPanel" type="PanelContainer" parent="Ui"]
+unique_name_in_owner = true
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -338.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_horizontal = 0
+script = ExtResource("4_panel")
