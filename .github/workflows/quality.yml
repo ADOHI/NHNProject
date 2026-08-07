@@ -35,11 +35,12 @@ jobs:
         run: pip install "gdtoolkit==4.*"
 
       # addons/ 는 서드파티라 검사하지 않는다 (.gdlintrc 의 excluded_directories).
+      # tools/ 는 빌드에 포함되지 않지만 우리가 쓰는 코드이므로 같은 기준으로 검사한다.
       - name: gdlint
-        run: gdlint src test
+        run: gdlint src test tools
 
       - name: gdformat --check
-        run: gdformat --check src test
+        run: gdformat --check src test tools
 
   test:
     name: Unit Tests

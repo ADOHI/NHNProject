@@ -190,19 +190,20 @@ CI 가 매 푸시마다 검사하므로, 커밋 전에 로컬에서 돌려 두�
 ```bash
 python -m pip install "gdtoolkit==4.*"
 
-python -m gdtoolkit.linter src test            # 네이밍·구조 규칙 위반 검사
-python -m gdtoolkit.formatter src test         # 포맷 자동 정리
-python -m gdtoolkit.formatter --check src test # 고치지 않고 확인만 (CI 와 동일)
+gdlint src test tools            # 네이밍·구조 규칙 위반 검사
+gdformat src test tools          # 포맷 자동 정리
+gdformat --check src test tools  # 고치지 않고 확인만 (CI 와 동일)
 ```
 
-> `gdlint` · `gdformat` 실행 파일은 pip 의 스크립트 경로가 PATH 에 없으면 잡히지 않는다.
-> `python -m` 형태는 그 경로와 무관하게 동작하므로 이쪽을 기본으로 쓴다.
-> CI 는 러너에서 PATH 가 잡히므로 짧은 이름을 그대로 쓴다.
+> 실행 파일이 잡히지 않으면 pip 의 스크립트 경로가 PATH 에 없는 것이다.
+> 그 경로를 PATH 에 넣거나, 무관하게 동작하는 `python -m gdtoolkit.linter` /
+> `python -m gdtoolkit.formatter` 형태를 쓴다.
+
+`addons/` 는 서드파티이므로 검사 대상에서 제외한다 (`.gdlintrc`).
+`tools/` 는 빌드에 포함되지 않지만 **우리가 쓰는 코드이므로 같은 기준으로 검사한다.**
 
 설정은 `.gdlintrc` 에 있고, 명시하지 않은 항목은 gdtoolkit 기본값을 따른다.
 기본값이 이미 §2 의 네이밍 규칙과 일치하므로 중복해서 적지 않는다.
-
-`addons/` 는 서드파티이므로 검사 대상에서 제외한다.
 
 ---
 
