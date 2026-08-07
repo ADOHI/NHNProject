@@ -470,9 +470,24 @@ Linux Chrome 출력에서는 `/BaseFont` 를 찾지 못했다.
 **1회차에만** 발생한다(폰트 데이터 생성 전에 테마가 로드됨). 2회차 0건, exit code 0.
 배포 워크플로는 export 전에 별도 import 패스를 돌리므로 영향이 없다.
 
+#### 웹 배포 확인 (푸시 후)
+
+| 확인 | 결과 |
+| --- | --- |
+| Deploy Web Build · Quality | 모두 success |
+| 배포본 부팅 | Godot 4.7.1 / WebGL 2 / single-threaded 정상 |
+| 게임 코드 실행 | `[NHNProject] v0.1.0 / platform=Web` 출력 |
+| 폰트 임베드 | `index.pck` 내부에서 `SongMyung`·`fontdata` 경로 확인 |
+
+`index.pck` 1.13 MB 중 대부분이 폰트다(코드·씬은 수십 KB).
+
+**확인하지 못한 것**: 브라우저 화면에서 한글이 실제로 어떻게 보이는지는
+확인하지 못했다. 브라우저 패널이 표시되지 않아 캔버스 크기가 0 이었고
+(`GL_INVALID_FRAMEBUFFER_OPERATION: Attachment has zero size`),
+스크린샷을 찍을 수 없었다. 데스크톱 렌더링은 캡처로 확인했다.
+
 #### 남은 과제
 
-- 웹 빌드에서 폰트가 실제로 임베드되는지는 **푸시 후 CI 결과로 확인**해야 한다
 - 2.03 MB 는 초기 로딩에 실린다. 서브셋 여부는 UI 문구가 확정된 뒤 판단한다
 
 ---
