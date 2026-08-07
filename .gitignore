@@ -21,3 +21,6 @@ dist/
 Thumbs.db
 .vscode/
 .idea/
+
+# 하위 에이전트(레인)가 쓰는 격리 워크트리. 저장소에 들어가면 안 된다
+.claude/
