@@ -14,10 +14,14 @@ extends Control
 ## 플레이어가 실제로 행동했다. 화면 밖의 것들(개발 패널 등)이 갱신할 신호다.
 signal player_acted
 
-## 지도의 위치와 배율이 바뀌었다. 배경(시설 바닥)이 같은 좌표를 따라가야 한다.
+## 어느 자리를 눌렀는가. 인쇄판이 그 자리에서 파문을 퍼뜨린다 —
+## **조작이 지면에 자국을 남긴다**는 것이 이 화면의 반응 규칙이다.
+signal struck(at: Vector2)
+
+## 지도의 위치와 배율이 바뀌었다. 지면(종이와 단 괘선)이 같은 좌표를 따라가야 한다.
 ##
 ## 배경이 가만히 있으면 판을 끌어도 "지도를 움직인다"는 감각이 없다.
-## 바닥이 함께 흘러야 판이 그림이 아니라 장소로 읽힌다.
+## 지면이 함께 흘러야 **큰 신문지를 책상 위에서 미는 것**이 된다.
 signal view_changed(pan: Vector2, zoom: float)
 
 ## 통로의 상태. **그리는 방식이 여기서 갈린다.**
@@ -81,11 +85,11 @@ var _last_threat := -1
 @onready var _room_layer: Control = %RoomLayer
 @onready var _room_label: Label = %RoomLabel
 @onready var _elevation_label: Label = %ElevationLabel
-@onready var _threat_label: Label = %ThreatLabel
+@onready var _threat_label: PlateLabel = %ThreatLabel
 @onready var _threat_delta_label: Label = %ThreatDeltaLabel
 @onready var _squad_label: Label = %SquadLabel
 @onready var _hint_label: Label = %HintLabel
-@onready var _turn_label: Label = %TurnLabel
+@onready var _turn_label: PlateLabel = %TurnLabel
 
 
 ## 판 하나를 이 화면에 붙인다.
@@ -108,9 +112,29 @@ func redraw() -> void:
 	_refresh()
 
 
+## 지금 몇 번째 판인가. 제호에 찍을 값이라 화면 밖에서도 필요하다.
+func turn_number() -> int:
+	return 0 if _run == null else _run.turn
+
+
+## 지면을 새로 찍는다. 판이 통째로 바뀌었을 때 상위가 부른다.
+##
+## **칸들이 한꺼번에 튀지 않는다.** 인쇄기의 앞머리는 왼쪽부터 지나가므로,
+## 각 칸은 자기 자리가 화면에서 얼마나 왼쪽인가에 따라 늦게 찍힌다.
+## 그 시차가 곧 박자이고, 박자가 있어야 전환이 사건으로 읽힌다.
+func reprint() -> void:
+	_threat_label.reprint()
+	for id in _room_nodes:
+		var node: RoomNode = _room_nodes[id]
+		var lag := UiTokens.TIME_STAGGER * clampf(node.position.x / maxf(size.x, 1.0), 0.0, 1.0)
+		get_tree().create_timer(lag).timeout.connect(node.reprint)
+	# 턴 표시는 맨 마지막에 찍힌다. 판 번호는 판을 다 짜고 나서 붙이는 것이다.
+	get_tree().create_timer(UiTokens.TIME_STAGGER).timeout.connect(_turn_label.reprint)
+
+
 ## 방 위젯의 자리와 크기만 다시 잡는다.
 ##
-## 이동·확대는 **보이는 내용이 아니라 위치만** 바꾼다.
+## 이동•확대는 **보이는 내용이 아니라 위치만** 바꾼다.
 ## 그때마다 라벨을 전부 새로 쓰면 끌 때마다 글자 배치가 다시 계산되어 버벅인다.
 func _reposition() -> void:
 	if _run == null:
@@ -178,7 +202,7 @@ func _pointer_position() -> Vector2:
 	return get_viewport().get_screen_transform().affine_inverse() * cursor - global_position
 
 
-## 커서가 UI 위에 있는가. HUD·조작 패널 위에서는 카메라가 움직이면 안 된다.
+## 커서가 UI 위에 있는가. HUD•조작 패널 위에서는 카메라가 움직이면 안 된다.
 ##
 ## 화면 구석의 정보를 읽으려고 커서를 올렸을 뿐인데 지도가 흘러가면 읽던 곳을 놓친다.
 ## 창 밖에 있을 때는 가리키는 것이 없으므로(null) 막지 않는다.
@@ -298,17 +322,17 @@ func _detail_level() -> RoomNode.Detail:
 ##
 ## **통로는 이어진 선이 아니라 점선이다.** 근거는 세계관에 있다 —
 ## 던전은 방송용 시설이고, **통로는 중계 구역이 아니다.**
-## 카메라가 없는 곳이라 그림이 안 나오고, 그래서 신호가 끊긴 것처럼 보여야 한다
+## 카메라가 없는 곳이라 지면에 실을 그림이 없고, 그래서 끊긴 자국으로 남는다
 ## (docs/design/02-overview.md §2.6.1).
 ##
-## 지금 내가 실제로 지나갈 수 있는 길만 이어진 선으로 켜진다.
+## 지금 내가 실제로 지나갈 수 있는 길만 **괘선 다발**로 굵게 찍힌다.
 ## 그 순간 판 위에서 **내 선택지가 저절로 도드라진다** — 따로 표시를 붙일 필요가 없다.
+## 신문에서 굵은 선 밑에 가는 선이 한 줄 더 붙는 것과 같은 문법이다.
 func _draw() -> void:
 	if _run == null:
 		return
 	# 방보다 먼저 그려져야 선이 방 아래로 깔린다. _room_layer 는 자식이라 나중에 그려진다.
 	var current_id := _run.player_room_id()
-	var width := maxf(1.0, UiTokens.STROKE_RULE * _zoom)
 	var dash := UiTokens.DASH_LENGTH * _zoom
 	var gap := UiTokens.DASH_GAP * _zoom
 	for pair in _run.blueprint.connections():
@@ -316,11 +340,23 @@ func _draw() -> void:
 		var to_pos := _map_to_screen(pair[1])
 		var link := _edge_link(current_id, pair)
 		if link == Link.LIVE:
-			draw_line(from_pos, to_pos, UiTokens.SIGNAL_DIM, width, true)
+			_draw_rule_pair(from_pos, to_pos)
 			continue
-		var color := UiTokens.HAZARD_DIM if link == Link.BLOCKED else UiTokens.SEAM
-		for segment in UiShape.dash_segments(from_pos, to_pos, dash, gap):
+		var blocked := link == Link.BLOCKED
+		var color := UiTokens.MARK_DEEP if blocked else UiTokens.fade(UiTokens.INK_FAINT, 0.75)
+		var width := maxf(1.0, (UiTokens.RULE_TEXT if blocked else UiTokens.RULE_HAIR) * _zoom)
+		var length := (UiTokens.DASH_LENGTH * 2.0 * _zoom) if blocked else dash
+		for segment in UiShape.dash_segments(from_pos, to_pos, length, gap):
 			draw_line(segment[0], segment[1], color, width, true)
+
+
+## 살아 있는 통로 한 줄. 굵은 괘선과 그 옆의 가는 괘선.
+func _draw_rule_pair(from_pos: Vector2, to_pos: Vector2) -> void:
+	var heavy := maxf(1.5, UiTokens.RULE_HEAVY * _zoom)
+	var hair := maxf(1.0, UiTokens.RULE_HAIR * _zoom)
+	var offset := (to_pos - from_pos).orthogonal().normalized() * (heavy * 0.5 + hair * 2.0)
+	draw_line(from_pos, to_pos, UiTokens.INK, heavy, true)
+	draw_line(from_pos + offset, to_pos + offset, UiTokens.fade(UiTokens.INK, 0.55), hair, true)
 
 
 ## 지금 서 있는 방에서 오를 수 없는 간선은 다르게 그린다.
@@ -385,8 +421,8 @@ func _refresh() -> void:
 	_room_label.text = _run.blueprint.display_name_of(current_id)
 	_elevation_label.text = "고도 %d" % _run.blueprint.elevation_of(current_id)
 	_squad_label.text = "전투력 %d      민첩 %d" % [_run.player.threat, _run.player.agility]
-	# 턴은 방송 진행 단위다(docs/design/02-overview.md §2.6.1). 그래서 송출 표시 쪽에 붙인다.
-	_turn_label.text = "%d 턴" % _run.turn
+	# 턴은 방송 진행 단위다(docs/design/02-overview.md §2.6.1). 그래서 별색판 쪽에 붙인다.
+	_turn_label.set_text("제 %d 판" % _run.turn)
 	_update_threat()
 	_update_hint()
 
@@ -400,19 +436,19 @@ func _refresh() -> void:
 ## (docs/design/13-information-design.md §13.7).
 func _update_threat() -> void:
 	var threat := _run.adjacent_threat()
-	_threat_label.text = str(threat)
+	# PlateLabel 이 값이 바뀐 것을 알아채고 별색판을 튀긴다. 서명은 여기서 가장 크게 보인다.
+	_threat_label.set_text(str(threat))
 	if _last_threat >= 0 and threat != _last_threat:
 		var difference := threat - _last_threat
 		_threat_delta_label.text = ("+%d" % difference) if difference > 0 else str(difference)
-		_threat_delta_label.add_theme_color_override("font_color", UiTokens.SIGNAL_HOT)
+		_threat_delta_label.add_theme_color_override("font_color", UiTokens.SPOT)
 		UiMotion.rise_and_fade(_threat_delta_label, UiTokens.SPACE_SNUG)
-		UiMotion.flash_color(_threat_label, Color(1.5, 1.5, 1.5), Color(1.0, 1.0, 1.0))
 	_last_threat = threat
 
 
 func _update_hint() -> void:
 	if reveal_everything:
-		_hint_label.text = "개발 모드 — 모든 방의 실제 값"
+		_hint_label.text = "교정쇄 — 모든 방의 실제 값이 드러나 있다"
 		return
 	_hint_label.text = "끌거나 가장자리로 이동      휠 확대 %d%%" % int(round(_zoom * 100.0))
 
@@ -446,6 +482,9 @@ func _climb_text(current_id: String, room_id: String) -> String:
 func _on_room_selected(room_id: String) -> void:
 	if not _run.can_move_to(room_id):
 		return
+	var node: RoomNode = _room_nodes.get(room_id)
+	if node != null:
+		struck.emit(node.global_position + node.size * 0.5 * _zoom)
 	_run.move_player(room_id)
 	redraw()
 	player_acted.emit()

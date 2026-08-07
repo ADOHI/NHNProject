@@ -1,7 +1,8 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://src/ui/dungeon_board/dungeon_board.gd" id="1_board"]
-[ext_resource type="Script" path="res://src/ui/style/signal_panel.gd" id="2_panel"]
+[ext_resource type="Script" path="res://src/ui/style/press_panel.gd" id="2_panel"]
+[ext_resource type="Script" path="res://src/ui/style/plate_label.gd" id="3_plate"]
 
 [node name="DungeonBoard" type="Control"]
 anchor_right = 1.0
@@ -19,11 +20,11 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="Hud" type="PanelContainer" parent="."]
-custom_minimum_size = Vector2(288, 0)
-offset_left = 26.0
-offset_top = 22.0
-offset_right = 26.0
-offset_bottom = 22.0
+custom_minimum_size = Vector2(254, 0)
+offset_left = 34.0
+offset_top = 148.0
+offset_right = 34.0
+offset_bottom = 148.0
 grow_horizontal = 1
 grow_vertical = 1
 script = ExtResource("2_panel")
@@ -34,17 +35,17 @@ layout_mode = 2
 
 [node name="Rows" type="VBoxContainer" parent="Hud/Content"]
 layout_mode = 2
-theme_override_constants/separation = 2
+theme_override_constants/separation = 0
 
 [node name="PlaceCaption" type="Label" parent="Hud/Content/Rows"]
 layout_mode = 2
 theme_type_variation = &"Micro"
-text = "현재 위치"
+text = "지금 서 있는 곳"
 
 [node name="RoomLabel" type="Label" parent="Hud/Content/Rows"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Title"
+theme_type_variation = &"Sub"
 text = "입구"
 
 [node name="ElevationLabel" type="Label" parent="Hud/Content/Rows"]
@@ -54,7 +55,7 @@ theme_type_variation = &"Caption"
 text = "고도 0"
 
 [node name="Gap" type="Control" parent="Hud/Content/Rows"]
-custom_minimum_size = Vector2(0, 16)
+custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
 mouse_filter = 2
 
@@ -67,18 +68,22 @@ text = "인접 위험도 합"
 [node name="ThreatRow" type="HBoxContainer" parent="Hud/Content/Rows"]
 layout_mode = 2
 theme_override_constants/separation = 10
+alignment = 2
 
-[node name="ThreatLabel" type="Label" parent="Hud/Content/Rows/ThreatRow"]
+[node name="ThreatLabel" type="Control" parent="Hud/Content/Rows/ThreatRow"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Display"
+mouse_filter = 2
+script = ExtResource("3_plate")
 text = "0"
+variation = "Banner"
+slip_amount = 0.55
 
 [node name="ThreatDeltaLabel" type="Label" parent="Hud/Content/Rows/ThreatRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 0
-theme_type_variation = &"Caption"
+theme_type_variation = &"Sub"
 text = ""
 
 [node name="SquadLabel" type="Label" parent="Hud/Content/Rows"]
@@ -88,7 +93,7 @@ theme_type_variation = &"Caption"
 text = "전투력 0   민첩 0"
 
 [node name="Gap2" type="Control" parent="Hud/Content/Rows"]
-custom_minimum_size = Vector2(0, 14)
+custom_minimum_size = Vector2(0, 16)
 layout_mode = 2
 mouse_filter = 2
 
@@ -100,16 +105,16 @@ text = "밝은 방을 눌러 이동"
 
 [node name="OnAir" type="PanelContainer" parent="."]
 unique_name_in_owner = true
-anchor_left = 0.5
 anchor_top = 1.0
-anchor_right = 0.5
 anchor_bottom = 1.0
-offset_top = -96.0
-offset_bottom = -96.0
-grow_horizontal = 2
+offset_left = 34.0
+offset_top = -196.0
+offset_right = 402.0
+offset_bottom = -112.0
+grow_horizontal = 1
 grow_vertical = 0
 script = ExtResource("2_panel")
-layer = 1
+plate = 1
 
 [node name="Content" type="MarginContainer" parent="OnAir"]
 layout_mode = 2
@@ -117,15 +122,22 @@ layout_mode = 2
 [node name="Row" type="HBoxContainer" parent="OnAir/Content"]
 layout_mode = 2
 alignment = 1
-theme_override_constants/separation = 16
+theme_override_constants/separation = 26
 
 [node name="OnAirLabel" type="Label" parent="OnAir/Content/Row"]
 layout_mode = 2
-theme_type_variation = &"Hype"
+size_flags_vertical = 4
+theme_type_variation = &"SpotHead"
 text = "송 출 중"
 
-[node name="TurnLabel" type="Label" parent="OnAir/Content/Row"]
+[node name="TurnLabel" type="Control" parent="OnAir/Content/Row"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Caption"
-text = "1 턴"
+size_flags_vertical = 4
+mouse_filter = 2
+script = ExtResource("3_plate")
+text = "제 1 판"
+variation = "Head"
+plate = 1
+slip_amount = 1.8
+drift = true

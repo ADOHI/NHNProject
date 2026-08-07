@@ -1,5 +1,5 @@
 extends Control
-## 부트 씬 겸 진입점. 던전을 만들어 화면들에 나눠 주고, 생성·개발 모드를 조작한다.
+## 부트 씬 겸 진입점. 던전을 만들어 화면들에 나눠 주고, 생성•개발 모드를 조작한다.
 ##
 ## 아웃게임(주둔지)이 생기면 이 씬은 "어떤 씬을 띄울지 결정"만 하고 물러난다.
 ## 플레이 로직은 여기에 쌓지 않는다.
@@ -7,14 +7,16 @@ extends Control
 ## 첫 판의 시드. 이후에는 생성 버튼이 새 시드를 뽑는다.
 const FIRST_SEED := 1
 
-const _BACKDROP_SHADER := preload("res://src/ui/style/shaders/facility_backdrop.gdshader")
+const _SHEET_SHADER := preload("res://src/ui/style/shaders/press_sheet.gdshader")
 
 var _seed := FIRST_SEED
 var _debug_visible := false
-var _backdrop: ShaderMaterial
+var _sheet: ShaderMaterial
 
 @onready var _background: ColorRect = %Background
 @onready var _board: DungeonBoard = %DungeonBoard
+@onready var _page: PressPage = %Page
+@onready var _plate: PressPlate = %PressPlate
 @onready var _overlay: DebugOverlay = %DebugOverlay
 @onready var _debug_button: Button = %DebugButton
 @onready var _generate_button: Button = %GenerateButton
@@ -27,7 +29,7 @@ func _ready() -> void:
 	# Theme 은 루트에 한 번만 물린다. 자식에게 그대로 흘러내린다.
 	# 여기서 물리지 않으면 화면마다 색을 손으로 칠하게 되고, 그러면 규칙이 흩어진다.
 	theme = UiTheme.get_theme()
-	_build_backdrop()
+	_build_sheet()
 
 	_size_slider.min_value = SampleDungeons.SIZE_MIN
 	_size_slider.max_value = SampleDungeons.SIZE_MAX
@@ -35,31 +37,55 @@ func _ready() -> void:
 
 	_generate_button.pressed.connect(_generate_new)
 	_debug_button.pressed.connect(_toggle_debug)
+	# 한 턴이 넘어갈 때마다 새 판을 찍는다. 전환 자체가 이 게임의 볼거리다.
+	_board.player_acted.connect(_print_edition)
+	_board.struck.connect(_plate.strike_at)
+	for button in [_generate_button, _debug_button]:
+		(button as Button).pressed.connect(_strike_from.bind(button))
 	_size_slider.value_changed.connect(func(_value: float) -> void: _update_size_label())
 
 	_update_size_label()
 	_build_run()
 	_apply_debug_state()
+	# 화면이 뜨는 것 자체가 **첫 판을 찍는 것**이다. 켜자마자 인쇄기가 한 번 지나간다.
+	# 첫 프레임에 완성된 지면이 그냥 놓여 있으면, 이 화면이 인쇄물이라는 전제가
+	# 글로만 남고 몸짓으로는 한 번도 나타나지 않는다.
+	_print_edition.call_deferred(true)
 
 
-## 시설 바닥을 깐다. 판의 이동·배율을 그대로 받아 격자가 지도와 함께 흐른다.
+## 지면을 깐다. 판의 이동•배율을 그대로 받아 잉크 얼룩이 지도와 함께 흐른다.
 ##
 ## 배경을 단색으로 두면 판을 끌어도 화면이 가만히 있어서 "지도를 움직인다"는 감각이 없다.
-## 이건 장식이 아니라 공간 표현이다 — 판은 그림이 아니라 장소여야 한다.
-func _build_backdrop() -> void:
-	_backdrop = ShaderMaterial.new()
-	_backdrop.shader = _BACKDROP_SHADER
-	_backdrop.set_shader_parameter("floor_color", UiTokens.FLOOR)
-	_backdrop.set_shader_parameter("seam_color", UiTokens.SEAM)
-	_backdrop.set_shader_parameter("glow_color", UiTokens.SIGNAL)
-	_backdrop.set_shader_parameter("sweep_period", UiTokens.TIME_DRIFT)
-	_background.material = _backdrop
+## 이건 장식이 아니라 공간 표현이다 — 판은 그림이 아니라 **책상 위의 큰 신문지**여야 한다.
+func _build_sheet() -> void:
+	_sheet = ShaderMaterial.new()
+	_sheet.shader = _SHEET_SHADER
+	_sheet.set_shader_parameter("paper_color", UiTokens.PAPER)
+	_sheet.set_shader_parameter("shade_color", UiTokens.PAPER_SHADE)
+	_background.material = _sheet
 	_board.view_changed.connect(_on_view_changed)
 
 
 func _on_view_changed(pan: Vector2, zoom: float) -> void:
-	_backdrop.set_shader_parameter("view_pan", pan)
-	_backdrop.set_shader_parameter("view_zoom", zoom)
+	_sheet.set_shader_parameter("view_pan", pan)
+	_sheet.set_shader_parameter("view_zoom", zoom)
+	# 지면이 접힌 자리도 함께 흐른다. 접힘은 화면의 무늬가 아니라 종이의 성질이다.
+	_plate.follow_view(pan, zoom)
+
+
+## 누른 자리에서 파문이 퍼진다. 조작이 지면에 자국을 남긴다.
+func _strike_from(button: Control) -> void:
+	_plate.strike_at(button.global_position + button.size * 0.5)
+
+
+## 새 판을 찍는다.
+##
+## 지면이 굵은 점 덩어리에서 왼쪽부터 자리를 잡고, 그 앞머리가 지나가는 순서대로
+## 방 칸들이 하나씩 다시 찍힌다. 판을 새로 짠 것이면 종이를 한 번 찢고 시작한다.
+func _print_edition(rip: bool = false) -> void:
+	_plate.print_edition(rip)
+	_board.reprint()
+	_page.set_edition("제 %d 판" % _board.turn_number())
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -75,6 +101,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _generate_new() -> void:
 	_seed = randi() % 1000000
 	_build_run()
+	# 판을 통째로 새로 짠 것이므로 종이를 찢고 다시 찍는다.
+	_print_edition(true)
 
 
 func _build_run() -> void:
@@ -87,11 +115,13 @@ func _build_run() -> void:
 	_status_label.text = _build_status_text()
 	_board.redraw()
 	_overlay.refresh()
+	_page.set_edition("제 %d 판" % _board.turn_number())
+	_page.set_folio(_build_folio_text())
 
 
 func _update_size_label() -> void:
 	var size := int(_size_slider.value)
-	_size_label.text = "맵 크기 %d   (방 %d개 안팎)" % [size, SampleDungeons.room_estimate(size)]
+	_size_label.text = "판 크기 %d   (칸 %d개 안팎)" % [size, SampleDungeons.room_estimate(size)]
 
 
 ## 개발 모드를 켜고 끈다.
@@ -108,7 +138,12 @@ func _apply_debug_state() -> void:
 	_board.reveal_everything = _debug_visible
 	_board.redraw()
 	_overlay.refresh()
-	_debug_button.text = "개발 정보 닫기 (F1)" if _debug_visible else "개발 정보 (F1)"
+	_debug_button.text = "교정쇄 닫기 (F1)" if _debug_visible else "교정쇄 (F1)"
+
+
+## 지면 아래쪽 여백에 찍히는 한 줄. 신문의 쪽수 자리다.
+func _build_folio_text() -> String:
+	return "지하 실황 • 연출부 유출본 • 조판 %d • 이 지면은 송출되지 않는다" % _seed
 
 
 ## 화면 구석에 띄울 런타임 상태 문자열.
