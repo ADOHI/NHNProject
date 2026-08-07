@@ -34,7 +34,7 @@ window/stretch/aspect="expand"
 
 [gui]
 
-theme/custom_font="res://assets/fonts/ui_font.tres"
+theme/custom_font="res://assets/fonts/song_myung/SongMyung-Regular.ttf"
 
 [rendering]
 

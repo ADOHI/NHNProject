@@ -35,7 +35,7 @@ src/
     ├── main.tscn               # 부트 씬 (project.godot 의 main_scene)
     └── main.gd
 
-assets/fonts/ui_font.tres       # 한글 표시용 SystemFont ⚠ 웹에서 동작 안 함
+assets/fonts/song_myung/        # SongMyung Regular (SIL OFL) + OFL.txt
 test/unit/                      # GUT 단위 테스트 6종
 tools/capture_scene.gd          # 화면 캡처 검증 도구 (빌드에 포함되지 않음)
 addons/gut/                     # GUT 9.7.1 (벤더링). 빌드에서 제외된다
@@ -90,12 +90,18 @@ web/shell.html                  # 웹 빌드용 커스텀 HTML 셸
 좌표는 `DungeonGraph` 가 아니라 `DungeonBlueprint` 에 있다.
 같은 판을 다르게 그릴 수는 있어도, 같은 판이 다르게 이어질 수는 없다.
 
-### 한글 폰트 ⚠
+### 한글 폰트
 
-`assets/fonts/ui_font.tres` 는 `SystemFont` 으로 시스템 한글 폰트를 빌려 쓴다.
-**데스크톱 전용 임시 조치이며 웹 빌드에서는 동작하지 않는다.**
-제출 전에 재배포 가능한 폰트를 임베드해야 한다
-([09 §9.3.1](design/09-art-sound.md), [12](design/12-open-questions.md) Q35).
+`assets/fonts/song_myung/SongMyung-Regular.ttf` (SIL OFL, 2.03 MB)를
+`project.godot` 의 `gui/theme/custom_font` 로 지정했다.
+Godot 기본 폰트에는 한글 글리프가 없어 그대로 두면 UI 가 전부 두부(□)가 된다.
+
+**임베드 폰트라 웹에서도 동작한다.** `OFL.txt` 는 재배포 조건이라 함께 둔다.
+서브셋 여부는 UI 문구가 확정된 뒤 판단한다 ([09 §9.3.2](design/09-art-sound.md)).
+
+첫 임포트에서 `Error loading custom project font` 가 출력되지만
+**1회차에만** 발생한다(폰트 데이터 생성 전에 테마가 로드된다). 2회차 0건, exit code 0.
+배포 워크플로는 export 전에 별도 import 패스를 돌리므로 영향이 없다.
 
 ### `GameConfig` (오토로드)
 

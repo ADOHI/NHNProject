@@ -91,3 +91,10 @@ python tools/build_docs.py
 ```
 
 결과물은 `docs/build/AI활용기술문서.pdf` 에 생성된다 (Git 추적 대상 아님).
+
+## 서드파티 에셋
+
+| 에셋 | 출처 | 라이선스 |
+| --- | --- | --- |
+| SongMyung Regular | [Google Fonts](https://fonts.google.com/specimen/Song+Myung) | SIL Open Font License 1.1 — `assets/fonts/song_myung/OFL.txt` |
+| GUT 9.7.1 | [bitwes/Gut](https://github.com/bitwes/Gut) | MIT — `addons/gut/` (테스트 전용, 빌드에서 제외) |
