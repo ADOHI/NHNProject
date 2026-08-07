@@ -1,10 +1,10 @@
 class_name DebugOverlay
-extends SignalPanel
-## 개발용 정보 패널. 판의 **진실**을 그대로 보여 준다.
+extends PressPanel
+## **교정쇄.** 아직 인쇄기에 걸리지 않은 지면이고, 판의 진실이 그대로 적혀 있다.
 ##
-## SignalPanel 의 TRUTH 레이어로 그린다 — **송출되지 않는 화면**이다.
-## 모서리를 자르지 않고 프레임도 두르지 않는다. 왼쪽에 계측 눈금만 선다.
-## 이 화면은 방송에 나가지 않으므로 방송의 문법을 쓰면 안 된다는 것이 형태의 근거다
+## PressPanel 의 PROOF 판으로 그린다 — 별색이 하나도 없다.
+## 별색은 렉카가 붙이는 것이고, 이 지면은 아직 렉카의 손에 가지 않았다.
+## 그래서 여기 적힌 것은 부풀려지지 않은 값이다
 ## (docs/design/18-visual-identity.md §18.7).
 ##
 ## 플레이 화면은 정보를 숨기는 것이 곧 재미다(docs/design/13-information-design.md).
@@ -74,7 +74,7 @@ func _build_summary() -> String:
 	return "\n".join(lines)
 
 
-## 인접 정보 한 줄. 합·개체 수·최댓값을 나란히 둔다.
+## 인접 정보 한 줄. 합•개체 수•최댓값을 나란히 둔다.
 ##
 ## 셋을 함께 보여 주는 이유는, 합만으로는 생성기가 의도한 모호함이 실제로 생겼는지
 ## 알 수 없기 때문이다 (docs/design/17-dungeon-generation.md §17.5 V6).

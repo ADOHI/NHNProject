@@ -18,7 +18,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(1, 1, 1, 1)
 
-[node name="Overlay" type="Control" parent="."]
+[node name="Underlay" type="Control" parent="."]
 unique_name_in_owner = true
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -29,37 +29,39 @@ mouse_filter = 2
 [node name="NameLabel" type="Label" parent="."]
 unique_name_in_owner = true
 anchor_right = 1.0
-offset_left = 19.0
-offset_top = 3.0
-offset_right = -12.0
+offset_left = 8.0
+offset_right = -26.0
 offset_bottom = 22.0
 grow_horizontal = 2
 mouse_filter = 2
 theme_type_variation = &"Caption"
 text = "방"
+vertical_alignment = 1
 clip_text = true
 
-[node name="DeltaLabel" type="Label" parent="."]
+[node name="ValueGhost" type="Label" parent="."]
 unique_name_in_owner = true
-anchor_left = 0.3
 anchor_right = 1.0
-offset_top = 20.0
-offset_right = -13.0
-offset_bottom = 38.0
+anchor_bottom = 1.0
+offset_left = 44.0
+offset_top = 26.0
+offset_right = -11.0
+offset_bottom = -3.0
 grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
-theme_type_variation = &"Caption"
-text = ""
+text = "?"
 horizontal_alignment = 2
+vertical_alignment = 2
 
 [node name="ValueLabel" type="Label" parent="."]
 unique_name_in_owner = true
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 46.0
-offset_top = 24.0
-offset_right = -13.0
-offset_bottom = -2.0
+offset_left = 44.0
+offset_top = 26.0
+offset_right = -11.0
+offset_bottom = -3.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
@@ -70,10 +72,10 @@ vertical_alignment = 2
 [node name="ClimbLabel" type="Label" parent="."]
 unique_name_in_owner = true
 anchor_top = 1.0
-anchor_right = 0.62
+anchor_right = 0.6
 anchor_bottom = 1.0
-offset_left = 22.0
-offset_top = -23.0
+offset_left = 21.0
+offset_top = -24.0
 offset_bottom = -4.0
 grow_vertical = 0
 mouse_filter = 2
@@ -81,3 +83,24 @@ theme_type_variation = &"Micro"
 text = ""
 vertical_alignment = 1
 clip_text = true
+
+[node name="DeltaLabel" type="Label" parent="."]
+unique_name_in_owner = true
+anchor_left = 0.3
+anchor_right = 1.0
+offset_top = 24.0
+offset_right = -12.0
+offset_bottom = 42.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_type_variation = &"Caption"
+text = ""
+horizontal_alignment = 2
+
+[node name="Overlay" type="Control" parent="."]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2

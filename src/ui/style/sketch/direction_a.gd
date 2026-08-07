@@ -7,7 +7,7 @@ extends Control
 ## 서명 후보: **12도 기울기.** 화면의 모든 판이 같은 각도로 기운다.
 ## 판만 축에 남고 그 위 그래픽은 전부 기울어, 판과 방송이 서로 다른 세계로 보인다.
 ##
-## 이건 비교용 스케치다. 채택되면 토큰·테마·셰이더로 옮긴다.
+## 이건 비교용 스케치다. 채택되면 토큰•테마•셰이더로 옮긴다.
 
 const _FEED := preload("res://src/ui/style/sketch/shaders/sketch_feed.gdshader")
 
@@ -110,7 +110,11 @@ func _draw_tile(center: Vector2, room: Dictionary, factor: float) -> void:
 	var bar := Rect2(box.position + Vector2(0.0, -1.0), Vector2(box.size.x * 0.74, 30.0 * factor))
 	draw_colored_polygon(_lean_rect(bar, center.y), _BLACK if state != "here" else _RED)
 	_shout(
-		box.position + Vector2(16.0, 22.0) * factor + Vector2((center.y - box.position.y) * _LEAN, 0),
+		(
+			box.position
+			+ Vector2(16.0, 22.0) * factor
+			+ Vector2((center.y - box.position.y) * _LEAN, 0)
+		),
 		room["name"] as String,
 		int(17.0 * factor),
 		_WHITE,
@@ -171,11 +175,11 @@ func _draw_counter(origin: Vector2) -> void:
 
 
 ## 외곽선을 두른 글자. 방송 자막은 배경이 무엇이든 읽혀야 한다.
-func _shout(
-	pos: Vector2, text: String, size: int, fill: Color, edge: Color, weight: float
-) -> void:
+func _shout(pos: Vector2, text: String, size: int, fill: Color, edge: Color, weight: float) -> void:
 	if weight > 0.0:
-		draw_string_outline(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, int(weight), edge)
+		draw_string_outline(
+			_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, int(weight), edge
+		)
 	draw_string(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, fill)
 
 

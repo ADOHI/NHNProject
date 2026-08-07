@@ -2,35 +2,45 @@ class_name UiStyleBox
 extends RefCounted
 ## StyleBox 를 코드로 찍어 낸다. 에디터에서 손으로 만든 .tres 를 두지 않기 위한 공장이다.
 ##
-## **잘린 모서리를 StyleBoxFlat 으로 내는 방법이 하나 있다.**
-## corner_radius 를 준 뒤 corner_detail 을 1 로 내리면, 곡선을 만들 분할이 하나뿐이라
-## 원호가 직선 한 토막이 된다 — 즉 챔퍼가 된다.
-## 그래서 둥근 모서리를 쓰지 않으면서도 Godot 기본 위젯(Button, Slider)의
-## 그리기 경로를 그대로 쓸 수 있다. 위젯마다 _draw 를 새로 짤 필요가 없다.
+## **이 화면에는 둥근 모서리가 없다. 잘린 모서리도 없다.**
+## 인쇄물의 형태는 굴리거나 자르는 것이 아니라 **괘선으로 갇히거나 찢겨 나오는 것**이다
+## (docs/design/18-visual-identity.md §18.4).
+##
+## 그래서 여기서 만드는 StyleBox 는 전부 corner_radius 가 0 이고,
+## 위계는 **테두리의 굵기와 어느 변에 있는가**로만 만든다.
 
 
-## 잘린 모서리를 가진 면. cuts 는 [좌상, 우상, 우하, 좌하] 순서다.
-static func plate(
-	fill: Color,
-	cuts: PackedFloat32Array,
-	border: Color = Color(0.0, 0.0, 0.0, 0.0),
-	border_width: int = 0
+## 괘선으로 갇힌 면. 사방을 같은 굵기로 두르지 않는다 — 굵은 변이 어디인지가 곧 위계다.
+static func ruled(
+	fill: Color, rule: Color, top: int = 0, bottom: int = 0, left: int = 0, right: int = 0
 ) -> StyleBoxFlat:
 	var box := StyleBoxFlat.new()
 	box.bg_color = fill
-	# 1 이면 원호가 직선 한 토막이 된다. 이 한 줄이 이 프로젝트의 모서리 규칙 전부다.
 	box.corner_detail = 1
-	box.corner_radius_top_left = int(cuts[0])
-	box.corner_radius_top_right = int(cuts[1])
-	box.corner_radius_bottom_right = int(cuts[2])
-	box.corner_radius_bottom_left = int(cuts[3])
-	if border_width > 0:
-		box.set_border_width_all(border_width)
-		box.border_color = border
+	box.set_corner_radius_all(0)
+	box.border_color = rule
+	box.border_width_top = top
+	box.border_width_bottom = bottom
+	box.border_width_left = left
+	box.border_width_right = right
 	return box
 
 
-## 안쪽 여백을 준다. 가로와 세로를 따로 받는 이유는 글자 줄높이 때문에
+## 사방을 같은 굵기로 두른 상자. 도해의 사진 테두리처럼 **가둔다**는 뜻이 필요할 때만 쓴다.
+static func boxed(fill: Color, rule: Color, weight: int) -> StyleBoxFlat:
+	return ruled(fill, rule, weight, weight, weight, weight)
+
+
+## 테두리 없는 면. 별색판을 얹거나 직접 그릴 때 바탕으로 쓴다.
+static func flat(fill: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = fill
+	box.corner_detail = 1
+	box.set_corner_radius_all(0)
+	return box
+
+
+## 안쪽 여백을 준다. 가로와 세로를 따로 받는 이유는 명조의 줄높이 때문에
 ## 세로를 늘 좁게 잡아야 균형이 맞기 때문이다.
 static func pad(box: StyleBox, horizontal: int, vertical: int) -> StyleBox:
 	box.content_margin_left = float(horizontal)
@@ -47,19 +57,4 @@ static func hollow(horizontal: int = 0, vertical: int = 0) -> StyleBoxEmpty:
 	box.content_margin_right = float(horizontal)
 	box.content_margin_top = float(vertical)
 	box.content_margin_bottom = float(vertical)
-	return box
-
-
-## 한쪽 변에만 굵은 선을 둔 면. 계측 장비의 옆면 표시다.
-##
-## 네 변을 두르지 않는 이유는, 얇은 흰 테두리를 두른 회색 패널이야말로
-## 어느 게임에 붙여도 말이 되는 형태이기 때문이다 (docs/design/18-visual-identity.md §18.4).
-static func edge_rule(fill: Color, rule: Color, width: int, left: bool = true) -> StyleBoxFlat:
-	var box := StyleBoxFlat.new()
-	box.bg_color = fill
-	box.border_color = rule
-	if left:
-		box.border_width_left = width
-	else:
-		box.border_width_top = width
 	return box

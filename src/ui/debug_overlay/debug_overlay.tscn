@@ -6,12 +6,13 @@
 anchor_left = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -446.0
-offset_top = 100.0
+offset_left = -452.0
+offset_top = 138.0
+offset_bottom = -150.0
 grow_horizontal = 0
 grow_vertical = 2
 script = ExtResource("1_debug")
-layer = 2
+plate = 2
 
 [node name="Content" type="MarginContainer" parent="."]
 layout_mode = 2
@@ -26,13 +27,13 @@ theme_override_constants/separation = 4
 
 [node name="Title" type="Label" parent="Content/Scroll/Rows"]
 layout_mode = 2
-theme_type_variation = &"Title"
-text = "판의 진실"
+theme_type_variation = &"Head"
+text = "교 정 쇄"
 
 [node name="Subtitle" type="Label" parent="Content/Scroll/Rows"]
 layout_mode = 2
 theme_type_variation = &"Micro"
-text = "송출되지 않는 화면      F1 로 닫기"
+text = "아직 인쇄기에 걸리지 않은 지면 — 부풀려지기 전의 값      F1 로 닫기"
 
 [node name="Gap" type="Control" parent="Content/Scroll/Rows"]
 custom_minimum_size = Vector2(0, 14)
@@ -53,7 +54,7 @@ mouse_filter = 2
 [node name="RoomsTitle" type="Label" parent="Content/Scroll/Rows"]
 layout_mode = 2
 theme_type_variation = &"Micro"
-text = "방마다 실제 위험도와 개체 수"
+text = "칸마다 실제 위험도와 개체 수"
 
 [node name="RoomsLabel" type="Label" parent="Content/Scroll/Rows"]
 unique_name_in_owner = true

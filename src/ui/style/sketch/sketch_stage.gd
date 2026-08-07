@@ -4,13 +4,19 @@ extends RefCounted
 ##
 ## 방향을 셋 만들 때 가장 쉬운 실수는 각자 다른 장면을 그려 놓고 고르는 것이다.
 ## 그러면 무엇이 스타일 차이고 무엇이 소재 차이인지 구별되지 않는다.
-## 그래서 방·통로·숫자·문장을 여기 한 벌만 두고, 방향은 **그리는 법만** 다르게 한다.
+## 그래서 방•통로•숫자•문장을 여기 한 벌만 두고, 방향은 **그리는 법만** 다르게 한다.
 
-## 한 방의 자리·이름·값·상태. 상태 문자열은 RoomNode.State 와 같은 뜻이다.
+## 한 방의 자리•이름•값•상태. 상태 문자열은 RoomNode.State 와 같은 뜻이다.
 const ROOMS := [
 	{"id": "r_here", "pos": Vector2(250.0, 250.0), "name": "관제실", "value": "9", "state": "here"},
 	{"id": "r_lift", "pos": Vector2(560.0, 168.0), "name": "화물 리프트", "value": "?", "state": "open"},
-	{"id": "r_vault", "pos": Vector2(566.0, 400.0), "name": "봉인된 금고", "value": "?", "state": "shut"},
+	{
+		"id": "r_vault",
+		"pos": Vector2(566.0, 400.0),
+		"name": "봉인된 금고",
+		"value": "?",
+		"state": "shut"
+	},
 	{"id": "r_hall", "pos": Vector2(120.0, 470.0), "name": "회랑", "value": "?", "state": "open"},
 	{"id": "r_altar", "pos": Vector2(860.0, 296.0), "name": "제단", "value": "?", "state": "far"},
 	{"id": "r_tank", "pos": Vector2(830.0, 540.0), "name": "저수조", "value": "?", "state": "far"},
@@ -32,7 +38,7 @@ const CLOSEUP := {"name": "화물 리프트", "value": "?", "state": "open", "cl
 ## 계측 레이어가 말하는 것 — 사실이지만 모호하다.
 const INSTRUMENT_TITLE := "인접 위험도 합"
 const INSTRUMENT_VALUE := "9"
-const INSTRUMENT_NOTE := "관제실 · 고도 0 · 전투력 8 · 민첩 2"
+const INSTRUMENT_NOTE := "관제실 • 고도 0 • 전투력 8 • 민첩 2"
 
 ## 송출 레이어가 말하는 것 — 구체적이지만 못 믿는다.
 const BROADCAST_TITLE := "금고 앞에서 셋이 붙었습니다"

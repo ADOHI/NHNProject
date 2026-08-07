@@ -9,7 +9,7 @@ extends Control
 ##
 ## 그리고 망점의 굵기가 곧 모르는 정도다. 좋은 원판이 있으면 곱게 찍고 없으면 뭉개 찍는다.
 ##
-## 이건 비교용 스케치다. 채택되면 토큰·테마·셰이더로 옮긴다.
+## 이건 비교용 스케치다. 채택되면 토큰•테마•셰이더로 옮긴다.
 
 const _PRESS := preload("res://src/ui/style/sketch/shaders/sketch_press.gdshader")
 const _HALFTONE := preload("res://src/ui/style/sketch/shaders/sketch_halftone.gdshader")
@@ -103,11 +103,11 @@ func _draw_masthead() -> void:
 	_rule(Rect2(40.0, 20.0, 1520.0, 5.0), _INK)
 	_rule(Rect2(40.0, 29.0, 1520.0, 1.0), _INK)
 	_slipped(Vector2(44.0, 100.0), "지하 실황", 74, _INK, 1.0)
-	_ink(Vector2(392.0, 100.0), "號 外", 46, _INK_MUTED)
+	_ink(Vector2(392.0, 100.0), "호 외", 46, _INK_MUTED)
 	# 붉은 판은 늦게 찍혀 어긋난다. 여기가 그 규칙을 처음 보여 주는 자리다.
 	_slipped(Vector2(1244.0, 98.0), "제 12 턴", 44, _RED, 2.4)
 	_rule(Rect2(40.0, 118.0, 1520.0, 7.0), _INK)
-	_ink(Vector2(44.0, 148.0), "연출부 유출 · 무단 전재 환영 · 조회수만이 진실이다", 15, _INK_MUTED)
+	_ink(Vector2(44.0, 148.0), "연출부 유출 • 무단 전재 환영 • 조회수만이 진실이다", 15, _INK_MUTED)
 	_rule(Rect2(40.0, 160.0, 1520.0, 1.0), _INK_FAINT)
 
 
@@ -159,7 +159,9 @@ func _dashes(from: Vector2, to: Vector2, dash: float, gap: float, color: Color, 
 
 
 ## 사진 한 칸을 둘러싼 **테와 캡션**. 신문 도해의 문법 그대로다.
-func _draw_frame(rect: Rect2, room_name: String, value: String, state: String, factor: float) -> void:
+func _draw_frame(
+	rect: Rect2, room_name: String, value: String, state: String, factor: float
+) -> void:
 	var heavy := state == "here"
 	_overlay.draw_rect(rect, _INK, false, (5.0 if heavy else 2.0) * factor)
 	if state == "shut":
@@ -209,7 +211,9 @@ func _draw_onair(rect: Rect2, factor: float) -> void:
 		Vector2(94.0 * factor, 26.0 * factor)
 	)
 	_overlay.draw_rect(tab.grow(1.0), _RED)
-	_ink(tab.position + Vector2(9.0, 19.0) * factor, "송출중", int(15.0 * factor), _PAPER_HIGH, _overlay)
+	_ink(
+		tab.position + Vector2(9.0, 19.0) * factor, "송출중", int(15.0 * factor), _PAPER_HIGH, _overlay
+	)
 
 
 # ---------------------------------------------------------------------------
@@ -259,10 +263,12 @@ func _draw_clipping() -> void:
 	_overlay.draw_rect(tag, _RED)
 	_ink(tag.position + Vector2(14.0, 34.0), SketchStage.BROADCAST_TAG, 28, _PAPER_HIGH, _overlay)
 
-	_slipped(rect.position + Vector2(122.0, 62.0), SketchStage.BROADCAST_TITLE, 40, _INK, 3.2, _overlay)
+	_slipped(
+		rect.position + Vector2(122.0, 62.0), SketchStage.BROADCAST_TITLE, 40, _INK, 3.2, _overlay
+	)
 	_overlay.draw_rect(Rect2(rect.position + Vector2(24.0, 82.0), Vector2(880.0, 2.0)), _INK)
 	_ink(rect.position + Vector2(24.0, 118.0), SketchStage.BROADCAST_BODY, 21, _INK_MUTED, _overlay)
-	_ink(rect.position + Vector2(24.0, 148.0), "조회 41,208 · 지하 실황 채널", 15, _RED, _overlay)
+	_ink(rect.position + Vector2(24.0, 148.0), "조회 41,208 • 지하 실황 채널", 15, _RED, _overlay)
 	_overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -286,7 +292,9 @@ func _deckle(rect: Rect2, amplitude: float) -> PackedVector2Array:
 			var ratio := float(index) / float(count)
 			seed += 1.0
 			var wobble := sin(seed * 12.9898) * 43758.5453
-			points.append(from.lerp(to, ratio) + normal * (fmod(absf(wobble), 1.0) - 0.5) * amplitude)
+			points.append(
+				from.lerp(to, ratio) + normal * (fmod(absf(wobble), 1.0) - 0.5) * amplitude
+			)
 	return points
 
 
@@ -319,9 +327,7 @@ func _slipped(
 	canvas.draw_string(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 
 
-func _ink(
-	pos: Vector2, text: String, size: int, color: Color, target: CanvasItem = null
-) -> void:
+func _ink(pos: Vector2, text: String, size: int, color: Color, target: CanvasItem = null) -> void:
 	var canvas: CanvasItem = target if target != null else _overlay
 	canvas.draw_string(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 

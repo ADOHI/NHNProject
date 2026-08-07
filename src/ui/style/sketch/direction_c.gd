@@ -2,12 +2,12 @@ extends Control
 ## 방향 C — **썸네일: 화면에 직접 그은 낙서.**
 ##
 ## 화면은 카메라 그림 그대로이고, 그 위에 렉카가 **빨간 펜으로 직접 그어 놓았다.**
-## 동그라미 · 화살표 · 밑줄 · 가위표 · 감탄사. 조회수를 위해 그은 선이다.
+## 동그라미 • 화살표 • 밑줄 • 가위표 • 감탄사. 조회수를 위해 그은 선이다.
 ##
 ## 서명 후보: **손으로 그은 획.** 자로 잰 선이 하나도 없고, 강조는 전부 떨리는 획으로 온다.
 ## 계측(카메라 그림)은 깨끗하고, 송출(낙서)은 삐뚤다 — 신뢰도가 필기감으로 갈린다.
 ##
-## 이건 비교용 스케치다. 채택되면 토큰·테마·셰이더로 옮긴다.
+## 이건 비교용 스케치다. 채택되면 토큰•테마•셰이더로 옮긴다.
 
 const _FEED := preload("res://src/ui/style/sketch/shaders/sketch_feed.gdshader")
 
@@ -71,18 +71,27 @@ func _draw_plain_tile(rect: Rect2, room: Dictionary, factor: float) -> void:
 	var here: bool = room["state"] == "here"
 	draw_rect(rect, Color(0.078, 0.098, 0.106, 0.72))
 	draw_rect(rect, _WHITE if here else _FEEDINK, false, 2.0 * factor if here else 1.0)
-	_text(rect.position + Vector2(10.0, 24.0) * factor, room["name"] as String, int(16.0 * factor), _WHITE)
+	_text(
+		rect.position + Vector2(10.0, 24.0) * factor,
+		room["name"] as String,
+		int(16.0 * factor),
+		_WHITE
+	)
 	var value: String = room["value"]
 	var size := int((40.0 if here else 26.0) * factor)
 	var width := _font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-	_text(Vector2(rect.end.x - 12.0 * factor - width, rect.end.y - 12.0 * factor), value, size, _WHITE)
+	_text(
+		Vector2(rect.end.x - 12.0 * factor - width, rect.end.y - 12.0 * factor), value, size, _WHITE
+	)
 
 
 ## 렉카가 그은 것들. 전부 손으로 그은 획이다.
 func _draw_scrawl() -> void:
 	var rooms := SketchStage.placed(Vector2(30.0, -6.0), 1.02)
 	_scrawl_circle(SketchStage.screen_of(rooms, "r_here"), Vector2(132.0, 70.0), _PEN, 7.0, 3)
-	_scrawl_text(SketchStage.screen_of(rooms, "r_here") + Vector2(-160.0, -76.0), "여기 지금 로또", 30, _PEN)
+	_scrawl_text(
+		SketchStage.screen_of(rooms, "r_here") + Vector2(-160.0, -76.0), "여기 지금 로또", 30, _PEN
+	)
 	_scrawl_arrow(
 		SketchStage.screen_of(rooms, "r_here") + Vector2(-24.0, -62.0),
 		SketchStage.screen_of(rooms, "r_here") + Vector2(-58.0, -28.0),
@@ -128,7 +137,12 @@ func _draw_closeup(origin: Vector2) -> void:
 	)
 	_scrawl_circle(rect.get_center() + Vector2(88.0, 34.0), Vector2(52.0, 40.0), _PEN, 6.0, 2)
 	_scrawl_text(origin + Vector2(-18.0, 190.0), "여기부터 보세요", 26, _PEN)
-	_text(origin + Vector2(0.0, 226.0), SketchStage.INSTRUMENT_TITLE + "  " + SketchStage.INSTRUMENT_VALUE, 22, _WHITE)
+	_text(
+		origin + Vector2(0.0, 226.0),
+		SketchStage.INSTRUMENT_TITLE + "  " + SketchStage.INSTRUMENT_VALUE,
+		22,
+		_WHITE
+	)
 
 
 # ---------------------------------------------------------------------------
@@ -215,9 +229,7 @@ func _scrawl_polygon(rect: Rect2, color: Color) -> void:
 	draw_colored_polygon(points, color)
 
 
-func _shout(
-	pos: Vector2, text: String, size: int, fill: Color, edge: Color, weight: float
-) -> void:
+func _shout(pos: Vector2, text: String, size: int, fill: Color, edge: Color, weight: float) -> void:
 	draw_string_outline(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, int(weight), edge)
 	draw_string(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, fill)
 
