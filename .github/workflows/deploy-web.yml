@@ -1,0 +1,81 @@
+name: Deploy Web Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Pages 배포는 동시에 하나만. 새 푸시가 오면 진행 중인 배포는 취소한다.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.1
+  EXPORT_PRESET: Web
+
+jobs:
+  build:
+    name: Export Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 공식 릴리스에서 엔진 + 익스포트 템플릿을 받는다.
+      # (도커 이미지에 의존하지 않으므로 엔진 버전을 올릴 때 env 한 줄만 바꾸면 된다)
+      - name: Install Godot ${{ env.GODOT_VERSION }}
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -fL -o godot.zip  "${BASE}/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -fL -o tpl.tpz    "${BASE}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+
+          unzip -q godot.zip
+          sudo mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+
+          # .tpz 는 templates/ 라는 단일 폴더를 담은 zip 이다.
+          # Godot 은 <data>/export_templates/<version>.stable/ 에서 템플릿을 찾는다.
+          TPL_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$TPL_DIR"
+          unzip -q tpl.tpz -d tpl
+          mv tpl/templates/* "$TPL_DIR/"
+
+          godot --version
+
+      # 첫 실행은 리소스 임포트만 수행한다. 이 단계 없이 바로 export 하면
+      # .godot/ 캐시가 없어 리소스가 누락된 채 빌드되는 경우가 있다.
+      - name: Import resources
+        run: godot --headless --import
+
+      - name: Export "${{ env.EXPORT_PRESET }}" preset
+        run: |
+          set -euo pipefail
+          mkdir -p build/web
+          godot --headless --export-release "${EXPORT_PRESET}" build/web/index.html
+
+      # Pages 는 디렉터리 인덱스를 자동 생성하지 않으므로 index.html 존재를 못 박아 둔다.
+      - name: Verify artifact
+        run: |
+          test -f build/web/index.html
+          ls -la build/web
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

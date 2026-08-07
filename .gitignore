@@ -1,0 +1,13 @@
+# Godot 4 자동 생성 캐시/임포트 결과물
+.godot/
+/android/
+
+# 로컬 빌드 산출물 (웹 빌드는 CI 가 만들어 Pages 로 배포한다)
+build/
+*.tmp
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
