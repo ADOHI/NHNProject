@@ -24,22 +24,23 @@ const SIZE_MAX := 5
 
 ## 맵 크기 단계를 생성 파라미터로 옮긴다.
 ##
-## 단계를 층 수와 층당 방 수에 함께 실어 준다. 한쪽만 늘리면
-## 판이 길쭉해지거나 납작해져서 지도 모양이 단조로워진다.
+## 예전에는 층 수와 층당 방 수를 함께 늘렸다. 지금은 방 개수 하나만 준다 —
+## 자리를 블루 노이즈로 뿌리므로 개수가 늘면 영역이 같은 밀도로 넓어진다
+## (docs/design/17-dungeon-generation.md §17.3). 판 모양을 따로 손볼 필요가 없다.
 static func params_for_size(size: int) -> DungeonGenerator.Params:
 	var clamped := clampi(size, SIZE_MIN, SIZE_MAX)
 	var params := DungeonGenerator.Params.new()
-	params.layer_count = 2 + clamped
-	params.rooms_per_layer_min = 2
-	params.rooms_per_layer_max = 2 + clamped / 2
+	params.room_count = 7 + clamped * 5
 	return params
 
 
 ## 크기 단계에서 나오는 대략적인 방 개수. 슬라이더 옆에 보여 준다.
+##
+## **대략인 것이 맞다.** 푸아송 디스크 샘플링은 개수를 정확히 맞추지 못한다.
+## 맞추려면 뽑은 점을 도로 지워야 하는데 그러면 "구멍 없음"이 깨진다
+## (PoissonDiskSampler.expected_count 참고).
 static func room_estimate(size: int) -> int:
-	var params := params_for_size(size)
-	var average := float(params.rooms_per_layer_min + params.rooms_per_layer_max) * 0.5
-	return int(round(float(params.layer_count) * average))
+	return params_for_size(size).room_count
 
 
 ## 판 하나를 통째로 만든다.
