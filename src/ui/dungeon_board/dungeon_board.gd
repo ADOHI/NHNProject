@@ -135,9 +135,10 @@ func _gui_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	if _run == null or _dragging or not _pointer_moved or not is_visible_in_tree():
 		return
-	if not _pointer_is_on_map():
+	# 창이 활성 상태가 아니면 멈춘다. 다른 창을 보는 동안 지도가 계속 흘러가면 안 된다.
+	if not get_window().has_focus() or _pointer_blocked_by_ui():
 		return
-	var push := _edge_push(get_local_mouse_position())
+	var push := _edge_push(_pointer_position())
 	if push == Vector2.ZERO:
 		return
 	_pan += push * _EDGE_SPEED * delta
@@ -145,29 +146,40 @@ func _process(delta: float) -> void:
 	_reposition()
 
 
-## 커서가 지도 위에 있는가. HUD·조작 패널 위에서는 카메라가 움직이면 안 된다.
+## 커서 위치. **창 밖으로 나가도 이어서 읽는다.**
 ##
-## 화면 구석의 정보를 읽으려고 커서를 올렸을 뿐인데 지도가 흘러가면
-## 읽던 곳을 놓친다. 가장자리 이동은 **지도를 보고 있을 때만** 일어나야 한다.
-func _pointer_is_on_map() -> bool:
+## get_local_mouse_position() 은 창 안에서 들어온 입력만 반영하므로
+## 커서가 창을 벗어나면 경계에서 멈춰 버린다. 그러면 스크롤도 함께 멈춘다.
+## OS 가 아는 커서 위치를 직접 읽어 창 좌표로 옮긴다.
+##
+## 웹에서는 브라우저가 캔버스 밖 커서를 알려 주지 않으므로
+## 창 경계까지만 동작한다.
+func _pointer_position() -> Vector2:
+	var cursor := Vector2(DisplayServer.mouse_get_position() - DisplayServer.window_get_position())
+	return get_viewport().get_screen_transform().affine_inverse() * cursor - global_position
+
+
+## 커서가 UI 위에 있는가. HUD·조작 패널 위에서는 카메라가 움직이면 안 된다.
+##
+## 화면 구석의 정보를 읽으려고 커서를 올렸을 뿐인데 지도가 흘러가면 읽던 곳을 놓친다.
+## 창 밖에 있을 때는 가리키는 것이 없으므로(null) 막지 않는다.
+func _pointer_blocked_by_ui() -> bool:
 	var hovered := get_viewport().gui_get_hovered_control()
-	return hovered == self or hovered is RoomNode
+	return hovered != null and hovered != self and not hovered is RoomNode
 
 
-## 커서 위치가 만드는 카메라 이동 방향. 가장자리에 가까울수록 세다.
+## 커서 위치가 만드는 카메라 이동 방향. 가장자리에 가까울수록 세고,
+## 창 밖으로 나가면 최대 속도로 유지된다.
 func _edge_push(mouse: Vector2) -> Vector2:
-	if not Rect2(Vector2.ZERO, size).has_point(mouse):
-		return Vector2.ZERO
-	var push := Vector2.ZERO
-	if mouse.x < _EDGE_MARGIN:
-		push.x = (_EDGE_MARGIN - mouse.x) / _EDGE_MARGIN
-	elif mouse.x > size.x - _EDGE_MARGIN:
-		push.x = -(mouse.x - size.x + _EDGE_MARGIN) / _EDGE_MARGIN
-	if mouse.y < _EDGE_MARGIN:
-		push.y = (_EDGE_MARGIN - mouse.y) / _EDGE_MARGIN
-	elif mouse.y > size.y - _EDGE_MARGIN:
-		push.y = -(mouse.y - size.y + _EDGE_MARGIN) / _EDGE_MARGIN
-	return push
+	return Vector2(_axis_push(mouse.x, size.x), _axis_push(mouse.y, size.y))
+
+
+func _axis_push(value: float, extent: float) -> float:
+	if value < _EDGE_MARGIN:
+		return minf((_EDGE_MARGIN - value) / _EDGE_MARGIN, 1.0)
+	if value > extent - _EDGE_MARGIN:
+		return -minf((value - extent + _EDGE_MARGIN) / _EDGE_MARGIN, 1.0)
+	return 0.0
 
 
 func _handle_mouse_button(event: InputEventMouseButton) -> void:
