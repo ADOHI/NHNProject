@@ -12,12 +12,14 @@ signal room_selected(room_id: String)
 ## 방의 표시 상태. 무엇을 보여 줄지가 여기서 갈린다.
 enum State {
 	CURRENT,  ## 플레이어가 서 있는 방 — 인접 위험도 합을 보여 준다
-	REACHABLE,  ## 갈 수 있는 방 — 안은 모른다
-	DISTANT,  ## 갈 수 없는 방 — 안은 모른다
+	REACHABLE,  ## 지금 갈 수 있는 방 — 안은 모른다
+	BLOCKED,  ## 인접하지만 민첩이 모자라 못 오르는 방 — 필요 상승폭을 보여 준다
+	DISTANT,  ## 인접하지 않은 방 — 안은 모른다
 }
 
 const _COLOR_CURRENT := Color(0.98, 0.86, 0.42)
 const _COLOR_REACHABLE := Color(0.86, 0.90, 0.96)
+const _COLOR_BLOCKED := Color(0.85, 0.52, 0.50)
 const _COLOR_DISTANT := Color(0.45, 0.48, 0.55)
 
 var room_id: String
@@ -38,12 +40,15 @@ func display(id: String, display_name: String, value_text: String, state: State)
 	room_id = id
 	_name_label.text = display_name
 	_value_label.text = value_text
-	disabled = state == State.DISTANT
+	# 막힌 방도 누를 수 없다. 다만 색과 값으로 "길은 있으나 못 오른다"를 구분해 보여 준다.
+	disabled = state != State.CURRENT and state != State.REACHABLE
 	match state:
 		State.CURRENT:
 			_apply_color(_COLOR_CURRENT)
 		State.REACHABLE:
 			_apply_color(_COLOR_REACHABLE)
+		State.BLOCKED:
+			_apply_color(_COLOR_BLOCKED)
 		State.DISTANT:
 			_apply_color(_COLOR_DISTANT)
 

@@ -69,6 +69,77 @@ func are_connected(a_id: String, b_id: String) -> bool:
 	return (_neighbors[a_id] as Array[String]).has(b_id)
 
 
+## from_id 에서 to_id 로 갈 때의 **상승폭**. 내려가거나 평지면 0 이다.
+##
+## 내려가는 것은 언제나 자유이므로 음수를 그대로 두지 않고 0 으로 자른다
+## (docs/design/07-level-design.md §7.2.6).
+func climb_between(from_id: String, to_id: String) -> int:
+	var from_room := get_room(from_id)
+	var to_room := get_room(to_id)
+	if from_room == null or to_room == null:
+		push_error("존재하지 않는 방입니다: %s -> %s" % [from_id, to_id])
+		return 0
+	return maxi(0, to_room.elevation - from_room.elevation)
+
+
+## 주어진 민첩으로 그 간선을 통과할 수 있는가.
+##
+## **연결 자체는 양방향이다.** 바뀌는 것은 통과 조건이 주체마다 다르다는 점뿐이다.
+## 그래서 A 는 못 올라가는데 B 는 내려올 수 있는 비대칭이 생긴다 (§7.2.7).
+func can_traverse(from_id: String, to_id: String, agility: int) -> bool:
+	if not are_connected(from_id, to_id):
+		return false
+	return climb_between(from_id, to_id) <= agility
+
+
+## 그 민첩으로 실제로 갈 수 있는 인접 방들.
+##
+## 위험도 합(adjacent_threat)은 이것과 다르다 —
+## **못 가는 방도 합에는 들어간다.** 저기 있는 것들은 내려올 수 있기 때문이다.
+func traversable_neighbors(room_id: String, agility: int) -> Array[String]:
+	var result: Array[String] = []
+	for neighbor_id in neighbors_of(room_id):
+		if can_traverse(room_id, neighbor_id, agility):
+			result.append(neighbor_id)
+	return result
+
+
+## 시작 방에서 각 방에 닿기 위해 필요한 **최소 민첩**.
+##
+##     필요 민첩(방) = min over 경로 ( max over 간선 ( 상승폭 ) )
+##
+## Dijkstra 와 같은 구조에 "합" 대신 "최댓값"을 쓰면 그대로 구해진다
+## (bottleneck shortest path). 반환값에 없는 방은 도달 불가능하다.
+##
+## 생성기가 귀중품·탈출구를 어디에 놓을지 정하는 기준이다
+## (docs/design/17-dungeon-generation.md §17.4).
+func required_agility_from(start_id: String) -> Dictionary:
+	if not _rooms.has(start_id):
+		push_error("존재하지 않는 방입니다: %s" % start_id)
+		return {}
+
+	var best := {start_id: 0}
+	var settled := {}
+	while true:
+		# 방 개수가 수십 단위라 우선순위 큐 없이 선형 탐색으로 충분하다.
+		var current := ""
+		var current_cost := -1
+		for id in best:
+			if settled.has(id):
+				continue
+			if current_cost < 0 or best[id] < current_cost:
+				current = id
+				current_cost = best[id]
+		if current.is_empty():
+			break
+		settled[current] = true
+		for neighbor_id in neighbors_of(current):
+			var cost: int = maxi(current_cost, climb_between(current, neighbor_id))
+			if not best.has(neighbor_id) or cost < best[neighbor_id]:
+				best[neighbor_id] = cost
+	return best
+
+
 ## 특정 방 자체의 위험도.
 ##
 ## 플레이어에게 직접 공개되는 값이 아니다. 공개되는 것은 adjacent_threat() 다.
@@ -155,13 +226,17 @@ func place_actor(actor: Actor, room_id: String) -> bool:
 	return true
 
 
-## 인접한 방으로 이동한다. 이어져 있지 않으면 이동하지 않고 false 를 돌려준다.
+## 인접한 방으로 이동한다.
+##
+## 이어져 있지 않거나 **주체의 민첩으로 오를 수 없으면** 이동하지 않는다.
+## 민첩 검사를 여기에 두는 이유는, 검사를 호출자에게 맡기면
+## 빠뜨린 경로가 하나만 생겨도 판의 규칙이 깨지기 때문이다.
 func move_actor(actor: Actor, to_room_id: String) -> bool:
 	var current := find_actor_room(actor)
 	if current.is_empty():
 		push_error("판 위에 없는 주체를 이동시키려 했습니다: %s" % actor.id)
 		return false
-	if not are_connected(current, to_room_id):
+	if not can_traverse(current, to_room_id, actor.agility):
 		return false
 	return place_actor(actor, to_room_id)
 

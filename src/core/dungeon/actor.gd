@@ -37,12 +37,24 @@ var kind: Kind
 ## (docs/design/14-squad.md §14.3).
 var threat: int
 
+## 민첩. **올라갈 수 있는 최대 상승폭**이다.
+##
+## 내려가는 것은 언제나 자유이므로 이 값은 상승에만 쓰인다
+## (docs/design/07-level-design.md §7.2.6).
+##
+## 몬스터와 NPC 도 각자 민첩을 가진다. 그래서 내가 못 올라가는 방에서
+## 그들이 내려올 수 있고, 그 비대칭이 고도의 공포다 (§7.2.7).
+var agility: int
 
-func _init(actor_id: String, name: String, actor_kind: Kind, actor_threat: int) -> void:
+
+func _init(
+	actor_id: String, name: String, actor_kind: Kind, actor_threat: int, actor_agility: int = 0
+) -> void:
 	id = actor_id
 	display_name = name
 	kind = actor_kind
 	threat = maxi(0, actor_threat)
+	agility = maxi(0, actor_agility)
 
 
 ## 방 사이를 이동하는 종류인가.

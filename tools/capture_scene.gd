@@ -34,10 +34,23 @@ func _process(_delta: float) -> bool:
 		return false
 	if _frames < _WARMUP_FRAMES + _SETTLE_FRAMES:
 		return false
+	_print_rooms()
 	var image := root.get_texture().get_image()
 	var err := image.save_png(_out_path)
 	print("capture: %s (err=%d)" % [_out_path, err])
 	return true
+
+
+## 판 위 방들의 id 를 찍어 둔다.
+##
+## 생성된 판은 id 가 r0, r1 … 이라 화면만 봐서는 어느 방을 눌러야 하는지 알 수 없다.
+## 이동 경로를 지정해 캡처하려면 이 목록이 필요하다.
+func _print_rooms() -> void:
+	for node in root.find_children("*", "Button", true, false):
+		var room_id: Variant = node.get("room_id")
+		if room_id == null:
+			continue
+		print("room %s = %s" % [room_id, node.get_child(0).get_child(0).text])
 
 
 ## 실제 버튼을 눌러 이동시킨다. 상태를 직접 건드리지 않아야 화면 경로까지 검증된다.

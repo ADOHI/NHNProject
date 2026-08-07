@@ -18,10 +18,12 @@ src/
 │   ├── dungeon/
 │   │   ├── actor.gd            # 던전 안의 행동 주체 (몬스터 · NPC · 스쿼드)
 │   │   ├── room.gd             # 방 하나. 점유자와 위험도
-│   │   ├── dungeon_graph.gd    # 방 연결 그래프 + 인접 위험도 조회
-│   │   ├── dungeon_blueprint.gd  # 던전 설계도 (방 · 연결 · 화면 배치)
+│   │   ├── dungeon_graph.gd    # 방 연결 · 고도 통과 판정 · 인접 위험도 조회
+│   │   ├── dungeon_blueprint.gd  # 던전 설계도 (방 · 고도 · 종류 · 연결 · 배치 산출)
+│   │   ├── dungeon_generator.gd  # 절차 생성 + 검증 규칙
+│   │   ├── squad_stats.gd      # 대원 능력치를 스쿼드 하나로 접는 규칙
 │   │   ├── dungeon_run.gd      # 진행 중인 잠입 한 판
-│   │   └── sample_dungeons.gd  # 개발용 표본 던전
+│   │   └── sample_dungeons.gd  # 생성된 판에 존재를 배치해 조립
 │   └── event/
 │       ├── game_event.gd       # 사건 하나 (누가 · 어디서 · 무엇을 · 얼마나)
 │       └── event_log.gd        # 사건의 시간순 기록
@@ -60,6 +62,35 @@ web/shell.html                  # 웹 빌드용 커스텀 HTML 셸
 
 연결 정보를 `Room` 이 아니라 `DungeonGraph` 가 갖는 이유는, 방에 두면
 양쪽 방을 동시에 고쳐야 해서 한쪽만 갱신되는 사고가 나기 때문이다.
+
+### 고도
+
+방마다 정수 고도가 있고, **내려가기는 자유 · 올라가기는 상승폭 ≤ 민첩**이다
+([07 §7.2.6](design/07-level-design.md)). 이 값 하나가 세 가지를 맡는다.
+
+| 쓰임 | 위치 |
+| --- | --- |
+| 이동 가능 판정 | `DungeonGraph.can_traverse()` |
+| 방 등급 (필요 민첩) | `DungeonGraph.required_agility_from()` — bottleneck path |
+| **화면 Y 좌표** | `DungeonBlueprint.layout()` |
+
+**좌표를 저장하지 않고 고도에서 만들어 내는 것이 핵심이다.**
+절차 생성의 숨은 비용이 자동 배치인데, 고도가 그 문제를 없앤다.
+
+민첩 검사를 `move_actor()` 안에 둔 이유는, 호출자에게 맡기면
+빠뜨린 경로가 하나만 생겨도 판의 규칙이 깨지기 때문이다.
+
+### 생성기
+
+`DungeonGenerator` 는 **척추를 먼저 보장하고 살을 붙인다**
+([17 §17.3](design/17-dungeon-generation.md)). 무작위로 잇고 나서 도달성을 검사하면
+대부분 실패해 재시도가 폭증한다.
+
+검증은 규칙마다 함수로 나눠 두었다. 실패한 규칙을 특정할 수 있어야 하고,
+규칙이 늘어날 때 한 함수가 계속 길어지지 않아야 한다.
+
+**생성은 시드를 받는다.** 전역 난수를 쓰면 재현성이 깨지므로
+`RandomNumberGenerator` 인스턴스를 들고 다닌다.
 
 ### `src/core/event/` — 사건
 

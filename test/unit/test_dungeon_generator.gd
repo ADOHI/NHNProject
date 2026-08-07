@@ -1,0 +1,174 @@
+extends GutTest
+## 던전 생성기의 단위 테스트.
+##
+## 생성기는 무작위이므로 "이 판이 이렇게 나온다"를 검증할 수 없다.
+## 대신 **여러 시드에 걸쳐 규칙이 항상 성립하는지**를 본다
+## (docs/design/17-dungeon-generation.md §17.5).
+
+const GeneratorScript := preload("res://src/core/dungeon/dungeon_generator.gd")
+
+## 검사할 시드 수. 늘리면 촘촘해지지만 테스트가 느려진다.
+const _SEEDS := 12
+
+
+func _entrance_of(blueprint: DungeonBlueprint) -> String:
+	return blueprint.rooms_of_kind(Room.Kind.ENTRANCE)[0]
+
+
+# ---------------------------------------------------------------- 재현성
+
+
+func test_same_seed_gives_the_same_dungeon() -> void:
+	# 시드가 고정되지 않으면 버그를 다시 볼 수 없고 밸런싱 비교도 불가능하다 (§17.7).
+	var a: DungeonBlueprint = GeneratorScript.new(42).generate()
+	var b: DungeonBlueprint = GeneratorScript.new(42).generate()
+	assert_eq(a.room_ids(), b.room_ids())
+	assert_eq(a.connections().size(), b.connections().size())
+	for id in a.room_ids():
+		assert_eq(a.elevation_of(id), b.elevation_of(id))
+		assert_eq(a.kind_of(id), b.kind_of(id))
+		assert_eq(a.display_name_of(id), b.display_name_of(id))
+
+
+func test_different_seeds_give_different_dungeons() -> void:
+	var a: DungeonBlueprint = GeneratorScript.new(1).generate()
+	var b: DungeonBlueprint = GeneratorScript.new(2).generate()
+	var same := a.connections().size() == b.connections().size()
+	for id in a.room_ids():
+		if not b.has_room(id) or a.elevation_of(id) != b.elevation_of(id):
+			same = false
+	assert_false(same, "서로 다른 시드가 같은 판을 만들었다")
+
+
+# ---------------------------------------------------------------- 검증 규칙
+
+
+func test_every_room_is_reachable() -> void:
+	# V1 — 고립된 방은 존재하지 않는 것과 같다.
+	for seed_value in _SEEDS:
+		var blueprint: DungeonBlueprint = GeneratorScript.new(seed_value).generate()
+		var costs := blueprint.build().required_agility_from(_entrance_of(blueprint))
+		assert_eq(costs.size(), blueprint.room_ids().size(), "시드 %d 에 고립된 방이 있다" % seed_value)
+
+
+func test_a_free_exit_always_exists() -> void:
+	# V2 — 이게 깨지면 시작하자마자 진 판이다.
+	for seed_value in _SEEDS:
+		var blueprint: DungeonBlueprint = GeneratorScript.new(seed_value).generate()
+		var costs := blueprint.build().required_agility_from(_entrance_of(blueprint))
+		var exits := blueprint.rooms_of_kind(Room.Kind.EXIT)
+		assert_gt(exits.size(), 0, "시드 %d 에 탈출구가 없다" % seed_value)
+		var free_exits := 0
+		for id in exits:
+			if costs.get(id, 999) == 0:
+				free_exits += 1
+		assert_gt(free_exits, 0, "시드 %d 에 민첩 0 으로 닿는 탈출구가 없다" % seed_value)
+
+
+func test_valuables_cost_more_than_the_free_exit() -> void:
+	# V3 — 보상은 대가를 요구해야 한다.
+	for seed_value in _SEEDS:
+		var blueprint: DungeonBlueprint = GeneratorScript.new(seed_value).generate()
+		var costs := blueprint.build().required_agility_from(_entrance_of(blueprint))
+		var valuables := (
+			blueprint.rooms_of_kind(Room.Kind.TREASURE) + blueprint.rooms_of_kind(Room.Kind.BOSS)
+		)
+		for id in valuables:
+			assert_gt(costs.get(id, 0), 0, "시드 %d 의 고가치 방이 공짜로 닿는다" % seed_value)
+
+
+func test_exactly_one_entrance() -> void:
+	for seed_value in _SEEDS:
+		var blueprint: DungeonBlueprint = GeneratorScript.new(seed_value).generate()
+		assert_eq(blueprint.rooms_of_kind(Room.Kind.ENTRANCE).size(), 1)
+
+
+func test_entrance_always_offers_a_choice() -> void:
+	# V7 — 차수가 1 이면 첫 턴에 누를 수 있는 버튼이 하나뿐이라 게임이 시작되지 않는다.
+	for seed_value in _SEEDS:
+		var blueprint: DungeonBlueprint = GeneratorScript.new(seed_value).generate()
+		var graph := blueprint.build()
+		assert_gte(
+			graph.neighbors_of(_entrance_of(blueprint)).size(),
+			2,
+			"시드 %d 의 입구에 갈림길이 없다" % seed_value
+		)
+
+
+func test_entrance_shows_a_number_to_read() -> void:
+	# 0 도 정보이긴 하지만, 첫 화면부터 0 이면 이 게임이 뭘 하는 게임인지 안 드러난다.
+	for seed_value in _SEEDS:
+		var run := SampleDungeons.create_run(seed_value)
+		assert_gt(run.adjacent_threat(), 0, "시드 %d 의 첫 화면에 읽을 숫자가 없다" % seed_value)
+
+
+func test_a_boss_room_exists() -> void:
+	for seed_value in _SEEDS:
+		var blueprint: DungeonBlueprint = GeneratorScript.new(seed_value).generate()
+		assert_gt(blueprint.rooms_of_kind(Room.Kind.BOSS).size(), 0)
+
+
+# ---------------------------------------------------------------- 판의 성질
+
+
+func test_elevation_actually_varies() -> void:
+	# 고도가 전부 같으면 이 게임의 절반(메트로배니아 게이트)이 없는 것과 같다.
+	for seed_value in _SEEDS:
+		var blueprint: DungeonBlueprint = GeneratorScript.new(seed_value).generate()
+		var lowest := 0
+		var highest := 0
+		for id in blueprint.room_ids():
+			lowest = mini(lowest, blueprint.elevation_of(id))
+			highest = maxi(highest, blueprint.elevation_of(id))
+		assert_gt(highest - lowest, 0, "시드 %d 의 판이 평평하다" % seed_value)
+
+
+func test_entrance_sits_at_the_bottom() -> void:
+	# 입구가 꼭대기에 있으면 "내려갈수록 깊어진다"는 구도가 뒤집힌다.
+	for seed_value in _SEEDS:
+		var blueprint: DungeonBlueprint = GeneratorScript.new(seed_value).generate()
+		var entrance := _entrance_of(blueprint)
+		for id in blueprint.room_ids():
+			assert_true(
+				blueprint.elevation_of(entrance) <= blueprint.elevation_of(id),
+				"시드 %d 에서 입구보다 낮은 방이 있다" % seed_value
+			)
+
+
+func test_layout_puts_higher_rooms_above() -> void:
+	# 고도가 곧 Y 축이라야 "위는 위협, 아래는 도주로"가 읽힌다 (§17.6).
+	var blueprint: DungeonBlueprint = GeneratorScript.new(7).generate()
+	var positions := blueprint.layout(Rect2(0, 0, 1000, 500))
+	for id in blueprint.room_ids():
+		for other in blueprint.room_ids():
+			if blueprint.elevation_of(id) > blueprint.elevation_of(other):
+				var above: Vector2 = positions[id]
+				var below: Vector2 = positions[other]
+				assert_true(above.y < below.y, "고도가 높은 방이 아래에 그려졌다")
+
+
+func test_layout_stays_inside_the_area() -> void:
+	# 판 전체가 한 화면에 들어가야 한다 (docs/design/07-level-design.md §7.8).
+	var area := Rect2(100, 50, 800, 400)
+	var blueprint: DungeonBlueprint = GeneratorScript.new(3).generate()
+	for position in blueprint.layout(area).values():
+		assert_true(area.has_point(position), "배치가 영역을 벗어났다: %s" % position)
+
+
+func test_generated_run_is_playable() -> void:
+	# 조립까지 포함해 실제로 굴러가는지 본다.
+	for seed_value in _SEEDS:
+		var run := SampleDungeons.create_run(seed_value)
+		assert_false(run.player_room_id().is_empty(), "스쿼드가 판 위에 없다")
+		assert_gt(run.reachable_room_ids().size(), 0, "시드 %d 에서 갈 곳이 없다" % seed_value)
+
+
+func test_entrance_is_not_a_death_trap() -> void:
+	# V4 — 판단할 기회도 없이 죽는 배치를 막는다.
+	for seed_value in _SEEDS:
+		var run := SampleDungeons.create_run(seed_value)
+		assert_lte(
+			run.adjacent_threat(),
+			SampleDungeons.ENTRANCE_THREAT_MAX,
+			"시드 %d 의 입구 인접 위험도가 상한을 넘었다" % seed_value
+		)

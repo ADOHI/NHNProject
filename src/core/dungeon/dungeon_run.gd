@@ -47,10 +47,29 @@ func adjacent_threat() -> int:
 	return graph.adjacent_threat(id) if not id.is_empty() else 0
 
 
-## 이번에 갈 수 있는 방들.
+## 이번에 **실제로 갈 수 있는** 방들. 민첩으로 오를 수 없는 방은 빠진다.
+##
+## adjacent_threat() 과 대상이 다르다 — 위험도 합에는 못 가는 방도 들어간다.
+## 그 차이가 고도의 공포다 (docs/design/07-level-design.md §7.2.7).
 func reachable_room_ids() -> Array[String]:
 	var id := player_room_id()
-	return graph.neighbors_of(id) if not id.is_empty() else [] as Array[String]
+	if id.is_empty():
+		return [] as Array[String]
+	return graph.traversable_neighbors(id, player.agility)
+
+
+## 인접해 있지만 민첩이 모자라 오를 수 없는 방들.
+##
+## 화면에서 "보이지만 못 가는 곳"으로 구분해 보여 주기 위해 쓴다.
+func blocked_room_ids() -> Array[String]:
+	var id := player_room_id()
+	if id.is_empty():
+		return [] as Array[String]
+	var result: Array[String] = []
+	for neighbor_id in graph.neighbors_of(id):
+		if not graph.can_traverse(id, neighbor_id, player.agility):
+			result.append(neighbor_id)
+	return result
 
 
 func can_move_to(room_id: String) -> bool:

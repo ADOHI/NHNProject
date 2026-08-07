@@ -10,7 +10,9 @@ extends Control
 
 func _ready() -> void:
 	_status_label.text = _build_status_text()
-	_board.setup(SampleDungeons.create_first_run())
+	# 시드를 고정해 두면 같은 판이 나온다. 판을 바꿔 보려면 이 값을 바꾼다
+	# (docs/design/17-dungeon-generation.md §17.7).
+	_board.setup(SampleDungeons.create_run(1))
 
 
 ## 화면 구석에 띄울 런타임 상태 문자열.

@@ -9,8 +9,31 @@ extends RefCounted
 ## 방은 자기 안에 누가 있는지만 안다. 어느 방과 이어져 있는지는 DungeonGraph 가 안다.
 ## 연결 정보를 방에 두면 양쪽 방을 동시에 고쳐야 해서 한쪽만 갱신되는 사고가 난다.
 
+## 방의 성격. 생성기가 필요 민첩 등급에 따라 배치한다
+## (docs/design/07-level-design.md §7.2.9).
+enum Kind {
+	ENTRANCE,  ## 스쿼드가 시작하는 방
+	EMPTY,  ## 통로
+	TREASURE,  ## 귀중품
+	HAZARD,  ## 함정 · 고위험
+	BOSS,  ## 고위험 고보상
+	EXIT,  ## 탈출 지점
+}
+
 ## 그래프에서 이 방을 가리키는 식별자.
 var id: String
+
+## 방의 성격.
+var kind: Kind = Kind.EMPTY
+
+## 고도. 이동 가능 여부가 이 값의 차이로 결정된다.
+##
+## 내려가기와 평지는 자유, 올라가기는 상승폭이 민첩 이하일 때만 가능하다
+## (docs/design/07-level-design.md §7.2.6).
+##
+## 화면에서는 이 값이 그대로 Y 축이 된다. 고도가 게임 규칙이면서
+## 동시에 레이아웃 축이라, 좌표를 따로 설계하지 않아도 된다.
+var elevation: int = 0
 
 ## 렉카 기사에 장소로 등장하기 위한 표시명.
 ##
@@ -21,9 +44,13 @@ var display_name: String
 var _occupants: Array[Actor] = []
 
 
-func _init(room_id: String, name: String = "") -> void:
+func _init(
+	room_id: String, name: String = "", room_elevation: int = 0, room_kind: Kind = Kind.EMPTY
+) -> void:
 	id = room_id
 	display_name = name if not name.is_empty() else room_id
+	elevation = room_elevation
+	kind = room_kind
 
 
 ## 이 방의 위험도. 안에 있는 모든 존재의 전투력 합이다.
