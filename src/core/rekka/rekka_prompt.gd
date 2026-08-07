@@ -6,24 +6,52 @@ extends RefCounted
 ## 이 클래스는 모델에게 넘길 사실만 정리한다
 ## (docs/design/19-rekka-voice.md §19.4).
 ##
-## **부풀리기를 모델에 맡기지 않고 여기서 계산해 넘긴다.**
-## 표본을 돌려 보니 모델은 규칙보다 문맥상 자연스러운 표현을 골랐고,
-## 실제 3 을 "두어 개" 로 적어 값을 줄였다 (§19.5.2).
-## 축소가 한 번이라도 일어나면 "기사는 하한선" 이라는 규칙이 깨지고,
-## 그 순간 플레이어의 역보정이 성립하지 않는다
-## (docs/design/13-information-design.md §13.3).
+## **과장되는 것은 어투뿐이고 사실은 그대로 나간다.**
+## 렉카는 스쳐 지나간 일을 놓고도 호들갑을 떨지만 "싸웠다" 라고 쓰지는 않는다.
+## 그래서 이 클래스가 넘기는 값은 전부 실제로 일어난 그대로이며,
+## 부풀린 값과 실제값을 나누어 들고 다니지 않는다 (§19.3.1).
+##
+## **수치는 넘기지 않는다.** 이 게임의 전투는 피해가 오가는 방식이 아니라
+## 상황이 갈리는 방식이고(docs/design/05-rules.md §5.8),
+## 기사에 "12 피해" 가 뜨면 있지도 않은 계량 감각을 만들어 낸다.
+## 그래서 magnitude 는 여기서 **등급**으로 옮겨진 뒤에만 프롬프트로 나간다 (§19.3.3).
 ##
 ## 그래서 경계를 이렇게 긋는다.
 ##
-##     이 클래스 -> 무엇이 사실이고 보도값이 얼마인가 (규칙)
-##     언어 모델 -> 그걸 어떻게 지껄이는가 (문체)
+##     이 클래스 -> 무엇이 사실인가 (사실)
+##     언어 모델 -> 그걸 어떻게 지껄이는가 (어투)
 
-## 보도값 배율의 범위. 하한이 1 이라 **절대 축소되지 않는다.**
+## `magnitude` 가 무엇을 세는 값인지. 종류마다 다르므로 등급 축도 갈린다.
 ##
-## 고정 배율로 두면 몇 판 만에 간파되어 긴장이 사라지고,
-## 범위를 두면 하한만 확실해진다 (docs/design/13-information-design.md §13.3.2).
-const INFLATE_MIN := 1
-const INFLATE_MAX := 3
+## 이 갈래가 등급 축이 둘뿐인 이유다. magnitude 가 뜻하는 것은
+## **값어치 아니면 사람 수** 둘 중 하나이고, 이동에는 둘 다 없다.
+enum Axis {
+	NONE,  ## 셀 것이 없다
+	HAUL,  ## 값어치 — 전리품 · 오간 물건
+	CROWD,  ## 사람 수 — 마주친 · 붙은 · 쫓은 · 쓰러진 인원
+}
+
+## 수확 등급 이름. 낮은 쪽이 앞이다.
+##
+## 네 단계인 이유는 플레이어가 이 값으로 내리는 결정이 하나이기 때문이다 —
+## "저 방에 가 볼 값어치가 있나". 그 결정은 네 갈래로 갈린다.
+## 갈 이유 없음 / 굳이 / 갈 만함 / 만사 제쳐놓고.
+const HAUL_GRADES: Array[String] = ["빈손", "푼돈", "한몫", "대박"]
+
+## 수확 등급의 경계값. `magnitude` 가 이 값 이상이면 다음 등급이다.
+##
+## **잠정 수치다.** 전리품 가치의 실제 분포가 정해지면 다시 본다
+## (docs/design/19-rekka-voice.md §19.9.1).
+const HAUL_CUTS: Array[int] = [1, 4, 10]
+
+## 규모 등급 이름. 낮은 쪽이 앞이다.
+##
+## 세 단계인 이유도 결정이 하나이기 때문이다 — "내가 저기 끼어들 수 있나".
+## 혼자 감당 / 애매 / 불가능 세 갈래면 충분하다.
+const CROWD_GRADES: Array[String] = ["맞대면", "한줌", "떼거리"]
+
+## 규모 등급의 경계값. 스쿼드 상한 인원이 정해지면 다시 본다 (§19.9.1).
+const CROWD_CUTS: Array[int] = [2, 4]
 
 ## 사건 종류의 한국어 표기. 기사에서 **사실로** 전달되는 값이다.
 const _KIND_LABELS := {
@@ -38,21 +66,51 @@ const _KIND_LABELS := {
 	GameEvent.Kind.ESCAPED: "탈출",
 }
 
-## 보도값의 단위 이름.
+## 종류마다 `magnitude` 가 무엇을 세는가.
 ##
-## 단위를 함께 넘기지 않으면 모델이 "8 가치" 를 "8명" 으로 적는다 (§19.5.3).
-## 같은 magnitude 라도 종류마다 뜻이 다르기 때문에 생기는 사고다.
-const _KIND_UNITS := {
-	GameEvent.Kind.MOVED: "",
-	GameEvent.Kind.SEARCHED: "건",
-	GameEvent.Kind.ACQUIRED: "가치",
-	GameEvent.Kind.ENCOUNTERED: "인원",
-	GameEvent.Kind.FOUGHT: "피해",
-	GameEvent.Kind.NEGOTIATED: "가치",
-	GameEvent.Kind.FLED: "추격 인원",
-	GameEvent.Kind.DOWNED: "인원",
-	GameEvent.Kind.ESCAPED: "가치",
+## 이 표가 비어 있으면 모델이 값어치를 사람 수로 읽는다.
+## 앞선 차수에서 "8 가치" 를 "8명" 으로 적은 사고가 그것이다 (§19.5.3).
+const _KIND_AXES := {
+	GameEvent.Kind.MOVED: Axis.NONE,
+	GameEvent.Kind.SEARCHED: Axis.HAUL,
+	GameEvent.Kind.ACQUIRED: Axis.HAUL,
+	GameEvent.Kind.ENCOUNTERED: Axis.CROWD,
+	GameEvent.Kind.FOUGHT: Axis.CROWD,
+	GameEvent.Kind.NEGOTIATED: Axis.HAUL,
+	GameEvent.Kind.FLED: Axis.CROWD,
+	GameEvent.Kind.DOWNED: Axis.CROWD,
+	GameEvent.Kind.ESCAPED: Axis.HAUL,
 }
+
+## 등급이 프롬프트에서 쓰는 칸 이름.
+const _AXIS_SLOTS := {
+	Axis.NONE: "",
+	Axis.HAUL: "수확",
+	Axis.CROWD: "규모",
+}
+
+## 한 턴에 나갈 기사 수의 상한 (docs/design/19-rekka-voice.md §19.4.3).
+const MAX_ARTICLES := 3
+
+## 제목의 결. 모델이 고르게 두면 한 가지로 수렴하므로 여기서 배정한다 (§19.6.2).
+const TITLE_SHAPES: Array[String] = [
+	"이름에 한 단어만 붙인 것",
+	"명사로 끊긴 파편",
+	"물음",
+	"반말 한 마디",
+	"누가 내뱉은 말을 옮긴 것 같은 것",
+	"완결된 서술문",
+]
+
+## 본문의 결.
+const BODY_SHAPES: Array[String] = [
+	"한 문장으로 끝",
+	"파편 두어 개를 이어 붙인 것",
+	"물음만",
+	"반말만",
+	"존댓말만",
+	"반말로 사실을 적고 존댓말로 비꼬는 것",
+]
 
 
 ## 사건 종류의 한국어 표기.
@@ -60,26 +118,49 @@ static func kind_label(kind: GameEvent.Kind) -> String:
 	return _KIND_LABELS.get(kind, "")
 
 
-## 보도값의 단위 이름. 수치가 뜻을 갖지 않는 종류는 빈 문자열이다.
-static func magnitude_unit(kind: GameEvent.Kind) -> String:
-	return _KIND_UNITS.get(kind, "")
+## 이 종류의 `magnitude` 가 무엇을 세는 값인가.
+static func axis_of(kind: GameEvent.Kind) -> Axis:
+	return _KIND_AXES.get(kind, Axis.NONE)
 
 
-## 실제 수치를 보도값으로 부풀린다. **줄어드는 경우는 없다.**
+## 값어치를 수확 등급으로 옮긴다. **0 은 등급이 아니라 빈손이다.**
 ##
-## 0 은 그대로 0 이다. 없는 일에 숫자를 붙이면 사건을 지어내는 것과 같다.
-static func inflate(magnitude: int, rng: RandomNumberGenerator) -> int:
+## 없는 일에 등급을 붙이면 사건을 지어내는 것과 같다. 다만 빈손은 지어낸 것이
+## 아니라 실제로 허탕을 쳤다는 정보이므로 등급으로 남긴다.
+static func haul_grade(magnitude: int) -> String:
+	return HAUL_GRADES[_bucket(magnitude, HAUL_CUTS)]
+
+
+## 사람 수를 규모 등급으로 옮긴다. 인원이 기록되지 않았으면 빈 문자열이다.
+##
+## 여기서 0 을 등급으로 만들면 "아무도 없는 전투" 가 기사에 실린다.
+static func crowd_grade(magnitude: int) -> String:
 	if magnitude <= 0:
-		return 0
-	return magnitude * rng.randi_range(INFLATE_MIN, INFLATE_MAX)
+		return ""
+	return CROWD_GRADES[_bucket(magnitude, CROWD_CUTS)]
+
+
+## 사건의 등급 칸을 만든다. 등급이 없는 사건은 빈 문자열이다.
+static func grade_slot(event: GameEvent) -> String:
+	var axis := axis_of(event.kind)
+	var grade := ""
+	match axis:
+		Axis.HAUL:
+			grade = haul_grade(event.magnitude)
+		Axis.CROWD:
+			grade = crowd_grade(event.magnitude)
+		_:
+			grade = ""
+	if grade.is_empty():
+		return ""
+	return "%s=%s" % [_AXIS_SLOTS[axis], grade]
 
 
 ## 사건 하나를 프롬프트 한 줄로 옮긴다.
 ##
-## 실제 magnitude 는 넘기지 않는다. 넘기면 모델이 둘 사이에서 타협해
-## 보도값보다 작은 수를 적을 여지가 생긴다.
+## 수치는 한 칸도 나가지 않는다. 등급만 나간다.
 static func serialize_event(
-	event: GameEvent, reported: int, player_actor_id: String = "", names: Dictionary = {}
+	event: GameEvent, player_actor_id: String = "", names: Dictionary = {}
 ) -> String:
 	var side := "플레이어" if event.actor_id == player_actor_id else "타인"
 	var parts: Array[String] = [
@@ -88,13 +169,12 @@ static func serialize_event(
 		"어디서=%s" % event.room_name,
 		"무엇을=%s" % kind_label(event.kind),
 	]
-	var unit := magnitude_unit(event.kind)
-	if reported > 0 and not unit.is_empty():
-		parts.append("보도값=%d" % reported)
-		parts.append("단위=%s" % unit)
-	var together := _resolve_names(event.related_actor_ids, names)
-	if not together.is_empty():
-		parts.append("함께=%s" % ", ".join(together))
+	var grade := grade_slot(event)
+	if not grade.is_empty():
+		parts.append(grade)
+	var others := _resolve_names(event.related_actor_ids, names)
+	if not others.is_empty():
+		parts.append("상대=%s" % ", ".join(others))
 	return " | ".join(parts)
 
 
@@ -102,24 +182,85 @@ static func serialize_event(
 ##
 ## 사건이 없어도 블록을 만든다. **조용한 턴에도 기사는 나가야 한다** —
 ## 아무도 안 움직였다는 것 자체가 위험도 숫자에 대한 정보이기 때문이다 (§19.6.3).
+##
+## `recent_titles` 는 직전 턴들의 제목이다. 모델은 턴마다 새로 불리므로
+## 자기가 방금 무슨 결로 썼는지 모르고, 그래서 매번 같은 틀로 돌아간다.
+## 최근 제목을 함께 넘기는 것이 그 반복을 깨는 유일한 장치다 (§19.4.2).
 static func serialize_turn(
 	turn: int,
 	events: Array[GameEvent],
 	viewpoint: String,
-	rng: RandomNumberGenerator,
 	player_actor_id: String = "",
-	names: Dictionary = {}
+	names: Dictionary = {},
+	recent_titles: Array[String] = [] as Array[String]
 ) -> String:
 	var lines: Array[String] = ["턴: %d" % turn, "시점: %s" % viewpoint]
+	if not recent_titles.is_empty():
+		lines.append("최근: %s" % " / ".join(recent_titles))
 	if events.is_empty():
 		lines.append("사건: 없음")
 		return "\n".join(lines)
 
 	lines.append("사건:")
 	for event in events:
-		var reported := inflate(event.magnitude, rng)
-		lines.append(serialize_event(event, reported, player_actor_id, names))
+		lines.append(serialize_event(event, player_actor_id, names))
 	return "\n".join(lines)
+
+
+## 이 턴에 기사가 몇 편 나가는가.
+##
+## **편수는 문체가 아니라 규칙이다.** 모델에게 맡겼더니 사건이 하나도 없는 턴에
+## 세 편을 썼다 (§19.6.1 의 실측). 같은 방 사건은 한 편으로 묶이므로
+## 방의 수가 곧 편수이고, 이동만 남은 방들은 마지막 한 편에 몰아 담는다.
+static func article_count(events: Array[GameEvent]) -> int:
+	if events.is_empty():
+		return 1
+	var hot: Dictionary = {}
+	var moved_only: Dictionary = {}
+	for event in events:
+		if event.kind == GameEvent.Kind.MOVED:
+			moved_only[event.room_id] = true
+		else:
+			hot[event.room_id] = true
+	if hot.is_empty():
+		return 1
+	var count := mini(MAX_ARTICLES, hot.size())
+	for room_id in moved_only:
+		if not hot.has(room_id) and count < MAX_ARTICLES:
+			return count + 1
+	return count
+
+
+## 기사 하나에 배정할 결. `index` 는 판이 시작한 뒤로 몇 번째 기사인가다.
+##
+## 결을 프롬프트의 지침으로만 두면 모델이 지키지 않는다. 실측에서
+## 턴별 호출만으로는 최빈 형태가 오히려 66%까지 올라갔고,
+## 이 배정을 넣은 뒤에야 22%로 내려갔다 (§19.6.2).
+##
+## 36편까지 같은 짝이 두 번 나오지 않는다.
+static func shape_hint(index: int) -> String:
+	var title: String = TITLE_SHAPES[index % TITLE_SHAPES.size()]
+	var body: String = BODY_SHAPES[(index / BODY_SHAPES.size() + index) % BODY_SHAPES.size()]
+	return "제목 %s / 본문 %s" % [title, body]
+
+
+## 한 턴의 결 지시문. 사용자 메시지에서 사건 블록 뒤에 붙는다.
+static func serialize_order(start_index: int, count: int) -> String:
+	var lines: Array[String] = ["이번 턴에 나갈 기사는 정확히 %d편이다. 더도 덜도 쓰지 마라." % count]
+	lines.append("각 편에 쓸 결을 지정한다.")
+	for offset in count:
+		lines.append("  %d번째 기사 - %s" % [offset + 1, shape_hint(start_index + offset)])
+	lines.append("결은 협상 대상이 아니다. 지정된 대로 써라. 사실은 입력 그대로 유지한다.")
+	return "\n".join(lines)
+
+
+## 값이 경계값 몇 개를 넘었는가. 그대로 등급 배열의 첨자가 된다.
+static func _bucket(value: int, cuts: Array[int]) -> int:
+	var index := 0
+	for cut in cuts:
+		if value >= cut:
+			index += 1
+	return index
 
 
 ## id 를 표시명으로 바꾼다. 모르는 id 는 그대로 둔다.
