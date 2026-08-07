@@ -85,6 +85,27 @@ func test_flow_field_reaches_the_goal_through_the_gate() -> void:
 	assert_lt(walker.distance_to(goal), 20.0, "흐름장을 따라가도 목적지에 닿지 못했다")
 
 
+func test_flow_direction_does_not_jump_between_cells() -> void:
+	# **지터의 진짜 원인이 여기 있었다.** 칸마다 방향은 8 방향 중 하나로 고정되어 있어,
+	# 칸 하나만 읽으면 유닛이 칸 경계를 넘는 순간 조향 방향이 45 도씩 통째로 뛴다.
+	# 회전 속도 제한은 그 뜀을 없애 주지 않는다 — 튀는 목표를 쫓게 만들어 좌우 왕복으로 바꾼다.
+	# 둘레 네 칸을 섞어 읽으면 격자가 연속적인 장이 되어 그 뜀이 사라진다.
+	# 벽이 없는 판에서 잰다. 벽에 몸이 걸릴 때의 보정은 따로 있고, 여기서 보려는 것은
+	# **격자를 읽는 것만으로 생기는 뜀**이다.
+	var grid := _open_grid()
+	var field := grid.build_flow_field(grid.cell_to_world(Vector2i(17, 6)))
+	var probe := grid.cell_to_world(Vector2i(3, 3))
+	var previous := field.direction_at(probe, 8.0)
+	var worst := 0.0
+	for _i in 120:
+		probe += Vector2(2.0, 1.0)
+		var now := field.direction_at(probe, 8.0)
+		if previous != Vector2.ZERO and now != Vector2.ZERO:
+			worst = maxf(worst, absf(rad_to_deg(now.angle_to(previous))))
+		previous = now
+	assert_lt(worst, 20.0, "칸을 넘을 때 조향 방향이 %.0f 도 뛰었다" % worst)
+
+
 func test_flow_field_cost_grows_with_distance() -> void:
 	var grid := _open_grid()
 	var field := grid.build_flow_field(grid.cell_to_world(Vector2i(1, 1)))
