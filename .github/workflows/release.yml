@@ -1,0 +1,125 @@
+name: Release
+
+# 제출물을 한 번에 만들어 낸다: 웹 빌드 zip + AI 활용 기술 문서 PDF.
+#
+# - v* 태그를 푸시하면 GitHub Release 를 만들고 두 파일을 첨부한다.
+# - 수동 실행(workflow_dispatch)은 Release 를 만들지 않고 워크플로 아티팩트로만 올린다.
+#   릴리스를 공개하지 않고 산출물을 점검하기 위한 경로다.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: 4.7.1
+  EXPORT_PRESET: Web
+
+jobs:
+  build:
+    name: Build submission artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version label
+        id: meta
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "label=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "label=dev-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ---------- 웹 빌드 ----------
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          export-templates: 'true'
+
+      - name: Import resources
+        run: godot --headless --import
+
+      - name: Export "${{ env.EXPORT_PRESET }}" preset
+        run: |
+          set -euo pipefail
+          mkdir -p build/web
+          godot --headless --export-release "${EXPORT_PRESET}" build/web/index.html
+          test -f build/web/index.html
+
+      - name: Package web build
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          # zip 안에 build/web 경로가 아니라 파일들이 바로 오도록 -C 로 들어가서 압축한다.
+          (cd build/web && zip -qr "${GITHUB_WORKSPACE}/dist/NHNProject-web-${LABEL}.zip" .)
+        env:
+          LABEL: ${{ steps.meta.outputs.label }}
+
+      # ---------- 문서 PDF ----------
+      # 한글 폰트가 없으면 PDF 의 모든 한글이 두부(□)로 렌더링된다.
+      - name: Install Korean fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk
+          fc-list :lang=ko family | head -3
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build AI usage document PDF
+        run: |
+          set -euo pipefail
+          pip install markdown
+          python tools/build_docs.py docs/ai-usage.md "dist/AI활용기술문서-${LABEL}.pdf"
+        env:
+          LABEL: ${{ steps.meta.outputs.label }}
+
+      # 한글이 실제로 렌더링됐는지 확인한다. 폰트가 없으면 텍스트 추출은 되지만
+      # 임베드 폰트 목록에 한글 폰트가 없다. 그래서 폰트를 직접 검사한다.
+      - name: Verify PDF
+        run: |
+          set -euo pipefail
+          pip install pypdf
+          python - <<'PY'
+          import glob, sys, pypdf
+          path = glob.glob("dist/*.pdf")[0]
+          reader = pypdf.PdfReader(path)
+          fonts = set()
+          for page in reader.pages:
+              for font in (page.get("/Resources", {}).get("/Font") or {}).values():
+                  fonts.add(str(font.get_object().get("/BaseFont")))
+          print("pages:", len(reader.pages))
+          print("fonts:", sorted(fonts))
+          if not any("CJK" in f or "Malgun" in f or "Nanum" in f for f in fonts):
+              sys.exit("한글 폰트가 PDF 에 임베드되지 않았습니다: %s" % sorted(fonts))
+          PY
+
+      - name: List artifacts
+        run: ls -la dist
+
+      # ---------- 산출물 ----------
+      - uses: actions/upload-artifact@v4
+        with:
+          name: submission-${{ steps.meta.outputs.label }}
+          path: dist/*
+
+      - name: Create GitHub Release
+        if: steps.meta.outputs.is_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: ${{ steps.meta.outputs.label }}
+        run: |
+          set -euo pipefail
+          gh release create "${LABEL}" dist/* \
+            --title "${LABEL}" \
+            --notes "웹 빌드: https://adohi.github.io/NHNProject/
+
+          - \`NHNProject-web-${LABEL}.zip\` — 웹 빌드 (정적 서버에 그대로 올려 실행)
+          - \`AI활용기술문서-${LABEL}.pdf\` — AI 활용 기술 문서"

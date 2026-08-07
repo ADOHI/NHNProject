@@ -1,0 +1,61 @@
+name: Quality
+
+# 코드 품질 게이트. 컨벤션(docs/conventions.md)을 문서가 아니라 CI 가 강제한다.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'addons/**'
+      - 'project.godot'
+      - '.gdlintrc'
+      - '.gutconfig.json'
+      - '.github/workflows/quality.yml'
+      - '.github/actions/**'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7.1
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install gdtoolkit
+        run: pip install "gdtoolkit==4.*"
+
+      # addons/ 는 서드파티라 검사하지 않는다 (.gdlintrc 의 excluded_directories).
+      - name: gdlint
+        run: gdlint src test
+
+      - name: gdformat --check
+        run: gdformat --check src test
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 테스트는 익스포트하지 않으므로 템플릿이 필요 없다.
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          export-templates: 'false'
+
+      - name: Import resources
+        run: godot --headless --import
+
+      # GUT 설정은 .gutconfig.json 에 있다 (테스트 위치, 종료 코드 등).
+      - name: Run GUT
+        run: godot --headless -s res://addons/gut/gut_cmdln.gd

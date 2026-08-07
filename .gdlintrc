@@ -1,0 +1,13 @@
+# gdlint 설정. 명시하지 않은 항목은 gdtoolkit 기본값을 따른다.
+# 기본값 전체를 보려면:  gdlint --dump-default-config
+#
+# 네이밍 규칙(snake_case 파일, PascalCase 클래스 등)은 기본값이 이미
+# docs/conventions.md §2 와 일치하므로 다시 적지 않는다.
+
+excluded_directories: !!set
+  .git: null
+  .godot: null
+  # 서드파티 애드온은 우리 컨벤션을 따르지 않는다. 검사 대상이 아니다.
+  addons: null
+
+max-line-length: 100

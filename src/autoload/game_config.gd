@@ -6,15 +6,18 @@ extends Node
 
 ## 프로젝트 표시 이름. project.godot 의 application/config/name 을 그대로 읽는다.
 var title: String:
-	get: return String(ProjectSettings.get_setting("application/config/name", "NHNProject"))
+	get:
+		return String(ProjectSettings.get_setting("application/config/name", "NHNProject"))
 
 ## 빌드 버전. project.godot 의 application/config/version 을 그대로 읽는다.
 var version: String:
-	get: return String(ProjectSettings.get_setting("application/config/version", "0.0.0"))
+	get:
+		return String(ProjectSettings.get_setting("application/config/version", "0.0.0"))
 
 ## 웹(HTML5)에서 실행 중인지 여부. 웹 전용 분기(파일 저장, 커서, 오디오 시작 조건 등)에 쓴다.
 var is_web: bool:
-	get: return OS.has_feature("web")
+	get:
+		return OS.has_feature("web")
 
 
 func _ready() -> void:

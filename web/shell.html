@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ko">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+		<title>$GODOT_PROJECT_NAME</title>
+		<style>
+/*
+ * Godot 기본 셸(misc/dist/html/full-size.html)을 대체하는 커스텀 셸.
+ * 아래 자바스크립트의 엔진 초기화 로직은 기본 셸과 동일하게 유지한다.
+ * 바꾼 것은 로딩 화면의 표현뿐이다.  근거: docs/web-build.md
+ */
+
+html, body, #canvas {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+body {
+	color: #e8eaee;
+	background-color: #171a21;
+	overflow: hidden;
+	touch-action: none;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic",
+		"Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+	-webkit-font-smoothing: antialiased;
+}
+
+#canvas {
+	display: block;
+}
+
+#canvas:focus {
+	outline: none;
+}
+
+#status {
+	position: absolute;
+	inset: 0;
+	background-color: #171a21;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	gap: 1.5rem;
+	padding: 2rem;
+	box-sizing: border-box;
+	visibility: hidden;
+	transition: opacity 0.35s ease;
+	z-index: 1;
+}
+
+#status.is-hiding {
+	opacity: 0;
+	pointer-events: none;
+}
+
+#status-title {
+	font-size: clamp(1.75rem, 6vw, 2.75rem);
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	margin: 0;
+	text-align: center;
+}
+
+/* 로딩 표시. 진행률을 아는 경우와 모르는 경우를 모두 처리한다. */
+#status-progress {
+	display: none;
+	width: min(22rem, 80vw);
+	flex-direction: column;
+	gap: 0.6rem;
+}
+
+#status-bar {
+	position: relative;
+	height: 4px;
+	border-radius: 999px;
+	background-color: #2b3040;
+	overflow: hidden;
+}
+
+#status-bar-fill {
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 0;
+	border-radius: 999px;
+	background-color: #4fc3f7;
+	transition: width 0.2s ease;
+}
+
+/* 전체 용량을 모를 때(서버가 Content-Length 를 안 주는 경우) 쓰는 무한 애니메이션 */
+#status-bar.is-indeterminate #status-bar-fill {
+	width: 35%;
+	animation: sliding 1.1s ease-in-out infinite;
+}
+
+@keyframes sliding {
+	0%   { transform: translateX(-100%); }
+	100% { transform: translateX(320%); }
+}
+
+#status-detail {
+	display: flex;
+	justify-content: space-between;
+	font-size: 0.8125rem;
+	font-variant-numeric: tabular-nums;
+	color: #8a92a3;
+}
+
+#status-notice {
+	display: none;
+	max-width: 32rem;
+	background-color: #3a2029;
+	border: 1px solid #8b3a4a;
+	border-radius: 0.5rem;
+	padding: 1.25rem 1.5rem;
+	line-height: 1.6;
+	font-size: 0.9375rem;
+	text-align: left;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+#status-notice strong {
+	display: block;
+	margin-bottom: 0.5rem;
+	font-size: 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	#status, #status-bar-fill { transition: none; }
+	#status-bar.is-indeterminate #status-bar-fill { animation: none; width: 100%; }
+}
+		</style>
+		$GODOT_HEAD_INCLUDE
+	</head>
+	<body>
+		<canvas id="canvas">
+			이 브라우저는 canvas 를 지원하지 않습니다.
+		</canvas>
+
+		<noscript>
+			이 게임을 실행하려면 자바스크립트가 필요합니다.
+		</noscript>
+
+		<div id="status">
+			<h1 id="status-title">$GODOT_PROJECT_NAME</h1>
+			<div id="status-progress">
+				<div id="status-bar"><div id="status-bar-fill"></div></div>
+				<div id="status-detail">
+					<span id="status-percent">불러오는 중…</span>
+					<span id="status-size"></span>
+				</div>
+			</div>
+			<div id="status-notice"></div>
+		</div>
+
+		<script src="$GODOT_URL"></script>
+		<script>
+const GODOT_CONFIG = $GODOT_CONFIG;
+const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
+const engine = new Engine(GODOT_CONFIG);
+
+(function () {
+	const statusOverlay = document.getElementById('status');
+	const statusProgress = document.getElementById('status-progress');
+	const statusBar = document.getElementById('status-bar');
+	const statusBarFill = document.getElementById('status-bar-fill');
+	const statusPercent = document.getElementById('status-percent');
+	const statusSize = document.getElementById('status-size');
+	const statusNotice = document.getElementById('status-notice');
+
+	let initializing = true;
+	let statusMode = '';
+
+	function setStatusMode(mode) {
+		if (statusMode === mode || !initializing) {
+			return;
+		}
+		if (mode === 'hidden') {
+			// 곧바로 제거하지 않고 페이드아웃시킨다. 화면이 툭 끊기지 않도록.
+			statusOverlay.classList.add('is-hiding');
+			setTimeout(() => statusOverlay.remove(), 400);
+			initializing = false;
+			return;
+		}
+		statusOverlay.style.visibility = 'visible';
+		statusProgress.style.display = mode === 'progress' ? 'flex' : 'none';
+		statusNotice.style.display = mode === 'notice' ? 'block' : 'none';
+		statusMode = mode;
+	}
+
+	function formatMegabytes(bytes) {
+		return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+	}
+
+	function setProgress(current, total) {
+		if (current > 0 && total > 0) {
+			const ratio = Math.min(current / total, 1);
+			statusBar.classList.remove('is-indeterminate');
+			statusBarFill.style.width = (ratio * 100).toFixed(1) + '%';
+			statusPercent.textContent = Math.round(ratio * 100) + '%';
+			statusSize.textContent = formatMegabytes(current) + ' / ' + formatMegabytes(total);
+		} else {
+			// 서버가 전체 용량을 알려주지 않는 경우. 퍼센트를 만들어내지 않는다.
+			statusBar.classList.add('is-indeterminate');
+			statusPercent.textContent = '불러오는 중…';
+			statusSize.textContent = current > 0 ? formatMegabytes(current) : '';
+		}
+	}
+
+	function setStatusNotice(title, detail) {
+		while (statusNotice.lastChild) {
+			statusNotice.removeChild(statusNotice.lastChild);
+		}
+		const heading = document.createElement('strong');
+		heading.textContent = title;
+		statusNotice.appendChild(heading);
+		statusNotice.appendChild(document.createTextNode(detail));
+	}
+
+	function displayFailureNotice(err) {
+		console.error(err);
+		let detail;
+		if (err instanceof Error) {
+			detail = err.message;
+		} else if (typeof err === 'string') {
+			detail = err;
+		} else {
+			detail = '알 수 없는 오류가 발생했습니다.';
+		}
+		setStatusNotice('게임을 실행할 수 없습니다', detail);
+		setStatusMode('notice');
+		initializing = false;
+	}
+
+	// ↓ 여기부터는 Godot 기본 셸의 초기화 로직이다. 동작을 바꾸지 않는다.
+	const missing = Engine.getMissingFeatures({
+		threads: GODOT_THREADS_ENABLED,
+	});
+
+	if (missing.length !== 0) {
+		if (GODOT_CONFIG['serviceWorker'] && GODOT_CONFIG['ensureCrossOriginIsolationHeaders'] && 'serviceWorker' in navigator) {
+			let serviceWorkerRegistrationPromise;
+			try {
+				serviceWorkerRegistrationPromise = navigator.serviceWorker.getRegistration();
+			} catch (err) {
+				serviceWorkerRegistrationPromise = Promise.reject(new Error('Service worker registration failed.'));
+			}
+			// There's a chance that installing the service worker would fix the issue
+			Promise.race([
+				serviceWorkerRegistrationPromise.then((registration) => {
+					if (registration != null) {
+						return Promise.reject(new Error('Service worker already exists.'));
+					}
+					return registration;
+				}).then(() => engine.installServiceWorker()),
+				// For some reason, `getRegistration()` can stall
+				new Promise((resolve) => {
+					setTimeout(() => resolve(), 2000);
+				}),
+			]).then(() => {
+				// Reload if there was no error.
+				window.location.reload();
+			}).catch((err) => {
+				console.error('Error while registering service worker:', err);
+			});
+		} else {
+			setStatusNotice(
+				'브라우저가 지원하지 않는 기능이 있습니다',
+				'이 게임을 실행하려면 아래 기능이 필요합니다.\n\n' + missing.join('\n')
+					+ '\n\n최신 버전의 Chrome, Edge, Firefox 에서 다시 시도해 주세요.'
+			);
+			setStatusMode('notice');
+			initializing = false;
+		}
+	} else {
+		setStatusMode('progress');
+		engine.startGame({
+			'onProgress': setProgress,
+		}).then(() => {
+			setStatusMode('hidden');
+		}, displayFailureNotice);
+	}
+}());
+		</script>
+	</body>
+</html>

@@ -29,11 +29,61 @@ Godot 헤드리스 익스포트 → GitHub Pages.
 
 익스포트 시 `web_nothreads_release.zip` 을 찾는다면 설정이 제대로 먹은 것이다.
 
+### `html/custom_html_shell = res://web/shell.html`
+
+Godot 기본 셸은 회색 배경에 진행 막대 하나가 전부다. 웹 제출에서는
+**로딩 화면이 채점자가 처음 보는 화면**이므로 커스텀 셸로 교체했다.
+
+기본 셸과 달라진 것은 표현뿐이다. 엔진 초기화 로직
+(`Engine.getMissingFeatures` 검사, 서비스워커 재시도 경로, `engine.startGame`)은
+공식 셸(`misc/dist/html/full-size.html`)과 동일하게 유지한다.
+**이 부분은 손대지 말 것** — 브라우저 호환성 처리가 들어 있다.
+
+셸이 제공하는 것:
+
+- 프로젝트 제목과 진행률(%), 다운로드 용량(MB)
+- 전체 용량을 모를 때(서버가 `Content-Length` 미제공)의 무한 진행 표시
+- 지원되지 않는 브라우저일 때 한국어 안내
+- 로딩 완료 시 페이드아웃
+
+셸에는 `$GODOT_CONFIG`, `$GODOT_THREADS_ENABLED`, `$GODOT_URL`,
+`$GODOT_PROJECT_NAME`, `$GODOT_HEAD_INCLUDE` 플레이스홀더가 반드시 있어야 한다.
+익스포트 시 Godot 이 이 문자열을 치환한다. 하나라도 빠지면 빌드는 되지만 실행되지 않는다.
+
+### `exclude_filter = "test/*, addons/gut/*"`
+
+테스트 코드와 GUT(약 3MB)를 빌드에서 뺀다.
+웹 빌드는 다운로드 용량이 곧 이탈률이므로 게임에 쓰이지 않는 파일은 담지 않는다.
+
 ### `html/canvas_resize_policy = 2`
 
 캔버스를 브라우저 창 크기에 맞춘다. 채점자가 어떤 화면에서 열든
 잘리지 않도록 하기 위한 설정이며, `project.godot` 의
 `window/stretch/mode = canvas_items` 와 짝을 이룬다.
+
+## 제출물 만들기
+
+`v` 로 시작하는 태그를 푸시하면 웹 빌드 zip 과 AI 활용 기술 문서 PDF 가
+GitHub Release 에 자동 첨부된다.
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+릴리스를 공개하지 않고 산출물만 확인하려면 Actions 탭에서 `Release` 워크플로를
+수동 실행한다. 이 경우 Release 를 만들지 않고 워크플로 아티팩트로만 올라간다.
+
+## 워크플로 구성
+
+| 워크플로 | 언제 | 하는 일 |
+| --- | --- | --- |
+| `deploy-web.yml` | `main` 푸시 (문서·도구 변경 제외) | 웹 빌드 → GitHub Pages 배포 |
+| `quality.yml` | `src/` `test/` 등 변경 | gdlint · gdformat · GUT 테스트 |
+| `release.yml` | `v*` 태그 푸시 / 수동 | 웹 zip + 문서 PDF 패키징 |
+
+엔진 설치는 세 워크플로가 `.github/actions/setup-godot` 합성 액션을 공유한다.
+Godot 버전을 올릴 때는 각 워크플로의 `env.GODOT_VERSION` 을 맞춘다.
 
 ## 최초 1회 설정 (저장소 소유자)
 

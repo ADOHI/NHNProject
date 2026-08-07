@@ -16,6 +16,12 @@ src/
 └── main/
     ├── main.tscn           # 부트 씬 (project.godot 의 main_scene)
     └── main.gd
+
+test/unit/
+└── test_game_config.gd     # GameConfig 단위 테스트
+
+addons/gut/                 # GUT 9.7.1 (벤더링). 빌드에서 제외된다
+web/shell.html              # 웹 빌드용 커스텀 HTML 셸
 ```
 
 ### `GameConfig` (오토로드)
@@ -71,3 +77,4 @@ Forward+ / Mobile 렌더러는 Vulkan 기반이라 브라우저에서 동작하�
 | 날짜 | 변경 | 사유 |
 | --- | --- | --- |
 | 2026-08-07 | `scenes/` + `scripts/` → `src/` 기능 단위 구조 | 타입별 분리는 기능 하나를 고칠 때 여러 폴더를 오가게 만든다. 근거는 [conventions.md](conventions.md) §1 |
+| 2026-08-07 | GUT · gdtoolkit · 커스텀 웹 셸 · Release 워크플로 도입 | 콘텐츠가 붙기 전에 품질 게이트와 제출 파이프라인을 먼저 세웠다. 코드가 늘어난 뒤에는 도입 비용이 커진다 |

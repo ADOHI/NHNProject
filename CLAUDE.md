@@ -22,9 +22,13 @@ Godot 4.7.1 기반 2D 게임. **웹(HTML5) 빌드로 제출**한다.
 코드 변경 후 아래를 통과해야 커밋한다. 코드 리뷰만으로 채택하지 않는다.
 
 ```bash
-godot --headless --path . --import          # 임포트 오류 없음
-godot --headless --path . --quit-after 60   # 런타임 오류 없음
+godot --headless --path . --import                          # 임포트 오류 없음
+godot --headless --path . --quit-after 60                   # 런타임 오류 없음
+godot --headless --path . -s res://addons/gut/gut_cmdln.gd  # 테스트 통과
+gdlint src test && gdformat --check src test                # 컨벤션 통과
 ```
+
+마지막 두 줄은 CI 가 `quality.yml` 에서 똑같이 검사한다. 로컬에서 먼저 돌리면 왕복이 준다.
 
 구조를 옮기는 변경(파일 이동/이름 변경)은 `.godot/` 캐시를 지우고 검증한다.
 캐시가 깨진 경로를 가려 준다.

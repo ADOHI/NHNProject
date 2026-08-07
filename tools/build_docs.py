@@ -28,12 +28,19 @@ DEFAULT_SOURCE = ROOT / "docs" / "ai-usage.md"
 DEFAULT_OUTPUT = ROOT / "docs" / "build" / "AI활용기술문서.pdf"
 
 # Chrome 계열 브라우저 후보. 앞에 있는 것부터 찾는다.
+# Windows 로컬과 Linux CI 양쪽에서 동작해야 한다.
 BROWSER_CANDIDATES = (
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
 )
+
+# PATH 에서 찾을 때 쓸 실행 파일 이름.
+BROWSER_COMMANDS = ("google-chrome", "chromium-browser", "chromium", "chrome", "msedge")
 
 # A4 인쇄용 스타일. 화면용이 아니라 종이 기준이므로 pt 단위를 쓴다.
 PRINT_CSS = """
@@ -42,7 +49,8 @@ PRINT_CSS = """
 html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
 body {
-  font-family: "Malgun Gothic", "맑은 고딕", "Noto Sans KR", sans-serif;
+  /* Windows 로컬은 맑은 고딕, Linux CI 는 fonts-noto-cjk 로 설치한 Noto Sans CJK KR 을 쓴다. */
+  font-family: "Malgun Gothic", "맑은 고딕", "Noto Sans CJK KR", "Noto Sans KR", sans-serif;
   font-size: 10.5pt;
   line-height: 1.65;
   color: #1b1d21;
@@ -97,7 +105,7 @@ th, td {
 th { background: #eef0f4; font-weight: 600; }
 
 code {
-  font-family: Consolas, "D2Coding", monospace;
+  font-family: Consolas, "D2Coding", "Noto Sans Mono CJK KR", monospace;
   font-size: 9pt;
   background: #eef0f4;
   padding: 1pt 3pt;
@@ -150,10 +158,11 @@ def find_browser() -> str:
     for path in BROWSER_CANDIDATES:
         if Path(path).exists():
             return path
-    found = shutil.which("chrome") or shutil.which("msedge")
-    if found:
-        return found
-    sys.exit("Chrome 또는 Edge 를 찾지 못했습니다. PDF 생성에는 둘 중 하나가 필요합니다.")
+    for name in BROWSER_COMMANDS:
+        found = shutil.which(name)
+        if found:
+            return found
+    sys.exit("Chrome 계열 브라우저를 찾지 못했습니다. PDF 생성에는 Chrome/Chromium/Edge 가 필요합니다.")
 
 
 def render_html(source: Path) -> str:

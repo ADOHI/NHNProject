@@ -25,6 +25,18 @@ godot --path . --editor
 godot --path .
 ```
 
+## 테스트 · 품질 검사
+
+```bash
+godot --headless --path . -s res://addons/gut/gut_cmdln.gd
+```
+
+```bash
+pip install "gdtoolkit==4.*" && gdlint src test && gdformat --check src test
+```
+
+둘 다 `main` 푸시 시 CI(`quality.yml`)가 동일하게 검사한다.
+
 ## 웹 빌드
 
 로컬에서 뽑기 (익스포트 템플릿 설치 후):
@@ -51,9 +63,12 @@ python -m http.server 8060 --directory build/web
 | `src/autoload/` | 자동 로드 싱글톤 |
 | `src/main/` | 진입점 씬 |
 | `assets/` | 여러 기능이 공유하는 원본 에셋 |
+| `test/` | 단위 테스트 (GUT). 빌드에 포함되지 않는다 |
+| `addons/` | 서드파티 애드온 (GUT) |
+| `web/` | 웹 빌드용 커스텀 HTML 셸 |
 | `docs/` | 기획·설계·운영 문서 |
 | `tools/` | 개발 보조 스크립트 (문서 PDF 빌드 등) |
-| `.github/workflows/` | 웹 빌드 & Pages 배포 |
+| `.github/workflows/` | 웹 배포 · 품질 검사 · 제출물 패키징 |
 
 씬·스크립트·전용 에셋은 같은 기능 폴더에 함께 둔다.
 자세한 규칙은 [docs/conventions.md](docs/conventions.md) 참고.
