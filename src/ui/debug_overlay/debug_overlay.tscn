@@ -1,69 +1,78 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://src/ui/debug_overlay/debug_overlay.gd" id="1_debug"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-content_margin_left = 16.0
-content_margin_top = 14.0
-content_margin_right = 16.0
-content_margin_bottom = 14.0
-bg_color = Color(0.07, 0.08, 0.11, 0.95)
-border_width_left = 1
-border_color = Color(0.28, 0.32, 0.4, 1)
 
 [node name="DebugOverlay" type="PanelContainer"]
 anchor_left = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -430.0
+offset_left = -446.0
+offset_top = 100.0
 grow_horizontal = 0
 grow_vertical = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 script = ExtResource("1_debug")
+layer = 2
 
-[node name="Scroll" type="ScrollContainer" parent="."]
+[node name="Content" type="MarginContainer" parent="."]
 layout_mode = 2
 
-[node name="Rows" type="VBoxContainer" parent="Scroll"]
+[node name="Scroll" type="ScrollContainer" parent="Content"]
+layout_mode = 2
+
+[node name="Rows" type="VBoxContainer" parent="Content/Scroll"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 12
+theme_override_constants/separation = 4
 
-[node name="Title" type="Label" parent="Scroll/Rows"]
+[node name="Title" type="Label" parent="Content/Scroll/Rows"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.98, 0.78, 0.4, 1)
-theme_override_font_sizes/font_size = 15
-text = "개발 정보  •  F1 로 닫기"
+theme_type_variation = &"Title"
+text = "판의 진실"
 
-[node name="SummaryLabel" type="Label" parent="Scroll/Rows"]
+[node name="Subtitle" type="Label" parent="Content/Scroll/Rows"]
+layout_mode = 2
+theme_type_variation = &"Micro"
+text = "송출되지 않는 화면      F1 로 닫기"
+
+[node name="Gap" type="Control" parent="Content/Scroll/Rows"]
+custom_minimum_size = Vector2(0, 14)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="SummaryLabel" type="Label" parent="Content/Scroll/Rows"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.82, 0.86, 0.93, 1)
-theme_override_font_sizes/font_size = 13
+theme_type_variation = &"Caption"
 text = "요약"
 
-[node name="RoomsTitle" type="Label" parent="Scroll/Rows"]
+[node name="Gap2" type="Control" parent="Content/Scroll/Rows"]
+custom_minimum_size = Vector2(0, 14)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.65, 0.75, 1)
-theme_override_font_sizes/font_size = 13
-text = "[ 판의 진실 ]"
+mouse_filter = 2
 
-[node name="RoomsLabel" type="Label" parent="Scroll/Rows"]
+[node name="RoomsTitle" type="Label" parent="Content/Scroll/Rows"]
+layout_mode = 2
+theme_type_variation = &"Micro"
+text = "방마다 실제 위험도와 개체 수"
+
+[node name="RoomsLabel" type="Label" parent="Content/Scroll/Rows"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.78, 0.82, 0.9, 1)
-theme_override_font_sizes/font_size = 12
+theme_type_variation = &"Micro"
 text = "방 목록"
 
-[node name="LogTitle" type="Label" parent="Scroll/Rows"]
+[node name="Gap3" type="Control" parent="Content/Scroll/Rows"]
+custom_minimum_size = Vector2(0, 14)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.65, 0.75, 1)
-theme_override_font_sizes/font_size = 13
-text = "[ 사건 기록 — 렉카 기사의 재료 ]"
+mouse_filter = 2
 
-[node name="LogLabel" type="Label" parent="Scroll/Rows"]
+[node name="LogTitle" type="Label" parent="Content/Scroll/Rows"]
+layout_mode = 2
+theme_type_variation = &"Micro"
+text = "사건 기록      렉카 기사의 재료"
+
+[node name="LogLabel" type="Label" parent="Content/Scroll/Rows"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
-theme_override_font_sizes/font_size = 12
+theme_type_variation = &"Micro"
 text = "로그"

@@ -1,22 +1,7 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://src/ui/dungeon_board/dungeon_board.gd" id="1_board"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hud"]
-content_margin_left = 16.0
-content_margin_top = 12.0
-content_margin_right = 16.0
-content_margin_bottom = 12.0
-bg_color = Color(0.12, 0.13, 0.17, 0.92)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.25, 0.28, 0.35, 1)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
+[ext_resource type="Script" path="res://src/ui/style/signal_panel.gd" id="2_panel"]
 
 [node name="DungeonBoard" type="Control"]
 anchor_right = 1.0
@@ -34,35 +19,113 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="Hud" type="PanelContainer" parent="."]
-offset_left = 24.0
-offset_top = 20.0
-offset_right = 340.0
-offset_bottom = 156.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_hud")
+custom_minimum_size = Vector2(288, 0)
+offset_left = 26.0
+offset_top = 22.0
+offset_right = 26.0
+offset_bottom = 22.0
+grow_horizontal = 1
+grow_vertical = 1
+script = ExtResource("2_panel")
+show_ticks = true
 
-[node name="Rows" type="VBoxContainer" parent="Hud"]
+[node name="Content" type="MarginContainer" parent="Hud"]
 layout_mode = 2
-theme_override_constants/separation = 6
 
-[node name="RoomLabel" type="Label" parent="Hud/Rows"]
-unique_name_in_owner = true
+[node name="Rows" type="VBoxContainer" parent="Hud/Content"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+theme_override_constants/separation = 2
+
+[node name="PlaceCaption" type="Label" parent="Hud/Content/Rows"]
+layout_mode = 2
+theme_type_variation = &"Micro"
 text = "현재 위치"
 
-[node name="ThreatLabel" type="Label" parent="Hud/Rows"]
+[node name="RoomLabel" type="Label" parent="Hud/Content/Rows"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "인접 위험도"
+theme_type_variation = &"Title"
+text = "입구"
 
-[node name="SquadLabel" type="Label" parent="Hud/Rows"]
+[node name="ElevationLabel" type="Label" parent="Hud/Content/Rows"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "스쿼드 전투력"
+theme_type_variation = &"Caption"
+text = "고도 0"
 
-[node name="HintLabel" type="Label" parent="Hud/Rows"]
+[node name="Gap" type="Control" parent="Hud/Content/Rows"]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="ThreatCaption" type="Label" parent="Hud/Content/Rows"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_type_variation = &"Micro"
+text = "인접 위험도 합"
+
+[node name="ThreatRow" type="HBoxContainer" parent="Hud/Content/Rows"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ThreatLabel" type="Label" parent="Hud/Content/Rows/ThreatRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Display"
+text = "0"
+
+[node name="ThreatDeltaLabel" type="Label" parent="Hud/Content/Rows/ThreatRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 0
+theme_type_variation = &"Caption"
+text = ""
+
+[node name="SquadLabel" type="Label" parent="Hud/Content/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "전투력 0   민첩 0"
+
+[node name="Gap2" type="Control" parent="Hud/Content/Rows"]
+custom_minimum_size = Vector2(0, 14)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="HintLabel" type="Label" parent="Hud/Content/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Micro"
 text = "밝은 방을 눌러 이동"
+
+[node name="OnAir" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_top = -96.0
+offset_bottom = -96.0
+grow_horizontal = 2
+grow_vertical = 0
+script = ExtResource("2_panel")
+layer = 1
+
+[node name="Content" type="MarginContainer" parent="OnAir"]
+layout_mode = 2
+
+[node name="Row" type="HBoxContainer" parent="OnAir/Content"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="OnAirLabel" type="Label" parent="OnAir/Content/Row"]
+layout_mode = 2
+theme_type_variation = &"Hype"
+text = "송 출 중"
+
+[node name="TurnLabel" type="Label" parent="OnAir/Content/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "1 턴"

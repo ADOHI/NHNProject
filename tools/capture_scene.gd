@@ -3,16 +3,29 @@ extends SceneTree
 ## 헤드리스로는 렌더링 결과를 볼 수 없어 눈으로 확인하기 위한 용도다.
 ##
 ##   godot --path . -s res://tools/capture_scene.gd -- out.png west_hall gallery shrine
+##
+## 인자는 순서대로 처리한다.
+##
+##   <방 id>    그 방을 눌러 이동한다
+##   zoom3      휠을 3번 굴린다 (음수면 축소: zoom-3)
+##   debug      개발 정보 패널을 켠다
+##   showcase   메인 씬 대신 스타일 확인용 씬을 띄운다
+##   perf       수직동기를 끄고 프레임 시간을 잰다 (웹 60fps 제약 확인용)
 
 const _WARMUP_FRAMES := 12
 
 ## 누른 뒤 캡처까지 두는 여유. 화면은 이번 프레임의 변경을 다음 프레임에 그린다.
 const _SETTLE_FRAMES := 8
 
+## perf 모드에서 재는 프레임 수. 셰이더가 도는 화면에서 몇 초는 봐야 튀는 값이 드러난다.
+const _PERF_FRAMES := 400
+
 var _pressed := false
 var _frames := 0
 var _out_path := "res://.capture.png"
 var _room_path: Array = []
+var _perf := false
+var _frame_times: Array[float] = []
 
 
 func _initialize() -> void:
@@ -20,18 +33,33 @@ func _initialize() -> void:
 	if args.size() > 0:
 		_out_path = "res://%s" % args[0]
 		_room_path = args.slice(1)
-	root.add_child(load("res://src/main/main.tscn").instantiate())
+	var scene := "res://src/main/main.tscn"
+	if _room_path.has("showcase"):
+		scene = "res://src/ui/style/style_showcase.tscn"
+	if _room_path.has("perf"):
+		_perf = true
+		# 수직동기가 켜져 있으면 화면 주사율이 그대로 측정값이 되어 여유를 알 수 없다.
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	root.add_child(load(scene).instantiate())
 
 
 func _process(_delta: float) -> bool:
 	_frames += 1
 	if _frames < _WARMUP_FRAMES:
 		return false
+	if _perf and _pressed and _frame_times.size() < _PERF_FRAMES:
+		_frame_times.append(_delta)
+		return false
+	if _perf and not _frame_times.is_empty():
+		_report_frame_times()
+		_frame_times.clear()
 	if not _pressed:
 		_pressed = true
 		for room_id in _room_path:
 			if room_id == "debug":
 				_press_debug_button()
+			elif room_id == "showcase":
+				continue
 			elif room_id.begins_with("zoom"):
 				_zoom_board(int(room_id.substr(4)))
 			else:
@@ -45,6 +73,31 @@ func _process(_delta: float) -> bool:
 	var err := image.save_png(_out_path)
 	print("capture: %s (err=%d)" % [_out_path, err])
 	return true
+
+
+## 프레임 시간 통계.
+##
+## 웹 빌드는 단일 스레드라 프레임을 잡아먹는 효과는 아름다워도 탈락이다.
+## 평균만 보면 가끔 튀는 프레임을 놓치므로 최댓값을 함께 찍는다.
+func _report_frame_times() -> void:
+	var total := 0.0
+	var worst := 0.0
+	for value in _frame_times:
+		total += value
+		worst = maxf(worst, value)
+	var average := total / float(_frame_times.size())
+	print(
+		(
+			"perf: frames=%d  avg=%.3fms (%.0f fps)  worst=%.3fms (%.0f fps)"
+			% [
+				_frame_times.size(),
+				average * 1000.0,
+				1.0 / maxf(average, 0.00001),
+				worst * 1000.0,
+				1.0 / maxf(worst, 0.00001),
+			]
+		)
+	)
 
 
 ## 확대·축소한 상태도 캡처할 수 있어야 한다. 인자는 휠을 굴린 횟수다(음수면 축소).
@@ -86,12 +139,15 @@ func _print_board_state() -> void:
 		return
 
 
+## 방 위젯의 자식 구성은 바뀔 수 있으므로 이름으로 찾는다.
+## 인덱스로 찾으면 위젯을 손볼 때마다 이 도구가 조용히 깨진다.
 func _print_rooms() -> void:
 	for node in root.find_children("*", "Button", true, false):
 		var room_id: Variant = node.get("room_id")
 		if room_id == null:
 			continue
-		print("room %s = %s" % [room_id, node.get_child(0).get_child(0).text])
+		var label := node.find_child("NameLabel", true, false) as Label
+		print("room %s = %s" % [room_id, "?" if label == null else label.text])
 
 
 ## 실제 버튼을 눌러 이동시킨다. 상태를 직접 건드리지 않아야 화면 경로까지 검증된다.

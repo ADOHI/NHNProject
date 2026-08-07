@@ -1,6 +1,11 @@
 class_name DebugOverlay
-extends PanelContainer
+extends SignalPanel
 ## 개발용 정보 패널. 판의 **진실**을 그대로 보여 준다.
+##
+## SignalPanel 의 TRUTH 레이어로 그린다 — **송출되지 않는 화면**이다.
+## 모서리를 자르지 않고 프레임도 두르지 않는다. 왼쪽에 계측 눈금만 선다.
+## 이 화면은 방송에 나가지 않으므로 방송의 문법을 쓰면 안 된다는 것이 형태의 근거다
+## (docs/design/18-visual-identity.md §18.7).
 ##
 ## 플레이 화면은 정보를 숨기는 것이 곧 재미다(docs/design/13-information-design.md).
 ## 그래서 개발 중에 "지금 판이 실제로 어떤 상태인가"를 확인할 방법이 없다.

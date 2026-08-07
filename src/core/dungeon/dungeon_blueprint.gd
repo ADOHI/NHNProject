@@ -7,11 +7,24 @@ extends RefCounted
 ## 그것이 판의 규칙이 아니라 표현이기 때문이다.
 ## 같은 판을 다르게 그릴 수는 있어도, 같은 판이 다르게 이어질 수는 없다.
 ##
-## **좌표는 저장하지 않고 연결 관계에서 만들어 낸다** (layout()).
-## 탑뷰라 고도는 배치에 쓰지 않는다
-## (docs/design/17-dungeon-generation.md §17.6).
+## **좌표는 이제 생성 단계에서 나온다.** 예전에는 연결 관계만 저장하고 좌표를
+## 힘 기반 완화로 만들어 냈지만, 그 순서로는 간선 교차가 풀리지 않는다
+## (docs/design/17-dungeon-generation.md §17.3).
+## 자리를 먼저 정하고 그 자리에서 연결을 고르는 쪽으로 뒤집었으므로,
+## 설계도는 생성기가 정한 좌표를 그대로 들고 다닌다.
+##
+## 좌표가 없는 설계도(손으로 짠 판, 테스트 픽스처)도 여전히 layout() 을 부를 수 있다.
+## 그때만 예전의 밀고 당기기가 돌아간다.
+##
+## 탑뷰라 고도는 배치에 쓰지 않는다 (§17.6).
 ##
 ## build() 로 매번 새 DungeonGraph 를 만든다. 설계도는 재사용되고 판은 소모된다.
+
+## 좌표가 정해지지 않은 방의 표시값.
+##
+## 별도의 has_position 필드를 두지 않는 이유는, 값과 플래그가 따로 놀면
+## 한쪽만 갱신되는 사고가 나기 때문이다.
+const NO_POSITION := Vector2.INF
 
 ## 배치를 다듬는 횟수. 늘리면 고르게 퍼지지만 생성이 느려진다.
 const _RELAX_STEPS := 240
@@ -27,13 +40,20 @@ var _connections: Array[Array] = []
 
 
 ## 방을 설계도에 추가한다. 체인으로 이어 쓸 수 있다.
+##
+## position 의 단위는 **방 사이 최소 간격 1** 이다. 화면 픽셀로 옮기는 것은
+## layout() 의 몫이라, 설계도는 화면 크기를 몰라도 된다.
 func add_room(
-	id: String, display_name: String, elevation: int = 0, kind: Room.Kind = Room.Kind.EMPTY
+	id: String,
+	display_name: String,
+	elevation: int = 0,
+	kind: Room.Kind = Room.Kind.EMPTY,
+	position: Vector2 = NO_POSITION
 ) -> DungeonBlueprint:
 	if _rooms.has(id):
 		push_error("이미 존재하는 방 id 입니다: %s" % id)
 		return self
-	_rooms[id] = {"name": display_name, "elevation": elevation, "kind": kind}
+	_rooms[id] = {"name": display_name, "elevation": elevation, "kind": kind, "position": position}
 	return self
 
 
@@ -69,6 +89,13 @@ func display_name_of(id: String) -> String:
 
 func elevation_of(id: String) -> int:
 	return _rooms[id]["elevation"] if _rooms.has(id) else 0
+
+
+## 생성기가 정해 둔 좌표. 없으면 NO_POSITION.
+##
+## 단위는 방 사이 최소 간격 1 이다. 화면 좌표가 필요하면 layout() 을 쓴다.
+func position_of(id: String) -> Vector2:
+	return _rooms[id]["position"] if _rooms.has(id) else NO_POSITION
 
 
 func kind_of(id: String) -> Room.Kind:
@@ -110,17 +137,45 @@ func build() -> DungeonGraph:
 ## 고도를 눈으로 보여 주는 것은 나중에 측면뷰가 생기면 그쪽이 맡는다
 ## (docs/design/17-dungeon-generation.md §17.6).
 ##
-## 연결된 방은 당기고 모든 방은 서로 밀어내는 방식으로 자리를 잡는다.
-## 결과가 화면보다 커도 된다 — 판은 스크롤해서 본다.
+## 생성기가 좌표를 이미 정해 두었으면 그것을 간격만큼 확대해 돌려준다.
+## **그 좌표에서 간선을 골랐기 때문에 다른 좌표로 그리면 교차가 되살아난다.**
 ##
-## 같은 시드는 같은 배치를 만든다. 배치가 매번 달라지면
-## "아까 그 판"을 다시 볼 수 없다.
+## 좌표가 없는 설계도에서만 예전의 밀고 당기기가 돈다. 그때는 layout_seed 가
+## 배치를 가른다. 좌표가 있으면 시드는 쓰이지 않는다 — 같은 판은 이미 같은 자리다.
+##
+## 결과가 화면보다 커도 된다. 판은 스크롤해서 본다 ([`07`] §7.8).
 func layout(layout_seed: int, spacing: float = 200.0) -> Dictionary:
 	if _rooms.is_empty():
 		return {}
 
 	var ids := room_ids()
 	ids.sort()
+	var positions := _placed(ids, spacing)
+	if positions.is_empty():
+		positions = _relaxed(ids, layout_seed, spacing)
+	_normalize(ids, positions, spacing)
+	return positions
+
+
+## 생성기가 정해 둔 좌표. 하나라도 빠져 있으면 빈 사전을 돌려준다.
+##
+## 일부만 좌표가 있는 상태는 섞어 쓸 수 없다. 나머지를 완화로 채우면
+## 그 방들이 정해진 방들 사이를 뚫고 지나간다.
+func _placed(ids: Array[String], spacing: float) -> Dictionary:
+	var positions: Dictionary = {}
+	for id in ids:
+		var position: Vector2 = _rooms[id]["position"]
+		if position == NO_POSITION:
+			return {}
+		positions[id] = position * spacing
+	return positions
+
+
+## 좌표가 없는 설계도용 대체 배치.
+##
+## 연결된 방은 당기고 모든 방은 서로 밀어낸다. 밀도도 교차도 보장하지 못하지만,
+## 손으로 짠 작은 판을 화면에 올릴 수단은 있어야 한다.
+func _relaxed(ids: Array[String], layout_seed: int, spacing: float) -> Dictionary:
 	# 방이 늘어나면 틀도 넓어져야 한다. 넓이가 방 수에 비례하므로 한 변은 제곱근에 비례한다.
 	var frame := spacing * sqrt(float(ids.size())) * 0.95
 	var positions := _scatter(ids, layout_seed, frame)
@@ -132,7 +187,6 @@ func layout(layout_seed: int, spacing: float = 200.0) -> Dictionary:
 		_relax(ids, positions, spacing, temperature, frame)
 
 	_separate(ids, positions, spacing)
-	_normalize(ids, positions, spacing)
 	return positions
 
 

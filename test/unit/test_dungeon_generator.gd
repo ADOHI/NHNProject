@@ -15,6 +15,17 @@ func _entrance_of(blueprint: DungeonBlueprint) -> String:
 	return blueprint.rooms_of_kind(Room.Kind.ENTRANCE)[0]
 
 
+func _valuables_of(blueprint: DungeonBlueprint) -> Array[String]:
+	return blueprint.rooms_of_kind(Room.Kind.TREASURE) + blueprint.rooms_of_kind(Room.Kind.BOSS)
+
+
+func _average_of(values: Dictionary, ids: Array[String]) -> float:
+	var total := 0.0
+	for id in ids:
+		total += float(values.get(id, 0))
+	return total / float(maxi(ids.size(), 1))
+
+
 # ---------------------------------------------------------------- 재현성
 
 
@@ -70,11 +81,33 @@ func test_valuables_cost_more_than_the_free_exit() -> void:
 	for seed_value in _SEEDS:
 		var blueprint: DungeonBlueprint = GeneratorScript.new(seed_value).generate()
 		var costs := blueprint.build().required_agility_from(_entrance_of(blueprint))
-		var valuables := (
-			blueprint.rooms_of_kind(Room.Kind.TREASURE) + blueprint.rooms_of_kind(Room.Kind.BOSS)
-		)
-		for id in valuables:
+		for id in _valuables_of(blueprint):
 			assert_gt(costs.get(id, 0), 0, "시드 %d 의 고가치 방이 공짜로 닿는다" % seed_value)
+
+
+func test_valuables_cost_more_agility_than_an_ordinary_room() -> void:
+	# 0 보다 크기만 해서는 부족하다. 평범한 방보다 비싸야 "값을 치렀다"가 성립한다.
+	for seed_value in _SEEDS:
+		var blueprint: DungeonBlueprint = GeneratorScript.new(seed_value).generate()
+		var costs := blueprint.build().required_agility_from(_entrance_of(blueprint))
+		var average := _average_of(costs, blueprint.room_ids())
+		for id in _valuables_of(blueprint):
+			assert_gt(
+				float(costs.get(id, 0)), average, "시드 %d 의 고가치 방이 평범한 방보다 싸게 닿는다" % seed_value
+			)
+
+
+func test_the_exit_is_far_even_though_it_is_free() -> void:
+	# 탈출구는 민첩 0 으로 닿아야 하므로(V2) 능력으로 막을 수 없다.
+	# 대신 **거리로** 값을 받는다. 코앞에 있으면 "언제 나갈까"가 판단이 아니게 된다.
+	for seed_value in _SEEDS:
+		var blueprint: DungeonBlueprint = GeneratorScript.new(seed_value).generate()
+		var graph := blueprint.build()
+		var entrance := _entrance_of(blueprint)
+		var hops := RoomKindPlanner.hops_from(graph, entrance)
+		var average := _average_of(hops, blueprint.room_ids())
+		for id in blueprint.rooms_of_kind(Room.Kind.EXIT):
+			assert_gt(float(hops.get(id, 0)), average, "시드 %d 의 탈출구가 입구에서 가깝다" % seed_value)
 
 
 func test_exactly_one_entrance() -> void:
@@ -133,6 +166,20 @@ func test_entrance_sits_at_the_bottom() -> void:
 				blueprint.elevation_of(entrance) <= blueprint.elevation_of(id),
 				"시드 %d 에서 입구보다 낮은 방이 있다" % seed_value
 			)
+
+
+func test_dead_ends_exist_but_do_not_take_over() -> void:
+	# V5 — 막다른 방은 앞방을 정확히 읽는 정찰 지점이라 없애지 않는다.
+	# 대신 너무 많으면 정보가 다 새고 판이 나뭇가지처럼 보인다 (§17.2).
+	for seed_value in _SEEDS:
+		var blueprint: DungeonBlueprint = GeneratorScript.new(seed_value).generate()
+		var graph := blueprint.build()
+		var dead_ends := 0
+		for id in blueprint.room_ids():
+			if graph.neighbors_of(id).size() <= 1:
+				dead_ends += 1
+		var ratio := float(dead_ends) / float(blueprint.room_ids().size())
+		assert_between(ratio, 0.05, 0.35, "시드 %d 의 막다른 방 비율이 %.2f" % [seed_value, ratio])
 
 
 func test_every_generated_room_gets_a_position() -> void:
