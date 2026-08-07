@@ -3,22 +3,7 @@
 [ext_resource type="Script" path="res://src/main/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://src/ui/dungeon_board/dungeon_board.tscn" id="2_board"]
 [ext_resource type="PackedScene" path="res://src/ui/debug_overlay/debug_overlay.tscn" id="3_debug"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar"]
-content_margin_left = 14.0
-content_margin_top = 10.0
-content_margin_right = 14.0
-content_margin_bottom = 10.0
-bg_color = Color(0.12, 0.13, 0.17, 0.92)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.25, 0.28, 0.35, 1)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
+[ext_resource type="Script" path="res://src/ui/style/signal_panel.gd" id="4_panel"]
 
 [node name="Main" type="Control"]
 anchor_right = 1.0
@@ -28,12 +13,13 @@ grow_vertical = 2
 script = ExtResource("1_main")
 
 [node name="Background" type="ColorRect" parent="."]
+unique_name_in_owner = true
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.09, 0.10, 0.13, 1)
+color = Color(1, 1, 1, 1)
 
 [node name="DungeonBoard" parent="." instance=ExtResource("2_board")]
 unique_name_in_owner = true
@@ -45,33 +31,36 @@ visible = false
 [node name="ControlBar" type="PanelContainer" parent="."]
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -560.0
-offset_top = 14.0
-offset_right = -20.0
-offset_bottom = 62.0
+offset_left = -26.0
+offset_top = 22.0
+offset_right = -26.0
+offset_bottom = 22.0
 grow_horizontal = 0
-theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
+grow_vertical = 1
+script = ExtResource("4_panel")
 
-[node name="Row" type="HBoxContainer" parent="ControlBar"]
+[node name="Content" type="MarginContainer" parent="ControlBar"]
 layout_mode = 2
-theme_override_constants/separation = 12
 
-[node name="GenerateButton" type="Button" parent="ControlBar/Row"]
+[node name="Row" type="HBoxContainer" parent="ControlBar/Content"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="GenerateButton" type="Button" parent="ControlBar/Content/Row"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 13
 text = "새 던전 생성"
 
-[node name="SizeLabel" type="Label" parent="ControlBar/Row"]
+[node name="SizeLabel" type="Label" parent="ControlBar/Content/Row"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.72, 0.77, 0.86, 1)
-theme_override_font_sizes/font_size = 12
+size_flags_vertical = 4
+theme_type_variation = &"Micro"
 text = "맵 크기"
 
-[node name="SizeSlider" type="HSlider" parent="ControlBar/Row"]
+[node name="SizeSlider" type="HSlider" parent="ControlBar/Content/Row"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(120, 0)
+custom_minimum_size = Vector2(112, 0)
 layout_mode = 2
 size_flags_vertical = 4
 min_value = 1.0
@@ -79,10 +68,9 @@ max_value = 5.0
 step = 1.0
 value = 3.0
 
-[node name="DebugButton" type="Button" parent="ControlBar/Row"]
+[node name="DebugButton" type="Button" parent="ControlBar/Content/Row"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 13
 text = "개발 정보 (F1)"
 
 [node name="StatusLabel" type="Label" parent="."]
@@ -90,13 +78,12 @@ unique_name_in_owner = true
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 24.0
-offset_top = -34.0
-offset_right = -24.0
-offset_bottom = -10.0
+offset_left = 26.0
+offset_top = -32.0
+offset_right = -26.0
+offset_bottom = -12.0
 grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.42, 0.45, 0.52, 1)
-theme_override_font_sizes/font_size = 12
+theme_type_variation = &"Micro"
 text = "부팅 중"

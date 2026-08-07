@@ -7,9 +7,13 @@ extends Control
 ## 첫 판의 시드. 이후에는 생성 버튼이 새 시드를 뽑는다.
 const FIRST_SEED := 1
 
+const _BACKDROP_SHADER := preload("res://src/ui/style/shaders/facility_backdrop.gdshader")
+
 var _seed := FIRST_SEED
 var _debug_visible := false
+var _backdrop: ShaderMaterial
 
+@onready var _background: ColorRect = %Background
 @onready var _board: DungeonBoard = %DungeonBoard
 @onready var _overlay: DebugOverlay = %DebugOverlay
 @onready var _debug_button: Button = %DebugButton
@@ -20,6 +24,11 @@ var _debug_visible := false
 
 
 func _ready() -> void:
+	# Theme 은 루트에 한 번만 물린다. 자식에게 그대로 흘러내린다.
+	# 여기서 물리지 않으면 화면마다 색을 손으로 칠하게 되고, 그러면 규칙이 흩어진다.
+	theme = UiTheme.get_theme()
+	_build_backdrop()
+
 	_size_slider.min_value = SampleDungeons.SIZE_MIN
 	_size_slider.max_value = SampleDungeons.SIZE_MAX
 	_size_slider.value = 3
@@ -31,6 +40,26 @@ func _ready() -> void:
 	_update_size_label()
 	_build_run()
 	_apply_debug_state()
+
+
+## 시설 바닥을 깐다. 판의 이동·배율을 그대로 받아 격자가 지도와 함께 흐른다.
+##
+## 배경을 단색으로 두면 판을 끌어도 화면이 가만히 있어서 "지도를 움직인다"는 감각이 없다.
+## 이건 장식이 아니라 공간 표현이다 — 판은 그림이 아니라 장소여야 한다.
+func _build_backdrop() -> void:
+	_backdrop = ShaderMaterial.new()
+	_backdrop.shader = _BACKDROP_SHADER
+	_backdrop.set_shader_parameter("floor_color", UiTokens.FLOOR)
+	_backdrop.set_shader_parameter("seam_color", UiTokens.SEAM)
+	_backdrop.set_shader_parameter("glow_color", UiTokens.SIGNAL)
+	_backdrop.set_shader_parameter("sweep_period", UiTokens.TIME_DRIFT)
+	_background.material = _backdrop
+	_board.view_changed.connect(_on_view_changed)
+
+
+func _on_view_changed(pan: Vector2, zoom: float) -> void:
+	_backdrop.set_shader_parameter("view_pan", pan)
+	_backdrop.set_shader_parameter("view_zoom", zoom)
 
 
 func _unhandled_input(event: InputEvent) -> void:
