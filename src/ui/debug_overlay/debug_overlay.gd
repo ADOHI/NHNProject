@@ -62,7 +62,7 @@ func _build_summary() -> String:
 	var name := _run.blueprint.display_name_of(current)
 	var elevation := _run.blueprint.elevation_of(current)
 	var lines: Array[String] = []
-	lines.append("시드 %d   ·   %d 턴" % [_seed, _run.turn])
+	lines.append("시드 %d   •   %d 턴" % [_seed, _run.turn])
 	lines.append("스쿼드   전투력 %d   민첩 %d" % [_run.player.threat, _run.player.agility])
 	lines.append("현재   %s (고도 %d)" % [name, elevation])
 	lines.append(_adjacent_line(current))
@@ -104,7 +104,7 @@ func _build_rooms() -> String:
 
 func _room_line(id: String, current: String, costs: Dictionary) -> String:
 	var room := _run.graph.get_room(id)
-	var marker := "▶ " if id == current else "   "
+	var marker := "> " if id == current else "  "
 	var name := _run.blueprint.display_name_of(id)
 	var kind: String = _KIND_LABELS[_run.blueprint.kind_of(id)]
 	var stats := "%4d %4d %4d" % [room.threat(), room.occupant_count(), costs.get(id, -1)]
@@ -123,7 +123,7 @@ func _build_log() -> String:
 
 func _event_line(event: GameEvent) -> String:
 	var kind: String = _EVENT_LABELS[event.kind]
-	return "%2d턴  %-4s  %s  ·  %s" % [event.turn, kind, event.actor_name, event.room_name]
+	return "%2d턴  %-4s  %s  /  %s" % [event.turn, kind, event.actor_name, event.room_name]
 
 
 func _entrance_id() -> String:

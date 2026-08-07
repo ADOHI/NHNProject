@@ -86,7 +86,7 @@ func _apply_debug_state() -> void:
 ## 웹 빌드에서 "브라우저에서 실제로 뭐가 돌고 있는지"를 눈으로 확인하는 용도다.
 func _build_status_text() -> String:
 	return (
-		"%s v%s   ·   Godot %s   ·   %s   ·   seed %d"
+		"%s v%s   •   Godot %s   •   %s   •   seed %d"
 		% [
 			GameConfig.title,
 			GameConfig.version,

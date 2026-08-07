@@ -23,8 +23,9 @@ const _EDGE_WIDTH := 3.0
 ## 방 사이의 목표 간격. 방 위젯보다 넉넉해야 이름이 겹쳐 보이지 않는다.
 const _SPACING := 210.0
 
-## 지도를 끌 때 화면에 최소한 남겨 둘 여백. 판을 완전히 밀어내지 못하게 한다.
-const _PAN_KEEP := 160.0
+## 화면 가장자리에서 카메라가 따라 움직이기 시작하는 폭과 그 속도.
+const _EDGE_MARGIN := 56.0
+const _EDGE_SPEED := 900.0
 
 ## 확대 배율의 범위와 한 칸의 크기.
 const _ZOOM_MIN := 0.4
@@ -64,15 +65,25 @@ func setup(run: DungeonRun, layout_seed: int) -> void:
 	center_on_player()
 
 
-## 판을 다시 그린다. 개발 모드·확대·이동 뒤에 모두 쓰인다.
+## 판을 통째로 다시 그린다. 상태가 바뀐 뒤에 쓴다.
 func redraw() -> void:
+	if _run == null:
+		return
+	_reposition()
+	_refresh()
+
+
+## 방 위젯의 자리와 크기만 다시 잡는다.
+##
+## 이동·확대는 **보이는 내용이 아니라 위치만** 바꾼다.
+## 그때마다 라벨을 전부 새로 쓰면 끌 때마다 글자 배치가 다시 계산되어 버벅인다.
+func _reposition() -> void:
 	if _run == null:
 		return
 	for id in _room_nodes:
 		var node: RoomNode = _room_nodes[id]
 		node.scale = Vector2(_zoom, _zoom)
 		node.position = _map_to_screen(id) - node.custom_minimum_size * 0.5 * _zoom
-	_refresh()
 	queue_redraw()
 
 
@@ -94,7 +105,38 @@ func _gui_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _dragging:
 		_pan += (event as InputEventMouseMotion).relative
 		_clamp_pan()
-		redraw()
+		_reposition()
+
+
+## 커서가 화면 가장자리에 가면 카메라가 그쪽으로 따라 움직인다.
+##
+## 끌지 않고도 지도를 훑을 수 있어야 한다. 지도가 화면보다 큰 판에서
+## 매번 끌어다 놓는 것은 번거롭다.
+func _process(delta: float) -> void:
+	if _run == null or _dragging or not is_visible_in_tree():
+		return
+	var push := _edge_push(get_local_mouse_position())
+	if push == Vector2.ZERO:
+		return
+	_pan += push * _EDGE_SPEED * delta
+	_clamp_pan()
+	_reposition()
+
+
+## 커서 위치가 만드는 카메라 이동 방향. 가장자리에 가까울수록 세다.
+func _edge_push(mouse: Vector2) -> Vector2:
+	if not Rect2(Vector2.ZERO, size).has_point(mouse):
+		return Vector2.ZERO
+	var push := Vector2.ZERO
+	if mouse.x < _EDGE_MARGIN:
+		push.x = (_EDGE_MARGIN - mouse.x) / _EDGE_MARGIN
+	elif mouse.x > size.x - _EDGE_MARGIN:
+		push.x = -(mouse.x - size.x + _EDGE_MARGIN) / _EDGE_MARGIN
+	if mouse.y < _EDGE_MARGIN:
+		push.y = (_EDGE_MARGIN - mouse.y) / _EDGE_MARGIN
+	elif mouse.y > size.y - _EDGE_MARGIN:
+		push.y = -(mouse.y - size.y + _EDGE_MARGIN) / _EDGE_MARGIN
+	return push
 
 
 func _handle_mouse_button(event: InputEventMouseButton) -> void:
@@ -117,24 +159,57 @@ func _apply_zoom(target: float, anchor: Vector2) -> void:
 	var next := clampf(target, _ZOOM_MIN, _ZOOM_MAX)
 	if is_equal_approx(next, _zoom):
 		return
+	var previous_detail := _detail_level()
 	var map_point := (anchor - _pan) / _zoom
 	_zoom = next
 	_pan = anchor - map_point * _zoom
 	_clamp_pan()
-	redraw()
+	_reposition()
+	# 배율이 정보량 경계를 넘었을 때만 라벨을 다시 쓴다.
+	if _detail_level() != previous_detail:
+		_refresh()
+	else:
+		_update_hint()
 
 
-## 지도를 화면 밖으로 완전히 밀어내지 못하게 막는다.
+## 화면이 지도 밖을 비추지 않게 막는다.
+##
+## 지도가 화면보다 크면 **화면이 지도 안에** 있어야 하고,
+## 지도가 화면보다 작으면 화면 가운데에 둔다.
+##
+## 예전에는 "지도를 조금이라도 남긴다"는 식으로 막았는데,
+## 지도가 화면보다 작을 때 허용 범위가 뒤집혀 이동이 한 점에 고정됐다.
+## 커서 기준 확대가 도로 튕겨 나가던 것도 이 때문이었다.
 func _clamp_pan() -> void:
 	if _positions.is_empty():
 		return
+	var extent := _node_extent()
 	var lowest := Vector2.INF
 	var highest := -Vector2.INF
 	for position in _positions.values():
 		lowest = lowest.min(position as Vector2 * _zoom)
 		highest = highest.max(position as Vector2 * _zoom)
-	_pan.x = clampf(_pan.x, _PAN_KEEP - highest.x, size.x - _PAN_KEEP - lowest.x)
-	_pan.y = clampf(_pan.y, _PAN_KEEP - highest.y, size.y - _PAN_KEEP - lowest.y)
+	_pan.x = _clamp_axis(_pan.x, lowest.x - extent.x, highest.x + extent.x, size.x)
+	_pan.y = _clamp_axis(_pan.y, lowest.y - extent.y, highest.y + extent.y, size.y)
+
+
+func _clamp_axis(value: float, map_low: float, map_high: float, view: float) -> float:
+	# 화면의 양 끝이 지도 안에 들어오는 이동량의 범위.
+	var lower := view - map_high
+	var upper := -map_low
+	if lower > upper:
+		# 지도가 화면보다 작다. 채울 수 없으니 가운데에 둔다.
+		return (lower + upper) * 0.5
+	return clampf(value, lower, upper)
+
+
+## 방 위젯이 좌표 바깥으로 뻗는 크기. 지도 경계를 잴 때 함께 세야
+## 가장자리 방이 화면 밖으로 잘리지 않는다.
+func _node_extent() -> Vector2:
+	if _room_nodes.is_empty():
+		return Vector2.ZERO
+	var node: RoomNode = _room_nodes.values()[0]
+	return node.custom_minimum_size * 0.5 * _zoom
 
 
 func _map_to_screen(room_id: String) -> Vector2:
@@ -226,11 +301,16 @@ func _refresh() -> void:
 		"현재 위치   %s   (고도 %d)" % [_run.blueprint.display_name_of(current_id), elevation]
 	)
 	_threat_label.text = "인접 위험도   %d" % _run.adjacent_threat()
-	_squad_label.text = ("전투력 %d   ·   민첩 %d" % [_run.player.threat, _run.player.agility])
+	_squad_label.text = ("전투력 %d   •   민첩 %d" % [_run.player.threat, _run.player.agility])
+	_update_hint()
+
+
+func _update_hint() -> void:
+	if reveal_everything:
+		_hint_label.text = "개발 모드 — 모든 방의 실제 값"
+		return
 	_hint_label.text = (
-		"개발 모드 — 모든 방의 실제 값"
-		if reveal_everything
-		else "끌어서 이동 · 휠로 확대   ·   %d 턴   ·   %d%%" % [_run.turn, int(round(_zoom * 100.0))]
+		"끌거나 가장자리로 이동   •   휠 확대 %d%%   •   %d 턴" % [int(round(_zoom * 100.0)), _run.turn]
 	)
 
 
@@ -249,11 +329,14 @@ func _climb_text(current_id: String, room_id: String) -> String:
 	if not _run.graph.are_connected(current_id, room_id):
 		return "고도 %d" % elevation
 
+	# 화살표(▲▼)를 쓰지 않는 이유는 폰트에 그 글리프가 없기 때문이다.
+	# 데스크톱에서는 시스템 폰트로 대체되어 멀쩡해 보이지만 웹에서는 두부가 된다
+	# (tools/check_glyphs.gd 로 확인할 수 있다).
 	var difference := elevation - _run.blueprint.elevation_of(current_id)
 	if difference > 0:
-		return "▲ %d" % difference
+		return "오름 %d" % difference
 	if difference < 0:
-		return "▼ %d" % -difference
+		return "내림 %d" % -difference
 	return "평지"
 
 

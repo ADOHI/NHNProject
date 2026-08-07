@@ -33,7 +33,7 @@ theme_override_constants/separation = 12
 layout_mode = 2
 theme_override_colors/font_color = Color(0.98, 0.78, 0.4, 1)
 theme_override_font_sizes/font_size = 15
-text = "개발 정보  ·  F1 로 닫기"
+text = "개발 정보  •  F1 로 닫기"
 
 [node name="SummaryLabel" type="Label" parent="Scroll/Rows"]
 unique_name_in_owner = true
@@ -46,7 +46,7 @@ text = "요약"
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.65, 0.75, 1)
 theme_override_font_sizes/font_size = 13
-text = "── 판의 진실 ──"
+text = "[ 판의 진실 ]"
 
 [node name="RoomsLabel" type="Label" parent="Scroll/Rows"]
 unique_name_in_owner = true
@@ -59,7 +59,7 @@ text = "방 목록"
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.65, 0.75, 1)
 theme_override_font_sizes/font_size = 13
-text = "── 사건 기록 (렉카 기사의 재료) ──"
+text = "[ 사건 기록 — 렉카 기사의 재료 ]"
 
 [node name="LogLabel" type="Label" parent="Scroll/Rows"]
 unique_name_in_owner = true
