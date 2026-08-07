@@ -1,0 +1,69 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/ui/debug_overlay/debug_overlay.gd" id="1_debug"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+content_margin_left = 16.0
+content_margin_top = 14.0
+content_margin_right = 16.0
+content_margin_bottom = 14.0
+bg_color = Color(0.07, 0.08, 0.11, 0.95)
+border_width_left = 1
+border_color = Color(0.28, 0.32, 0.4, 1)
+
+[node name="DebugOverlay" type="PanelContainer"]
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -430.0
+grow_horizontal = 0
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+script = ExtResource("1_debug")
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+layout_mode = 2
+
+[node name="Rows" type="VBoxContainer" parent="Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Scroll/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.78, 0.4, 1)
+theme_override_font_sizes/font_size = 15
+text = "개발 정보  ·  F1 로 닫기"
+
+[node name="SummaryLabel" type="Label" parent="Scroll/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.86, 0.93, 1)
+theme_override_font_sizes/font_size = 13
+text = "요약"
+
+[node name="RoomsTitle" type="Label" parent="Scroll/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.65, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "── 판의 진실 ──"
+
+[node name="RoomsLabel" type="Label" parent="Scroll/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.82, 0.9, 1)
+theme_override_font_sizes/font_size = 12
+text = "방 목록"
+
+[node name="LogTitle" type="Label" parent="Scroll/Rows"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.65, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "── 사건 기록 (렉카 기사의 재료) ──"
+
+[node name="LogLabel" type="Label" parent="Scroll/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.78, 0.88, 1)
+theme_override_font_sizes/font_size = 12
+text = "로그"

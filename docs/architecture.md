@@ -28,11 +28,14 @@ src/
 │       ├── game_event.gd       # 사건 하나 (누가 · 어디서 · 무엇을 · 얼마나)
 │       └── event_log.gd        # 사건의 시간순 기록
 ├── ui/
-│   └── dungeon_board/
-│       ├── dungeon_board.tscn  # 판 화면 (방 배치 · 연결선 · HUD)
-│       ├── dungeon_board.gd
-│       ├── room_node.tscn      # 방 하나의 위젯
-│       └── room_node.gd
+│   ├── dungeon_board/
+│   │   ├── dungeon_board.tscn  # 판 화면 (방 배치 · 연결선 · HUD)
+│   │   ├── dungeon_board.gd
+│   │   ├── room_node.tscn      # 방 하나의 위젯
+│   │   └── room_node.gd
+│   └── debug_overlay/
+│       ├── debug_overlay.tscn  # 개발 정보 패널 (F1)
+│       └── debug_overlay.gd
 └── main/
     ├── main.tscn               # 부트 씬 (project.godot 의 main_scene)
     └── main.gd
@@ -120,6 +123,19 @@ web/shell.html                  # 웹 빌드용 커스텀 HTML 셸
 
 좌표는 `DungeonGraph` 가 아니라 `DungeonBlueprint` 에 있다.
 같은 판을 다르게 그릴 수는 있어도, 같은 판이 다르게 이어질 수는 없다.
+
+### `src/ui/debug_overlay/` — 개발 정보
+
+**숨김을 전부 걷어낸 화면.** 이 게임은 정보를 숨기는 것이 곧 재미라
+(design/13), 플레이 화면만으로는 **의도한 모호함인지 버그인지 구분할 수 없다.**
+
+`F1` 또는 우측 상단 버튼으로 연다. 규칙과 갱신 의무는
+[conventions.md §8](conventions.md) 에 있다 —
+**새 시스템을 만들면 그 상태를 이 패널에 노출한다.**
+
+판과 패널은 서로의 내부를 들여다보지 않는다.
+`main.gd` 가 `DungeonRun` 을 만들어 둘에게 나눠 주고,
+판은 `player_acted` 시그널로 알린다.
 
 ### 한글 폰트
 
