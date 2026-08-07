@@ -51,6 +51,23 @@ python -m http.server 8060 --directory build/web
 | `scripts/` | GDScript. 씬과 1:1로 대응하는 스크립트 |
 | `scripts/autoload/` | 자동 로드 싱글톤 |
 | `docs/` | 설계·운영 문서 |
+| `tools/` | 개발 보조 스크립트 (문서 PDF 빌드 등) |
 | `.github/workflows/` | 웹 빌드 & Pages 배포 |
 
 코드 배치 규칙은 [docs/architecture.md](docs/architecture.md) 참고.
+
+## 문서
+
+| 문서 | 내용 |
+| --- | --- |
+| [docs/architecture.md](docs/architecture.md) | 씬·스크립트·오토로드 배치 규칙 |
+| [docs/web-build.md](docs/web-build.md) | 웹 빌드 설정 근거와 배포 절차 |
+| [docs/ai-usage.md](docs/ai-usage.md) | **AI 활용 기술 문서** (제출물). 개발과 함께 갱신한다 |
+
+AI 활용 기술 문서는 제출 시 PDF로 변환한다.
+
+```bash
+python tools/build_docs.py
+```
+
+결과물은 `docs/build/AI활용기술문서.pdf` 에 생성된다 (Git 추적 대상 아님).
