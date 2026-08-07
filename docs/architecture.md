@@ -4,7 +4,7 @@
 코드를 어떻게 써야 하는지는 [conventions.md](conventions.md),
 무엇을 만드는지는 [game-design.md](game-design.md) 참고.
 
-부트 씬과 **판·사건의 순수 모델**이 있다. 아직 화면에 그려지는 게임은 없다.
+**판이 화면에 그려지고 클릭으로 이동한다.** 턴 페이즈와 NPC 는 아직 없다.
 
 ---
 
@@ -18,20 +18,26 @@ src/
 │   ├── dungeon/
 │   │   ├── actor.gd            # 던전 안의 행동 주체 (몬스터 · NPC · 스쿼드)
 │   │   ├── room.gd             # 방 하나. 점유자와 위험도
-│   │   └── dungeon_graph.gd    # 방 연결 그래프 + 인접 위험도 조회
+│   │   ├── dungeon_graph.gd    # 방 연결 그래프 + 인접 위험도 조회
+│   │   ├── dungeon_blueprint.gd  # 던전 설계도 (방 · 연결 · 화면 배치)
+│   │   ├── dungeon_run.gd      # 진행 중인 잠입 한 판
+│   │   └── sample_dungeons.gd  # 개발용 표본 던전
 │   └── event/
 │       ├── game_event.gd       # 사건 하나 (누가 · 어디서 · 무엇을 · 얼마나)
 │       └── event_log.gd        # 사건의 시간순 기록
+├── ui/
+│   └── dungeon_board/
+│       ├── dungeon_board.tscn  # 판 화면 (방 배치 · 연결선 · HUD)
+│       ├── dungeon_board.gd
+│       ├── room_node.tscn      # 방 하나의 위젯
+│       └── room_node.gd
 └── main/
     ├── main.tscn               # 부트 씬 (project.godot 의 main_scene)
     └── main.gd
 
-test/unit/
-├── test_game_config.gd
-├── test_room.gd
-├── test_dungeon_graph.gd
-└── test_event_log.gd
-
+assets/fonts/ui_font.tres       # 한글 표시용 SystemFont ⚠ 웹에서 동작 안 함
+test/unit/                      # GUT 단위 테스트 6종
+tools/capture_scene.gd          # 화면 캡처 검증 도구 (빌드에 포함되지 않음)
 addons/gut/                     # GUT 9.7.1 (벤더링). 빌드에서 제외된다
 web/shell.html                  # 웹 빌드용 커스텀 HTML 셸
 ```
@@ -70,6 +76,26 @@ web/shell.html                  # 웹 빌드용 커스텀 HTML 셸
 **로그에 담기는 값은 언제나 진실이다.** 기사의 과장은 생성 단계에서 일어나고,
 그것도 `magnitude` 에만 적용된다 ([13 §13.3](design/13-information-design.md)).
 로그에 과장을 섞으면 세계 갱신까지 오염되어 판 자체가 어긋난다.
+
+### `src/ui/dungeon_board/` — 화면
+
+**화면은 상태를 갖지 않는다.** `DungeonRun` 을 읽어 그리고, 클릭을 `DungeonRun` 에
+넘기고, 다시 읽어 그린다. 게임 규칙은 전부 `src/core/` 에 있다 (conventions.md §3.1).
+
+`DungeonBoard` 가 내리는 유일한 판단은 **무엇을 보여 줄지**다.
+플레이어가 선 방에만 인접 위험도 합을 띄우고 나머지는 `?` 로 둔다.
+이 판단이 위젯으로 흩어지면 "무엇이 보이는가"라는 규칙이 화면 곳곳에 퍼진다 —
+이 게임에서 그 규칙은 재미 그 자체다.
+
+좌표는 `DungeonGraph` 가 아니라 `DungeonBlueprint` 에 있다.
+같은 판을 다르게 그릴 수는 있어도, 같은 판이 다르게 이어질 수는 없다.
+
+### 한글 폰트 ⚠
+
+`assets/fonts/ui_font.tres` 는 `SystemFont` 으로 시스템 한글 폰트를 빌려 쓴다.
+**데스크톱 전용 임시 조치이며 웹 빌드에서는 동작하지 않는다.**
+제출 전에 재배포 가능한 폰트를 임베드해야 한다
+([09 §9.3.1](design/09-art-sound.md), [12](design/12-open-questions.md) Q35).
 
 ### `GameConfig` (오토로드)
 
@@ -128,3 +154,5 @@ Forward+ / Mobile 렌더러는 Vulkan 기반이라 브라우저에서 동작하�
 | 2026-08-07 | `scenes/` + `scripts/` → `src/` 기능 단위 구조 | 타입별 분리는 기능 하나를 고칠 때 여러 폴더를 오가게 만든다. 근거는 [conventions.md](conventions.md) §1 |
 | 2026-08-07 | GUT · gdtoolkit · 커스텀 웹 셸 · Release 워크플로 도입 | 콘텐츠가 붙기 전에 품질 게이트와 제출 파이프라인을 먼저 세웠다. 코드가 늘어난 뒤에는 도입 비용이 커진다 |
 | 2026-08-07 | `src/core/dungeon/` · `src/core/event/` 신설 | 구현 0단계. 위험도 합산은 순수 함수라 씬 없이 검증되고, 이벤트 로그는 기사·세계갱신의 공통 입력이라 먼저 세워야 재작업이 없다 ([16 §16.2](design/16-build-order.md)) |
+| 2026-08-07 | `src/ui/dungeon_board/` 신설, `main.tscn` 을 Node2D → Control 로 교체 | 구현 1단계. 이 게임의 화면은 판과 텍스트라 Control 트리가 맞다. 웹 검증용 상태 표시줄은 하단에 남겼다 |
+| 2026-08-07 | 좌표를 `Room` 이 아니라 `DungeonBlueprint` 에 둠 | 좌표는 판의 규칙이 아니라 표현이다. 같은 판을 다르게 그릴 수는 있어도 같은 판이 다르게 이어질 수는 없다 |

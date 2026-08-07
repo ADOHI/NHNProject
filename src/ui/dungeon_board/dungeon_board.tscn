@@ -1,0 +1,68 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/ui/dungeon_board/dungeon_board.gd" id="1_board"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hud"]
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+bg_color = Color(0.12, 0.13, 0.17, 0.92)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.25, 0.28, 0.35, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="DungeonBoard" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_board")
+
+[node name="RoomLayer" type="Control" parent="."]
+unique_name_in_owner = true
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Hud" type="PanelContainer" parent="."]
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 340.0
+offset_bottom = 156.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_hud")
+
+[node name="Rows" type="VBoxContainer" parent="Hud"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="RoomLabel" type="Label" parent="Hud/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "현재 위치"
+
+[node name="ThreatLabel" type="Label" parent="Hud/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "인접 위험도"
+
+[node name="SquadLabel" type="Label" parent="Hud/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "스쿼드 전투력"
+
+[node name="HintLabel" type="Label" parent="Hud/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "밝은 방을 눌러 이동"
