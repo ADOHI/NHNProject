@@ -98,9 +98,12 @@ func _build_capture_steps() -> void:
 
 	# 4. 좁은 문으로 몰아넣기. 뭉침 처리가 가장 크게 갈리는 상황이다.
 	#    목적지가 조절판에 가려 우클릭으로 찍을 수 없어 같은 명령을 직접 부르고, 문이 보이게 화면을 옮긴다.
+	#    진동은 한 장으로는 보이지 않는다. 몇 프레임을 이어 붙여야 흔들리는지 흐르는지 갈린다.
 	_add(6, func() -> void: _proto.call("order_move_at", Vector2(1240, 560)))
 	_add(230, func() -> void: _proto.call("focus_camera", Vector2(1000, 560)))
 	_add(4, _save.bind("04_choke.png"))
+	for frame in 5:
+		_add(3, _save.bind("04_choke_%d.png" % (frame + 1)))
 
 	# 5. 부대 전환. 같은 숫자를 두 번 눌러 화면이 그 부대로 옮겨 가는 것을 잡는다.
 	_add(6, func() -> void: pass, 2400)

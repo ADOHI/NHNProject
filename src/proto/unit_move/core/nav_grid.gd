@@ -19,6 +19,10 @@ const _NEIGHBORS: Array[Vector2i] = [
 
 const _DIAGONAL_COST := 1.41421356
 
+## 벽에서 밀어낼 때 훑는 방향 수와 고리 수. 걸음 크기는 `push_out` 이 몸 크기에서 정한다.
+const _PUSH_OUT_DIRECTIONS := 12
+const _PUSH_OUT_RINGS := 12
+
 ## 가로 칸 수.
 var cols: int
 
@@ -126,13 +130,26 @@ func nearest_walkable(point: Vector2) -> Vector2:
 func push_out(point: Vector2, radius: float) -> Vector2:
 	if is_circle_free(point, radius):
 		return point
-	var step := cell_size * 0.5
-	for ring in range(1, 8):
-		for i in 8:
-			var angle := TAU * float(i) / 8.0
+	# **걸음이 굵으면 바로 옆의 빈자리를 건너뛴다.** 한 칸 폭 통로에서 몸이 들어갈 수 있는 띠는
+	# 칸 폭에서 지름을 뺀 만큼뿐이다(32 픽셀 통로에 지름 24 면 8 픽셀). 걸음이 16 픽셀이면
+	# 그 띠를 매번 뛰어넘어 어느 고리에서도 답을 못 찾고, 결국 통로 밖 넓은 곳까지 밀려나
+	# **유닛이 100 픽셀 너머로 순간이동한다.** 그 순간이동으로 앞을 막은 아군 여섯을 통째로
+	# 통과하는 것을 보고 찾았다. 걸음을 몸 크기에 묶고, 같은 고리에서는 가장 가까운 곳을 고른다.
+	var step := minf(cell_size * 0.25, maxf(radius * 0.5, 1.0))
+	for ring in range(1, _PUSH_OUT_RINGS + 1):
+		var best := Vector2.INF
+		var best_distance := INF
+		for i in _PUSH_OUT_DIRECTIONS:
+			var angle := TAU * float(i) / float(_PUSH_OUT_DIRECTIONS)
 			var candidate := point + Vector2.from_angle(angle) * step * ring
-			if is_circle_free(candidate, radius):
-				return candidate
+			if not is_circle_free(candidate, radius):
+				continue
+			var distance := candidate.distance_squared_to(point)
+			if distance < best_distance:
+				best_distance = distance
+				best = candidate
+		if best_distance < INF:
+			return best
 	return nearest_walkable(point)
 
 

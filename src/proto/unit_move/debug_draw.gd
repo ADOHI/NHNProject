@@ -18,6 +18,9 @@ const _FLOW_COLOR := Color(0.35, 0.45, 0.60, 0.75)
 const _TEXT_COLOR := Color(0.90, 0.92, 0.96)
 const _BLOCKED_COLOR := Color(1.0, 0.35, 0.35)
 
+## 앞이 막혀 기다리는 유닛. 막힘(빨강)과 달리 **비키면 스스로 다시 가는** 상태라 색을 가른다.
+const _HOLDING_COLOR := Color(1.0, 0.78, 0.35)
+
 ## 힘 벡터를 화면 길이로 바꿀 때의 배수. 속도 단위 그대로 그리면 화면을 덮는다.
 const _FORCE_SCALE := 0.12
 
@@ -87,7 +90,9 @@ func _draw_slots() -> void:
 func _draw_agent(agent: ProtoUnitAgent) -> void:
 	if agent.state == ProtoUnitAgent.State.BLOCKED:
 		draw_arc(agent.position, agent.radius + 8.0, 0.0, TAU, 16, _BLOCKED_COLOR, 1.5)
-	if agent.is_moving():
+	elif agent.state == ProtoUnitAgent.State.HOLDING:
+		draw_arc(agent.position, agent.radius + 8.0, 0.0, TAU, 16, _HOLDING_COLOR, 1.5)
+	if agent.is_moving() or agent.state == ProtoUnitAgent.State.HOLDING:
 		draw_line(agent.position, agent.goal, _GOAL_COLOR, 1.0)
 	if show_forces and agent.is_moving():
 		var seek_end := agent.position + agent.debug_seek * _FORCE_SCALE
