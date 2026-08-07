@@ -20,13 +20,30 @@ src/
 │   │   ├── room.gd             # 방 하나. 점유자와 위험도
 │   │   ├── dungeon_graph.gd    # 방 연결 · 고도 통과 판정 · 인접 위험도 조회
 │   │   ├── dungeon_blueprint.gd  # 던전 설계도 (방 · 고도 · 종류 · 연결 · 배치 산출)
-│   │   ├── dungeon_generator.gd  # 절차 생성 + 검증 규칙
+│   │   ├── dungeon_generator.gd  # 절차 생성 (아래 generation/ 을 엮는다)
+│   │   ├── generation/         # 생성 파이프라인 단계별
+│   │   │   ├── poisson_disk_sampler.gd   # 자리 뿌리기 (블루 노이즈)
+│   │   │   ├── delaunay_triangulation.gd # 평면 후보 간선 (Bowyer-Watson)
+│   │   │   ├── proximity_graphs.gd       # RNG · 가브리엘 · MST 부분그래프
+│   │   │   ├── dungeon_terrain.gd        # 고도를 지형으로 (거리 + 저주파 노이즈)
+│   │   │   ├── dungeon_edge_selector.gd  # 간선 선택 (고도차 · 깊이 가중)
+│   │   │   └── room_kind_planner.gd      # 방 종류 배정
 │   │   ├── squad_stats.gd      # 대원 능력치를 스쿼드 하나로 접는 규칙
 │   │   ├── dungeon_run.gd      # 진행 중인 잠입 한 판
 │   │   └── sample_dungeons.gd  # 생성된 판에 존재를 배치해 조립
-│   └── event/
-│       ├── game_event.gd       # 사건 하나 (누가 · 어디서 · 무엇을 · 얼마나)
-│       └── event_log.gd        # 사건의 시간순 기록
+│   ├── event/
+│   │   ├── game_event.gd       # 사건 하나 (누가 · 어디서 · 무엇을 · 얼마나)
+│   │   └── event_log.gd        # 사건의 시간순 기록
+│   ├── turn/
+│   │   ├── turn_intent.gd      # 한 주체가 이번 턴에 하려는 일 (2단계 공유 어휘)
+│   │   └── turn_phase.gd       # 계획 / 행동 두 국면
+│   └── rekka/
+│       └── rekka_prompt.gd     # 사건 -> 언어 모델 입력 직렬화
+├── proto/
+│   └── unit_move/              # 이동 조작감 프로토타입 (본 게임과 독립 씬)
+│       ├── unit_move_proto.tscn / .gd   # 진입점 · 입력 해석
+│       ├── terrain_view.gd · field_view.gd · debug_draw.gd · tuning_panel.gd
+│       └── core/               # 흐름장 · 대형 · 선택 · 부대. 노드 비의존
 ├── ui/
 │   ├── dungeon_board/
 │   │   ├── dungeon_board.tscn  # 판 화면 (방 배치 · 연결선 · HUD)
@@ -41,8 +58,14 @@ src/
     └── main.gd
 
 assets/fonts/song_myung/        # SongMyung Regular (SIL OFL) + OFL.txt
-test/unit/                      # GUT 단위 테스트 6종
+test/unit/                      # GUT 단위 테스트 (현재 255개 통과)
+test/support/segment_crossing.gd  # 선분 교차 판정. 생성기를 안 믿고 따로 검사한다
 tools/capture_scene.gd          # 화면 캡처 검증 도구 (빌드에 포함되지 않음)
+tools/capture_dungeon_maps.gd   # 여러 시드의 판을 한꺼번에 캡처
+tools/capture_unit_move.gd      # 이동 프로토 캡처 + 성능 측정
+tools/bench_dungeon_generation.gd  # 생성 소요 시간 실측
+tools/check_glyphs.gd           # src/ 문자열이 폰트에 있는지 검사
+tools/check_glyphs_text.gd      # 표본 .txt 도 같은 검사 (화면에 나갈 텍스트)
 addons/gut/                     # GUT 9.7.1 (벤더링). 빌드에서 제외된다
 web/shell.html                  # 웹 빌드용 커스텀 HTML 셸
 ```
