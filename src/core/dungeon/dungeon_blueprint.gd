@@ -7,12 +7,20 @@ extends RefCounted
 ## 그것이 판의 규칙이 아니라 표현이기 때문이다.
 ## 같은 판을 다르게 그릴 수는 있어도, 같은 판이 다르게 이어질 수는 없다.
 ##
-## **좌표는 저장하지 않고 고도에서 만들어 낸다** (§layout).
-## 고도가 게임 규칙이면서 동시에 레이아웃 축이라
-## 절차 생성에서 배치를 따로 설계하지 않아도 된다
+## **좌표는 저장하지 않고 연결 관계에서 만들어 낸다** (layout()).
+## 탑뷰라 고도는 배치에 쓰지 않는다
 ## (docs/design/17-dungeon-generation.md §17.6).
 ##
 ## build() 로 매번 새 DungeonGraph 를 만든다. 설계도는 재사용되고 판은 소모된다.
+
+## 배치를 다듬는 횟수. 늘리면 고르게 퍼지지만 생성이 느려진다.
+const _RELAX_STEPS := 240
+
+## 방 사이 최소 간격 (목표 간격 대비). 방 위젯 너비보다 커야 이름이 겹치지 않는다.
+const _MIN_GAP_RATIO := 0.9
+
+## 겹침을 푸는 횟수. 한 쌍을 떼면 다른 쌍이 붙을 수 있어 여러 번 돈다.
+const _SEPARATE_PASSES := 40
 
 var _rooms: Dictionary = {}
 var _connections: Array[Array] = []
@@ -95,46 +103,117 @@ func build() -> DungeonGraph:
 # ---------------------------------------------------------------- 배치
 
 
-## 방들의 화면 좌표를 계산한다. 방 id -> Vector2.
+## 방들의 지도 좌표를 계산한다. 방 id -> Vector2.
 ##
-## Y 는 고도다. **높은 방이 위로 간다.** 그래서 플레이어는 설명 없이
-## "위로 갈수록 어렵다"와 "아래는 도주로"를 읽는다
-## (docs/design/07-level-design.md §7.2.6.2).
+## **탑뷰다. 고도는 배치에 쓰지 않는다.**
+## 위에서 내려다보는 시점에서 높이는 평면 위치와 무관하다.
+## 고도를 눈으로 보여 주는 것은 나중에 측면뷰가 생기면 그쪽이 맡는다
+## (docs/design/17-dungeon-generation.md §17.6).
 ##
-## X 는 같은 고도 안에서 균등 분산한다. 연결 관계까지 반영한 최적 배치는
-## 하지 않는다 — 판이 수십 개 방 규모라 얻는 것에 비해 비용이 크다.
-func layout(area: Rect2) -> Dictionary:
+## 연결된 방은 당기고 모든 방은 서로 밀어내는 방식으로 자리를 잡는다.
+## 결과가 화면보다 커도 된다 — 판은 스크롤해서 본다.
+##
+## 같은 시드는 같은 배치를 만든다. 배치가 매번 달라지면
+## "아까 그 판"을 다시 볼 수 없다.
+func layout(layout_seed: int, spacing: float = 200.0) -> Dictionary:
 	if _rooms.is_empty():
 		return {}
 
-	var by_elevation: Dictionary = {}
-	for id in _rooms:
-		var elevation: int = _rooms[id]["elevation"]
-		if not by_elevation.has(elevation):
-			by_elevation[elevation] = [] as Array[String]
-		(by_elevation[elevation] as Array[String]).append(id)
+	var ids := room_ids()
+	ids.sort()
+	# 방이 늘어나면 틀도 넓어져야 한다. 넓이가 방 수에 비례하므로 한 변은 제곱근에 비례한다.
+	var frame := spacing * sqrt(float(ids.size())) * 0.95
+	var positions := _scatter(ids, layout_seed, frame)
 
-	# 고도가 높은 층부터 위에서 아래로.
-	var elevations: Array = by_elevation.keys()
-	elevations.sort()
-	elevations.reverse()
+	for step in _RELAX_STEPS:
+		# 처음에는 크게 움직이고 갈수록 잠잠해진다.
+		# 이 냉각이 없으면 서로 밀고 당기며 끝없이 진동한다.
+		var temperature := frame * 0.1 * (1.0 - float(step) / float(_RELAX_STEPS))
+		_relax(ids, positions, spacing, temperature, frame)
 
-	# 고도 실값이 아니라 층 순서로 배분한다. 실값에 비례시키면 고도차가 큰 판에서
-	# 방들이 한쪽에 뭉쳐 읽기 어려워진다. 상승폭은 막힌 방에 숫자로 따로 보여 준다.
-	#
-	# 가장자리에 정확히 걸치지 않도록 X 와 같은 방식으로 나눈다.
-	# 방 위젯은 이 좌표를 중심으로 그려지므로 경계에 놓이면 화면 밖으로 삐져나간다.
-	var positions: Dictionary = {}
-	var row_step := area.size.y / float(elevations.size() + 1)
-	for row_index in elevations.size():
-		var row: Array[String] = by_elevation[elevations[row_index]]
-		row.sort()
-		var y := area.position.y + row_step * float(row_index + 1)
-		var column_step := area.size.x / float(row.size() + 1)
-		# 층마다 좌우로 살짝 엇갈리게 둔다. 층별 방 개수가 같으면 방들이 격자처럼
-		# 줄을 맞춰 서서 판이 표처럼 보인다. 엇갈리면 지도처럼 읽힌다.
-		var stagger := column_step * (0.15 if row_index % 2 == 0 else -0.15)
-		for i in row.size():
-			var x := area.position.x + column_step * float(i + 1) + stagger
-			positions[row[i]] = Vector2(x, y)
+	_separate(ids, positions, spacing)
+	_normalize(ids, positions, spacing)
 	return positions
+
+
+## 너무 붙은 방들을 떼어 놓는다.
+##
+## 밀고 당기는 힘만으로는 최소 간격이 보장되지 않는다. 멀리 있는 방까지
+## 균형을 맞추다 보면 어떤 쌍은 겹칠 만큼 가까워진다.
+## **방이 겹치면 이름도 숫자도 못 읽으므로** 마지막에 강제로 떼어 놓는다.
+func _separate(ids: Array[String], positions: Dictionary, spacing: float) -> void:
+	var minimum := spacing * _MIN_GAP_RATIO
+	for pass_index in _SEPARATE_PASSES:
+		var overlapped := false
+		for i in ids.size():
+			for j in range(i + 1, ids.size()):
+				var a: String = ids[i]
+				var b: String = ids[j]
+				var delta: Vector2 = positions[a] - positions[b]
+				var distance := delta.length()
+				if distance >= minimum:
+					continue
+				overlapped = true
+				# 완전히 겹쳐 방향이 없으면 임의의 축으로 민다.
+				var axis := delta.normalized() if distance > 0.01 else Vector2.RIGHT
+				var half := axis * (minimum - distance) * 0.5
+				positions[a] += half
+				positions[b] -= half
+		if not overlapped:
+			return
+
+
+## 틀 안에 고르게 흩뿌린다. 전부 한 점에서 시작하면 밀어내는 힘의 방향이
+## 정해지지 않아 배치가 무너진다.
+func _scatter(ids: Array[String], layout_seed: int, frame: float) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = layout_seed
+	var positions: Dictionary = {}
+	for id in ids:
+		positions[id] = Vector2(rng.randf_range(0.0, frame), rng.randf_range(0.0, frame))
+	return positions
+
+
+## 한 번 다듬는다. 연결된 방은 당기고, 모든 방끼리는 밀어낸다.
+##
+## **틀 밖으로 나가지 못하게 가두는 것이 중요하다.** 모든 방이 서로 밀어내는데
+## 가둘 틀이 없으면 판이 풍선처럼 계속 부푼다.
+func _relax(
+	ids: Array[String], positions: Dictionary, spacing: float, temperature: float, frame: float
+) -> void:
+	var shifts: Dictionary = {}
+	for id in ids:
+		shifts[id] = Vector2.ZERO
+
+	for i in ids.size():
+		for j in range(i + 1, ids.size()):
+			var a: String = ids[i]
+			var b: String = ids[j]
+			var delta: Vector2 = positions[a] - positions[b]
+			var distance := maxf(delta.length(), 1.0)
+			var push := delta.normalized() * (spacing * spacing / distance)
+			shifts[a] += push
+			shifts[b] -= push
+
+	for pair in _connections:
+		var delta: Vector2 = positions[pair[0]] - positions[pair[1]]
+		var distance := maxf(delta.length(), 1.0)
+		var pull := delta.normalized() * (distance * distance / spacing)
+		shifts[pair[0]] -= pull
+		shifts[pair[1]] += pull
+
+	for id in ids:
+		var shift: Vector2 = shifts[id]
+		var moved: Vector2 = positions[id] + shift.limit_length(temperature)
+		positions[id] = moved.clamp(Vector2.ZERO, Vector2(frame, frame))
+
+
+## 좌상단이 여백만큼 떨어진 곳에 오도록 통째로 옮긴다.
+func _normalize(ids: Array[String], positions: Dictionary, spacing: float) -> void:
+	var lowest: Vector2 = positions[ids[0]]
+	for id in ids:
+		lowest.x = minf(lowest.x, positions[id].x)
+		lowest.y = minf(lowest.y, positions[id].y)
+	var margin := Vector2(spacing, spacing) * 0.5
+	for id in ids:
+		positions[id] = positions[id] - lowest + margin

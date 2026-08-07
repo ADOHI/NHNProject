@@ -135,24 +135,29 @@ func test_entrance_sits_at_the_bottom() -> void:
 			)
 
 
-func test_layout_puts_higher_rooms_above() -> void:
-	# 고도가 곧 Y 축이라야 "위는 위협, 아래는 도주로"가 읽힌다 (§17.6).
-	var blueprint: DungeonBlueprint = GeneratorScript.new(7).generate()
-	var positions := blueprint.layout(Rect2(0, 0, 1000, 500))
-	for id in blueprint.room_ids():
-		for other in blueprint.room_ids():
-			if blueprint.elevation_of(id) > blueprint.elevation_of(other):
-				var above: Vector2 = positions[id]
-				var below: Vector2 = positions[other]
-				assert_true(above.y < below.y, "고도가 높은 방이 아래에 그려졌다")
+func test_every_generated_room_gets_a_position() -> void:
+	for seed_value in _SEEDS:
+		var blueprint: DungeonBlueprint = GeneratorScript.new(seed_value).generate()
+		var positions := blueprint.layout(seed_value)
+		assert_eq(
+			positions.size(), blueprint.room_ids().size(), "시드 %d 에 자리를 못 잡은 방이 있다" % seed_value
+		)
 
 
-func test_layout_stays_inside_the_area() -> void:
-	# 판 전체가 한 화면에 들어가야 한다 (docs/design/07-level-design.md §7.8).
-	var area := Rect2(100, 50, 800, 400)
-	var blueprint: DungeonBlueprint = GeneratorScript.new(3).generate()
-	for position in blueprint.layout(area).values():
-		assert_true(area.has_point(position), "배치가 영역을 벗어났다: %s" % position)
+func test_map_size_changes_room_count() -> void:
+	# 슬라이더가 실제로 판 규모를 바꾸는지 본다.
+	var small := SampleDungeons.create_run(11, SampleDungeons.SIZE_MIN)
+	var large := SampleDungeons.create_run(11, SampleDungeons.SIZE_MAX)
+	assert_gt(
+		large.blueprint.room_ids().size(), small.blueprint.room_ids().size(), "맵 크기를 올렸는데 방이 늘지 않았다"
+	)
+
+
+func test_every_map_size_produces_a_playable_run() -> void:
+	for size in range(SampleDungeons.SIZE_MIN, SampleDungeons.SIZE_MAX + 1):
+		var run := SampleDungeons.create_run(size * 17, size)
+		assert_gt(run.reachable_room_ids().size(), 0, "크기 %d 에서 갈 곳이 없다" % size)
+		assert_gt(run.blueprint.rooms_of_kind(Room.Kind.EXIT).size(), 0)
 
 
 func test_generated_run_is_playable() -> void:

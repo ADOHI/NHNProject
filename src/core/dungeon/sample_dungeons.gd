@@ -17,10 +17,34 @@ const SQUAD_AGILITY := 2
 ## 입구 인접 위험도 상한. 판단할 기회도 없이 죽는 배치를 막는다 (§17.5 V4).
 const ENTRANCE_THREAT_MAX := 4
 
+## 맵 크기 단계. 슬라이더가 이 범위를 오간다.
+const SIZE_MIN := 1
+const SIZE_MAX := 5
+
+
+## 맵 크기 단계를 생성 파라미터로 옮긴다.
+##
+## 단계를 층 수와 층당 방 수에 함께 실어 준다. 한쪽만 늘리면
+## 판이 길쭉해지거나 납작해져서 지도 모양이 단조로워진다.
+static func params_for_size(size: int) -> DungeonGenerator.Params:
+	var clamped := clampi(size, SIZE_MIN, SIZE_MAX)
+	var params := DungeonGenerator.Params.new()
+	params.layer_count = 2 + clamped
+	params.rooms_per_layer_min = 2
+	params.rooms_per_layer_max = 2 + clamped / 2
+	return params
+
+
+## 크기 단계에서 나오는 대략적인 방 개수. 슬라이더 옆에 보여 준다.
+static func room_estimate(size: int) -> int:
+	var params := params_for_size(size)
+	var average := float(params.rooms_per_layer_min + params.rooms_per_layer_max) * 0.5
+	return int(round(float(params.layer_count) * average))
+
 
 ## 판 하나를 통째로 만든다.
-static func create_run(seed_value: int = 0) -> DungeonRun:
-	var generator := DungeonGenerator.new(seed_value)
+static func create_run(seed_value: int = 0, size: int = 3) -> DungeonRun:
+	var generator := DungeonGenerator.new(seed_value, params_for_size(size))
 	var blueprint := generator.generate()
 	var graph := blueprint.build()
 

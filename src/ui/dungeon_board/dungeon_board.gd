@@ -7,11 +7,9 @@ extends Control
 ##
 ## **무엇을 보여 줄지가 이 파일의 유일한 판단이다.**
 ## 플레이어가 선 방에는 인접 위험도 합을 띄우고, 나머지 방은 전부 "?" 로 둔다.
-## 판 전체가 한눈에 들어와야 하므로 스크롤도 카메라 이동도 없다
-## (docs/design/07-level-design.md §7.8).
 ##
-## 방의 세로 위치는 **고도**다. 위쪽이 높은 곳이고, 그래서 플레이어는
-## "위는 위협의 출처, 아래는 도주로"를 설명 없이 읽는다 (§7.2.6.2).
+## 판은 한 화면에 다 들어오지 않아도 된다. **빈 곳을 끌어서 움직여 본다.**
+## 지도가 화면에 맞춰 줄어들면 방이 뭉개져 오히려 읽기 어려워진다.
 
 ## 플레이어가 실제로 행동했다. 화면 밖의 것들(개발 패널 등)이 갱신할 신호다.
 signal player_acted
@@ -22,14 +20,20 @@ const _EDGE_COLOR := Color(0.30, 0.33, 0.40)
 const _EDGE_BLOCKED_COLOR := Color(0.46, 0.28, 0.30)
 const _EDGE_WIDTH := 3.0
 
-## 판을 그릴 영역. 좌상단은 HUD 를 피하고, 하단은 상태 표시줄을 피한다.
-##
-## 층 수가 늘면 세로 간격이 좁아져 방이 서로 겹친다.
-## 방 위젯 높이(room_node.tscn)와 함께 봐야 하는 값이다.
-const _BOARD_MARGIN := Rect2(200.0, 70.0, 1020.0, 560.0)
+## 방 사이의 목표 간격. 방 위젯보다 넉넉해야 이름이 겹쳐 보이지 않는다.
+const _SPACING := 210.0
 
-## 개발 패널이 열렸을 때의 영역. 패널이 판을 가리면 확인하려던 것을 못 본다.
-const _BOARD_MARGIN_WITH_PANEL := Rect2(200.0, 70.0, 620.0, 560.0)
+## 지도를 끌 때 화면에 최소한 남겨 둘 여백. 판을 완전히 밀어내지 못하게 한다.
+const _PAN_KEEP := 160.0
+
+## 확대 배율의 범위와 한 칸의 크기.
+const _ZOOM_MIN := 0.4
+const _ZOOM_MAX := 1.8
+const _ZOOM_STEP := 1.12
+
+## 이 배율보다 작아지면 글자가 뭉개진다. 읽히지 않을 글자는 지운다.
+const _DETAIL_NAME_ZOOM := 0.62
+const _DETAIL_FULL_ZOOM := 0.92
 
 ## 개발 모드에서는 숨김을 걷어낸다.
 ##
@@ -41,6 +45,9 @@ var reveal_everything := false
 var _run: DungeonRun
 var _room_nodes: Dictionary = {}
 var _positions: Dictionary = {}
+var _pan := Vector2.ZERO
+var _zoom := 1.0
+var _dragging := false
 
 @onready var _room_layer: Control = %RoomLayer
 @onready var _room_label: Label = %RoomLabel
@@ -50,24 +57,97 @@ var _positions: Dictionary = {}
 
 
 ## 판 하나를 이 화면에 붙인다.
-func setup(run: DungeonRun) -> void:
+func setup(run: DungeonRun, layout_seed: int) -> void:
 	_run = run
+	_positions = run.blueprint.layout(layout_seed, _SPACING)
 	_build_room_nodes()
-	redraw()
+	center_on_player()
 
 
-## 판을 다시 배치하고 다시 그린다. 개발 모드가 켜지고 꺼질 때도 쓰인다.
+## 판을 다시 그린다. 개발 모드·확대·이동 뒤에 모두 쓰인다.
 func redraw() -> void:
 	if _run == null:
 		return
-	_positions = _run.blueprint.layout(
-		_BOARD_MARGIN_WITH_PANEL if reveal_everything else _BOARD_MARGIN
-	)
 	for id in _room_nodes:
 		var node: RoomNode = _room_nodes[id]
-		node.position = _positions.get(id, Vector2.ZERO) - node.custom_minimum_size * 0.5
+		node.scale = Vector2(_zoom, _zoom)
+		node.position = _map_to_screen(id) - node.custom_minimum_size * 0.5 * _zoom
 	_refresh()
 	queue_redraw()
+
+
+## 스쿼드가 있는 방이 화면 가운데 오도록 지도를 옮긴다.
+func center_on_player() -> void:
+	if _run == null:
+		return
+	_zoom = 1.0
+	var current: Vector2 = _positions.get(_run.player_room_id(), Vector2.ZERO)
+	_pan = size * 0.5 - current * _zoom
+	redraw()
+
+
+func _gui_input(event: InputEvent) -> void:
+	# 방 위젯은 Button 이라 자기 클릭을 먼저 가져간다.
+	# 여기까지 온 입력은 빈 곳에서 일어난 것이므로 지도 조작으로 해석한다.
+	if event is InputEventMouseButton:
+		_handle_mouse_button(event as InputEventMouseButton)
+	elif event is InputEventMouseMotion and _dragging:
+		_pan += (event as InputEventMouseMotion).relative
+		_clamp_pan()
+		redraw()
+
+
+func _handle_mouse_button(event: InputEventMouseButton) -> void:
+	match event.button_index:
+		MOUSE_BUTTON_LEFT:
+			_dragging = event.pressed
+		MOUSE_BUTTON_WHEEL_UP:
+			if event.pressed:
+				_apply_zoom(_zoom * _ZOOM_STEP, event.position)
+		MOUSE_BUTTON_WHEEL_DOWN:
+			if event.pressed:
+				_apply_zoom(_zoom / _ZOOM_STEP, event.position)
+
+
+## 커서 아래 지점을 붙잡은 채 배율을 바꾼다.
+##
+## 화면 중심을 기준으로 확대하면 보고 있던 곳이 밀려나 매번 다시 찾아야 한다.
+## 커서가 가리키는 방은 그 자리에 그대로 있어야 한다.
+func _apply_zoom(target: float, anchor: Vector2) -> void:
+	var next := clampf(target, _ZOOM_MIN, _ZOOM_MAX)
+	if is_equal_approx(next, _zoom):
+		return
+	var map_point := (anchor - _pan) / _zoom
+	_zoom = next
+	_pan = anchor - map_point * _zoom
+	_clamp_pan()
+	redraw()
+
+
+## 지도를 화면 밖으로 완전히 밀어내지 못하게 막는다.
+func _clamp_pan() -> void:
+	if _positions.is_empty():
+		return
+	var lowest := Vector2.INF
+	var highest := -Vector2.INF
+	for position in _positions.values():
+		lowest = lowest.min(position as Vector2 * _zoom)
+		highest = highest.max(position as Vector2 * _zoom)
+	_pan.x = clampf(_pan.x, _PAN_KEEP - highest.x, size.x - _PAN_KEEP - lowest.x)
+	_pan.y = clampf(_pan.y, _PAN_KEEP - highest.y, size.y - _PAN_KEEP - lowest.y)
+
+
+func _map_to_screen(room_id: String) -> Vector2:
+	return (_positions.get(room_id, Vector2.ZERO) as Vector2) * _zoom + _pan
+
+
+## 지금 배율에서 방이 얼마나 자세히 보여야 하는가.
+func _detail_level() -> RoomNode.Detail:
+	if _zoom < _DETAIL_NAME_ZOOM:
+		return RoomNode.Detail.MINIMAL
+	if _zoom < _DETAIL_FULL_ZOOM:
+		return RoomNode.Detail.NORMAL
+	return RoomNode.Detail.FULL
 
 
 func _draw() -> void:
@@ -75,10 +155,11 @@ func _draw() -> void:
 		return
 	# 방보다 먼저 그려져야 선이 방 아래로 깔린다. _room_layer 는 자식이라 나중에 그려진다.
 	var current_id := _run.player_room_id()
+	var width := maxf(1.0, _EDGE_WIDTH * _zoom)
 	for pair in _run.blueprint.connections():
-		var from_pos: Vector2 = _positions.get(pair[0], Vector2.ZERO)
-		var to_pos: Vector2 = _positions.get(pair[1], Vector2.ZERO)
-		draw_line(from_pos, to_pos, _edge_color(current_id, pair), _EDGE_WIDTH, true)
+		var from_pos := _map_to_screen(pair[0])
+		var to_pos := _map_to_screen(pair[1])
+		draw_line(from_pos, to_pos, _edge_color(current_id, pair), width, true)
 
 
 ## 지금 서 있는 방에서 오를 수 없는 간선은 다르게 칠한다.
@@ -107,13 +188,14 @@ func _build_room_nodes() -> void:
 		_room_layer.add_child(node)
 		node.room_selected.connect(_on_room_selected)
 		_room_nodes[id] = node
-	# 위치는 redraw() 가 잡는다. 개발 패널 여닫이에 따라 영역이 달라지기 때문이다.
+	# 위치는 redraw() 가 잡는다. 지도를 끌면 매번 다시 잡아야 하기 때문이다.
 
 
 func _refresh() -> void:
 	var current_id := _run.player_room_id()
 	var reachable := _run.reachable_room_ids()
 	var blocked := _run.blocked_room_ids()
+	var detail := _detail_level()
 
 	for id in _room_nodes:
 		var node: RoomNode = _room_nodes[id]
@@ -131,7 +213,12 @@ func _refresh() -> void:
 			var room := _run.graph.get_room(id)
 			value_text = "%d (%d)" % [room.threat(), room.occupant_count()]
 		node.display(
-			id, _run.blueprint.display_name_of(id), value_text, state, _climb_text(current_id, id)
+			id,
+			_run.blueprint.display_name_of(id),
+			value_text,
+			state,
+			_climb_text(current_id, id),
+			detail
 		)
 
 	var elevation := _run.blueprint.elevation_of(current_id)
@@ -141,7 +228,9 @@ func _refresh() -> void:
 	_threat_label.text = "인접 위험도   %d" % _run.adjacent_threat()
 	_squad_label.text = ("전투력 %d   ·   민첩 %d" % [_run.player.threat, _run.player.agility])
 	_hint_label.text = (
-		"개발 모드 — 모든 방의 실제 값" if reveal_everything else "밝은 방을 눌러 이동   ·   %d 턴" % _run.turn
+		"개발 모드 — 모든 방의 실제 값"
+		if reveal_everything
+		else "끌어서 이동 · 휠로 확대   ·   %d 턴   ·   %d%%" % [_run.turn, int(round(_zoom * 100.0))]
 	)
 
 

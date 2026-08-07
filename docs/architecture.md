@@ -75,13 +75,25 @@ web/shell.html                  # 웹 빌드용 커스텀 HTML 셸
 | --- | --- |
 | 이동 가능 판정 | `DungeonGraph.can_traverse()` |
 | 방 등급 (필요 민첩) | `DungeonGraph.required_agility_from()` — bottleneck path |
-| **화면 Y 좌표** | `DungeonBlueprint.layout()` |
 
-**좌표를 저장하지 않고 고도에서 만들어 내는 것이 핵심이다.**
-절차 생성의 숨은 비용이 자동 배치인데, 고도가 그 문제를 없앤다.
+**고도는 화면 배치에 쓰지 않는다.** 탑뷰라 높이는 평면 위치와 무관하다.
+숫자로만 보여 주고, 시각화는 나중에 측면뷰가 맡는다
+([11 번복 기록](design/11-decisions.md)).
 
 민첩 검사를 `move_actor()` 안에 둔 이유는, 호출자에게 맡기면
 빠뜨린 경로가 하나만 생겨도 판의 규칙이 깨지기 때문이다.
+
+### 배치
+
+`DungeonBlueprint.layout()` 이 **연결 관계만으로** 좌표를 만든다 —
+흩뿌리고, 밀고 당기기를 반복하고, 겹친 것을 떼어 낸다
+([17 §17.6](design/17-dungeon-generation.md)).
+
+좌표를 저장하지 않고 매번 만들어 내는 이유는 그것이 판의 규칙이 아니라 표현이기 때문이다.
+같은 시드는 같은 배치를 만든다.
+
+판은 화면보다 커도 된다. `DungeonBoard` 가 이동(끌기)과 확대(휠)를 맡고,
+**배율이 낮아지면 읽히지 않을 글자를 지운다** ([07 §7.8](design/07-level-design.md)).
 
 ### 생성기
 

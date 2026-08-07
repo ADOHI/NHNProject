@@ -18,6 +18,16 @@ extends Button
 ## 이 방이 눌렸다. 이동 가능 여부 판단은 상위가 한다.
 signal room_selected(room_id: String)
 
+## 얼마나 자세히 보여 줄지. 확대 배율에 따라 상위가 정한다.
+##
+## 축소하면 글자가 같이 작아져 못 읽게 된다. 그때는 **읽히지 않을 글자를 지우는 편이**
+## 남겨 두는 것보다 낫다. 작게 뭉갠 글자는 정보가 아니라 잡음이다.
+enum Detail {
+	MINIMAL,  ## 숫자만. 판의 모양과 색만 읽는 배율
+	NORMAL,  ## 이름 + 숫자
+	FULL,  ## 이름 + 숫자 + 고도
+}
+
 ## 방의 표시 상태. 무엇을 보여 줄지가 여기서 갈린다.
 enum State {
 	CURRENT,  ## 플레이어가 서 있는 방 — 인접 위험도 합을 보여 준다
@@ -52,13 +62,19 @@ func _ready() -> void:
 ## value_text 와 climb_text 를 상위에서 받는 이유는, 방이 자기 상태를 아는 것과
 ## 플레이어가 그것을 보는 것이 전혀 다른 문제이기 때문이다.
 func display(
-	id: String, display_name: String, value_text: String, state: State, climb_text: String = ""
+	id: String,
+	display_name: String,
+	value_text: String,
+	state: State,
+	climb_text: String = "",
+	detail: Detail = Detail.FULL
 ) -> void:
 	room_id = id
 	_name_label.text = display_name
 	_value_label.text = value_text
 	_climb_label.text = climb_text
-	_climb_label.visible = not climb_text.is_empty()
+	_name_label.visible = detail != Detail.MINIMAL
+	_climb_label.visible = detail == Detail.FULL and not climb_text.is_empty()
 
 	# 막힌 방도 누를 수 없다. 다만 색과 값으로 "길은 있으나 못 오른다"를 구분해 보여 준다.
 	disabled = state != State.CURRENT and state != State.REACHABLE

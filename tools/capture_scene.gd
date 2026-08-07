@@ -32,6 +32,8 @@ func _process(_delta: float) -> bool:
 		for room_id in _room_path:
 			if room_id == "debug":
 				_press_debug_button()
+			elif room_id.begins_with("zoom"):
+				_zoom_board(int(room_id.substr(4)))
 			else:
 				_press_room(room_id)
 		return false
@@ -42,6 +44,18 @@ func _process(_delta: float) -> bool:
 	var err := image.save_png(_out_path)
 	print("capture: %s (err=%d)" % [_out_path, err])
 	return true
+
+
+## 확대·축소한 상태도 캡처할 수 있어야 한다. 인자는 휠을 굴린 횟수다(음수면 축소).
+func _zoom_board(steps: int) -> void:
+	for node in root.find_children("*", "DungeonBoard", true, false):
+		var event := InputEventMouseButton.new()
+		event.button_index = (MOUSE_BUTTON_WHEEL_UP if steps > 0 else MOUSE_BUTTON_WHEEL_DOWN)
+		event.pressed = true
+		event.position = (node as Control).size * 0.5
+		for i in absi(steps):
+			node.call("_gui_input", event)
+		return
 
 
 ## 개발 패널을 켠 상태도 캡처할 수 있어야 한다.
