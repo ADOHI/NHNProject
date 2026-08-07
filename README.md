@@ -77,7 +77,8 @@ python -m http.server 8060 --directory build/web
 
 | 문서 | 내용 |
 | --- | --- |
-| [docs/game-design.md](docs/game-design.md) | 기획 — 무엇을 만드는가 |
+| [docs/game-design.md](docs/game-design.md) | 기획 문서 지도 — 어떤 내용이 어느 파일에 있는가 |
+| [docs/design/](docs/design/) | 기획 본문 — 무엇을 만드는가 (항목별 분할) |
 | [docs/conventions.md](docs/conventions.md) | 개발 컨벤션 — 폴더 구조, 네이밍, 코드 규칙 |
 | [docs/architecture.md](docs/architecture.md) | 구조 — 지금 무엇이 있는가 |
 | [docs/web-build.md](docs/web-build.md) | 웹 빌드 설정 근거와 배포 절차 |

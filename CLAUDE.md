@@ -60,7 +60,8 @@ python tools/build_docs.py
 
 | 문서 | 내용 |
 | --- | --- |
-| `docs/game-design.md` | 기획 — 무엇을 만드는가 |
+| `docs/game-design.md` | 기획 문서 지도 — 어떤 내용이 어느 파일에 있는가 |
+| `docs/design/*.md` | 기획 본문 — 무엇을 만드는가 (항목별 분할) |
 | `docs/conventions.md` | 개발 컨벤션 — 어떻게 쓰는가 |
 | `docs/architecture.md` | 구조 — 지금 무엇이 있는가 |
 | `docs/web-build.md` | 웹 빌드·배포 |

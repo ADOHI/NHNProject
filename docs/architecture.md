@@ -1,7 +1,8 @@
 # 구조
 
 이 문서는 **"지금 무엇이 있는가"**를 기록한다.
-코드를 어떻게 써야 하는지는 [conventions.md](conventions.md) 참고.
+코드를 어떻게 써야 하는지는 [conventions.md](conventions.md),
+무엇을 만드는지는 [game-design.md](game-design.md) 참고.
 
 현재는 부트 씬 하나뿐인 골격 상태다.
 

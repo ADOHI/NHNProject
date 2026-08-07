@@ -305,9 +305,29 @@ AI 도구·프롬프트·활용 내역을 정리한 기술 문서를 PDF로 제�
 | 테스트 프레임워크 | `godot --headless -s res://addons/gut/gut_cmdln.gd` | GUT 9.7.1 / Godot 4.7.1 에서 4/4 통과 |
 | 린트 · 포맷 | `gdlint src test`, `gdformat --check src test` | 위반 없음 |
 | 기존 기능 유지 | `.godot/` 삭제 후 임포트 · 런타임 구동 | 오류 없음. 출력은 이전과 동일 |
-| CI 품질 게이트 | GitHub Actions `Quality` 워크플로 | 아래 참조 |
-| 커스텀 웹 셸 | 배포본 브라우저 로딩 확인 | 아래 참조 |
-| 제출물 패키징 | `Release` 워크플로 수동 실행(드라이런) | 아래 참조 |
+| CI 품질 게이트 | GitHub Actions `Quality` 워크플로 | `Lint & Format`, `Unit Tests` 모두 success |
+| 웹 배포 유지 | GitHub Actions `Deploy Web Build` | success. 배포본 정상 구동 |
+| 커스텀 웹 셸 반영 | 배포된 `index.html` 원문 검사 | 커스텀 마커 5종 확인, 미치환 `$GODOT_*` 플레이스홀더 0개, `startGame`·`getMissingFeatures`·`installServiceWorker` 모두 보존, `lang="ko"` |
+| 빌드 제외 필터 | 배포된 `index.pck` 내부 경로 목록 검사 | **`.pck` 6,836바이트.** 포함 경로는 `src/` 3개 + `icon.svg` 뿐. `res://test/` 없음, GUT 스크립트 없음 |
+| 제출물 패키징 | `Release` 워크플로 수동 실행(드라이런) | success. `NHNProject-web-*.zip` 10.2 MB, `AI활용기술문서-*.pdf` 837 KB 생성 |
+| CI PDF 한글 폰트 | `tools/verify_pdf.py` | `NotoSansCJKkr-Regular/Bold`, `NotoSansMonoCJKkr-*` 임베드 확인 |
+
+#### 중간에 발견한 문제
+
+첫 Release 드라이런이 **실패**했다. PDF 는 정상적으로 만들어졌는데
+검증 코드가 한글 폰트를 찾지 못해 빌드를 세웠다.
+
+원인은 검증 코드에 있었다. 페이지 리소스의 `/Font` 만 직접 들여다봤는데,
+폰트 딕셔너리의 위치는 PDF 생성기마다 다르다(Form XObject 안에 중첩되거나
+부모 페이지 트리에서 상속된다). Windows Chrome 출력에서는 통했지만
+Linux Chrome 출력에서는 `/BaseFont` 를 찾지 못했다.
+
+인라인 스크립트를 `tools/verify_pdf.py` 로 분리하고, 특정 경로를 가정하지 않고
+객체 그래프 전체를 훑도록 고쳤다. 실패 시 실제로 찾은 폰트 목록을 출력하게 해서
+다음에는 원인 파악이 바로 되도록 했다.
+
+**교훈: 검증 코드도 코드다.** "검증이 실패했다"가 곧 "대상이 잘못됐다"는 아니다.
+이번에는 검증 쪽이 틀렸다.
 
 ---
 

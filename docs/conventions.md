@@ -1,7 +1,8 @@
 # 개발 컨벤션
 
 이 문서는 **"어떻게 쓰는가"**를 정한다.
-지금 무엇이 있는지는 [architecture.md](architecture.md), 무엇을 만드는지는 [game-design.md](game-design.md) 참고.
+지금 무엇이 있는지는 [architecture.md](architecture.md),
+무엇을 만드는지는 [game-design.md](game-design.md) (기획 문서 지도) 참고.
 
 ---
 
@@ -30,6 +31,7 @@ NHNProject/
 │   └── unit/
 ├── web/                    # 웹 빌드용 커스텀 HTML 셸
 ├── docs/
+│   └── design/             # 기획 본문 (항목별 분할). 지도는 docs/game-design.md
 ├── tools/                  # 개발 보조 스크립트 (게임에 포함되지 않음)
 └── .github/
     ├── actions/            # 워크플로가 공유하는 합성 액션
@@ -221,7 +223,7 @@ speed = 300  # 웹 빌드 기준 60fps 에서 한 화면을 4초에 가로지르
 
 | 변경 | 갱신할 문서 |
 | --- | --- |
-| 게임 규칙·콘텐츠 결정 | `game-design.md` |
+| 게임 규칙·콘텐츠 결정 | `docs/design/` 의 해당 항목 문서 + `design/11-decisions.md` |
 | 폴더 구조·컨벤션 변경 | `conventions.md` |
 | 새 시스템·모듈 추가 | `architecture.md` |
 | 빌드·배포 설정 변경 | `web-build.md` |
