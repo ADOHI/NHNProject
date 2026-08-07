@@ -47,20 +47,24 @@ python -m http.server 8060 --directory build/web
 
 | 경로 | 역할 |
 | --- | --- |
-| `scenes/` | 씬(`.tscn`) |
-| `scripts/` | GDScript. 씬과 1:1로 대응하는 스크립트 |
-| `scripts/autoload/` | 자동 로드 싱글톤 |
-| `docs/` | 설계·운영 문서 |
+| `src/` | 게임 코드와 씬. 기능 단위로 묶는다 |
+| `src/autoload/` | 자동 로드 싱글톤 |
+| `src/main/` | 진입점 씬 |
+| `assets/` | 여러 기능이 공유하는 원본 에셋 |
+| `docs/` | 기획·설계·운영 문서 |
 | `tools/` | 개발 보조 스크립트 (문서 PDF 빌드 등) |
 | `.github/workflows/` | 웹 빌드 & Pages 배포 |
 
-코드 배치 규칙은 [docs/architecture.md](docs/architecture.md) 참고.
+씬·스크립트·전용 에셋은 같은 기능 폴더에 함께 둔다.
+자세한 규칙은 [docs/conventions.md](docs/conventions.md) 참고.
 
 ## 문서
 
 | 문서 | 내용 |
 | --- | --- |
-| [docs/architecture.md](docs/architecture.md) | 씬·스크립트·오토로드 배치 규칙 |
+| [docs/game-design.md](docs/game-design.md) | 기획 — 무엇을 만드는가 |
+| [docs/conventions.md](docs/conventions.md) | 개발 컨벤션 — 폴더 구조, 네이밍, 코드 규칙 |
+| [docs/architecture.md](docs/architecture.md) | 구조 — 지금 무엇이 있는가 |
 | [docs/web-build.md](docs/web-build.md) | 웹 빌드 설정 근거와 배포 절차 |
 | [docs/ai-usage.md](docs/ai-usage.md) | **AI 활용 기술 문서** (제출물). 개발과 함께 갱신한다 |
 
