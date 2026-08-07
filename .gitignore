@@ -16,6 +16,9 @@ dist/
 .capture*.png
 .capture*.png.import
 
+# tools/capture_unit_move.gd 가 남기는 화면 캡처 묶음 (같은 이유)
+.captures/
+
 # OS / 에디터
 .DS_Store
 Thumbs.db
