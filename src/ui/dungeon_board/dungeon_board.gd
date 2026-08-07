@@ -20,12 +20,21 @@ const _EDGE_COLOR := Color(0.30, 0.33, 0.40)
 const _EDGE_BLOCKED_COLOR := Color(0.46, 0.28, 0.30)
 const _EDGE_WIDTH := 3.0
 
-## 방 사이의 목표 간격. 방 위젯보다 넉넉해야 이름이 겹쳐 보이지 않는다.
-const _SPACING := 210.0
+## 방 사이의 목표 간격.
+##
+## 방 위젯보다 넉넉해야 이름이 겹쳐 보이지 않고, 지도가 화면보다 커야
+## 훑어볼 여지가 생긴다. 좁히면 판이 한 화면에 들어와 이동이 무의미해진다.
+const _SPACING := 280.0
 
 ## 화면 가장자리에서 카메라가 따라 움직이기 시작하는 폭과 그 속도.
 const _EDGE_MARGIN := 56.0
 const _EDGE_SPEED := 900.0
+
+## 지도 바깥으로 둘 여백의 최솟값. 실제로는 화면 절반과 비교해 큰 쪽을 쓴다.
+##
+## 화면 절반만큼 두는 이유는 **가장자리 방도 화면 가운데에 놓고 볼 수 있어야** 하기 때문이다.
+## 이보다 좁으면 지도 끝의 방은 아무리 끌어도 화면 구석에 붙어 있다.
+const _WORLD_PADDING_MIN := 200.0
 
 ## 확대 배율의 범위와 한 칸의 크기.
 const _ZOOM_MIN := 0.4
@@ -50,6 +59,12 @@ var _pan := Vector2.ZERO
 var _zoom := 1.0
 var _dragging := false
 
+## 커서가 실제로 움직인 적이 있는가.
+##
+## 이걸 보지 않으면, 창이 열리자마자 커서가 우연히 가장자리에 있다는 이유로
+## 카메라가 저 혼자 흘러간다. 사용자가 지도를 만지기 전에는 가만히 있어야 한다.
+var _pointer_moved := false
+
 @onready var _room_layer: Control = %RoomLayer
 @onready var _room_label: Label = %RoomLabel
 @onready var _threat_label: Label = %ThreatLabel
@@ -62,7 +77,9 @@ func setup(run: DungeonRun, layout_seed: int) -> void:
 	_run = run
 	_positions = run.blueprint.layout(layout_seed, _SPACING)
 	_build_room_nodes()
-	center_on_player()
+	redraw()
+	# 화면 크기는 배치가 끝난 뒤에야 확정된다. 그 전에 가운데를 잡으면 빗나간다.
+	center_on_player.call_deferred()
 
 
 ## 판을 통째로 다시 그린다. 상태가 바뀐 뒤에 쓴다.
@@ -94,6 +111,7 @@ func center_on_player() -> void:
 	_zoom = 1.0
 	var current: Vector2 = _positions.get(_run.player_room_id(), Vector2.ZERO)
 	_pan = size * 0.5 - current * _zoom
+	_clamp_pan()
 	redraw()
 
 
@@ -102,10 +120,12 @@ func _gui_input(event: InputEvent) -> void:
 	# 여기까지 온 입력은 빈 곳에서 일어난 것이므로 지도 조작으로 해석한다.
 	if event is InputEventMouseButton:
 		_handle_mouse_button(event as InputEventMouseButton)
-	elif event is InputEventMouseMotion and _dragging:
-		_pan += (event as InputEventMouseMotion).relative
-		_clamp_pan()
-		_reposition()
+	elif event is InputEventMouseMotion:
+		_pointer_moved = true
+		if _dragging:
+			_pan += (event as InputEventMouseMotion).relative
+			_clamp_pan()
+			_reposition()
 
 
 ## 커서가 화면 가장자리에 가면 카메라가 그쪽으로 따라 움직인다.
@@ -113,7 +133,9 @@ func _gui_input(event: InputEvent) -> void:
 ## 끌지 않고도 지도를 훑을 수 있어야 한다. 지도가 화면보다 큰 판에서
 ## 매번 끌어다 놓는 것은 번거롭다.
 func _process(delta: float) -> void:
-	if _run == null or _dragging or not is_visible_in_tree():
+	if _run == null or _dragging or not _pointer_moved or not is_visible_in_tree():
+		return
+	if not _pointer_is_on_map():
 		return
 	var push := _edge_push(get_local_mouse_position())
 	if push == Vector2.ZERO:
@@ -121,6 +143,15 @@ func _process(delta: float) -> void:
 	_pan += push * _EDGE_SPEED * delta
 	_clamp_pan()
 	_reposition()
+
+
+## 커서가 지도 위에 있는가. HUD·조작 패널 위에서는 카메라가 움직이면 안 된다.
+##
+## 화면 구석의 정보를 읽으려고 커서를 올렸을 뿐인데 지도가 흘러가면
+## 읽던 곳을 놓친다. 가장자리 이동은 **지도를 보고 있을 때만** 일어나야 한다.
+func _pointer_is_on_map() -> bool:
+	var hovered := get_viewport().gui_get_hovered_control()
+	return hovered == self or hovered is RoomNode
 
 
 ## 커서 위치가 만드는 카메라 이동 방향. 가장자리에 가까울수록 세다.
@@ -172,39 +203,46 @@ func _apply_zoom(target: float, anchor: Vector2) -> void:
 		_update_hint()
 
 
-## 화면이 지도 밖을 비추지 않게 막는다.
+## 카메라를 **세계 범위** 안에 가둔다.
 ##
-## 지도가 화면보다 크면 **화면이 지도 안에** 있어야 하고,
-## 지도가 화면보다 작으면 화면 가운데에 둔다.
+## 세계 = 지도 전체 크기 + 사방 패딩.
+## 화면은 이 안에서만 움직인다. 나가면 아무것도 없는 곳을 하염없이 보게 된다.
 ##
-## 예전에는 "지도를 조금이라도 남긴다"는 식으로 막았는데,
-## 지도가 화면보다 작을 때 허용 범위가 뒤집혀 이동이 한 점에 고정됐다.
-## 커서 기준 확대가 도로 튕겨 나가던 것도 이 때문이었다.
+## 패딩이 있어야 가장자리 방을 화면 구석이 아니라 **가운데에 놓고 볼 수 있다.**
+## 패딩 없이 지도 경계로만 막으면 끝의 방은 늘 화면 모서리에 붙어 보인다.
 func _clamp_pan() -> void:
-	if _positions.is_empty():
+	var world := _world_rect()
+	if world.size == Vector2.ZERO:
 		return
-	var extent := _node_extent()
+	_pan.x = _clamp_axis(_pan.x, world.position.x, world.end.x, size.x)
+	_pan.y = _clamp_axis(_pan.y, world.position.y, world.end.y, size.y)
+
+
+## 카메라가 돌아다닐 수 있는 세계. 화면 좌표계에서 잰다(= 배율이 적용된 크기).
+func _world_rect() -> Rect2:
+	if _positions.is_empty():
+		return Rect2()
 	var lowest := Vector2.INF
 	var highest := -Vector2.INF
 	for position in _positions.values():
 		lowest = lowest.min(position as Vector2 * _zoom)
 		highest = highest.max(position as Vector2 * _zoom)
-	_pan.x = _clamp_axis(_pan.x, lowest.x - extent.x, highest.x + extent.x, size.x)
-	_pan.y = _clamp_axis(_pan.y, lowest.y - extent.y, highest.y + extent.y, size.y)
+	# 방 위젯은 좌표를 중심으로 그려지므로 그 절반만큼 더 뻗고,
+	# 거기에 화면 절반만큼의 여백을 더 둔다.
+	var padding := (size * 0.5).max(Vector2(_WORLD_PADDING_MIN, _WORLD_PADDING_MIN))
+	var extent := _node_extent() + padding
+	return Rect2(lowest - extent, highest - lowest + extent * 2.0)
 
 
-func _clamp_axis(value: float, map_low: float, map_high: float, view: float) -> float:
-	# 화면의 양 끝이 지도 안에 들어오는 이동량의 범위.
-	var lower := view - map_high
-	var upper := -map_low
-	if lower > upper:
-		# 지도가 화면보다 작다. 채울 수 없으니 가운데에 둔다.
-		return (lower + upper) * 0.5
-	return clampf(value, lower, upper)
+func _clamp_axis(value: float, world_low: float, world_high: float, view: float) -> float:
+	# 화면의 양 끝이 세계 안에 들어오는 이동량의 범위.
+	# 세계가 화면보다 작으면 둘이 뒤집히는데, 그때는 세계가 화면 안에 들어오면 된다.
+	var a := view - world_high
+	var b := -world_low
+	return clampf(value, minf(a, b), maxf(a, b))
 
 
-## 방 위젯이 좌표 바깥으로 뻗는 크기. 지도 경계를 잴 때 함께 세야
-## 가장자리 방이 화면 밖으로 잘리지 않는다.
+## 방 위젯이 좌표 바깥으로 뻗는 크기.
 func _node_extent() -> Vector2:
 	if _room_nodes.is_empty():
 		return Vector2.ZERO

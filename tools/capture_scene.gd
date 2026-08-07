@@ -39,6 +39,7 @@ func _process(_delta: float) -> bool:
 		return false
 	if _frames < _WARMUP_FRAMES + _SETTLE_FRAMES:
 		return false
+	_print_board_state()
 	_print_rooms()
 	var image := root.get_texture().get_image()
 	var err := image.save_png(_out_path)
@@ -74,6 +75,17 @@ func _press_debug_button() -> void:
 ##
 ## 생성된 판은 id 가 r0, r1 … 이라 화면만 봐서는 어느 방을 눌러야 하는지 알 수 없다.
 ## 이동 경로를 지정해 캡처하려면 이 목록이 필요하다.
+func _print_board_state() -> void:
+	for node in root.find_children("*", "DungeonBoard", true, false):
+		print(
+			(
+				"board size=%s zoom=%.2f pan=%s"
+				% [(node as Control).size, node.get("_zoom"), node.get("_pan")]
+			)
+		)
+		return
+
+
 func _print_rooms() -> void:
 	for node in root.find_children("*", "Button", true, false):
 		var room_id: Variant = node.get("room_id")
