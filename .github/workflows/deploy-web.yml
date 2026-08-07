@@ -3,6 +3,17 @@ name: Deploy Web Build
 on:
   push:
     branches: [main]
+    # 게임 빌드 결과에 영향이 없는 변경으로는 재배포하지 않는다.
+    # (문서만 고쳐도 엔진과 템플릿을 통째로 내려받는 것은 낭비다)
+    # 이 목록을 고칠 때 주의: .github/workflows/** 는 절대 넣지 말 것.
+    # 워크플로 자신을 무시하면 수정이 반영됐는지 확인할 방법이 없어진다.
+    paths-ignore:
+      - 'docs/**'
+      - 'tools/**'
+      - '*.md'          # 최상위 .md 만 매칭된다 (* 는 / 를 넘지 않음)
+      - '.gitignore'
+      - '.gitattributes'
+  # 문서만 고친 뒤에도 재배포가 필요하면 Actions 탭에서 수동 실행한다.
   workflow_dispatch:
 
 permissions:
