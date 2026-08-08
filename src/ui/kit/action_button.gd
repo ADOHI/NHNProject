@@ -34,6 +34,7 @@ extends BaseButton
 const MOTION_STATE := ActionButtonMotion.State
 
 const FONT := preload("res://assets/fonts/song_myung/SongMyung-Regular.ttf")
+const MESH_SHADER := preload("res://src/ui/kit/plate_mesh.gdshader")
 
 ## 글자 자간. 자간이 0 이면 두 글자 낱말이 뭉쳐 보인다.
 const TRACKING: float = 3.0
@@ -185,6 +186,29 @@ func _sync() -> void:
 
 ## 크기는 글자에서 나온다. 형태마다 글자 크기와 여백이 달라 **같은 낱말이라도
 ## 형태를 바꾸면 버튼이 커지거나 작아진다** — 위계가 색이 아니라 형태에서 나온다.
+## 커서 정도를 밖에서도 읽는다. 셰이더 균일값에 넣어야 해서 `_draw` 앞에서 필요하다.
+func warmth_now() -> float:
+	return _motion.warmth()
+
+
+## 셰이더가 붙는 형태에만 재료를 달고 균일값을 채운다. 나머지 형태는 재료가 없다 —
+## 안 쓰는 셰이더를 전부에 달면 그리기 묶음이 형태마다 쪼개진다.
+func _feed_shader(body: Vector2, energy: float) -> void:
+	if not PlateForm.shaded(form):
+		if material != null:
+			material = null
+		return
+	if material == null:
+		var made := ShaderMaterial.new()
+		made.shader = MESH_SHADER
+		material = made
+	var stuff := material as ShaderMaterial
+	stuff.set_shader_parameter("clock", _motion.ambient)
+	stuff.set_shader_parameter("energy", energy)
+	stuff.set_shader_parameter("plate_size", body)
+	stuff.set_shader_parameter("plate_origin", get_global_transform_with_canvas().origin)
+
+
 func _refresh_size() -> void:
 	var points := PlateForm.font_size(form)
 	var width := FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, points).x
@@ -197,8 +221,10 @@ func _draw() -> void:
 	_static_drawn = dead
 
 	var body := Vector2(size.x, PlateForm.height(form))
-	var shape := PlateForm.outline(form, body)
+	var raw := PlateForm.outline(form, body)
+	var shape := PlateForm.animate(form, raw, _motion.ambient)
 	var box := PlateForm.hull(form, body)
+	_feed_shader(body, warmth_now())
 	var lift := _motion.lift()
 	var squash := _motion.squash()
 
@@ -295,7 +321,11 @@ func _draw_ticks(body: Vector2, dead: bool) -> void:
 ## 괘선 두 줄. 바깥은 실선, 안쪽은 한 겹 여린 선.
 ## 비활성은 바깥 줄이 **점선**이 된다 — 색을 흐리는 것보다 훨씬 확실하게 갈린다.
 func _draw_rules(shape: PackedVector2Array, warmth: float, dead: bool) -> void:
-	var inner := PlateForm.shrink(shape, INSET)
+	var inner := PlateForm.animate(
+		form,
+		PlateForm.shrink(PlateForm.outline(form, Vector2(size.x, PlateForm.height(form))), INSET),
+		_motion.ambient
+	)
 	var open_lines := PlateForm.strokes(form, Vector2(size.x, PlateForm.height(form)))
 	var line := RULE.lerp(INK, 0.35 * warmth)
 	var soft := RULE_SOFT.lerp(RULE, warmth)

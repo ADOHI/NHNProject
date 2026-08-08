@@ -41,8 +41,21 @@ const FORMS: Array[PlateForm.Kind] = [
 	PlateForm.Kind.FANG,
 	PlateForm.Kind.WIRE,
 	PlateForm.Kind.SPLIT,
+	PlateForm.Kind.BOIL,
+	PlateForm.Kind.RIP,
+	PlateForm.Kind.MESH,
 ]
-const FORM_NAMES: Array[String] = ["쐐기", "어긋난 판 셋", "기운 판", "뿔 (과한 것)", "선만", "흩어진 조각"]
+const FORM_NAMES: Array[String] = [
+	"쐐기",
+	"어긋난 판 셋",
+	"기운 판",
+	"뿔 (과한 것)",
+	"선만",
+	"흩어진 조각",
+	"끓는 윤곽",
+	"찢어진 아래",
+	"점망 (셰이더)",
+]
 
 ## 한 줄에 넣을 수 있는 폭. 넘으면 다음 줄로 접는다.
 const ROW_WIDTH: float = 1180.0

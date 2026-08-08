@@ -39,6 +39,12 @@ enum Kind {
 	WIRE,
 	## 조각 여섯으로 흩어져 있다. 글자가 조각과 바탕에 걸쳐 앉는다.
 	SPLIT,
+	## 윤곽이 **끓는다.** 테두리가 매 프레임 물결친다 — 정지 화면에는 없는 형태다.
+	BOIL,
+	## 아래 변이 **찢어져** 톱니가 났다. 잘린 종이의 결이다.
+	RIP,
+	## 판 위에 **점망**이 한쪽으로 몰려 깔린다. 셰이더가 만드는 유일한 형태다.
+	MESH,
 }
 
 
@@ -55,6 +61,10 @@ static func height(kind: Kind) -> float:
 			return 54.0
 		Kind.SPLIT:
 			return 62.0
+		Kind.BOIL:
+			return 60.0
+		Kind.RIP:
+			return 62.0
 		_:
 			return 56.0
 
@@ -70,6 +80,8 @@ static func padding(kind: Kind) -> float:
 			return 92.0
 		Kind.SPLIT:
 			return 104.0
+		Kind.MESH:
+			return 96.0
 		_:
 			return 78.0
 
@@ -85,6 +97,8 @@ static func font_size(kind: Kind) -> int:
 			return 21
 		Kind.SPLIT:
 			return 24
+		Kind.MESH:
+			return 23
 		_:
 			return 22
 
@@ -122,6 +136,12 @@ static func outline(kind: Kind, size: Vector2) -> PackedVector2Array:
 			return _poly([42, 0, w - 4, 0, w, 15, w - 34, h, 26, h, 33, 45, 0, 36, 35, 25])
 		Kind.WIRE:
 			return _poly([14, 6, w - 6, 6, w - 14, h - 6, 6, h - 6])
+		Kind.BOIL:
+			return _poly([10, 4, w - 10, 4, w - 4, h * 0.5, w - 12, h - 4, 12, h - 4, 4, h * 0.5])
+		Kind.RIP:
+			return _poly([0, 0, w, 0, w, h - 14, 0, h - 14])
+		Kind.MESH:
+			return _poly([18, 0, w, 0, w, h - 16, w - 18, h, 0, h, 0, 16])
 		Kind.SPLIT:
 			# 글자 아래 조각은 **글자보다 짧다.** 글자 양끝이 바탕에 걸린다.
 			return _poly([w * 0.30, 22, w * 0.78, 18, w * 0.74, 48, w * 0.26, 52])
@@ -193,6 +213,12 @@ static func marker(kind: Kind, size: Vector2) -> PackedVector2Array:
 			return _poly([18, h * 0.5 - 8, 30, h * 0.5, 18, h * 0.5 + 8])
 		Kind.SPLIT:
 			return _poly([w * 0.13, 26, w * 0.23, 24, w * 0.16, 44])
+		Kind.BOIL:
+			return _poly([16, h * 0.5 - 8, 27, h * 0.5, 16, h * 0.5 + 8])
+		Kind.RIP:
+			return _poly([12, 12, 16, 12, 16, h - 26, 12, h - 26])
+		Kind.MESH:
+			return _poly([14, 14, 20, 12, 20, h - 12, 14, h - 14])
 		_:
 			return _poly([14, h * 0.5 - 9, 17, h * 0.5 - 9, 17, h * 0.5 + 9, 14, h * 0.5 + 9])
 
@@ -215,6 +241,10 @@ static func text_at(kind: Kind, size: Vector2) -> Vector2:
 			return Vector2(size.x * 0.52, size.y * 0.44)
 		Kind.SPLIT:
 			return Vector2(size.x * 0.52, 35.0)
+		Kind.RIP:
+			return Vector2(size.x * 0.5, (size.y - 14.0) * 0.55)
+		Kind.MESH:
+			return Vector2(size.x * 0.44, size.y * 0.5)
 		_:
 			return size * 0.5
 
@@ -238,6 +268,12 @@ static func gauge_at(kind: Kind, size: Vector2) -> Vector2:
 			return Vector2(size.x - 10.0, size.y - 4.0)
 		Kind.SPLIT:
 			return Vector2(size.x * 0.62, 9.0)
+		Kind.BOIL:
+			return Vector2(size.x - 18.0, 12.0)
+		Kind.RIP:
+			return Vector2(size.x - 12.0, 9.0)
+		Kind.MESH:
+			return Vector2(size.x - 10.0, 10.0)
 		_:
 			return Vector2(size.x - 12.0, 10.0)
 
@@ -259,6 +295,12 @@ static func ticks(kind: Kind, size: Vector2) -> Vector3:
 			return Vector3(30.0, size.x - 40.0, 4.0)
 		Kind.SPLIT:
 			return Vector3(size.x * 0.30, size.x * 0.58, 22.0)
+		Kind.BOIL:
+			return Vector3(26.0, size.x - 64.0, 8.0)
+		Kind.RIP:
+			return Vector3(20.0, size.x - 58.0, 5.0)
+		Kind.MESH:
+			return Vector3(28.0, size.x - 56.0, 6.0)
 		_:
 			return Vector3(24.0, size.x - 58.0, 6.0)
 
@@ -302,3 +344,73 @@ static func hull(kind: Kind, size: Vector2) -> Rect2:
 	for line in strokes(kind, size):
 		box = box.merge(bounds(line))
 	return box
+
+
+## 셰이더가 붙는 형태인가. `MESH` 만 붙는다.
+static func shaded(kind: Kind) -> bool:
+	return kind == Kind.MESH
+
+
+## 윤곽을 **시각에 따라 흔든다.** 정지 화면에는 없는 형태가 여기서 나온다.
+##
+## 셰이더로 하지 않고 여기서 하는 이유: 프래그먼트 셰이더는 자기가 테두리에서
+## 얼마나 떨어져 있는지 모른다. 판 모양이 형태마다 다르므로 거리장을 넘겨 줄 방법도
+## 마땅치 않다. **꼭짓점을 직접 흔드는 쪽이 정확하고, 어느 형태에나 붙는다.**
+##
+## `randf()` 를 쓰지 않는다 — 캡처마다 화면이 달라지면 비교가 안 된다.
+static func animate(kind: Kind, points: PackedVector2Array, clock: float) -> PackedVector2Array:
+	match kind:
+		Kind.BOIL:
+			return _boil(points, clock)
+		Kind.RIP:
+			return _rip(points, clock)
+		_:
+			return points
+
+
+## 테두리를 잘게 나눈 뒤 바깥 방향으로 물결치게 민다.
+##
+## 파장 둘을 섞는다. 하나만 쓰면 **주기가 눈에 보여서** 끓는 것이 아니라
+## 톱니바퀴가 도는 것으로 읽힌다.
+static func _boil(points: PackedVector2Array, clock: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var count := points.size()
+	var walked := 0.0
+	for i in count:
+		var from := points[i]
+		var to := points[(i + 1) % count]
+		var length := from.distance_to(to)
+		if length <= 0.0:
+			continue
+		var way := (to - from) / length
+		var normal := Vector2(way.y, -way.x)
+		var steps := maxi(2, int(length / 4.0))
+		for step in steps:
+			var along := float(step) / float(steps)
+			var s := walked + along * length
+			var push := 1.5 * sin(s * 0.28 + clock * 5.1) + 0.9 * sin(s * 0.63 - clock * 3.3)
+			out.append(from + way * (along * length) + normal * push)
+		walked += length
+	return out
+
+
+## 아래 변을 톱니로 찢는다. 이가 고르면 톱이고 **들쭉날쭉해야 찢어진 것**이다.
+static func _rip(points: PackedVector2Array, clock: float) -> PackedVector2Array:
+	if points.size() < 4:
+		return points
+	var out := PackedVector2Array([points[0], points[1], points[2]])
+	var from := points[2]
+	var to := points[3]
+	var span := from.x - to.x
+	var teeth := maxi(4, int(span / 11.0))
+	for i in range(teeth + 1):
+		var t := float(i) / float(teeth)
+		var x := from.x - span * t
+		var deep := 3.0 + 9.0 * KitEase.hash01(i * 2654435761 + 11)
+		if i % 2 == 1:
+			deep += 1.2 * sin(clock * 2.0 + float(i))
+		else:
+			deep *= 0.25
+		out.append(Vector2(x, from.y + deep))
+	out.append(points[3])
+	return out

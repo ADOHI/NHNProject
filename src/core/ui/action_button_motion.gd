@@ -73,8 +73,9 @@ const IMPACT_TIME: float = 0.40
 
 var state: State = State.NORMAL
 
-## 평상시에도 흐르는 시계. 상시 모션(광택 · 테두리 빛)만 여기서 시각을 읽는다.
-var _ambient: float = 0.0
+## 평상시에도 흐르는 시계. 상시 모션과 **윤곽이 끓는 형태 · 셰이더**가 이걸 읽는다.
+## 공개 변수인 이유는 밖에서 읽어야 해서다 — `TIME` 을 쓰면 캡처가 재현되지 않는다.
+var ambient: float = 0.0
 
 ## 사건 뒤 흐른 시간. `-1` 은 **아직 그 사건이 없었다**는 뜻이다.
 var _since_hover: float = -1.0
@@ -87,7 +88,7 @@ var _since_up: float = -1.0
 func advance(delta: float) -> void:
 	if state == State.DISABLED:
 		return
-	_ambient += delta
+	ambient += delta
 	if _since_hover >= 0.0:
 		_since_hover += delta
 	if _since_leave >= 0.0:
@@ -103,7 +104,7 @@ func advance(delta: float) -> void:
 func pose(
 	ambient: float, since_hover: float, since_leave: float, since_down: float, since_up: float
 ) -> void:
-	_ambient = ambient
+	ambient = ambient
 	_since_hover = since_hover
 	_since_leave = since_leave
 	_since_down = since_down
@@ -242,7 +243,7 @@ func flare() -> float:
 func runner_at() -> float:
 	if state == State.DISABLED:
 		return -1.0
-	return fposmod(_ambient, RUNNER_PERIOD) / RUNNER_PERIOD
+	return fposmod(ambient, RUNNER_PERIOD) / RUNNER_PERIOD
 
 
 ## 갈매기표를 지나가는 밝은 점의 자리 0..1.
@@ -251,7 +252,7 @@ func chevron_at() -> float:
 		return -1.0
 	if _since_hover >= 0.0:
 		return fposmod(_since_hover, CHEVRON_HOVER) / CHEVRON_HOVER
-	return fposmod(_ambient, CHEVRON_IDLE) / CHEVRON_IDLE
+	return fposmod(ambient, CHEVRON_IDLE) / CHEVRON_IDLE
 
 
 ## 아래 강세 띠가 그려진 길이 0..1. 커서에서 **끝을 지나쳤다 되돌아온다.**
