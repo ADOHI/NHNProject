@@ -52,6 +52,7 @@ func _ready() -> void:
 			CharWalkClip.new(_rig),
 			CharSwingClip.new(_rig, WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW),
 			CharSwingClip.new(_rig, WeaponGuard.Id.LOW, WeaponGuard.Id.HIGH),
+			CharHitClip.new(_rig),
 			CharFrontIdleClip.new(_rig),
 		]
 		as Array[CharClip]
@@ -125,6 +126,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_select_clip(3)
 		KEY_5:
 			_select_clip(4)
+		KEY_6:
+			_select_clip(5)
 		KEY_Z:
 			_toggle_all()
 		KEY_G:
@@ -193,7 +196,7 @@ func _build_overlay() -> void:
 		"\n"
 		. join(
 			[
-				"1 idle • 2 walk • 3 내려치기 • 4 올려치기 • 5 정면 문법",
+				"1 idle • 2 walk • 3 내려치기 • 4 올려치기 • 5 맞기 • 6 정면 문법",
 				"Space  멈춤 • 왼쪽 오른쪽 화살표  한 걸음씩",
 				"Q 지연 • W 호 • E 배율 • A 비대칭 • D 앞뒤 • P 디딤 • Z 다",
 				"G 기준선 • Tab 조절판 • H 도움말 • R 처음으로",

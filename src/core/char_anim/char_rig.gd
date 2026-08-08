@@ -175,6 +175,21 @@ func local_bottom(part: CharPart.Id) -> Vector2:
 	return local_centers[part] - Vector2(0.0, half_sizes[part].y)
 
 
+## 그려지는 상자의 네 모서리 (파츠 지역 공간).
+##
+## 회전한 파츠가 땅을 파고드는지 재는 데 쓴다 — **모서리를 안 보면 옆으로 누운 파츠가
+## 절반쯤 묻혀도 검사가 통과한다.** 발은 밑창이 상자보다 좁으므로 이걸 쓰지 않는다.
+func local_corners(part: CharPart.Id) -> Array[Vector2]:
+	var center := local_centers[part]
+	var half := half_sizes[part]
+	return [
+		center + Vector2(-half.x, -half.y),
+		center + Vector2(half.x, -half.y),
+		center + Vector2(half.x, half.y),
+		center + Vector2(-half.x, half.y),
+	]
+
+
 ## 파츠 지역 공간에서의 **발끝**(밑창의 앞쪽 끝).
 ##
 ## 뒤꿈치를 드는 동작이 이 점을 축으로 돈다. 피벗은 밑면 한가운데에 고정되어 있으므로

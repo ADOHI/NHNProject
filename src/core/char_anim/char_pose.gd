@@ -86,10 +86,30 @@ func part_ground_point(part: CharPart.Id, rig: CharRig) -> Vector2:
 ## **지면이 파츠마다 다르다** — 사이드 사선에서는 뒷발의 바닥이 앞발보다 높다.
 ## 발은 밑면과 발끝 중 더 낮은 쪽으로 재고, 나머지 파츠는 밑면으로 잰다.
 func sink_depth(part: CharPart.Id, rig: CharRig) -> float:
-	var lowest := part_bottom(part, rig).y
+	return rig.ground_y(part) - part_lowest(part, rig)
+
+
+## 파츠가 실제로 차지한 자리 중 **가장 낮은 높이.** 회전 · 배율까지 반영한다.
+##
+## **발과 나머지가 다른 것을 본다.**
+##
+## | | 무엇으로 재나 | 왜 |
+## | --- | --- | --- |
+## | 발 | 밑창(밑면 · 발끝 · 뒤꿈치) | 밑창이 반크기보다 **좁고 비대칭**이다 (§25.10.35) |
+## | 나머지 | 그려지는 상자의 **네 모서리** | 윤곽표가 없으므로 상자가 가장 안전한 근사다 |
+##
+## **밑면 한가운데만 보면 안 된다.** 몸 · 머리는 피벗이 곧 밑면이라 **회전해도 그 점이
+## 안 움직인다** — 파츠가 옆으로 누워 절반이 땅에 묻혀도 검사가 통과한다.
+## idle · walk 는 회전이 작아 이 눈이 멀어 있어도 티가 안 났는데, `get hit` 의
+## 쓰러짐이 파츠를 크게 돌리면서 드러났다.
+func part_lowest(part: CharPart.Id, rig: CharRig) -> float:
 	if CharPart.is_foot(part):
-		lowest = minf(lowest, part_ground_point(part, rig).y)
-	return rig.ground_y(part) - lowest
+		return minf(part_bottom(part, rig).y, part_ground_point(part, rig).y)
+	var transform := core_transform(part)
+	var lowest := INF
+	for corner in rig.local_corners(part):
+		lowest = minf(lowest, (transform * corner).y)
+	return lowest
 
 
 ## 여섯 파츠 중 가장 깊이 파고든 정도. 접지 검증이 쓴다.

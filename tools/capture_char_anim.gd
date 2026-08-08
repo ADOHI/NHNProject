@@ -53,7 +53,7 @@ const WARMUP_FRAMES := 8
 const MIN_SUBJECT_RATIO := 0.03
 
 ## 낱말로 고를 수 있는 클립과 조절판 축.
-const CLIPS: Array[String] = ["idle", "walk", "front", "swing", "swingup"]
+const CLIPS: Array[String] = ["idle", "walk", "front", "swing", "swingup", "hit"]
 const AXES: Array[String] = ["delay", "arc", "squash", "asymmetry", "depth", "plant"]
 
 var _out_prefix := ".renders-char-anim/idle"
@@ -155,6 +155,8 @@ func _make_clip(name: String, rig: CharRig) -> CharClip:
 	match name:
 		"walk":
 			return CharWalkClip.new(rig)
+		"hit":
+			return CharHitClip.new(rig)
 		"swing":
 			return CharSwingClip.new(rig, WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW)
 		"swingup":
