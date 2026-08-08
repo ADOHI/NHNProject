@@ -18,10 +18,16 @@ extends RefCounted
 ## 한 번에 다 부르든 250명씩 부르든 **결과가 같다.** 분할 스케줄러는 이번 범위가 아니지만
 ## 못 나누는 구조로 짜지 않는 것까지가 이번 몫이다.
 ##
-## ## 결정론 (§24.16.7)
+## ## 결정론 — 필드마다 흐름이 갈려 있다 (§24.24)
 ##
-## `randi()` 를 직접 부르지 않는다. 시드를 받은 RNG 하나가 모든 값을 낸다 —
-## DungeonGenerator 와 같은 규율이다. 같은 시드 + 같은 인구 = 같은 세계.
+## 예전에는 RNG 하나를 순서대로 소비했다. 그래서 **필드를 하나 더하면 그 뒤의 모든
+## 뽑기가 밀려 같은 시드의 같은 인덱스가 다른 사람이 됐다** — 성과 성별을 넣을 때
+## 실제로 두 번 그랬고 초상 레인이 골라 둔 인물이 사라졌다.
+##
+## 지금은 `PersonSeed` 가 **(세계 시드, 필드, 인물 인덱스)** 로 흐름을 연다.
+## **필드를 더해도 인물이 안 바뀌고**, 인구를 늘려도 앞 인물이 안 밀린다.
+##
+## 그래서 인덱스 하나가 곧 그 인물이다 — 초상 배치를 밤새 돌려도 아침에 같은 사람이다.
 
 ## 소속 하나에 들어가는 평균 인원. 소속 수는 인구를 이것으로 나눈 값이다.
 ##
@@ -84,6 +90,7 @@ const FAME_YOUNG_FACTOR := 0.35
 const STAT_SPREAD := 1
 
 var _rng := RandomNumberGenerator.new()
+var _seed: int
 var _population: int
 var _made := 0
 
@@ -96,6 +103,7 @@ var _faction_weights := PackedFloat32Array()
 
 func _init(seed_value: int, population: int) -> void:
 	_population = maxi(population, 0)
+	_seed = seed_value
 	_rng.seed = seed_value
 	_faction_weights = _build_faction_weights(faction_count())
 
@@ -141,18 +149,34 @@ func has_name_capacity() -> bool:
 
 
 func _append_one(registry: PersonRegistry) -> void:
+	# 필드마다 흐름을 갈아 끼운다. 순서를 바꿔도 값이 안 바뀐다 (§24.24).
+	var index := _made
+	_stream(PersonSeed.Field.DISCIPLINE, index)
 	var discipline := (_rng.randi() % MemberDiscipline.count()) as MemberDiscipline.Kind
+	_stream(PersonSeed.Field.NAME, index)
 	var person_name := MemberNames.pick(_rng, _used_names)
 	# 계열 기본값을 베끼지 않고 MemberDiscipline 에 물어본다 — 상수를 복제하면
 	# 계열 밸런스를 고쳤을 때 세계만 옛 수치로 남는다.
+	_stream(PersonSeed.Field.THREAT, index)
 	var threat := _stat(MemberDiscipline.base_threat(discipline))
+	_stream(PersonSeed.Field.AGILITY, index)
 	var agility := _stat(MemberDiscipline.base_agility(discipline))
+	_stream(PersonSeed.Field.FACTION, index)
 	var faction := _pick_faction()
+	_stream(PersonSeed.Field.AGE, index)
 	var age := _pick_age()
+	_stream(PersonSeed.Field.GENDER, index)
 	var gender := _pick_gender()
+	_stream(PersonSeed.Field.FAME, index)
 	var fame := _pick_fame(age)
+	_stream(PersonSeed.Field.TRAITS, index)
 	var traits := TraitDistribution.sample_person(_rng)
 	registry.add(person_name, discipline, threat, agility, faction, fame, age, gender, traits)
+
+
+## 이 필드 · 이 인물의 흐름으로 갈아 끼운다.
+func _stream(field: PersonSeed.Field, index: int) -> void:
+	PersonSeed.apply(_rng, _seed, field, index)
 
 
 ## 계열 기본값 주변의 값. 1 미만으로는 내리지 않는다 —
