@@ -56,11 +56,25 @@ func test_unknown_key_is_ignored() -> void:
 	assert_almost_eq(tuning.get_value("없는값"), 0.0, 0.0001)
 
 
+## 밀고 밀리는 값은 전부 없어졌다. 하나라도 되살아나면 물리력이 다시 스며든 것이다.
+func test_no_pushing_knob_survives() -> void:
+	var banned := [
+		"separation_radius",
+		"separation_weight",
+		"side_bias",
+		"yield_strength",
+		"push_resolve",
+		"push_cap",
+	]
+	for definition in ProtoMoveTuning.DEFS:
+		assert_false(banned.has(String(definition["key"])), "미는 값이 되살아났다: %s" % definition["key"])
+
+
 func test_reset_restores_every_default() -> void:
 	# 만지다 망가뜨렸을 때 돌아올 곳이 없으면 아무도 마음 놓고 만지지 않는다.
 	var tuning := ProtoMoveTuning.new()
 	tuning.set_value("max_speed", 500.0)
-	tuning.set_value("separation_weight", 0.0)
+	tuning.set_value("turn_rate", 200.0)
 	tuning.reset()
 	assert_eq(tuning.changed_count(), 0)
 	assert_almost_eq(tuning.get_value("max_speed"), tuning.default_of("max_speed"), 0.0001)

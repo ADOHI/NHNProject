@@ -36,17 +36,18 @@ func _make_corridor_field() -> ProtoUnitField:
 	return ProtoUnitField.new(grid, ProtoMoveTuning.new())
 
 
-## 비키지 않는 아군 앞에서 굴린다. **밀치기를 걷어낸 뒤로는 못을 박을 필요가 없다.**
+## 비키지 않는 아군 앞에서 굴린다. **못을 박지 않고 정말 그 자리에 있었는지 확인한다.**
 ##
 ## 예전에는 걸음마다 제자리로 되돌려야 했다. 서 있는 쪽이 더 많이 밀리도록 되어 있어서
-## 지나가는 유닛이 그대로 밀고 나갔기 때문이다. 지금은 서 있는 유닛이 벽과 같으므로
-## 되돌리는 대신 **정말 그 자리에 있었는지 확인한다.** 되돌리기가 판정을 가려 주고 있었는지
-## 아닌지가 이 한 줄에서 갈린다.
+## 지나가는 유닛이 그대로 밀고 나갔기 때문이다. 되돌리기가 판정을 가려 주고 있었다.
+##
+## 지금은 **진행 방향으로만 못을 박는다.** 복도는 가로로 뚫려 있으므로 x 가 그대로여야 하고,
+## y 는 길에서 비켜서느라 움직일 수 있다 - 그것은 밀고 나아가기가 아니다.
 func _run_pinned(field: ProtoUnitField, blocker: ProtoUnitAgent, seconds: float) -> void:
 	var anchor := blocker.position
 	for _i in int(seconds / _STEP):
 		field.step(_STEP)
-	assert_lt(blocker.position.distance_to(anchor), 0.5, "막고 선 아군이 밀려났다")
+	assert_lt(absf(blocker.position.x - anchor.x), 0.5, "막고 선 아군이 진행 방향으로 떠밀렸다")
 
 
 ## 복도를 막은 아군과 그 뒤에 선 유닛을 만든다.

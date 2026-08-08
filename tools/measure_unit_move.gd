@@ -12,17 +12,30 @@ extends SceneTree
 ##
 ## | 지표 | 무엇의 크기인가 |
 ## | --- | --- |
-## | 꺾임 | 유닛당 초당 진행 방향이 꺾인 각도. **지터의 크기다** |
+## | 걸음꺾임 | 유닛당 초당 진행 방향이 꺾인 각도. **비켜서느라 옮겨진 거리는 뺀다** |
+## | 방향반전 | 유닛당 초당 조향 방향이 좌우로 뒤집힌 횟수. **이것이 진짜 지터다** |
+## | 옆걸음 | 유닛당 비켜주기가 옮긴 거리. 의도된 것이라 크다고 나쁘지 않다 |
+## | 순환 | 서로가 서로를 막는 고리의 최대 개수와 거기 묶인 유닛 수 |
+## | 굽기 | 막힘을 알고 흐름장을 다시 구운 횟수. **굽는 빈도가 곧 프레임 위험이다** |
 ## | 역주행 | 제 목표에서 멀어지는 쪽으로 움직인 프레임의 비율. **튕김의 크기다** |
 ## | 굽이 | 실제 이동 거리 / 직선 거리. 1.0 이 완전한 직선이다 |
-## | 밀린거리 | 겹침 해소가 위치를 강제로 옮긴 총 거리 |
-## | 정지밀림 | **움직이는 유닛이 서 있는 유닛을 밀어낸 총 거리. 0 이어야 한다** |
+## | 벽보정 | 지형 보정이 위치를 강제로 옮긴 총 거리. 평상시에는 0 이다 |
+## | 정지밀림 | **서 있는 유닛이 제 뜻과 무관하게 옮겨진 총 거리. 0 이어야 한다** |
 ## | 최대겹침 | 몸이 서로 파고든 최대 깊이. 통과하려면 몸 지름까지 자라야 한다 |
-## | 막힌이동 | 이웃의 몸에 막혀 깎여 나간 이동 거리. 밀치기를 걷어낸 값이다 |
+## | 막힌이동 | 가려 했으나 앞이 막혀 못 간 거리. 밀치기를 걷어낸 값이다 |
 ## | 정지 | 명령부터 전원이 멎기까지의 시간 |
 ## | 90% | 열에 아홉이 멎기까지의 시간. 정지와의 차이가 뒤끝이다 |
 ## | 통과 | 전원이 벽 너머로 넘어가기까지의 시간(괄호는 못 넘은 인원) |
 ## | 뒤진동 | 멎은 뒤 3 초 동안 움직인 총 거리 |
+##
+## **꺾임에서 옆걸음을 빼야 한다.** 비켜주기가 들어가면서 몸이 초당 140 픽셀로 옆으로
+## 옮겨지는데, 위치만 보면 그 프레임의 진행 방향은 옆이고 지표는 그것을 "방향이 꺾였다"로
+## 읽는다. 그런데 그건 **의도한 이동**이지 떨림이 아니다. 둘이 한 숫자에 섞여 있으면
+## 무엇을 고쳐도 효과를 읽을 수 없다. 그래서 `yield_shift` 를 빼고 **자기 걸음만** 센다.
+##
+## 그리고 진짜 지터는 따로 잰다. **목표 방향이 좌우로 뒤집히는 횟수**다. 누적 꺾임 각도는
+## 크게 도는 것과 잘게 떠는 것을 못 가르지만, 부호가 뒤집힌 횟수는 떨림에만 반응한다.
+## 몸의 걸음이 아니라 조향이 가리키는 방향을 보므로 옆걸음과도 섞이지 않는다.
 ##
 ## **꺾임 · 역주행 · 굽이는 속도가 아니라 실제로 옮겨 간 위치로 잰다.**
 ##
@@ -52,6 +65,11 @@ const _CELL := 32.0
 ## 이 속도 아래에서는 방향이 의미 없어 꺾임도 역주행도 세지 않는다(최대 속도 배수).
 const _MOVING_RATIO := 0.25
 
+## 조향 방향의 회전이 이보다 작은 프레임은 반전 판정에서 무시한다(도).
+##
+## 없으면 거의 직진하는 유닛의 수치 잡음이 매 프레임 부호를 바꿔 반전으로 세인다.
+const _REVERSAL_DEADBAND := 0.5
+
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -62,14 +80,24 @@ func _initialize() -> void:
 	quit()
 
 
+## **흔한 규모부터 잰다.** 40 과 100 만 재던 것을 4 · 8 · 12 · 24 로 넓혔다.
+##
+## 스쿼드 정원은 서넛이고 소환수와 다른 스쿼드가 겹쳐야 수십이 된다. 그런데 지금까지
+## 40 · 100 만 재어서 **정작 흔한 규모에서 어떤지 아무도 몰랐다.** 작은 규모가 나쁘면
+## 그쪽이 훨씬 큰 문제다 - 매번 보이는 것은 그쪽이다.
 func _run_cases() -> void:
 	var rows: Array[Dictionary] = []
-	rows.append(_measure("좁은 통로 40", _choke_field(40, 2), Vector2(1500, 545), 30 * _CELL))
-	rows.append(_measure("좁은 통로 100", _choke_field(100, 2), Vector2(1500, 545), 30 * _CELL))
-	rows.append(_measure("열린 곳 40", _open_field(40), Vector2(1500, 545), -1.0))
-	rows.append(_measure("열린 곳 100", _open_field(100), Vector2(1500, 545), -1.0))
+	var gate := 30 * _CELL
+	var target := Vector2(1500, 545)
+	for count in [4, 8, 12, 24, 40, 100]:
+		rows.append(_measure("좁은 통로 %d" % count, _choke_field(count, 2), target, gate))
+	for count in [4, 8, 12, 24, 40, 100]:
+		rows.append(_measure("열린 곳 %d" % count, _open_field(count), target, -1.0))
+	# **한 칸 문을 따로 잰다.** 폭 1 통로는 그래프의 다리라 원리상 순환이 없고, 두 칸 문은
+	# 사다리 꼴이라 국소 순환이 생긴다. 두 폭을 나란히 놓아야 순환이 진짜 원인인지 갈린다.
+	rows.append(_measure("한 칸 문 40", _choke_field(40, 1), target, gate))
 	rows.append(_measure("구석 24", _open_field(24), Vector2(60, 60), -1.0))
-	rows.append(_measure("맞교차 40", _facing_field(40), Vector2(1500, 545), -1.0, Vector2(200, 545)))
+	rows.append(_measure("맞교차 40", _facing_field(40), target, -1.0, Vector2(200, 545)))
 	_print_table(rows)
 
 
@@ -98,18 +126,19 @@ func _facing_field(count: int, gate_cells: int = 0) -> ProtoUnitField:
 
 ## 새로 넣은 장치를 하나씩 꺼 본다. **켜 두는 값은 꺼 봤을 때 나빠져야 자격이 있다.**
 ##
-## 처음에는 원래 있던 항(비껴가기 · 겹침 해소 · 분리 · 대형 유지)을 하나씩 꺼 봤는데
-## 어느 하나도 지터를 혼자 만들지 않았다 — 전부 15 퍼센트 안팎이었다. 원인은 힘의 세기가
-## 아니라 **조향이 가리키는 방향 자체가 튀는 것**이었고, 그것은 흐름장을 읽는 방식에 있었다.
+## 예전에는 힘 항(비껴가기 · 겹침 해소 · 분리 · 양보)을 하나씩 꺼 봤고, 어느 하나도 지터를
+## 혼자 만들지 않았다. 그 항들이 통째로 없어졌으므로 이제 끌 수 있는 것은 **자기 몸의 성질**
+## 뿐이다 — 조향 평활 · 회전 제한 · 대형 유지. 꺼도 나빠지지 않는 값은 있을 이유가 없다.
 func _run_probe() -> void:
 	var target := Vector2(1500, 545)
 	var gate := 30 * _CELL
 	var rows: Array[Dictionary] = []
 	rows.append(_measure("전부 켬", _choke_field(40, 2), target, gate))
 	rows.append(_measure("조향 평활 끔", _tuned(_choke_field(40, 2), "steer_smooth", 0.0), target, gate))
-	rows.append(_measure("양보 끔", _tuned(_choke_field(40, 2), "yield_strength", 0.0), target, gate))
-	rows.append(_measure("겹침 상한 풀기", _tuned(_choke_field(40, 2), "push_cap", 1.0), target, gate))
-	rows.append(_measure("비껴가기 끔", _tuned(_choke_field(40, 2), "side_bias", 0.0), target, gate))
+	rows.append(
+		_measure("회전 제한 풀기", _tuned(_choke_field(40, 2), "turn_rate", 2000.0), target, gate)
+	)
+	rows.append(_measure("대형 유지 끔", _tuned(_choke_field(40, 2), "group_sync", 0.0), target, gate))
 	rows.append(_measure("한 칸 문", _choke_field(40, 1), target, gate))
 	rows.append(_measure("전부 켬 100", _choke_field(100, 2), target, gate))
 	rows.append(
@@ -118,20 +147,8 @@ func _run_probe() -> void:
 	var back := Vector2(200, 545)
 	rows.append(_measure("문 맞교차 전부 켬", _facing_field(40, 2), target, -1.0, back))
 	rows.append(
-		_measure("문 맞교차 비껴가기 끔", _tuned(_facing_field(40, 2), "side_bias", 0.0), target, -1.0, back)
-	)
-	rows.append(
 		_measure(
-			"문 맞교차 양보 끔", _tuned(_facing_field(40, 2), "yield_strength", 0.0), target, -1.0, back
-		)
-	)
-	rows.append(
-		_measure(
-			"문 맞교차 둘 다 끔",
-			_tuned(_tuned(_facing_field(40, 2), "yield_strength", 0.0), "side_bias", 0.0),
-			target,
-			-1.0,
-			back
+			"문 맞교차 평활 끔", _tuned(_facing_field(40, 2), "steer_smooth", 0.0), target, -1.0, back
 		)
 	)
 	_print_table(rows)
@@ -209,6 +226,8 @@ func _measure(
 	field.settled_push_total = 0.0
 	field.max_penetration = 0.0
 	field.blocked_move_total = 0.0
+	field.flow_build_peak = 0
+	field.rebake_count = 0
 	if other_target == Vector2.INF:
 		field.issue_move(field.all_ids(), target)
 	else:
@@ -235,8 +254,17 @@ func _measure(
 	var seek_churn := 0.0
 	var seek_dir := PackedVector2Array()
 	seek_dir.resize(count)
+	# 직전 프레임에 조향이 어느 쪽으로 돌았는가(부호). 이 부호가 뒤집힌 횟수가 지터다.
+	var seek_turn := PackedFloat32Array()
+	seek_turn.resize(count)
 	for index in count:
 		seek_dir[index] = Vector2.ZERO
+		seek_turn[index] = 0.0
+	var reversals := 0
+	var yield_total := 0.0
+	var cycles_peak := 0
+	var cycle_units_peak := 0
+	var cycle_longest := 0
 	var elapsed := 0.0
 	var settle_time := -1.0
 	var ninety_time := -1.0
@@ -256,15 +284,18 @@ func _measure(
 		for index in count:
 			var agent := field.agents[index]
 			# **실제로 옮겨 간 거리로 잰다.** 막힌 유닛은 속도가 살아 있어도 위치가 그대로다.
-			var moved := agent.position - previous[index]
+			# **비켜주기가 옮긴 몫을 뺀다.** 남는 것이 이 유닛이 제 발로 간 거리다.
+			var moved := agent.position - previous[index] - agent.yield_shift
+			yield_total += agent.yield_shift.length()
 			previous[index] = agent.position
 			var speed := moved.length() / _STEP
 			travelled[index] += moved.length()
-			# 이웃을 밀어내는 힘이 제 갈 길을 가리키는 힘보다 커진 프레임. 이때 유닛의 진행
-			# 방향은 목적지가 아니라 **주변 인원 배치**가 정한다. 그 배치는 매 프레임 바뀐다.
+			# 가려 했는데 앞이 막혀 절반도 못 간 프레임. **힘이 없어진 판에서 얼마나 눌려
+			# 있는지를 재는 자리다.** 예전에는 분리력이 조향을 압도한 비율을 셌는데,
+			# 분리력이 없어졌으므로 뜻과 결과의 차이로 갈아탔다.
 			if agent.is_moving() and agent.debug_seek.length_squared() > 0.01:
 				force_frames += 1
-				if agent.debug_separation.length() > agent.debug_seek.length():
+				if agent.velocity.length() < agent.debug_seek.length() * 0.5:
 					overrun_frames += 1
 				if not agent.has_sight:
 					flow_frames += 1
@@ -272,7 +303,14 @@ func _measure(
 				# 거친 결과라 원인을 감춘다. 입력이 튀는지 결과가 튀는지를 갈라야 한다.
 				var wanted := agent.debug_seek.normalized()
 				if seek_dir[index] != Vector2.ZERO:
-					seek_churn += absf(rad_to_deg(wanted.angle_to(seek_dir[index])))
+					var turn := rad_to_deg(seek_dir[index].angle_to(wanted))
+					seek_churn += absf(turn)
+					# **부호가 뒤집혔는가.** 왼쪽으로 돌다가 오른쪽으로 도는 것이 떨림이고,
+					# 한쪽으로 계속 크게 도는 것은 그냥 방향을 트는 것이다.
+					if absf(turn) >= _REVERSAL_DEADBAND:
+						if seek_turn[index] != 0.0 and signf(turn) != signf(seek_turn[index]):
+							reversals += 1
+						seek_turn[index] = turn
 				seek_dir[index] = wanted
 			if speed < moving_speed:
 				continue
@@ -284,6 +322,14 @@ func _measure(
 			if heading[index] != Vector2.ZERO:
 				churn += absf(rad_to_deg(direction.angle_to(heading[index])))
 			heading[index] = direction
+		# **순환을 센다.** 유닛마다 나가는 간선이 최대 하나라(나를 가장 늦추는 이웃) 이 그래프는
+		# 기능 그래프이고, 순환 찾기가 유닛 수만큼만 든다. 잼이 가장 심한 순간을 남긴다.
+		if step_frames % 30 == 0:
+			var census := _count_cycles(field)
+			if int(census["units"]) > cycle_units_peak:
+				cycle_units_peak = int(census["units"])
+				cycles_peak = int(census["cycles"])
+				cycle_longest = int(census["longest"])
 		var moving := field.moving_count()
 		if ninety_time < 0.0 and moving <= ninety:
 			ninety_time = elapsed
@@ -326,6 +372,12 @@ func _measure(
 		"back": 100.0 * float(back_frames) / maxf(float(live_frames), 1.0),
 		"overrun": 100.0 * float(overrun_frames) / maxf(float(force_frames), 1.0),
 		"seek_churn": seek_churn / maxf(float(force_frames), 1.0) * 60.0,
+		"reversal": float(reversals) / maxf(float(force_frames), 1.0) * 60.0,
+		"yielded": yield_total / float(count),
+		"cycles": cycles_peak,
+		"cycle_units": cycle_units_peak,
+		"cycle_longest": cycle_longest,
+		"rebakes": field.rebake_count,
 		"flow": 100.0 * float(flow_frames) / maxf(float(force_frames), 1.0),
 		"wiggle": wiggle / float(count),
 		"push": field.overlap_push_total,
@@ -343,9 +395,45 @@ func _measure(
 		# "겹치긴 했는데 얼마나 겹쳤나"에 답이 된다.
 		"body": _smallest_body(field),
 		"blocked_move": field.blocked_move_total,
+		"flow_ms": float(field.flow_build_peak) / 1000.0,
 		"step_ms": float(step_total) / maxf(float(step_frames - 1), 1.0) / 1000.0,
 		"worst_ms": float(worst_usec) / 1000.0,
 	}
+
+
+## **서로가 서로를 막는 고리를 센다.** 「83 명 교착」이 순환 때문인지 그냥 줄이 긴 것인지
+## 가르는 지표다.
+##
+## 유닛마다 "나를 가장 늦추는 이웃" 하나만 가리키므로 나가는 간선이 최대 하나다. 이런 그래프를
+## 기능 그래프라 하고, **순환 찾기가 선형이다** - 번호를 따라가다 이번 순회에서 이미 본 놈을
+## 다시 만나면 그 지점부터가 순환이다. 전체 그래프 탐색이 필요 없다.
+func _count_cycles(field: ProtoUnitField) -> Dictionary:
+	# 0 = 아직 안 봄, 1 = 이번 순회에서 봄, 2 = 지난 순회에서 끝난 것
+	var mark := {}
+	var order := {}
+	var cycles := 0
+	var units := 0
+	var longest := 0
+	for agent in field.agents:
+		if mark.get(agent.id, 0) != 0:
+			continue
+		var path: Array[int] = []
+		var id := agent.id
+		while id != 0 and mark.get(id, 0) == 0:
+			mark[id] = 1
+			order[id] = path.size()
+			path.append(id)
+			var walker: ProtoUnitAgent = field.agent_of(id)
+			id = 0 if walker == null else walker.blocker_id
+		if id != 0 and mark.get(id, 0) == 1:
+			# 이번 순회에서 이미 지난 놈을 다시 만났다. 거기서부터 끝까지가 고리다.
+			var length := path.size() - int(order[id])
+			cycles += 1
+			units += length
+			longest = maxi(longest, length)
+		for seen in path:
+			mark[seen] = 2
+	return {"cycles": cycles, "units": units, "longest": longest}
 
 
 ## 가장 작은 두 몸이 닿는 거리. 겹침이 이만큼 자라면 중심이 반대편으로 넘어간 것이다.
@@ -373,28 +461,29 @@ func _all_past(field: ProtoUnitField, cross_x: float) -> bool:
 func _print_table(rows: Array[Dictionary]) -> void:
 	print(
 		(
-			"| 상황 | 꺾임 도/초 | 조향꺾임 도/초 | 흐름장 % | 역주행 % | 굽이 | 튕김 최대 "
-			+ "| 정지 | 90% | 통과 | 뒤진동 | 막힘 | 양보 | step 평균 | step 최악 |"
+			"| 상황 | 걸음꺾임 | 방향반전 /초 | 옆걸음 px | 눌림 % | 역주행 % | 굽이 | 튕김 최대 "
+			+ "| 정지 | 90% | 통과 | 뒤진동 | 막힘 | 양보 | 흐름장 | step 평균 | step 최악 |"
 		)
 	)
 	print(
 		(
 			"| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- "
-			+ "| --- | --- |"
+			+ "| --- | --- | --- | --- |"
 		)
 	)
 	for row in rows:
 		print(
 			(
 				(
-					"| %s | %.0f | %.0f | %.0f | %.1f | %.2f | %.1f px | %s | %s | %s "
-					+ "| %.1f px | %d | %d | %.3f ms | %.2f ms |"
+					"| %s | %.0f | %.2f | %.0f | %.0f | %.1f | %.2f | %.1f px | %s | %s | %s "
+					+ "| %.1f px | %d | %d | %.1f ms | %.3f ms | %.2f ms |"
 				)
 				% [
 					row["label"],
 					row["churn"],
-					row["seek_churn"],
-					row["flow"],
+					row["reversal"],
+					row["yielded"],
+					row["overrun"],
 					row["back"],
 					row["wiggle"],
 					row["peak"],
@@ -404,13 +493,33 @@ func _print_table(rows: Array[Dictionary]) -> void:
 					row["after"],
 					row["blocked"],
 					row["waiting"],
+					row["flow_ms"],
 					row["step_ms"],
 					row["worst_ms"],
 				]
 			)
 		)
 	print("")
-	print("| 상황 | 정지밀림 | 최대겹침 | 몸 지름 | 막힌이동 | 밀린거리 |")
+	print("| 상황 | 순환 수 | 순환 최대 길이 | 순환에 묶인 유닛 | 굽기 | 정지밀림 | 최대겹침 | 막힌이동 |")
+	print("| --- | --- | --- | --- | --- | --- | --- | --- |")
+	for row in rows:
+		print(
+			(
+				"| %s | %d | %d | %d | %d | %.2f px | %.2f px | %.0f px |"
+				% [
+					row["label"],
+					row["cycles"],
+					row["cycle_longest"],
+					row["cycle_units"],
+					row["rebakes"],
+					row["settled_push"],
+					row["pierce"],
+					row["blocked_move"],
+				]
+			)
+		)
+	print("")
+	print("| 상황 | 정지밀림 | 최대겹침 | 몸 지름 | 막힌이동 | 벽보정 |")
 	print("| --- | --- | --- | --- | --- | --- |")
 	for row in rows:
 		print(
