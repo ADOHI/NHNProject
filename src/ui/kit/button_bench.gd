@@ -23,12 +23,12 @@ const MOTION_STATE := ActionButtonMotion.State
 
 const FONT := preload("res://assets/fonts/song_myung/SongMyung-Regular.ttf")
 
-const INK := Color("#f0e6d2")
-const DIM := Color("#8b8577")
-const FAINT := Color("#3a3730")
-const SURFACE := Color("#15161a")
-const BACKDROP := Color("#0b0c0f")
-const GOLD := Color("#c1913c")
+const INK := Color("#212a37")
+const DIM := Color("#6d7681")
+const FAINT := Color("#c2c8d1")
+const SURFACE := Color("#eef1f5")
+const BACKDROP := Color("#dee2e8")
+const GOLD := Color("#b0685c")
 
 ## 게이트 목록에 세우는 줄. 마지막 하나는 **갈 수 없는 게이트**라 비활성이다.
 const GATES: Array[Array] = [

@@ -55,9 +55,11 @@ const SINK: float = 4.5
 const INVERT_IN: float = 0.05
 const INVERT_OUT: float = 0.10
 
-## 광택 띠가 판을 한 번 훑는 주기. 평상과 커서가 다르다.
-const SHEEN_IDLE: float = 4.6
-const SHEEN_HOVER: float = 0.62
+## 커서가 붙을 때 눈금과 모서리 표가 **한꺼번에 나오는** 시간. 사건이므로 짧다.
+const REVEAL_TIME: float = 0.20
+
+## 눌린 순간 확 켜졌다 꺼지는 시간. 이것이 **사건의 길이**다.
+const FLARE_TIME: float = 0.18
 
 ## 테두리를 타고 도는 빛의 주기. 평상에서도 버튼이 살아 있게 하는 유일한 것이다.
 const RUNNER_PERIOD: float = 2.6
@@ -207,23 +209,33 @@ func inversion() -> float:
 	return 0.0
 
 
-## 광택 띠의 자리. `-0.35`(판 왼쪽 밖)에서 `1.35`(오른쪽 밖)까지 간다.
-func sheen_at() -> float:
-	if state == State.DISABLED:
-		return -1.0
-	var period := SHEEN_IDLE
-	var clock := _ambient
-	if _since_hover >= 0.0:
-		period = SHEEN_HOVER
-		clock = _since_hover
-	return fposmod(clock, period) / period * 1.70 - 0.35
-
-
-## 광택의 세기. 평상에서도 0 이 아니지만 **글자를 방해할 만큼은 아니다.**
-func sheen_strength() -> float:
+## 커서가 붙을 때 늘어나는 **밀도**. 눈금 · 모서리 표 · 게이지 칸이 이걸 본다.
+##
+## **1 을 지나친다.** 모서리 표가 제자리를 지나쳐 튀어 나갔다 돌아와야 「붙었다」로
+## 읽힌다. 알파에 쓸 때는 부르는 쪽에서 자른다.
+##
+## 화려함을 평상에 두지 않고 여기에 두는 이유: **가만히 있을 때 화려하면 시끄럽고
+## 손이 닿았을 때 화려하면 반응이다.** 평상 상태에 화려함을 넣은 판이 「조잡」했다.
+func reveal() -> float:
 	if state == State.DISABLED:
 		return 0.0
-	return 0.06 + 0.14 * warmth()
+	if _since_hover >= 0.0:
+		if _since_hover >= REVEAL_TIME:
+			return 1.0
+		return KitEase.out_back(_since_hover / REVEAL_TIME, 2.4)
+	if _since_leave >= 0.0:
+		return 1.0 - clampf(KitEase.in_quad(_since_leave / 0.10), 0.0, 1.0)
+	return 0.0
+
+
+## 눌린 순간의 섬광 1 → 0. 테두리 · 눈금 · 모서리 표가 한꺼번에 이걸 탄다.
+##
+## **한 가지만 번쩍이면 상태 표시고 여럿이 같이 번쩍여야 사건이다.** 그래서 값이
+## 하나뿐이다 — 따로 만들면 끝나는 시각이 어긋나 사건이 흩어진다.
+func flare() -> float:
+	if state == State.DISABLED or _since_down < 0.0 or _since_down >= FLARE_TIME:
+		return 0.0
+	return 1.0 - KitEase.in_quad(_since_down / FLARE_TIME)
 
 
 ## 테두리를 타고 도는 빛의 자리 0..1. 둘레 길이에 대한 비율이다.

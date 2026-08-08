@@ -90,6 +90,8 @@ func test_disabled_freezes_every_clock() -> void:
 	assert_eq(motion.warmth(), 0.0, "비활성에는 커서 상태가 없다")
 	assert_eq(motion.lift(), 0.0, "비활성은 떠 있지 않다")
 	assert_eq(motion.accent(), 0.0, "비활성에는 강세 띠가 없다")
+	assert_eq(motion.reveal(), 0.0, "비활성에는 커서 밀도가 없다")
+	assert_eq(motion.flare(), 0.0, "비활성에는 섬광이 없다")
 	assert_eq(motion.impact(), -1.0, "비활성으로 넘어갈 때 남은 충격파를 지운다")
 
 
@@ -104,33 +106,56 @@ func test_disabled_does_not_keep_a_stale_press() -> void:
 	assert_eq(motion.inversion(), 0.0, "반전도 같이 지워져야 한다")
 
 
-func test_sheen_crosses_the_plate_and_wraps() -> void:
+## 화려함은 요소를 더해서가 아니라 **밀도 대비**에서 나온다. 평상이 조용해야
+## 커서에서 밀도가 오르는 것이 반응으로 읽힌다 — 평상까지 화려하게 만든 판이
+## 「조잡」했고, 반대로 사건까지 조용한 판이 「허접」했다.
+func test_resting_button_has_no_extra_density() -> void:
 	var motion := _settled()
-	var lowest := 9.0
-	var highest := -9.0
-	for i in 500:
+	for i in 200:
 		motion.advance(0.01)
-		lowest = minf(lowest, motion.sheen_at())
-		highest = maxf(highest, motion.sheen_at())
-	assert_lt(lowest, 0.0, "광택은 판 왼쪽 밖에서 들어와야 한다")
-	assert_gt(highest, 1.0, "광택은 판 오른쪽 밖으로 나가야 한다")
+		assert_eq(motion.reveal(), 0.0, "평상에는 눈금도 모서리 표도 없다")
+		assert_eq(motion.flare(), 0.0, "평상에는 섬광이 없다")
 
 
-func test_hover_makes_the_sheen_much_faster() -> void:
-	assert_lt(
-		ActionButtonMotion.SHEEN_HOVER,
-		ActionButtonMotion.SHEEN_IDLE * 0.25,
-		"커서를 올렸을 때 광택이 확실히 빨라져야 상태가 갈린다"
-	)
-
-
-func test_sheen_stays_weak_enough_to_read_text_under() -> void:
+func test_hover_density_overshoots_then_settles() -> void:
 	var motion := _settled()
 	motion.state = ActionButtonMotion.State.HOVER
 	motion.enter_hover()
-	for i in 60:
+	var peak := 0.0
+	for i in 40:
 		motion.advance(0.01)
-		assert_lt(motion.sheen_strength(), 0.25, "광택이 진하면 글자를 먹는다")
+		peak = maxf(peak, motion.reveal())
+	assert_gt(peak, 1.02, "모서리 표가 제자리를 지나쳐 튀어 나가야 붙은 것으로 읽힌다")
+	assert_almost_eq(motion.reveal(), 1.0, 0.001, "지나친 뒤에는 제자리에 선다")
+
+
+func test_hover_density_arrives_fast_enough_to_feel_like_a_response() -> void:
+	assert_lt(ActionButtonMotion.REVEAL_TIME, 0.25, "손이 닿고 늦게 반응하면 죽은 것으로 보인다")
+
+
+## 하나만 번쩍이면 상태 표시고 여럿이 한 시각에 같이 번쩍여야 사건이다.
+## 값이 하나뿐이라 따로 어긋날 자리가 없다는 것을 잠근다.
+func test_flare_fires_at_once_and_dies() -> void:
+	var motion := _settled()
+	motion.state = ActionButtonMotion.State.PRESSED
+	motion.press()
+	assert_almost_eq(motion.flare(), 1.0, 0.001, "누른 그 순간이 가장 세다")
+	var seen := 0
+	for i in 6:
+		motion.advance(0.05)
+		if motion.flare() > 0.05:
+			seen += 1
+	assert_gte(seen, 2, "20fps 표본 두 장에는 걸려야 번쩍인 것으로 보인다")
+	motion.advance(ActionButtonMotion.FLARE_TIME)
+	assert_eq(motion.flare(), 0.0, "섬광은 남지 않는다")
+
+
+func test_flare_is_shorter_than_the_shockwave() -> void:
+	assert_lt(
+		ActionButtonMotion.FLARE_TIME,
+		ActionButtonMotion.IMPACT_TIME,
+		"섬광이 먼저 꺼지고 파문이 뒤에 퍼져야 한 사건의 앞뒤가 생긴다"
+	)
 
 
 func test_text_never_moves_more_than_a_pixel() -> void:
@@ -162,4 +187,4 @@ func test_pose_is_a_pure_function_of_the_clocks() -> void:
 		first.advance(0.01)
 	second.pose(0.12, 0.12, -1.0, -1.0, -1.0)
 	assert_almost_eq(second.rise(), first.rise(), 0.0001, "앉힌 시각이 흘린 시각과 같아야 한다")
-	assert_almost_eq(second.sheen_at(), first.sheen_at(), 0.0001, "캡처가 재현되려면 순수해야 한다")
+	assert_almost_eq(second.reveal(), first.reveal(), 0.0001, "캡처가 재현되려면 순수해야 한다")
