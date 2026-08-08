@@ -163,6 +163,29 @@ godot --headless --path . -s res://addons/gut/gut_cmdln.gd
 
 설정은 `.gutconfig.json` 에 있다. 테스트 위치를 옮기면 여기도 고친다.
 
+### ⚠ GUT 은 파싱 실패한 테스트를 **조용히 건너뛴다**
+
+파스 에러가 있는 테스트 파일을 GUT 은 **실패로 세지 않는다.** 경고 한 줄만 남기고
+넘어가고, 요약에는 **`---- All tests passed! ----` 가 그대로 찍힌다.**
+
+```
+[GUT WARNING]: Ignoring script res://test/unit/test_xxx.gd
+               because it does not extend GutTest
+```
+
+실제로 새 테스트 두 파일이 통째로 안 돌고 있는데 초록불이 떠 있었다
+(2026-08-08, `ui-kit-2`). **「전부 통과」는 「전부 돌았다」가 아니다.**
+
+> **테스트를 추가했으면 `Scripts` 와 `Tests` 숫자가 실제로 늘었는지 확인한다.**
+> 숫자가 그대로면 새 파일이 안 돌고 있는 것이다.
+
+자주 걸리는 파스 에러 둘:
+
+| 쓴 것 | 왜 안 되나 |
+| --- | --- |
+| `const A := PackedVector2Array([...])` | 생성자 호출은 **상수 표현식이 아니다.** `static func` 로 바꾼다 |
+| `var x := helper().field` | 헬퍼에 반환 타입이 없으면 `:=` 추론이 안 된다. `-> Type` 을 붙인다 |
+
 ### 무엇을 테스트하는가
 
 **`src/core/` 의 순수 로직이 1순위다.** 노드 트리에 의존하지 않으므로

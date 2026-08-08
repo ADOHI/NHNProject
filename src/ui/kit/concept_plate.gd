@@ -10,7 +10,7 @@ extends BaseButton
 ## 요소가 영원히 도착하지 않아 타격감이 생기지 않는다 (앞 판이 그래서 죽었다).
 
 ## 어느 컨셉으로 움직일 것인가.
-enum Concept { SLAM, SHEAR, HOLD, SQUASH }
+enum Concept { SLAM, SHEAR, HOLD, SQUASH, AFTERIMAGE }
 
 const FONT := preload("res://assets/fonts/song_myung/SongMyung-Regular.ttf")
 
@@ -67,6 +67,10 @@ func _process(delta: float) -> void:
 
 func _evaluate() -> PlateState:
 	match concept:
+		Concept.AFTERIMAGE:
+			return AfterimageMotion.evaluate(
+				_time, _hover_time, _hovering, _press_time, _pressing, _seed
+			)
 		Concept.SQUASH:
 			return SquashMotion.evaluate(
 				_time, _hover_time, _hovering, _press_time, _pressing, _seed
@@ -199,16 +203,20 @@ func _draw_label(state: PlateState) -> void:
 		+ state.ink_offset
 		+ state.pivot * size * (Vector2.ONE - state.scale)
 	)
+	var anchor := Vector2(-measured.x * 0.5, measured.y * 0.32)
+
+	# 잔상이 있으면 글자도 같이 갈라진다. 판만 갈라지고 글자가 멀쩡하면
+	# 색분해가 아니라 **그림자 세 개를 깐 것**으로 보인다.
+	for ghost in state.ghosts:
+		draw_set_transform(
+			center + (ghost["offset"] as Vector2) - state.offset, 0.0, state.ink_squash
+		)
+		draw_string(
+			variation, anchor, text, HORIZONTAL_ALIGNMENT_LEFT, -1, scaled, ghost["color"] as Color
+		)
+
 	# 글자를 가로세로 따로 눌러야 하므로 그리기 변환을 걸어 둔다. 글꼴 크기만으로는
 	# 한 방향으로만 커지고, 그러면 판만 물렁하고 글자는 빳빳한 스티커가 된다.
 	draw_set_transform(center, 0.0, state.ink_squash)
-	draw_string(
-		variation,
-		Vector2(-measured.x * 0.5, measured.y * 0.32),
-		text,
-		HORIZONTAL_ALIGNMENT_LEFT,
-		-1,
-		scaled,
-		state.ink
-	)
+	draw_string(variation, anchor, text, HORIZONTAL_ALIGNMENT_LEFT, -1, scaled, state.ink)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

@@ -63,6 +63,8 @@ func set_concept(name: String) -> void:
 			_concept = ConceptPlate.Concept.HOLD
 		"squash":
 			_concept = ConceptPlate.Concept.SQUASH
+		"afterimage":
+			_concept = ConceptPlate.Concept.AFTERIMAGE
 		_:
 			_concept = ConceptPlate.Concept.SLAM
 	# 판이 아직 없을 수 있다 (위 설명 참고). 그때는 `_build_plates()` 가 집어 간다.
@@ -100,6 +102,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			set_concept("hold")
 		KEY_4:
 			set_concept("squash")
+		KEY_5:
+			set_concept("afterimage")
 		KEY_S:
 			_set_scripted(not _scripted)
 		KEY_H:
@@ -159,7 +163,7 @@ func _build_guide() -> void:
 func _guide_text() -> String:
 	var mode := "대본 켬" if _scripted else "대본 끔 (직접 조작)"
 	return (
-		"[%s]   1 SLAM  2 SHEAR  3 HOLD  4 SQUASH   S %s   H 안내 숨김   Esc 닫기"
+		"[%s]   1 SLAM  2 SHEAR  3 HOLD  4 SQUASH  5 AFTERIMAGE   S %s   H 숨김   Esc 닫기"
 		% [_concept_name(), mode]
 	)
 
@@ -172,5 +176,7 @@ func _concept_name() -> String:
 			return "HOLD 시간이 끊긴다"
 		ConceptPlate.Concept.SQUASH:
 			return "SQUASH 부피가 보존된다"
+		ConceptPlate.Concept.AFTERIMAGE:
+			return "AFTERIMAGE 잔상이 상태다"
 		_:
 			return "SLAM 들이받는다"
