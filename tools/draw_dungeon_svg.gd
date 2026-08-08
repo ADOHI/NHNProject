@@ -389,10 +389,10 @@ func _caption(board: Dictionary, origin: Vector2) -> String:
 			% [origin.x + 18.0, origin.y + 30.0]
 		)
 		+ (
-			"%sseed %d · 방 %d · 간선 %d · 고리 %d · 평지 %d%% · 최고 고도 %d</text>"
+			"%s%s · 방 %d · 간선 %d · 고리 %d · 평지 %d%% · 최고 고도 %d</text>"
 			% [
 				("%s — " % board["label"]) if board.has("label") else "",
-				int(board["seed"]),
+				_grade_text(board),
 				points.size(),
 				edges.size(),
 				edges.size() - points.size() + 1,
@@ -425,6 +425,31 @@ func _caption(board: Dictionary, origin: Vector2) -> String:
 				]
 			)
 		)
+	)
+
+
+## 등급 셋. **제품 코드(DungeonGrade)가 매긴 것을 그대로 쓴다** — 그림이 게임과 다른 잣대로
+## 재면 그림을 보고 내린 판단이 게임에 적용되지 않는다.
+func _grade_text(board: Dictionary) -> String:
+	var plan := DungeonBlueprint.new()
+	var points: PackedVector2Array = board["points"]
+	var elevations: PackedInt32Array = board["elevations"]
+	for index in points.size():
+		plan.add_room("r%d" % index, "r%d" % index, elevations[index])
+	for edge in board["edges"] as Array[Vector2i]:
+		plan.connect_rooms("r%d" % edge.x, "r%d" % edge.y)
+
+	var grade := DungeonGrade.of(plan)
+	return (
+		"규모 %d/%d · 복잡 %d/%d · 험난 %d/%d"
+		% [
+			grade["scale"],
+			DungeonGrade.SCALE_MAX,
+			grade["complexity"],
+			DungeonGrade.COMPLEXITY_MAX,
+			grade["hardship"],
+			DungeonGrade.HARDSHIP_MAX,
+		]
 	)
 
 

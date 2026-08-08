@@ -83,7 +83,34 @@ func preview_lines(level: GateDisclosure.Level) -> Array[String]:
 		lines.append("성격 %s" % DungeonCatalog.name_of(dungeon_character))
 	if GateDisclosure.needs_blueprint(level):
 		var plan := blueprint()
+		# **잰 값은 해부 수준에서만 나올 수 있다.** 재려면 설계도가 있어야 하고
+		# 설계도는 이 수준에서만 만든다(22-guild-base.md). 구현 제약과 정보 설계가
+		# 같은 곳을 가리킨다 (docs/design/17-dungeon-generation.md §17.20.5).
+		var grade := DungeonGrade.of(plan)
 		lines.append("실제 방 %d 개" % plan.room_ids().size())
+		(
+			lines
+			. append(
+				(
+					"규모 %d/%d · 복잡 %d/%d · 험난 %d/%d"
+					% [
+						grade["scale"],
+						DungeonGrade.SCALE_MAX,
+						grade["complexity"],
+						DungeonGrade.COMPLEXITY_MAX,
+						grade["hardship"],
+						DungeonGrade.HARDSHIP_MAX,
+					]
+				)
+			)
+		)
+		# 등급만 보여 주면 왜 그 등급인지 알 수 없다. 근거를 한 줄 붙인다.
+		lines.append(
+			(
+				"갈림길 %d%% · 한 걸음 평균 상승 %.1f"
+				% [int(round(float(grade["junction_pct"]))), float(grade["average_climb"])]
+			)
+		)
 		lines.append("고가치 방 %d 개" % plan.rooms_of_kind(Room.Kind.TREASURE).size())
 		lines.append(
 			"보스 %s" % ("있음" if not plan.rooms_of_kind(Room.Kind.BOSS).is_empty() else "없음")
