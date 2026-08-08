@@ -1,19 +1,24 @@
 extends GutTest
-## **유닛은 다른 유닛을 밀 수 없고 통과할 수 없다.** 이 요구를 못 박는다.
+## **비켜주기는 되는데 밀고 나아가기는 안 된다.** 그 경계를 못 박는다.
 ##
-## 이 게임은 물리력 게임이 아니다. 예전에는 겹친 몸을 위치로 떼어 놓으면서 서 있는 쪽을 더
-## 많이 옮겼고(0.75), 그래서 지나가려는 유닛이 남을 밀쳐 내고 그 자리를 차지했다. 눈에는
-## 물리 시뮬레이션처럼 보였고 지터의 큰 몫이기도 했다.
+## 판이 두 번 뒤집혔다. 처음에는 겹친 몸을 위치로 떼어 놓으며 **양쪽을 다 옮겼고**, 그것이
+## 대칭 스프링이라 진동했다. 그래서 힘을 전부 걷어냈더니 이번에는 **좁은 문이 무너졌다** -
+## 밀기가 좁은 통로 통과의 수단이었던 것이다.
+##
+## 지금은 **비대칭 비켜주기**다. 전진 중인 유닛이 앞을 막은 유닛을 **진행 방향의 수직으로만**
+## 밀어 길에서 비켜서게 하고, 비켜준 쪽은 되밀지 않는다. 그래서 지켜야 할 것이 바뀌었다 -
+## "아무도 안 밀린다"가 아니라 **"밀려도 진행 방향으로는 안 밀린다"** 이다. 목적지 쪽으로
+## 떠밀 수 있으면 그것이 곧 밀고 나아가기이고, 이 게임에서 금지된 것은 그것이다.
 ##
 ## | 성질 | 지키는 테스트 |
 ## | --- | --- |
-## | 서 있는 유닛은 밀려나지 않는다 | `test_a_standing_unit_is_never_shoved` |
+## | 진행 방향으로는 못 민다 (옆으로만 비켜선다) | `test_a_standing_unit_is_never_shoved_forward` |
+## | 비켜준 쪽은 되밀지 않는다 | `test_yielding_is_one_way` |
 ## | 몸을 통과하지 못한다 | `test_nobody_walks_through_a_standing_body` |
 ## | 여럿이 몰려도 몸이 파고들지 않는다 | `test_a_crowd_never_pierces_a_body` |
-## | 밀치기는 이동 수단이 아니다 | `test_pushing_is_not_a_way_to_move` |
+## | 비켜줄 자리가 없으면 못 지나간다 | `test_pushing_is_not_a_way_to_move` |
 ## | 멎은 뒤 몸이 겹쳐 있지 않다 | `test_bodies_do_not_overlap_once_everyone_stops` |
 ##
-## 지표로도 함께 묻는다. `settled_push_total` 이 0 이 아니면 서 있는 유닛이 밀려난 것이고,
 ## `max_penetration` 이 몸 지름에 닿으면 중심이 반대편으로 넘어간 것이다.
 
 const _STEP := 1.0 / 60.0
@@ -68,16 +73,35 @@ func _smallest_body(field: ProtoUnitField) -> float:
 	return smallest * 2.0
 
 
-func test_a_standing_unit_is_never_shoved() -> void:
-	# 못을 박지 않는다. 정말 그 자리에 있는지가 이 테스트의 전부다.
+func test_a_standing_unit_is_never_shoved_forward() -> void:
+	# 복도는 가로로 뚫려 있고 걸어오는 유닛은 +x 로 온다. **x 가 한 뼘도 안 움직여야 한다** -
+	# 움직이면 앞선 유닛을 목적지 쪽으로 떠민 것이고 그것이 밀고 나아가기다.
+	# y 는 움직일 수 있다. 그것이 길에서 비켜서는 것이고 이번에 되찾은 기능이다.
 	var field := _corridor_field()
 	var pair := _blocked_pair(field)
 	var blocker := pair[0]
 	var anchor := blocker.position
 	_run(field, 12.0)
-	assert_almost_eq(blocker.position.x, anchor.x, 0.001, "서 있는 아군이 밀려났다")
-	assert_almost_eq(blocker.position.y, anchor.y, 0.001, "서 있는 아군이 밀려났다")
-	assert_eq(field.settled_push_total, 0.0, "서 있는 유닛을 밀어낸 거리가 잡혔다")
+	assert_almost_eq(blocker.position.x, anchor.x, 0.001, "서 있는 아군이 진행 방향으로 떠밀렸다")
+	# 한 칸 폭 복도라 옆으로 비킬 수 있는 폭이 몸 지름을 뺀 나머지뿐이다. 그 밖으로 나가면
+	# 벽을 뚫은 것이다.
+	var side_room := field.grid.cell_size * 0.5 - blocker.radius
+	assert_lte(absf(blocker.position.y - anchor.y), side_room + 0.001, "비켜서다 벽을 뚫었다")
+
+
+func test_yielding_is_one_way() -> void:
+	# **되밀림이 있으면 대칭 스프링이고, 대칭 스프링은 구조적으로 진동한다.**
+	# 서 있던 유닛이 비켜선 뒤, 걸어온 유닛이 그 반작용으로 뒤로 밀리지 않아야 한다.
+	var field := _corridor_field()
+	var pair := _blocked_pair(field)
+	var walker := pair[1]
+	var furthest := walker.position.x
+	for _i in int(12.0 / _STEP):
+		field.step(_STEP)
+		# 되밀림은 진행 방향의 반대로 나타난다. 감속은 속도가 줄어드는 것이지
+		# 왔던 길을 되돌아가는 것이 아니다.
+		assert_gte(walker.position.x, furthest - 0.001, "비켜준 유닛이 걸어온 유닛을 되밀었다")
+		furthest = maxf(furthest, walker.position.x)
 
 
 func test_nobody_walks_through_a_standing_body() -> void:
@@ -95,12 +119,15 @@ func test_nobody_walks_through_a_standing_body() -> void:
 
 
 func test_pushing_is_not_a_way_to_move() -> void:
-	# 막힌 이동은 **사라져야 한다.** 예전에는 그 거리가 남의 몸을 밀어내는 데 쓰였다.
+	# 한 칸 폭 복도에서는 비켜설 자리가 없다. **비켜주기는 길을 열어 줄 뿐이고,
+	# 안 열리면 못 간다** - 밀어서 뚫는 수단이 아니다.
 	var field := _corridor_field()
-	_blocked_pair(field)
+	var pair := _blocked_pair(field)
+	var blocker := pair[0]
+	var walker := pair[1]
 	_run(field, 12.0)
 	assert_gt(field.blocked_move_total, 0.0, "막힌 이동이 하나도 없다면 판이 막지 못한 것이다")
-	assert_eq(field.settled_push_total, 0.0, "막힌 이동의 일부가 남을 미는 데 쓰였다")
+	assert_lt(walker.position.x, blocker.position.x, "비켜주기로 앞선 아군을 뚫고 나갔다")
 
 
 func test_a_crowd_never_pierces_a_body() -> void:
@@ -111,7 +138,6 @@ func test_a_crowd_never_pierces_a_body() -> void:
 		field.spawn(index % 3, Vector2(120.0 + (index % 6) * 34.0, 200.0 + (index / 6) * 34.0))
 	field.issue_move(field.all_ids(), Vector2(800.0, 380.0))
 	_run(field, 25.0)
-	assert_eq(field.settled_push_total, 0.0, "서 있는 유닛이 밀려났다")
 	assert_lt(field.max_penetration, _smallest_body(field) * _PIERCE_LIMIT, "몸이 통과를 향해 갈 만큼 파고들었다")
 
 

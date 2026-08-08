@@ -368,6 +368,7 @@ func step(delta: float) -> void:
 	# 사정에 오염되지 않는다.
 	for agent in agents:
 		_plan(agent, delta)
+	ProtoUnitYield.apply(self, delta)
 	_walk(delta)
 	_clamp_positions()
 	_update_states(delta)
@@ -410,7 +411,7 @@ func _rebuild_buckets() -> void:
 		(_buckets[key] as Array[ProtoUnitAgent]).append(agent)
 
 
-func _collect_neighbors(agent: ProtoUnitAgent, into: Array[ProtoUnitAgent]) -> void:
+func collect_neighbors(agent: ProtoUnitAgent, into: Array[ProtoUnitAgent]) -> void:
 	into.clear()
 	var origin := Vector2i(
 		floori(agent.position.x / _bucket_size), floori(agent.position.y / _bucket_size)
@@ -520,7 +521,7 @@ func _walk(delta: float) -> void:
 		if not agent.is_moving():
 			agent.advance = Vector2.ZERO
 			continue
-		_collect_neighbors(agent, _scratch)
+		collect_neighbors(agent, _scratch)
 		var target_speed := agent.debug_seek.length()
 		if target_speed <= 0.001:
 			agent.speed = maxf(agent.speed - acceleration * delta, 0.0)
@@ -784,7 +785,7 @@ func _review_hold(agent: ProtoUnitAgent, arrive: float) -> void:
 	# 이웃을 훑으면 평균은 싸도 그 프레임만 몇 배로 튄다.
 	if (agent.id + _frame) % _HOLD_REVIEW_FRAMES != 0:
 		return
-	_collect_neighbors(agent, _scratch)
+	collect_neighbors(agent, _scratch)
 	if _slot_taken(agent, arrive):
 		# 내 자리에 이미 다른 아군이 서 있다. 그러면 여기가 내 자리다 — 영원히 기다릴 이유가 없다.
 		agent.settle(ProtoUnitAgent.State.ARRIVED)

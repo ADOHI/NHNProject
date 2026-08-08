@@ -62,14 +62,21 @@ func _initialize() -> void:
 	quit()
 
 
+## **흔한 규모부터 잰다.** 40 과 100 만 재던 것을 4 · 8 · 12 · 24 로 넓혔다.
+##
+## 스쿼드 정원은 서넛이고 소환수와 다른 스쿼드가 겹쳐야 수십이 된다. 그런데 지금까지
+## 40 · 100 만 재어서 **정작 흔한 규모에서 어떤지 아무도 몰랐다.** 작은 규모가 나쁘면
+## 그쪽이 훨씬 큰 문제다 - 매번 보이는 것은 그쪽이다.
 func _run_cases() -> void:
 	var rows: Array[Dictionary] = []
-	rows.append(_measure("좁은 통로 40", _choke_field(40, 2), Vector2(1500, 545), 30 * _CELL))
-	rows.append(_measure("좁은 통로 100", _choke_field(100, 2), Vector2(1500, 545), 30 * _CELL))
-	rows.append(_measure("열린 곳 40", _open_field(40), Vector2(1500, 545), -1.0))
-	rows.append(_measure("열린 곳 100", _open_field(100), Vector2(1500, 545), -1.0))
+	var gate := 30 * _CELL
+	var target := Vector2(1500, 545)
+	for count in [4, 8, 12, 24, 40, 100]:
+		rows.append(_measure("좁은 통로 %d" % count, _choke_field(count, 2), target, gate))
+	for count in [4, 8, 12, 24, 40, 100]:
+		rows.append(_measure("열린 곳 %d" % count, _open_field(count), target, -1.0))
 	rows.append(_measure("구석 24", _open_field(24), Vector2(60, 60), -1.0))
-	rows.append(_measure("맞교차 40", _facing_field(40), Vector2(1500, 545), -1.0, Vector2(200, 545)))
+	rows.append(_measure("맞교차 40", _facing_field(40), target, -1.0, Vector2(200, 545)))
 	_print_table(rows)
 
 
