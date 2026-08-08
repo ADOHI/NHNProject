@@ -269,15 +269,26 @@ DEMONS: list[tuple[str, str]] = [
         #      접힌 무릎 하나가 팔짱만큼 센 닫힘 신호다. 팔을 열어 놔도 다리가 닫는다.
         #      → **늘어뜨림은 팔다리 전부에 걸어야 한다. 접힌 관절이 하나도 없어야 한다.**
         #
-        # 아래는 그 둘을 고친 문장이다. **아직 안 돌려 봤다** — 다음 판에 낼 것.
-        # 소품이 될 만한 명사를 다 걷어내고, 사지를 전부 아래로 늘어뜨린다.
+        # **4차 판이 여기서 이겼다.** 사지를 전부 아래로 늘어뜨리니 심사자 둘 다
+        # 처음으로 **열렸다 · 즐긴다**를 골랐다(§21.11.7). 팔다리 문장은 그대로 둔다.
+        #
+        # 대신 **눈이 둘로 나왔다.** `belly turned up toward us` 가 몸통만이 아니라
+        # **머리까지 정면으로 돌려세웠고**, 정면 얼굴은 좌우 대칭이라 눈이 둘이 된다.
+        # `DEMON_CORE` 가 "눈은 하나"를 세 번 말하는데도 졌다 —
+        # **자세 문장이 정체성 문장을 이긴다.** 통과한 `demon_a`·`demon_c` 는 둘 다
+        # 머리가 비스듬하다. 그것이 갈랐다.
+        #
+        # 그래서 `toward us` 를 빼고 **머리 각도를 못 박는다.** 몸통은 열되 얼굴은 튼다.
+        # (`never square-on` 같은 부정문으로 쓰지 않는다 — §21.13.13.)
         "Long and thin, drifting at a lazy backward-leaning diagonal as though the air "
-        "were holding it up, shoulders rolled back and belly turned up toward us so the "
-        "whole front of its body stays open and unguarded. Both of its long arms hang "
-        "straight down from the shoulders, well clear of its body on either side, wrists "
-        "limp and both hands empty. Its long thin legs hang straight down too, slack and "
-        "heavy, the feet loose. Every limb drops under its own weight, unhurried and at "
-        "ease — it has settled in to watch for a long time. "
+        "were holding it up, its spine unfolded and its chest and belly turned upward "
+        "and open. Its head is turned well to one side in three-quarter view, the near "
+        "cheek toward us and the far side of its face falling away, and its one eye sits "
+        "on the near side of that face. Both of its long arms hang straight down from "
+        "the shoulders, well clear of its body on either side, wrists limp and both "
+        "hands empty. Its long thin legs hang straight down too, slack and heavy, the "
+        "feet loose. Every limb drops under its own weight, unhurried and at ease — "
+        "it has settled in to watch for a long time. "
         "The half-lidded eye is rolled down and slightly to the LEFT.",
     ),
     (
