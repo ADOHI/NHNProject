@@ -272,24 +272,30 @@ DEMONS: list[tuple[str, str]] = [
         # **4차 판이 여기서 이겼다.** 사지를 전부 아래로 늘어뜨리니 심사자 둘 다
         # 처음으로 **열렸다 · 즐긴다**를 골랐다(§21.11.7). 팔다리 문장은 그대로 둔다.
         #
-        # 대신 **눈이 둘로 나왔다.** `belly turned up toward us` 가 몸통만이 아니라
-        # **머리까지 정면으로 돌려세웠고**, 정면 얼굴은 좌우 대칭이라 눈이 둘이 된다.
-        # `DEMON_CORE` 가 "눈은 하나"를 세 번 말하는데도 졌다 —
-        # **자세 문장이 정체성 문장을 이긴다.** 통과한 `demon_a`·`demon_c` 는 둘 다
-        # 머리가 비스듬하다. 그것이 갈랐다.
+        # 대신 **눈이 둘로 나왔다.** 4차에는 `belly turned up toward us` 를 범인으로
+        # 짚고 그것을 빼면서 머리 각도를 못 박았는데, **5차에도 그대로 눈이 둘이었다.**
+        # 한 변수만 바꾼 대조 실험이라 결론이 분명하다 — **그 진단이 틀렸다** (§21.11.9).
         #
-        # 그래서 `toward us` 를 빼고 **머리 각도를 못 박는다.** 몸통은 열되 얼굴은 튼다.
-        # (`never square-on` 같은 부정문으로 쓰지 않는다 — §21.13.13.)
+        # 진짜 범인은 **좌우 대칭**이고, 그것을 만든 것은 내가 이겼다고 지킨 바로 그
+        # 문장이었다 — `**Both** arms hang straight down ... on **either side**` +
+        # `legs hang straight down **too**`. 사지 넷을 나란히 늘어뜨리면 몸이 완전히
+        # 좌우 대칭이 되고, **대칭인 몸은 대칭인 얼굴을 부르고, 대칭인 얼굴은 눈이 둘이다.**
+        # 살아남은 `demon_a`·`demon_c` 는 온몸이 비대칭이다 — 심사자들이 그 둘에서
+        # "귀가 한쪽에만" · "뿔 넷의 크기가 다 다르다"를 짚은 것이 그 증거다.
+        #
+        # **그래서 열림과 외눈이 싸운다.** 둘을 다 가지려면 열림의 근거를 대칭이 아니라
+        # **관절**에서 가져와야 한다 — 접힌 관절이 없고 몸통 앞을 가로지르는 것이 없으면
+        # 열린 것이다. 대칭일 필요가 없다. 그래서 **사지를 전부 펴 두되 각각 다른 각도로**
+        # 둔다. (`not symmetrical` 같은 부정문으로 쓰지 않는다 — §21.13.13.)
         "Long and thin, drifting at a lazy backward-leaning diagonal as though the air "
-        "were holding it up, its spine unfolded and its chest and belly turned upward "
-        "and open. Its head is turned well to one side in three-quarter view, the near "
-        "cheek toward us and the far side of its face falling away, and its one eye sits "
-        "on the near side of that face. Both of its long arms hang straight down from "
-        "the shoulders, well clear of its body on either side, wrists limp and both "
-        "hands empty. Its long thin legs hang straight down too, slack and heavy, the "
-        "feet loose. Every limb drops under its own weight, unhurried and at ease — "
-        "it has settled in to watch for a long time. "
-        "The half-lidded eye is rolled down and slightly to the LEFT.",
+        "were holding it up, its spine unfolded and its chest and belly open. Every part "
+        "of it sits at a different angle: its head lolls over onto one shoulder, one "
+        "long arm hangs straight down at its side while the other trails straight out "
+        "behind it, and one long leg hangs far lower than the other. Every limb stays "
+        "straight, slack and heavy, dropping under its own weight, and both hands are "
+        "empty. Unhurried and at ease, settled in to watch for a long time. Its single "
+        "eye sits on the near side of that tilted face, half-lidded, rolled down and "
+        "slightly to the LEFT.",
     ),
     (
         # 가장 위, 가장 작고 가장 멀다. 바로 아래 정면의 사람을 본다.
