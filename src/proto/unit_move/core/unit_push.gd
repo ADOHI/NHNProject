@@ -124,6 +124,8 @@ static func _step_aside(
 	var away := side / lateral if lateral > 0.001 else Vector2(-heading.y, heading.x)
 	# **몸이 실제로 빠져나갈 만큼 민다.** 중심선을 스치는 것으로는 눈에 안 보인다.
 	var want := maxf(touch - lateral + _MARGIN, blocker.radius * _MIN_NUDGE)
+	# **자리를 상태로 건다.** 한 프레임 밀어 놓는 것만으로는 다음 프레임에 지워진다.
+	ProtoUnitYield.begin(field, blocker, blocker.position + away * minf(want, _NUDGE), behind.id)
 	var moved := _shove(field, blocker, away, minf(want, _NUDGE), scratch, chain, 0)
 	if moved <= 0.0:
 		field.propagate_blocked += 1

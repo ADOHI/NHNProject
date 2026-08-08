@@ -550,6 +550,19 @@ func _plan(agent: ProtoUnitAgent, delta: float) -> void:
 		agent.debug_seek = Vector2.ZERO
 		return
 
+	# **비켜서는 중이면 자기 목적지가 아니라 비켜설 자리로 간다.** 이것이 「지속」이다 -
+	# 상태가 유지되는 동안 조향이 목적지를 다시 가리키지 않으므로 밀어 준 것이 안 지워진다.
+	if agent.is_yielding():
+		if ProtoUnitYield.finished(self, agent):
+			agent.end_yield()
+			if not agent.is_moving():
+				return
+		else:
+			var to_spot := agent.yield_goal - agent.position
+			var length := to_spot.length()
+			agent.steer_dir = to_spot / length if length > 0.001 else agent.steer_dir
+			agent.debug_seek = (agent.steer_dir * tuning.get_value("max_speed") * agent.speed_scale)
+			return
 	var wanted := _seek(agent, delta)
 	var target_speed := tuning.get_value("max_speed") * agent.speed_scale * agent.pace
 	var slow := tuning.get_value("slow_radius")
@@ -597,9 +610,8 @@ func _smoothed(current: Vector2, wanted: Vector2, delta: float) -> Vector2:
 
 ## 걷는다. **빈 자리로만 간다. 남을 옮기는 코드는 여기에 없다.**
 ##
-## 유닛 번호 순으로 처리해 앞선 유닛의 **새 위치**를 본다. 전원의 옛 위치로 한꺼번에 판단하면
-## 둘이 같은 빈 자리로 동시에 들어가고, 그러면 겹침을 사후에 풀어야 한다 - 그것이 바로
-## 걷어낸 장치다. 처리 순서가 번호 순이라 프레임마다 뒤바뀌지도 않는다.
+## 유닛 번호 순으로 처리해 앞선 유닛의 **새 위치**를 본다. 한꺼번에 판단하면 둘이 같은
+## 빈 자리로 동시에 들어가고, 그 겹침을 사후에 풀어야 한다 - 그것이 걷어낸 장치다.
 func _walk(delta: float) -> void:
 	if delta <= 0.0:
 		return
@@ -641,21 +653,13 @@ func _walk(delta: float) -> void:
 
 ## 갈 방향을 **고른다.** 앞이 트여 있으면 고를 것이 없다.
 ##
-## 이것은 옆으로 미는 힘이 아니다. 힘은 이웃이 있기만 하면 늘 걸리고 합쳐져 방향을 정하지만,
-## 여기서는 **앞이 막혔을 때만** 후보를 재고 그중 하나를 고른다. 고른 것에는 다음 프레임에
-## 가산점이 붙어 갈팡질팡하지 않는다.
+## 힘이 아니다 - 힘은 이웃이 있기만 하면 늘 걸리지만 여기서는 **앞이 막혔을 때만** 후보를
+## 재고 하나를 고른다. 점수는 "가고 싶던 방향으로 얼마나 나아가는가"라, 정면이 트이는 순간
+## 반드시 정면이 이긴다. 전부 막히면 **그 자리에 선다** - 서는 것은 올바른 결과다.
 ##
-## 점수는 "가고 싶던 방향으로 얼마나 나아가는가"다. 옆으로 크게 도는 후보는 코사인이 작아
-## 웬만큼 트여 있지 않으면 뽑히지 않고, 정면이 트이는 순간 반드시 정면이 이긴다.
-##
-## 후보가 전부 막히면 0 을 돌려준다. 그러면 유닛은 **그 자리에 선다.** 서 있는 것은 실패가
-## 아니라 올바른 결과다.
-##
-## **드는 문턱과 푸는 문턱을 따로 둔다.** 하나로 두었더니 열린 방에서 꺾임이 33 에서 217 로
-## 뛰었다. 대형 간격이 30 픽셀이라 이웃이 늘 앞에 있고, 문턱 하나면 매 프레임 우회가 켜졌다
-## 꺼졌다 하면서 방향이 30 도씩 널뛰었다. **켜짐 자체가 지터였다** — 힘으로 만들던 것과
-## 똑같은 왕복을 고르기로 되풀이한 것이다. 드는 문턱을 "이번 걸음을 못 걷는다"로 좁히고,
-## 푸는 문턱을 그보다 훨씬 넓게 잡아 한번 돌기 시작하면 정면이 확실히 트일 때까지 돈다.
+## **드는 문턱과 푸는 문턱을 따로 둔다.** 하나로 두었더니 열린 방 꺾임이 33 에서 217 로
+## 뛰었다. 문턱 하나면 매 프레임 우회가 켜졌다 꺼졌다 하고 **그 켜짐 자체가 지터였다** -
+## 힘으로 만들던 왕복을 고르기로 되풀이한 셈이다.
 func _choose_step(agent: ProtoUnitAgent, want_dir: Vector2) -> float:
 	var straight := _room(agent, want_dir, true)
 	if agent.detour != 0.0:
@@ -708,17 +712,9 @@ func _turn_toward(agent: ProtoUnitAgent, wanted: Vector2, delta: float) -> Vecto
 ## 이 방향으로 **얼마나 갈 수 있는가**(픽셀). 이웃의 몸과 벽까지의 빈 거리다.
 ##
 ## 이 한 함수가 예전의 분리력 · 접촉 제약 · 위치 자르기 · 겹침 해소를 통째로 대신한다.
-## 넷 다 "얼마나 세게 밀까"를 물었고, 이것은 "갈 수 있는가"를 묻는다.
-##
-## 이웃마다 광선과 원의 교차를 푼다. 지나쳐 가는 이웃(수직 거리가 몸 지름보다 먼)은 걸리지
-## 않으므로, 스쳐 지나가는 데에 아무 값도 치르지 않는다.
-##
-## **이미 겹쳐 있으면 다가가는 방향은 0 이고 멀어지는 방향은 막지 않는다.** 스폰이나 지형
-## 보정이 만든 겹침이 여기 걸리는데, 겹침을 힘으로 푸는 대신 **더 겹치는 걸음을 금지**하면
-## 유닛이 스스로 빠져나오는 걸음만 고르게 된다.
-##
-## `note_block` 이 참이면 나를 세운 것이 **이미 자리를 잡은 아군**인지도 함께 표시한다.
-## 그 판정 하나를 위해 이웃을 또 훑으면 유닛이 늘 때 비용이 배로 든다.
+## 넷 다 "얼마나 세게 밀까"를 물었고, 이것은 "갈 수 있는가"를 묻는다. 이미 겹쳐 있으면
+## 다가가는 방향만 0 이라 **더 겹치는 걸음만 금지**되고 빠져나오는 걸음은 열려 있다.
+## `note_block` 이 참이면 나를 세운 것이 누구인지도 함께 적는다(훑기 한 벌을 아낀다).
 func _room(agent: ProtoUnitAgent, direction: Vector2, note_block: bool) -> float:
 	var limit := _LOOKAHEAD
 	if note_block:
@@ -854,6 +850,11 @@ func _review_moving(agent: ProtoUnitAgent, arrive: float, crawl: float) -> void:
 	#
 	# 지금은 **뭉치기 전에** 선다. 문에 가장 가까운 유닛부터 바깥으로 기다림이 번져 나가
 	# 줄이 서고, 앞이 비면 `_review_hold` 가 앞에서부터 하나씩 풀어 준다.
+	# 비켜서는 중인 유닛은 제 목적지에서 멀어지는 것이 정상이다. 막힘으로 세면 안 된다.
+	if agent.is_yielding():
+		agent.press_frames = 0
+		agent.grind_frames = 0
+		return
 	var progress := agent.goal_distance - distance
 	if agent.pressed:
 		press_agent_frames += 1

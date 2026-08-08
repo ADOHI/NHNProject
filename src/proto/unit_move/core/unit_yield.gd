@@ -41,6 +41,15 @@ const _YIELD_MARGIN := 1.5
 ## 양보가 살아남았는지 이만큼 뒤에 견준다(프레임). 3 분의 1 초다.
 const _YIELD_WATCH := 20
 
+## 비켜서기를 시작하지 않을 만큼 자기 자리에 가까운 거리(감속 반경의 배수).
+##
+## **자기 자리에 다 온 유닛은 비켜서기 상태로 넣지 않는다.** 넣으면 전원이 멎은 뒤에도
+## 그 유닛이 계속 걸어 도착 후 진동이 되살아난다 - 어렵게 0 으로 만든 계약이다.
+const _YIELD_SKIP_NEAR := 1.0
+
+## 비켜설 자리에 이만큼 들면 닿은 것으로 본다(픽셀).
+const _YIELD_REACHED := 3.0
+
 
 ## **비켜주기.** 전진 중인 유닛의 진로에서 남을 옆으로 비켜서게 한다.
 ##
@@ -173,6 +182,47 @@ static func yield_room(
 	if not field.grid.is_circle_free(agent.position + direction * limit, agent.radius):
 		return 0.0
 	return limit
+
+
+## **비켜서기를 상태로 건다.** 한 번의 변위가 아니라 자리에 닿을 때까지 이어진다.
+##
+## 자기 자리에 다 온 유닛은 걸지 않는다(`_YIELD_SKIP_NEAR`). 걸면 전원이 멎은 뒤에도
+## 그 유닛이 계속 걸어 도착 후 진동이 되살아난다.
+static func begin(
+	field: ProtoUnitField, agent: ProtoUnitAgent, target: Vector2, asked_by: int
+) -> void:
+	if agent.state != ProtoUnitAgent.State.MOVING and agent.state != ProtoUnitAgent.State.HOLDING:
+		return
+	var near := field.tuning.get_value("slow_radius") * _YIELD_SKIP_NEAR
+	if agent.position.distance_to(agent.goal) < near:
+		return
+	if not agent.is_yielding():
+		agent.yield_was_holding = agent.state == ProtoUnitAgent.State.HOLDING
+	agent.yield_goal = target
+	agent.yield_for = asked_by
+	# 기다리던 유닛도 비켜서려면 걸어야 한다. 끝나면 `end_yield` 가 되돌려 놓는다.
+	if agent.state == ProtoUnitAgent.State.HOLDING:
+		agent.state = ProtoUnitAgent.State.MOVING
+
+
+## 비켜서기를 끝낼 때인가. **시간이 아니라 조건으로 묻는다.**
+##
+## | 조건 | 왜 |
+## | --- | --- |
+## | 비켜설 자리에 닿았다 | 할 일을 다 했다 |
+## | 부탁한 쪽이 사라졌다 | 물어볼 상대가 없다 |
+## | **부탁한 쪽이 더 이상 나에게 막혀 있지 않다** | **앞이 실제로 트였다** |
+##
+## 셋째가 핵심이다. 돌아가기에서 배운 것을 그대로 옮겼다 - **"그 칸이 비었는지"** 를
+## **"앞이 실제로 트였는지"** 로 바꿔 물으면 된다. 시간으로 풀면 아직 안 트였는데
+## 도로 당겨지고, 그것이 의뢰인이 본 "살짝 돌았다가 바로 다시 막힌 길로"다.
+static func finished(field: ProtoUnitField, agent: ProtoUnitAgent) -> bool:
+	if agent.position.distance_to(agent.yield_goal) <= _YIELD_REACHED:
+		return true
+	var asker: ProtoUnitAgent = field.agent_of(agent.yield_for)
+	if asker == null or not asker.is_moving():
+		return true
+	return asker.blocker_id != agent.id
 
 
 ## **양보가 살아남는지 지켜본다.** 밀린 그 순간의 자리를 적어 두고, 얼마 뒤에 견준다.

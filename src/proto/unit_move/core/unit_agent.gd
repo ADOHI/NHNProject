@@ -89,7 +89,23 @@ var speed: float = 0.0
 ## 도리어 유리하다 — 같은 것을 계속 고르면 방향이 아예 안 바뀐다.
 var detour: float = 0.0
 
-## 양보를 받은 순간의 자리와 프레임, 그리고 그때 밀린 거리.
+## **비켜서기로 정한 자리**와 누구를 위해 비키는지. 0 이면 비켜서는 중이 아니다.
+##
+## 양보가 **명령이 아니라 상태**여야 하는 이유는 쟀기 때문이다 - 한 프레임짜리 변위로
+## 두었더니 잼에서 절반 이상이 다음 프레임에 지워졌다(맞교차 18 %, 한 칸 문 47 %,
+## 좁은 통로 100 은 58 %). 밀어 놓아도 조향이 곧바로 목적지를 다시 가리키고, 잼에서는
+## 목적지 방향이 곧 되돌아오는 방향이라 밀어 준 것이 그대로 사라진다.
+##
+## 상태로 두면 **비켜설 자리에 닿을 때까지** 그쪽으로 간다. 푸는 조건은 시간이 아니라
+## 확인이다 - 자리에 닿았거나, **부탁한 쪽이 더 이상 나에게 막혀 있지 않거나**.
+## 시간으로 풀면 앞이 아직 안 트였는데 도로 당겨지고, 그것이 돌아가기에서 겪은 실패다.
+var yield_goal: Vector2 = Vector2.ZERO
+var yield_for: int = 0
+
+## 비켜서기를 시작할 때 기다리는 중이었는가. 끝나면 그 상태로 돌려놓는다.
+var yield_was_holding: bool = false
+
+## 양보를 받은 순간의 자리와 그때 밀린 거리.
 ##
 ## **"비키라고 해 놓고 다음 프레임에 도로 돌아오는가"를 재려고 있는 값이다.**
 ##
@@ -211,6 +227,22 @@ func _init(agent_id: int, agent_kind: int, spawn: Vector2) -> void:
 	speed_scale = KIND_SHAPES[kind].y
 
 
+## 지금 비켜서는 중인가.
+func is_yielding() -> bool:
+	return yield_for != 0
+
+
+## 비켜서기를 끝낸다. 기다리던 중이었으면 그 자리로 돌려놓는다.
+func end_yield() -> void:
+	yield_for = 0
+	yield_goal = Vector2.ZERO
+	if yield_was_holding and state == State.MOVING:
+		state = State.HOLDING
+		velocity = Vector2.ZERO
+		speed = 0.0
+	yield_was_holding = false
+
+
 func kind_name() -> String:
 	return KIND_NAMES[kind]
 
@@ -232,6 +264,9 @@ func accept_order(new_order_id: int, slot: Vector2, sight_interval: float) -> vo
 	grind_frames = 0
 	press_frames = 0
 	hold_retries = 0
+	yield_for = 0
+	yield_goal = Vector2.ZERO
+	yield_was_holding = false
 	pace = 1.0
 	speed = velocity.length()
 	detour = 0.0
