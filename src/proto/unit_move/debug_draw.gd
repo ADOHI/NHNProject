@@ -28,6 +28,10 @@ const _PUSHED_FRAMES := 90
 ## 자리 없이 실패했다. 화면에서도 갈려 보여야 무엇이 일하는지 읽힌다.
 const _CHAIN_COLOR := Color(1.00, 0.85, 0.25)
 const _RELAY_COLOR := Color(0.35, 0.85, 1.00)
+
+## 분홍은 **뒤로 물러나라**를 전한 상대. 옆이 막혔을 때만 나오는 색이라, 이 색이 많으면
+## 그 자리가 옆으로는 못 비키는 곳이라는 뜻이다.
+const _RECOIL_COLOR := Color(1.00, 0.45, 0.85)
 const _GOAL_COLOR := Color(0.60, 0.60, 0.68, 0.55)
 const _SLOT_COLOR := Color(0.95, 0.55, 0.85, 0.85)
 const _FLOW_COLOR := Color(0.35, 0.45, 0.60, 0.75)
@@ -109,7 +113,11 @@ func _draw_agent(agent: ProtoUnitAgent) -> void:
 	if agent.chain_ago < _PUSHED_FRAMES and field != null:
 		var target: ProtoUnitAgent = field.agent_of(agent.chain_to)
 		if target != null:
-			var line := _RELAY_COLOR if agent.chain_kind == 1 else _CHAIN_COLOR
+			var line := _CHAIN_COLOR
+			if agent.chain_kind == 1:
+				line = _RELAY_COLOR
+			elif agent.chain_kind == 2:
+				line = _RECOIL_COLOR
 			line.a = 1.0 - float(agent.chain_ago) / float(_PUSHED_FRAMES)
 			draw_line(agent.position, target.position, line, 2.0)
 			_draw_arrow(agent.position, target.position, line, 2.0)
