@@ -19,8 +19,8 @@ func _init(title_text: String = "", accent: bool = false) -> void:
 		body.add_child(BaseWidgets.label(title_text, BaseWidgets.SIZE_HEAD))
 
 
-## 한 줄 적는다.
+## 한 줄 적는다. 칸 폭보다 길면 접힌다 — 게이트 미리보기와 기록이 그렇다.
 func line(text: String, color: Color = BaseWidgets.INK) -> Label:
-	var node := BaseWidgets.label(text, BaseWidgets.SIZE_BODY, color)
+	var node := BaseWidgets.wrap(BaseWidgets.label(text, BaseWidgets.SIZE_BODY, color))
 	body.add_child(node)
 	return node

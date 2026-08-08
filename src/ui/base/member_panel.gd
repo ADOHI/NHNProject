@@ -72,8 +72,9 @@ func _facility_row(guild: Guild, member: GuildMember, current: int, locked: bool
 		var button := BaseWidgets.button(
 			Facility.label(kind as Facility.Kind), not locked and not here and not full
 		)
+		# 잠긴 버튼이 둘 다 흐리면 "지금 여기 있다" 와 "정원이 찼다" 가 구분되지 않는다.
 		if here:
-			button.add_theme_color_override("font_color_disabled", BaseWidgets.INK_MARK)
+			button.add_theme_color_override("font_disabled_color", BaseWidgets.INK_MARK)
 		button.pressed.connect(_on_facility_pressed.bind(member.id, kind))
 		row.add_child(button)
 	var clear_button := BaseWidgets.button("해제", not locked and current != UNASSIGN)
