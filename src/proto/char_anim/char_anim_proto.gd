@@ -44,7 +44,8 @@ var _status: Label
 
 func _ready() -> void:
 	_rig = CharRig.new()
-	_clips = [CharIdleClip.new(_rig)] as Array[CharClip]
+	# 1 번이 실물, 2 번이 정면 문법 대조군. 나란히 돌려 봐야 시점의 차이가 보인다.
+	_clips = [CharIdleClip.new(_rig), CharFrontIdleClip.new(_rig)] as Array[CharClip]
 
 	_view = CharPartsView.new()
 	_view.name = "PartsView"
@@ -100,6 +101,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle("squash")
 		KEY_A:
 			_toggle("asymmetry")
+		KEY_D:
+			_toggle("depth")
+		KEY_1:
+			_select_clip(0)
+		KEY_2:
+			_select_clip(1)
 		KEY_Z:
 			_toggle_all()
 		KEY_G:
@@ -168,8 +175,9 @@ func _build_overlay() -> void:
 		"\n"
 		. join(
 			[
+				"1 사이드 사선 • 2 정면 문법 (대조군)",
 				"Space  멈춤 • 왼쪽 오른쪽 화살표  한 걸음씩",
-				"Q 지연 • W 호 • E 배율 • A 비대칭 • Z 넷 다",
+				"Q 지연 • W 호 • E 배율 • A 비대칭 • D 앞뒤 • Z 다섯 다",
 				"G 기준선 • Tab 조절판 • H 도움말 • R 처음으로",
 				"대괄호 여닫기  느리게 빠르게 • Esc 나가기",
 			]
@@ -205,9 +213,16 @@ func _toggle_all() -> void:
 		or _features.arc > 0.0
 		or _features.squash > 0.0
 		or _features.asymmetry > 0.0
+		or _features.depth > 0.0
 	)
 	_features = AnimFeatures.all_off() if any_on else AnimFeatures.all_on()
 	_panel.sync_from(_features)
+
+
+## 클립을 바꿔도 시각을 안 되돌린다. 같은 `t` 의 두 문법을 바로 견줄 수 있어야 한다.
+func _select_clip(index: int) -> void:
+	_clip_index = clampi(index, 0, _clips.size() - 1)
+	_time = current_clip().wrap_time(_time)
 
 
 func _set_speed(speed: float) -> void:

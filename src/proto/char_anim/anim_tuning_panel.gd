@@ -16,7 +16,8 @@ const ROWS: Array[Array] = [
 	["delay", "지연", "파츠가 몸을 늦게 따라오는 정도"],
 	["arc", "호", "경로의 좌우 성분 - 머리의 8 자"],
 	["squash", "배율", "눌림과 늘어남 (면적 보존)"],
-	["asymmetry", "비대칭", "좌우 차이와 무게 이동"],
+	["asymmetry", "비대칭", "무게가 앞뒤로 옮겨 다니는 것"],
+	["depth", "앞뒤", "뒷손이 작고 느려 보이는 것"],
 ]
 
 const SPEED_MIN := 0.1
@@ -51,7 +52,7 @@ func _init() -> void:
 	_add_speed_row(column)
 
 	var note := Label.new()
-	note.text = "넷을 다 0 으로 내리면 관절 없는 인형이 된다"
+	note.text = "다섯을 다 0 으로 내리면 관절 없는 인형이 된다"
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(note)
 

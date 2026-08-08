@@ -36,8 +36,12 @@ const SKY_BANDS := 28
 ## 창이 자리를 잡을 준비 프레임. 첫 장이 백지로 나오는 것을 막는다.
 const WARMUP_FRAMES := 8
 
-## 배경만 찍혔는지 판정할 때 요구하는 최소 색 수. 캐릭터가 있으면 훨씬 많다.
-const MIN_DISTINCT_COLORS := 12
+## 캐릭터가 덮어야 하는 최소 화면 비율.
+##
+## **색 가짓수로 세다가 속았다.** 파츠가 하나도 안 그려진 판(스크립트가 컴파일 실패해
+## 트랜스폼이 전부 튕긴 상태)에서 배경 그라데이션만으로 33 색이 나왔고, 기준이 12 색이라
+## 그대로 통과했다. 배경이 화려하면 색 수는 아무것도 증명하지 않는다.
+const MIN_SUBJECT_RATIO := 0.03
 
 var _out_prefix := ".renders-char-anim/idle"
 var _features := AnimFeatures.all_on()
@@ -48,6 +52,7 @@ var _warmup := WARMUP_FRAMES
 var _next_frame := 0
 var _pending := -1
 var _verified := false
+var _front := false
 
 
 func _initialize() -> void:
@@ -56,6 +61,7 @@ func _initialize() -> void:
 		_out_prefix = args[0]
 	if args.size() > 1:
 		_features = _parse_features(args[1])
+	_front = args.has("front")
 
 	# **`SubViewport` 에 그린다.** 창 크기를 바꾸는 방법은 안 통했다 — `get_root().size` 를
 	# 400x520 으로 넣어도 찍히는 것은 1280x720 이었다(늘리기 설정이 이겼다). 자기 크기를
@@ -67,7 +73,7 @@ func _initialize() -> void:
 	get_root().add_child(_viewport)
 
 	var rig := CharRig.new()
-	_clip = CharIdleClip.new(rig)
+	_clip = CharFrontIdleClip.new(rig) if _front else CharIdleClip.new(rig)
 
 	var stage := _make_stage()
 	_viewport.add_child(stage)
@@ -85,8 +91,15 @@ func _initialize() -> void:
 	print("캡처: %s  프레임 %d  %d fps" % [_out_prefix, FRAMES, FPS])
 	print(
 		(
-			"조절판: 지연 %.1f 호 %.1f 배율 %.1f 비대칭 %.1f"
-			% [_features.delay, _features.arc, _features.squash, _features.asymmetry]
+			"클립 %s / 지연 %.1f 호 %.1f 배율 %.1f 비대칭 %.1f 앞뒤 %.1f"
+			% [
+				_clip.clip_name(),
+				_features.delay,
+				_features.arc,
+				_features.squash,
+				_features.asymmetry,
+				_features.depth,
+			]
 		)
 	)
 
@@ -119,7 +132,9 @@ func _parse_features(spec: String) -> AnimFeatures:
 		return AnimFeatures.all_off()
 	if spec == "on":
 		return AnimFeatures.all_on()
-	if spec in ["delay", "arc", "squash", "asymmetry"]:
+	if spec == "front":
+		return AnimFeatures.all_on()
+	if spec in ["delay", "arc", "squash", "asymmetry", "depth"]:
 		return AnimFeatures.only(spec)
 	push_error("모르는 조절판 지정: %s" % spec)
 	return AnimFeatures.all_on()
@@ -167,12 +182,24 @@ func _verify(image: Image) -> bool:
 			)
 		)
 		return false
-	var seen := {}
-	for y in range(0, image.get_height(), 4):
-		for x in range(0, image.get_width(), 4):
-			seen[image.get_pixel(x, y).to_rgba32()] = true
-	if seen.size() < MIN_DISTINCT_COLORS:
-		push_error("배경만 찍혔다 — 색이 %d 가지뿐이다. 캐릭터가 안 그려졌다" % seen.size())
+	# **배경은 가로줄마다 단색이다**(가로 띠 그라데이션). 그래서 어느 줄에서든 왼쪽 끝과
+	# 다른 화소는 전부 캐릭터다. 배경을 따로 렌더해 빼지 않아도 피사체만 정확히 셀 수 있다.
+	var sampled := 0
+	var subject := 0
+	for y in range(0, image.get_height(), 2):
+		var background := image.get_pixel(0, y)
+		for x in range(0, image.get_width(), 2):
+			sampled += 1
+			if not image.get_pixel(x, y).is_equal_approx(background):
+				subject += 1
+	var ratio := float(subject) / float(maxi(sampled, 1))
+	if ratio < MIN_SUBJECT_RATIO:
+		push_error(
+			(
+				"캐릭터가 안 그려졌다 — 화면의 %.2f %% 만 배경과 다르다 (최소 %.2f %%)"
+				% [ratio * 100.0, MIN_SUBJECT_RATIO * 100.0]
+			)
+		)
 		return false
-	print("확인: %dx%d, 색 %d 가지" % [image.get_width(), image.get_height(), seen.size()])
+	print("확인: %dx%d, 캐릭터가 화면의 %.1f %%" % [image.get_width(), image.get_height(), ratio * 100.0])
 	return true

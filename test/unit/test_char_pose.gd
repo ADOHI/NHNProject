@@ -1,8 +1,10 @@
 extends GutTest
-## `CharPose` 의 좌표계 변환과 `CharRig` 의 피벗을 잡는다.
+## `CharPose` 의 좌표계 변환과 피벗의 접지를 잡는다.
 ##
 ## 코어는 `+y` 가 위이고 Godot 은 `+y` 가 아래다. 그 변환에서 **회전은 뒤집히고
 ## 배율은 안 뒤집힌다.** 이 비대칭이 함정이라 셋을 따로 단정한다.
+##
+## 리그의 치수와 앞뒤 구분은 `test_char_rig.gd` 가 본다.
 
 const EPS := 0.0001
 
@@ -49,81 +51,50 @@ func test_canvas_transform_does_not_flip_scale() -> void:
 func test_squashing_a_bottom_pivot_part_keeps_its_bottom_still() -> void:
 	var rig := CharRig.new()
 	var pose := CharPose.from_rig(rig)
-	var part := CharPart.Id.FOOT_R
+	var part := CharPart.Id.FOOT_NEAR
 	var before := pose.part_bottom(part, rig)
 	pose.scales[part] = Vector2(1.1, 0.7)
 	var after := pose.part_bottom(part, rig)
 	assert_almost_eq(after.y, before.y, EPS, "발이 눌리면서 땅에서 뜨면 안 된다")
-	assert_almost_eq(after.y, 0.0, EPS)
+	assert_almost_eq(after.y, rig.ground_y(part), EPS)
 
 
 func test_rotating_a_bottom_pivot_part_keeps_its_bottom_still() -> void:
 	var rig := CharRig.new()
 	var pose := CharPose.from_rig(rig)
-	var part := CharPart.Id.FOOT_L
+	var part := CharPart.Id.FOOT_FAR
 	pose.rotations[part] = 0.3
-	assert_almost_eq(pose.part_bottom(part, rig).y, 0.0, EPS)
+	assert_almost_eq(pose.part_bottom(part, rig).y, rig.ground_y(part), EPS)
+
+
+func test_the_toe_sits_ahead_of_the_pivot() -> void:
+	# 뒤꿈치 들기가 이 점을 축으로 돈다. 뒤에 있으면 회전 보정의 부호가 뒤집힌다.
+	var rig := CharRig.new()
+	assert_gt(rig.local_toe(CharPart.Id.FOOT_NEAR).x, rig.local_bottom(CharPart.Id.FOOT_NEAR).x)
 
 
 func test_hand_pivot_is_its_center_so_its_bottom_hangs_below() -> void:
 	var rig := CharRig.new()
 	var pose := CharPose.from_rig(rig)
-	var part := CharPart.Id.HAND_L
+	var part := CharPart.Id.HAND_FAR
 	var expected := rig.rest_positions[part].y - rig.half_sizes[part].y
 	assert_almost_eq(pose.part_bottom(part, rig).y, expected, EPS)
 
 
-func test_the_lowest_part_at_rest_is_exactly_on_the_ground() -> void:
+func test_nothing_sinks_at_rest() -> void:
 	var rig := CharRig.new()
-	assert_almost_eq(CharPose.from_rig(rig).lowest_bottom_y(rig), 0.0, EPS)
+	assert_almost_eq(CharPose.from_rig(rig).deepest_sink(rig), 0.0, EPS)
 
 
-func test_dimensions_come_from_one_place_only() -> void:
+func test_each_foot_stands_on_its_own_ground() -> void:
+	# 사이드 사선에서는 바닥이 멀어지며 화면 위로 물러난다. 지면을 하나로 두면
+	# 뒷발이 땅에 파묻히거나 공중에 뜬다.
 	var rig := CharRig.new()
-	var head := CharPart.Id.HEAD
-	assert_eq(
-		rig.total_height(),
-		rig.rest_positions[head].y + rig.half_sizes[head].y * 2.0,
-		"키를 상수로 따로 적으면 도구가 옛 수치로 거짓말한다"
-	)
-
-
-func test_head_is_the_widest_part_so_the_silhouette_reads_as_chibi() -> void:
-	var rig := CharRig.new()
+	var pose := CharPose.from_rig(rig)
+	for part: CharPart.Id in [CharPart.Id.FOOT_FAR, CharPart.Id.FOOT_NEAR]:
+		assert_almost_eq(pose.part_bottom(part, rig).y, rig.ground_y(part), EPS)
 	assert_gt(
-		rig.half_sizes[CharPart.Id.HEAD].x,
-		rig.half_sizes[CharPart.Id.TORSO].x,
-		"머리가 몸보다 좁으면 SD 비례가 아니다"
+		rig.ground_y(CharPart.Id.FOOT_FAR),
+		rig.ground_y(CharPart.Id.FOOT_NEAR),
+		"뒷발의 지면이 앞발보다 높아야 물러나 보인다"
 	)
-
-
-func test_parts_do_not_touch_each_other() -> void:
-	# 팔다리 · 목이 없는 것이 이 스타일의 정체다. 파츠가 붙으면 그냥 인형이 된다.
-	var rig := CharRig.new()
-	var foot_top := rig.half_sizes[CharPart.Id.FOOT_R].y * 2.0
-	var torso_bottom := rig.rest_positions[CharPart.Id.TORSO].y
-	assert_gt(torso_bottom - foot_top, 0.0, "몸과 발 사이에 간격이 있어야 한다")
-
-	var torso_top := torso_bottom + rig.half_sizes[CharPart.Id.TORSO].y * 2.0
-	var head_bottom := rig.rest_positions[CharPart.Id.HEAD].y
-	assert_gt(head_bottom - torso_top, 0.0, "몸과 머리 사이에 목이 있을 자리가 있어야 한다")
-
-	var torso_side := rig.half_sizes[CharPart.Id.TORSO].x
-	var hand_inner := (
-		rig.rest_positions[CharPart.Id.HAND_R].x - rig.half_sizes[CharPart.Id.HAND_R].x
-	)
-	assert_gt(hand_inner - torso_side, 0.0, "손이 몸에 닿으면 팔이 있는 것으로 읽힌다")
-
-
-func test_outward_sign_is_opposite_on_each_side() -> void:
-	assert_eq(CharPart.outward_sign(CharPart.Id.HAND_L), -1.0)
-	assert_eq(CharPart.outward_sign(CharPart.Id.HAND_R), 1.0)
-	assert_eq(CharPart.outward_sign(CharPart.Id.TORSO), 0.0)
-
-
-func test_draw_order_holds_every_part_exactly_once() -> void:
-	assert_eq(CharPart.DRAW_ORDER.size(), CharPart.COUNT)
-	var seen := {}
-	for part: int in CharPart.DRAW_ORDER:
-		seen[part] = true
-	assert_eq(seen.size(), CharPart.COUNT, "파츠가 겹치거나 빠지면 하나가 안 그려진다")

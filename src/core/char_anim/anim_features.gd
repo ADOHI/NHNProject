@@ -15,8 +15,17 @@ var arc := 1.0
 ## 눌림과 늘어남. `0` 이면 모든 배율이 정확히 `1` 이다.
 var squash := 1.0
 
-## 좌우 파츠의 차이와 무게 이동. `0` 이면 두 손이 같아지고 발이 죽은 듯 멈춘다.
+## 좌우 파츠의 차이와 무게 이동. `0` 이면 발이 죽은 듯 멈춘다.
 var asymmetry := 1.0
+
+## **앞뒤.** 먼 파츠가 얼마나 덜, 그리고 얼마나 뭉툭하게 움직이는가.
+##
+## `0` 이면 뒷손이 앞손과 **똑같이** 움직인다 — 크기만 작을 뿐 궤도가 같아서
+## 종이 인형 두 장을 겹친 것처럼 보인다. 사이드 사선에서 이것이 가장 잘 티 나는 실패다.
+##
+## 켜면 셋이 한꺼번에 걸린다: 진폭이 줄고, 지연이 길어지고, **고주파가 깎인다.**
+## 셋째가 「느려 보인다」를 만든다 — 사람은 잔떨림의 양으로 속도를 읽기 때문이다.
+var depth := 1.0
 
 
 static func all_on() -> AnimFeatures:
@@ -29,6 +38,7 @@ static func all_off() -> AnimFeatures:
 	f.arc = 0.0
 	f.squash = 0.0
 	f.asymmetry = 0.0
+	f.depth = 0.0
 	return f
 
 
@@ -45,4 +55,5 @@ func copy() -> AnimFeatures:
 	f.arc = arc
 	f.squash = squash
 	f.asymmetry = asymmetry
+	f.depth = depth
 	return f

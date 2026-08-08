@@ -48,3 +48,21 @@ func wrap_time(t: float) -> float:
 	if not is_looping():
 		return clampf(t, 0.0, span)
 	return fposmod(t, span)
+
+
+## 지연이 걸린 사인파. **모든 것이 「시각의 함수」인 지점이 여기다.**
+##
+## `cycles` 는 **한 바퀴당 도는 횟수**이고 반드시 정수여야 한다. 무리수 비율이면
+## 파형이 절대 되돌아오지 않아 GIF 와 게임 루프의 이음매가 툭 끊긴다.
+##
+## `features.delay` 가 0 이면 지연이 통째로 사라져 모든 파츠가 같은 위상이 된다.
+func wave(cycles: float, t: float, delay: float, f: AnimFeatures) -> float:
+	return sin(TAU * cycles * (t - delay * f.delay) / loop_seconds())
+
+
+## 면적을 보존하는 배율. `stretch` 가 0 이면 정확히 `Vector2.ONE` 이다.
+##
+## `1.0 / 1.0` 이 부동소수점에서도 정확히 `1.0` 이므로 "배율 끄기" 가 근사가 아니라 등식이다.
+static func volume_scale(stretch: float) -> Vector2:
+	var sy := 1.0 + stretch
+	return Vector2(1.0 / sy, sy)

@@ -62,7 +62,7 @@ func test_the_hands_lag_further_behind_than_the_head() -> void:
 	var clip := CharAnimProbe.clip()
 	var f := AnimFeatures.all_on()
 	assert_gt(
-		CharAnimProbe.peak_time(clip, CharPart.Id.HAND_L, f),
+		CharAnimProbe.peak_time(clip, CharPart.Id.HAND_FAR, f),
 		CharAnimProbe.peak_time(clip, CharPart.Id.HEAD, f),
 		"손이 머리보다 늦어야 한다"
 	)
@@ -74,7 +74,7 @@ func test_the_hands_float_higher_than_the_body() -> void:
 	var clip := CharAnimProbe.clip()
 	var f := AnimFeatures.all_on()
 	var torso := CharAnimProbe.span(clip, CharPart.Id.TORSO, f)
-	assert_gt(CharAnimProbe.span(clip, CharPart.Id.HAND_R, f), torso, "손이 몸보다 크게 떠야 한다")
+	assert_gt(CharAnimProbe.span(clip, CharPart.Id.HAND_NEAR, f), torso, "손이 몸보다 크게 떠야 한다")
 	assert_gt(CharAnimProbe.span(clip, CharPart.Id.HEAD, f), torso)
 
 
@@ -127,18 +127,36 @@ func test_the_head_squashes_against_the_torso_stretch() -> void:
 # --- 접지 -------------------------------------------------------------------
 
 
-func test_no_part_ever_sinks_into_the_ground() -> void:
+func test_no_part_ever_sinks_into_its_ground() -> void:
 	var clip := CharAnimProbe.clip()
 	var f := AnimFeatures.all_on()
 	for t in CharAnimProbe.scan_times():
-		assert_gte(clip.sample(t, f).lowest_bottom_y(clip.rig), -EPS, "t = %.3f 에서 파츠가 땅을 파고든다" % t)
+		assert_lte(clip.sample(t, f).deepest_sink(clip.rig), EPS, "t = %.3f 에서 파츠가 땅을 파고든다" % t)
 
 
-func test_the_loaded_foot_stays_exactly_on_the_ground() -> void:
+func test_the_loaded_foot_stays_exactly_on_its_ground() -> void:
 	# 피벗이 중심에 있으면 눌리는 발이 땅에서 뜬다. 그것을 막는 단정이다.
 	var clip := CharAnimProbe.clip()
+	var rig := clip.rig
 	var pose := clip.sample(CharIdleClip.LOOP * 0.25, AnimFeatures.all_on())
-	assert_almost_eq(pose.part_bottom(CharPart.Id.FOOT_R, clip.rig).y, 0.0, EPS)
+	var part := CharPart.Id.FOOT_NEAR
+	assert_almost_eq(pose.part_bottom(part, rig).y, rig.ground_y(part), EPS)
+
+
+func test_the_freed_foot_lifts_its_heel_and_keeps_its_toe_down() -> void:
+	# **측면 문법의 핵심.** 정면에서는 발이 통째로 들렸다. 옆에서 그렇게 하면 발이
+	# 공중에서 평행이동해 서 있는 것으로 안 보인다.
+	#
+	# 이 단정이 없으면 회전 보정을 빼먹어도 눈으로는 잘 안 걸린다 — 발끝이 땅에
+	# 박히는 것은 안 보이고 발이 미끄러지는 느낌으로만 남는다.
+	var clip := CharAnimProbe.clip()
+	var rig := clip.rig
+	# 무게가 앞으로 실리는 순간이면 뒷발이 자유로워진다.
+	var pose := clip.sample(CharIdleClip.LOOP * 0.25, AnimFeatures.all_on())
+	var part := CharPart.Id.FOOT_FAR
+	assert_almost_eq(pose.part_toe(part, rig).y, rig.ground_y(part), 0.001, "발끝은 땅에 붙어 있어야 한다")
+	assert_gt(pose.part_bottom(part, rig).y, rig.ground_y(part), "뒤꿈치 쪽은 들려야 한다")
+	assert_lt(pose.rotations[part], 0.0, "뒤꿈치를 들려면 시계 방향으로 돌아야 한다")
 
 
 func test_the_feet_do_not_breathe() -> void:
@@ -149,7 +167,24 @@ func test_the_feet_do_not_breathe() -> void:
 	var clip := CharAnimProbe.clip()
 	var f := AnimFeatures.all_on()
 	for t in CharAnimProbe.scan_times():
-		var left := CharAnimProbe.offset(clip, CharPart.Id.FOOT_L, t, f).y
-		var right := CharAnimProbe.offset(clip, CharPart.Id.FOOT_R, t, f).y
-		assert_almost_eq(minf(left, right), 0.0, EPS, "t = %.3f 에서 두 발이 같이 떴다" % t)
-		assert_gte(maxf(left, right), 0.0, "발이 쉬는 높이보다 내려가면 안 된다")
+		var far := CharAnimProbe.offset(clip, CharPart.Id.FOOT_FAR, t, f).y
+		var near := CharAnimProbe.offset(clip, CharPart.Id.FOOT_NEAR, t, f).y
+		assert_almost_eq(minf(far, near), 0.0, EPS, "t = %.3f 에서 두 발이 같이 떴다" % t)
+		assert_gte(maxf(far, near), 0.0, "발이 쉬는 높이보다 내려가면 안 된다")
+
+
+func test_the_weight_travels_fore_and_aft() -> void:
+	# 몸이 앞으로 나가 있는 순간에는 **앞발**이 눌려 있어야 한다.
+	# 부호가 어긋나면 몸과 발이 따로 놀고, 그건 눈으로 "뭔가 이상하다" 로만 보인다.
+	var clip := CharAnimProbe.clip()
+	var f := AnimFeatures.all_on()
+	var forward_t := 0.0
+	var furthest := -INF
+	for t in CharAnimProbe.scan_times():
+		var x := CharAnimProbe.offset(clip, CharPart.Id.TORSO, t, f).x
+		if x > furthest:
+			furthest = x
+			forward_t = t
+	var pose := clip.sample(forward_t, f)
+	assert_lt(pose.scales[CharPart.Id.FOOT_NEAR].y, 1.0, "몸이 앞에 있으면 앞발이 눌려야 한다")
+	assert_lt(pose.rotations[CharPart.Id.FOOT_FAR], 0.0, "그때 뒷발의 뒤꿈치가 들려야 한다")

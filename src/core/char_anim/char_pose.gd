@@ -57,9 +57,27 @@ func part_bottom(part: CharPart.Id, rig: CharRig) -> Vector2:
 	return core_transform(part) * rig.local_bottom(part)
 
 
-## 여섯 파츠 중 가장 낮은 밑면의 높이. 접지 검증이 쓴다.
-func lowest_bottom_y(rig: CharRig) -> float:
-	var lowest := INF
+## 파츠의 **발끝**(앞쪽 밑 모서리)이 캐릭터 공간에서 어디에 있는가.
+##
+## 뒤꿈치를 드는 동안 이 점이 자기 지면에 붙어 있어야 발이 미끄러지지 않는다.
+func part_toe(part: CharPart.Id, rig: CharRig) -> Vector2:
+	return core_transform(part) * rig.local_toe(part)
+
+
+## 파츠가 자기 지면 아래로 얼마나 파고들었는가. 음수면 떠 있는 것이라 문제가 없다.
+##
+## **지면이 파츠마다 다르다** — 사이드 사선에서는 뒷발의 바닥이 앞발보다 높다.
+## 발은 밑면과 발끝 중 더 낮은 쪽으로 재고, 나머지 파츠는 밑면으로 잰다.
+func sink_depth(part: CharPart.Id, rig: CharRig) -> float:
+	var lowest := part_bottom(part, rig).y
+	if CharPart.is_foot(part):
+		lowest = minf(lowest, part_toe(part, rig).y)
+	return rig.ground_y(part) - lowest
+
+
+## 여섯 파츠 중 가장 깊이 파고든 정도. 접지 검증이 쓴다.
+func deepest_sink(rig: CharRig) -> float:
+	var deepest := -INF
 	for i in CharPart.COUNT:
-		lowest = minf(lowest, part_bottom(i, rig).y)
-	return lowest
+		deepest = maxf(deepest, sink_depth(i, rig))
+	return deepest

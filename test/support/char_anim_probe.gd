@@ -25,12 +25,12 @@ static func scan_times() -> Array[float]:
 
 
 ## 쉬는 자세로부터의 변위. 절대 좌표가 아니라 이것을 봐야 파형이 읽힌다.
-static func offset(anim: CharIdleClip, part: CharPart.Id, t: float, f: AnimFeatures) -> Vector2:
+static func offset(anim: CharClip, part: CharPart.Id, t: float, f: AnimFeatures) -> Vector2:
 	return anim.sample(t, f).positions[part] - anim.rig.rest_positions[part]
 
 
 ## 파츠가 가장 높이 올라간 시각. 지연의 부호와 크기를 재는 데 쓴다.
-static func peak_time(anim: CharIdleClip, part: CharPart.Id, f: AnimFeatures) -> float:
+static func peak_time(anim: CharClip, part: CharPart.Id, f: AnimFeatures) -> float:
 	var best := -INF
 	var best_t := 0.0
 	for t in scan_times():
@@ -42,11 +42,27 @@ static func peak_time(anim: CharIdleClip, part: CharPart.Id, f: AnimFeatures) ->
 
 
 ## 한 바퀴에서의 상하 최대 변위.
-static func span(anim: CharIdleClip, part: CharPart.Id, f: AnimFeatures) -> float:
+static func span(anim: CharClip, part: CharPart.Id, f: AnimFeatures) -> float:
 	var widest := 0.0
 	for t in scan_times():
 		widest = maxf(widest, absf(offset(anim, part, t, f).y))
 	return widest
+
+
+## 한 바퀴에서의 **최대 속력** (표본 사이의 최대 이동량).
+##
+## 진폭과 따로 재야 하는 이유가 있다. 어떤 궤도를 그냥 작게 줄이면 진폭과 속력이
+## 같은 비율로 준다. **속력이 진폭보다 더 많이 줄어야** 사람이 "느리다" 고 읽는다 —
+## 속도감은 고주파 성분의 양에서 나오기 때문이다. 그 차이를 재는 자다.
+static func top_speed(anim: CharClip, part: CharPart.Id, f: AnimFeatures) -> float:
+	var times := scan_times()
+	var fastest := 0.0
+	var previous := anim.sample(times[0], f).positions[part]
+	for i in range(1, times.size()):
+		var now := anim.sample(times[i], f).positions[part]
+		fastest = maxf(fastest, previous.distance_to(now))
+		previous = now
+	return fastest
 
 
 ## 부호가 바뀐 횟수. **0 은 건너뛴다.**

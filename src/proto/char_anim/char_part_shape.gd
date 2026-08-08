@@ -6,6 +6,13 @@ extends Node2D
 ## 그 안을 채우는 것뿐이고, 치수를 직접 적어 두지 않는다 — 리그를 고치면 도형이 따라온다.
 ## 그래서 모든 위치가 **반크기의 비율**로 적혀 있다.
 ##
+## **시점은 사이드 사선이고, 그림은 자리표시자다.** 어차피 스프라이트로 갈아 끼우므로
+## 옆얼굴을 새로 그리지 않았다. 시점 때문에 바꾼 것은 딱 둘이다.
+##
+## * **좌우 거울을 없앴다.** 옆에서 보면 두 발이 **같은 쪽**을 본다. 서로 반대로
+##   벌어지는 것은 정면 문법이고, 그것 하나로 시점이 정면으로 읽혀 버린다
+## * **먼 파츠를 배경 쪽으로 물들인다.** 겹침 · 크기와 함께 깊이를 만드는 셋째 수단이다
+##
 ## 지역 좌표는 **Godot 관례대로 `+y` 가 아래**다. 코어(`+y` 위)와의 변환은
 ## `CharPose.canvas_transform()` 이 켤레로 처리하므로 여기서는 신경 쓸 것이 없다.
 ##
@@ -34,35 +41,24 @@ const MITTEN_SHADE := Color(0.612, 0.078, 0.137)
 const BOOT := Color(0.216, 0.208, 0.231)
 const BOOT_LIGHT := Color(0.337, 0.325, 0.357)
 
+## 먼 파츠를 배경 쪽으로 물들이는 색과 양. 공기원근을 아주 얕게 흉내 낸다.
+## 세게 넣으면 뒷손이 그림자로 보이고, 없으면 앞뒤가 안 갈린다.
+const FAR_TINT := Color(0.353, 0.396, 0.439)
+const FAR_TINT_AMOUNT := 0.32
+
 ## 잉크 굵기. 캐릭터 키 146 에 대해 1.3 — 시트의 선 굵기와 같은 비율이다.
 const STROKE := 1.3
 
 ## 원을 다각형으로 쪼갤 때의 분할 수. 배율 3 배로 봐도 각이 안 보이는 최소값이다.
 const ARC_STEPS := 32
 
-## 원피스 실루엣. **한쪽만** 적고 `_mirrored_profile()` 이 좌우로 닫는다.
-## `x` 는 반너비의 비율, `y` 는 밑단(0)에서 깃(1)까지의 비율.
+## 원피스 실루엣은 **`CharRig.TORSO_PROFILE` 에 있다.** 여기에 두지 않는 이유가 있다 —
+## 손이 몸에 겹치는지를 재려면 리그가 그 높이의 몸 너비를 알아야 하는데, 표가 이 파일에
+## 있으면 코어가 못 본다. 그러면 검증이 최대 반너비(밑단)로 재게 되어 거짓말한다.
 ##
 ## **밑단(1.00)이 어깨(0.68)보다 1.5 배 넓다.** 첫 판은 이 비가 1.3 이었는데
 ## 그 정도로는 A 라인이 안 읽히고 그냥 민소매 상의로 보였다.
 ## 점을 촘촘히 둔 이유도 있다 — 적으면 윤곽선에 각이 생겨 종이봉투가 된다.
-const DRESS_PROFILE: Array[Vector2] = [
-	Vector2(0.00, 0.00),
-	Vector2(0.50, 0.01),
-	Vector2(0.84, 0.04),
-	Vector2(1.00, 0.10),
-	Vector2(0.97, 0.18),
-	Vector2(0.88, 0.28),
-	Vector2(0.77, 0.40),
-	Vector2(0.68, 0.50),
-	Vector2(0.63, 0.58),
-	Vector2(0.62, 0.66),
-	Vector2(0.66, 0.74),
-	Vector2(0.68, 0.82),
-	Vector2(0.62, 0.90),
-	Vector2(0.44, 0.97),
-	Vector2(0.00, 1.02),
-]
 
 ## 부츠 실루엣. 한 바퀴를 다 적었고, `x` 는 **바깥 방향으로** 잰 값이라 좌우가 자동으로 뒤집힌다.
 ##
@@ -101,7 +97,7 @@ func _draw() -> void:
 			_draw_head()
 		CharPart.Id.TORSO:
 			_draw_torso()
-		CharPart.Id.HAND_L, CharPart.Id.HAND_R:
+		CharPart.Id.HAND_FAR, CharPart.Id.HAND_NEAR:
 			_draw_hand()
 		_:
 			_draw_foot()
@@ -125,37 +121,37 @@ func _draw_head() -> void:
 	var r := _half().x
 	var top := _center()
 
-	_blob(_ellipse(top, r, r), HAIR)
-	_fill(_ellipse(Vector2(0.0, -r * 0.77), r * 0.77, r * 0.77), SKIN)
+	_blob(_ellipse(top, r, r), _ink(HAIR))
+	_fill(_ellipse(Vector2(0.0, -r * 0.77), r * 0.77, r * 0.77), _ink(SKIN))
 	# 앞머리 — 이마를 덮어 남은 아래쪽만 얼굴로 만든다. 이것이 단발머리로 읽히게 하는 부분이다.
-	_fill(_ellipse(Vector2(0.0, -r * 1.33), r * 0.83, r * 0.50), HAIR)
+	_fill(_ellipse(Vector2(0.0, -r * 1.33), r * 0.83, r * 0.50), _ink(HAIR))
 	# 광택은 **가운데를 벗어나고 기울어야** 광택이다.
 	# 정중앙에 수평으로 두면 머리띠나 베레모로 보인다 (첫 판이 그랬다).
-	_fill(_ellipse(Vector2(-r * 0.22, -r * 1.58), r * 0.42, r * 0.10, -0.26), HAIR_LIGHT)
+	_fill(_ellipse(Vector2(-r * 0.22, -r * 1.58), r * 0.42, r * 0.10, -0.26), _ink(HAIR_LIGHT))
 
 	var eye := Vector2(r * 0.32, -r * 0.53)
 	for side: float in [-1.0, 1.0]:
 		var at := Vector2(side * eye.x, eye.y)
 		# 위쪽 속눈썹을 눈보다 넓고 납작하게 겹쳐 얹는다. 이 무게가 눈을 크게 보이게 한다.
-		_fill(_ellipse(at + Vector2(0.0, -r * 0.16), r * 0.20, r * 0.10), INK)
-		_fill(_ellipse(at, r * 0.17, r * 0.23), INK)
+		_fill(_ellipse(at + Vector2(0.0, -r * 0.16), r * 0.20, r * 0.10), _ink(INK))
+		_fill(_ellipse(at, r * 0.17, r * 0.23), _ink(INK))
 		# 하이라이트는 두 눈 모두 **같은 쪽**에 둔다. 좌우로 뒤집으면 빛이 두 군데서 오고,
 		# 눈 안에서 눈동자처럼 읽혀 물음표 모양이 된다.
-		_fill(_ellipse(at + Vector2(-r * 0.055, -r * 0.10), r * 0.065, r * 0.065), SKIN)
+		_fill(_ellipse(at + Vector2(-r * 0.055, -r * 0.10), r * 0.065, r * 0.065), _ink(SKIN))
 		# 볼은 **얼굴 안에** 있어야 한다. 처음엔 0.57 이라 머리카락을 넘어 밖으로 삐져나왔다.
-		_fill(_ellipse(Vector2(side * r * 0.44, -r * 0.40), r * 0.15, r * 0.075), BLUSH)
-	_fill(_ellipse(Vector2(0.0, -r * 0.23), r * 0.072, r * 0.052), MOUTH)
+		_fill(_ellipse(Vector2(side * r * 0.44, -r * 0.40), r * 0.15, r * 0.075), _ink(BLUSH))
+	_fill(_ellipse(Vector2(0.0, -r * 0.23), r * 0.072, r * 0.052), _ink(MOUTH))
 
 
 ## 몸 — 둥근 어깨에서 잘록한 허리로, 다시 벌어지는 밑단으로.
 func _draw_torso() -> void:
 	var half := _half()
-	var points := _mirrored_profile(DRESS_PROFILE, half)
-	_blob(points, DRESS_SHADE)
+	var points := _mirrored_profile(CharRig.TORSO_PROFILE, half)
+	_blob(points, _ink(DRESS_SHADE))
 	# 손과 같은 두 판 방식. 직선으로 자르면 음영이 아니라 접힌 자국으로 보였다 —
 	# 밝은 판을 **실루엣 자체를 줄여** 얹으면 그늘이 치맛단의 곡선을 따라 흐른다.
-	_fill(_shrunk(points, 0.80, half.x * 0.11, 0.94), DRESS)
-	_blob(_ellipse(Vector2(0.0, -half.y * 1.92), half.x * 0.42, half.y * 0.12), COLLAR)
+	_fill(_shrunk(points, 0.80, half.x * 0.11, 0.94), _ink(DRESS))
+	_blob(_ellipse(Vector2(0.0, -half.y * 1.92), half.x * 0.42, half.y * 0.12), _ink(COLLAR))
 
 
 ## 손 — 엄지를 먼저 찍고 손등으로 덮어 이음매를 감춘다. 그 순서가 벙어리장갑을 만든다.
@@ -168,19 +164,20 @@ func _draw_torso() -> void:
 ## 이 순서가 곧 자체 클리핑이고, 그늘이 실루엣의 바깥 테두리에 닿아 셀 음영으로 읽힌다.
 func _draw_hand() -> void:
 	var r := _half().x
-	var outward := CharPart.outward_sign(part)
-	_blob(_ellipse(Vector2(-outward * r * 0.52, -r * 0.46), r * 0.36, r * 0.42), MITTEN_SHADE)
-	_blob(_ellipse(Vector2(0.0, r * 0.06), r * 0.82, r), MITTEN_SHADE)
-	_fill(_ellipse(Vector2(-outward * r * 0.12, -r * 0.18), r * 0.62, r * 0.72), MITTEN)
-	_blob(_ellipse(Vector2(0.0, -r * 0.86), r * 0.50, r * 0.20), BOOT)
+	# 두 손이 **같은 쪽**을 본다. 옆에서 보면 앞손과 뒷손이 같은 각도로 보이기 때문이다.
+	_blob(_ellipse(Vector2(-r * 0.52, -r * 0.46), r * 0.36, r * 0.42), _ink(MITTEN_SHADE))
+	_blob(_ellipse(Vector2(0.0, r * 0.06), r * 0.82, r), _ink(MITTEN_SHADE))
+	_fill(_ellipse(Vector2(-r * 0.12, -r * 0.18), r * 0.62, r * 0.72), _ink(MITTEN))
+	_blob(_ellipse(Vector2(0.0, -r * 0.86), r * 0.50, r * 0.20), _ink(BOOT))
 
 
 func _draw_foot() -> void:
 	var half := _half()
-	var points := _loop_profile(BOOT_PROFILE, half, CharPart.outward_sign(part))
-	_blob(points, BOOT)
+	# 발끝이 **둘 다 앞(`+x`)** 을 본다. 거울로 뒤집으면 그 순간 정면 자세가 된다.
+	var points := _loop_profile(BOOT_PROFILE, half, 1.0)
+	_blob(points, _ink(BOOT))
 	# 목 안쪽. 좁은 목이 있어야 이것이 통 뚜껑이 아니라 부츠 입구로 읽힌다.
-	_fill(_ellipse(Vector2(0.0, -half.y * 1.86), half.x * 0.40, half.y * 0.11), BOOT_LIGHT)
+	_fill(_ellipse(Vector2(0.0, -half.y * 1.86), half.x * 0.40, half.y * 0.11), _ink(BOOT_LIGHT))
 
 
 ## 한쪽 윤곽만 적은 비율표를 **좌우 대칭으로 닫아** 폴리곤을 만든다.
@@ -229,6 +226,15 @@ func _shrunk(
 	return inner
 
 
+## 먼 파츠면 배경 쪽으로 물들인 색을, 아니면 원래 색을 준다.
+##
+## 잉크선까지 같이 흐려야 한다 — 선만 새까맣게 남으면 뒷손이 앞으로 튀어나와 보인다.
+func _ink(color: Color) -> Color:
+	if not CharPart.is_far(part):
+		return color
+	return color.lerp(FAR_TINT, FAR_TINT_AMOUNT)
+
+
 func _fill(points: PackedVector2Array, color: Color) -> void:
 	if points.size() >= 3:
 		draw_colored_polygon(points, color)
@@ -241,4 +247,4 @@ func _blob(points: PackedVector2Array, color: Color) -> void:
 		return
 	var closed := points.duplicate()
 	closed.append(points[0])
-	draw_polyline(closed, INK, STROKE, true)
+	draw_polyline(closed, _ink(INK), STROKE, true)

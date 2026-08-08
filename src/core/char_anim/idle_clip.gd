@@ -1,76 +1,95 @@
 class_name CharIdleClip
 extends CharClip
-## idle — 호흡 하나에서 시작해 층을 쌓은 것.
+## idle — **사이드 사선**의 문법으로.
 ##
-## 층마다 무엇을 담당하는지와 값을 고른 근거는
-## `docs/design/25-character-animation.md` §25.4 에 있다. 요약하면
+## 정면 걸음과 측면 걸음이 완전히 다르듯, 정면 idle 과 측면 idle 도 다르다.
+## 무엇이 다른지가 이 파일의 전부다 (`docs/design/25-character-animation.md` §25.4).
 ##
-## * **몸** 이 유일한 원본 신호다. 나머지는 그것을 늦게 · 다르게 받는다
-## * **머리** 는 늦게 오고 8 자를 그린다. 위치 · 좌우 · 갸웃의 지연이 셋 다 다르다
-## * **손** 은 가장 늦고 가장 크게 뜬다. 떠 있는 손이 이 스타일에서 가장 많이 말한다
-## * **발** 은 호흡을 안 받는다. 안 움직이는 것이 무게다
+## | | 정면 | **사이드 사선** |
+## | --- | --- | --- |
+## | 무게 | 좌우로 오간다 | **앞뒤로, 지면을 따라** 오간다 |
+## | 발 | 한쪽이 통째로 들린다 | **뒤꿈치가 들린다.** 발끝은 땅에 남는다 |
+## | 손 | 거울 대칭에서 위상만 어긋난다 | **앞손과 뒷손의 크기 · 속도가 다르다** |
+## | 깊이 | 없다 | 겹침 · 크기 · 고주파 감쇠로 만든다 |
 ##
-## 모든 주파수가 **한 바퀴당 정수 회**다. 무리수 비율이면 절대 되돌아오지 않아
-## GIF 와 게임 루프의 이음매가 툭 끊긴다.
+## 안 바뀐 것: 트랜스폼만 쓴다 · 관절 없음 · 파츠 여섯 · `sample()` 은 순수 함수.
+## 지연 · 호 · 배율 · 비대칭 네 축도 그대로다. **앞뒤(`depth`)가 다섯째로 붙었다.**
 
 const LOOP := 4.0
 
 ## 상하의 본체. 한 바퀴에 2 회 = 2.0 초에 한 번 숨쉰다.
 const BREATH_CYCLES := 2.0
 
-## 좌우로 천천히 흐르는 것. 한 바퀴에 1 회.
+## **앞뒤 무게 이동.** 한 바퀴에 1 회.
 ##
-## 상하 2 회 · 좌우 1 회면 **머리가 8 자를 그린다**(리사주 1:2). idle 의 "호" 가 이것이다.
-const DRIFT_CYCLES := 1.0
+## 정면일 때는 좌우로 흐르는 곁가지였지만, 측면에서는 이것이 **자세의 본체**다.
+## 사람이 가만히 서 있을 때 실제로 하는 일이 앞뒤로 아주 조금씩 무게를 옮기는 것이다.
+## 그래서 진폭을 정면의 1.1 에서 2.6 으로 키웠다.
+const SWAY_CYCLES := 1.0
 
 ## 손에만 얹는 잔떨림. 한 바퀴에 3 회 — 호흡과 안 맞물려 보이게 홀수로 골랐다.
 const FLUTTER_CYCLES := 3.0
 
 const TORSO_RISE := 2.2
-const TORSO_SWAY := 1.1
-const TORSO_TILT := 0.012
-const TORSO_TILT_DELAY := 0.10
+const TORSO_SWAY := 2.6
+const TORSO_LEAN := 0.016
+const TORSO_LEAN_DELAY := 0.10
 const TORSO_STRETCH := 0.030
 
-## 몸의 2.2 보다 크다. 몸이 늘어나며 정수리를 밀어 올리므로 강체로 따라와도 2.8 은 된다.
 const HEAD_RISE := 3.4
 const HEAD_RISE_DELAY := 0.13
-const HEAD_SWAY := 2.0
+
+## 앞뒤 2.4 회 + 상하 2 회 = 리사주 1:2. 옆에서 보면 머리가 **시상면에서 8 자**를 그린다.
+## 실제로 사람 머리가 그렇게 움직인다 — 정면에서 8 자를 그리던 것과 축만 바뀐 것이 아니라
+## 이쪽이 원래 맞는 평면이다.
+const HEAD_SWAY := 2.4
 const HEAD_SWAY_DELAY := 0.18
 
-## 위치보다 더 늦다. 이게 목의 무게다.
-const HEAD_TILT := 0.030
+const HEAD_TILT := 0.032
 const HEAD_TILT_DELAY := 0.30
-
-## 몸이 늘어날 때 머리는 **반대로** 눌린다. 올라가는 것에 눌리는 것이 붙어야 가속이 보인다.
 const HEAD_SQUASH := 0.018
 
-## 몸보다 크다. 물리적으로는 매달린 것이 덜 흔들려야 하지만, 떠 있는 손은
-## 부표처럼 더 크게 뜨는 쪽이 예쁘다. **물리가 아니라 미감으로 고른 값이다.**
 const HAND_RISE := 3.6
-
-## 몸 · 머리보다 가장 늦다 — 붙어 있지 않으니까.
 const HAND_DELAY := 0.19
-const HAND_DELAY_SKEW := 0.09
-const HAND_RISE_SKEW := 0.18
 const HAND_SPREAD := 1.3
 const HAND_SPREAD_DELAY := 0.05
-const HAND_CARRY := 1.6
+const HAND_CARRY := 1.8
 const HAND_CARRY_DELAY := 0.12
 const HAND_FLUTTER := 0.8
+
+## 뒷손의 잔떨림 위상 어긋남. **`depth` 소관이지 `asymmetry` 소관이 아니다.**
+##
+## 정면일 때는 두 손의 차이가 전부 `asymmetry` 였다. 측면에서는 그 차이가
+## **앞뒤에서 나온다.** 축을 안 옮기면 "비대칭을 껐는데 두 손이 여전히 다르다" 가 되어
+## 조절판이 거짓말한다.
 const HAND_FLUTTER_SKEW := 0.22
 const HAND_TILT := 0.05
 const HAND_TILT_DELAY := 0.08
 const HAND_SQUASH := 0.015
 
+## 뒷손의 진폭 배수. 멀리 있는 것은 화면에서 덜 움직인다.
+const FAR_MOTION := 0.72
+
+## 뒷손의 **잔떨림** 배수. 진폭보다 더 깎는다.
+##
+## **이것이 「느려 보인다」를 만드는 값이다.** 사람은 속도를 고주파 성분의 양으로 읽는다.
+## 진폭만 줄이면 그냥 작은 손이 똑같이 빠르게 움직이는 것으로 보인다.
+const FAR_FLUTTER := 0.35
+
+## 뒷손이 더 늦다. 멀수록 굼뜨다.
+const FAR_DELAY := 0.11
+
 const FOOT_SQUASH := 0.030
-const FOOT_LIFT := 0.9
-const FOOT_SPLAY := 0.5
-const FOOT_TILT := 0.05
+
+## 뒤꿈치를 드는 각도. 발끝을 축으로 돌므로 위치 보정이 따라붙는다.
+const FOOT_HEEL_LIFT := 0.075
+
+## 무게가 빠진 발이 뒤로 조금 미끄러지는 양.
+const FOOT_SLIDE := 0.4
 
 
 func clip_name() -> String:
-	return "idle"
+	return "idle (사이드 사선)"
 
 
 func loop_seconds() -> float:
@@ -81,109 +100,101 @@ func sample(t: float, features: AnimFeatures) -> CharPose:
 	var pose := CharPose.from_rig(rig)
 	_apply_torso(pose, t, features)
 	_apply_head(pose, t, features)
-	_apply_hand(pose, t, features, CharPart.Id.HAND_L)
-	_apply_hand(pose, t, features, CharPart.Id.HAND_R)
-	_apply_foot(pose, t, features, CharPart.Id.FOOT_L)
-	_apply_foot(pose, t, features, CharPart.Id.FOOT_R)
+	_apply_hand(pose, t, features, CharPart.Id.HAND_FAR)
+	_apply_hand(pose, t, features, CharPart.Id.HAND_NEAR)
+	_apply_foot(pose, t, features, CharPart.Id.FOOT_FAR)
+	_apply_foot(pose, t, features, CharPart.Id.FOOT_NEAR)
 	return pose
 
 
-## 몸 — 나머지 전부의 원본 신호.
-##
-## 좌우 성분을 `arc` 로 묶은 이유: 상하만 있으면 몸이 직선으로 오간다.
-## 좌우가 붙어야 경로가 곡선이 된다. 그래서 이것이 "호" 다.
+## 몸 — 나머지 전부의 원본 신호. 위로 숨쉬고 앞뒤로 무게를 옮긴다.
 func _apply_torso(pose: CharPose, t: float, f: AnimFeatures) -> void:
 	var part := CharPart.Id.TORSO
 	var breath := _breath(t, 0.0, f)
-	pose.positions[part] += Vector2(TORSO_SWAY * _drift(t, 0.0, f) * f.arc, TORSO_RISE * breath)
-	# 무게가 실린 쪽으로 기운다 — 정수리가 `+x` 로 가는 것이므로 시계 방향, 즉 음수다.
-	pose.rotations[part] = -TORSO_TILT * _drift(t, TORSO_TILT_DELAY, f) * f.arc
-	# 면적 보존 — 가슴이 부풀면 몸통이 좁아진다.
-	pose.scales[part] = _volume_scale(TORSO_STRETCH * breath * f.squash)
+	pose.positions[part] += Vector2(TORSO_SWAY * _sway(t, 0.0, f) * f.arc, TORSO_RISE * breath)
+	# 무게가 실린 쪽으로 기운다. 앞(`+x`)으로 갈 때 정수리가 앞으로 = 시계 방향 = 음수.
+	pose.rotations[part] = -TORSO_LEAN * _sway(t, TORSO_LEAN_DELAY, f) * f.arc
+	pose.scales[part] = CharClip.volume_scale(TORSO_STRETCH * breath * f.squash)
 
 
-## 머리 — 늦게, 그리고 8 자로.
-##
-## 지연 값이 셋 다 다르다(0.13 · 0.18 · 0.30)는 게 핵심이다. **한 파츠 안에서도
-## 이동과 회전이 따로 늦어야** 덩어리가 아니라 살로 읽힌다.
+## 머리 — 늦게, 그리고 시상면에서 8 자로.
 func _apply_head(pose: CharPose, t: float, f: AnimFeatures) -> void:
 	var part := CharPart.Id.HEAD
 	var breath := _breath(t, HEAD_RISE_DELAY, f)
 	pose.positions[part] += Vector2(
-		HEAD_SWAY * _drift(t, HEAD_SWAY_DELAY, f) * f.arc, HEAD_RISE * breath
+		HEAD_SWAY * _sway(t, HEAD_SWAY_DELAY, f) * f.arc, HEAD_RISE * breath
 	)
-	# 몸이 `+x` 로 갈 때 머리는 늦으므로 정수리가 상대적으로 `-x` 에 남는다 = 반시계, 양수.
+	# 몸이 앞으로 갈 때 머리는 늦으므로 정수리가 상대적으로 뒤에 남는다 = 반시계, 양수.
 	# 몸의 기울기와 부호가 반대라 척추의 S 곡선이 생긴다 — 의도한 것이다.
-	#
-	# `arc` 로 묶는다: 갸웃거림은 좌우 흐름과 같은 곡선의 일부다(둘 다 `_drift` 가 원본).
-	# 그래서 "호" 를 끄면 머리가 정말로 상하로만 오간다.
-	pose.rotations[part] = HEAD_TILT * _drift(t, HEAD_TILT_DELAY, f) * f.arc
-	pose.scales[part] = _volume_scale(-HEAD_SQUASH * breath * f.squash)
+	pose.rotations[part] = HEAD_TILT * _sway(t, HEAD_TILT_DELAY, f) * f.arc
+	pose.scales[part] = CharClip.volume_scale(-HEAD_SQUASH * breath * f.squash)
 
 
-## 손 — 이 스타일에서 가장 많이 말하는 파츠.
+## 손 — 앞손과 뒷손은 **위상만 다른 같은 궤도가 아니다.**
 ##
-## 비대칭은 **오른손에만** 얹는다. 그래서 `asymmetry = 0` 이면 두 손의 상하가
-## 정확히 같아지고, 켜면 어긋난다. 스위치가 실제로 무엇을 하는지가 눈에 보인다.
+## 진폭 · 지연 · 잔떨림 셋이 전부 다르고, 셋 다 `depth` 가 잡는다.
+## `depth = 0` 이면 뒷손이 앞손과 똑같이 움직여 종이 인형 두 장이 된다.
 func _apply_hand(pose: CharPose, t: float, f: AnimFeatures, part: CharPart.Id) -> void:
-	var outward := CharPart.outward_sign(part)
-	var skew := (1.0 if CharPart.is_right(part) else 0.0) * f.asymmetry
-	var delay := HAND_DELAY + HAND_DELAY_SKEW * skew
-	var rise := HAND_RISE * (1.0 + HAND_RISE_SKEW * skew)
+	var depth_sign := CharPart.depth_sign(part)
+	var far := 1.0 if CharPart.is_far(part) else 0.0
+	# 먼 쪽일수록 1 에서 멀어지는 배수들. 가까운 쪽은 `far = 0` 이라 전부 1 이 된다.
+	var motion := lerpf(1.0, FAR_MOTION, far * f.depth)
+	var flutter_scale := lerpf(1.0, FAR_FLUTTER, far * f.depth)
+	var delay := HAND_DELAY + FAR_DELAY * far * f.depth
 	var breath := _breath(t, delay, f)
 
-	var offset_y := rise * breath + HAND_FLUTTER * _flutter(t, delay + HAND_FLUTTER_SKEW * skew, f)
-	# 가슴이 벌어지면 손이 바깥으로 밀리고, 몸의 좌우 이동을 더 늦게 끌고 온다.
-	var offset_x := outward * HAND_SPREAD * _breath(t, delay + HAND_SPREAD_DELAY, f)
-	offset_x += HAND_CARRY * _drift(t, delay + HAND_CARRY_DELAY, f)
+	var offset_y := HAND_RISE * motion * breath
+	offset_y += (
+		HAND_FLUTTER * flutter_scale * _flutter(t, delay + HAND_FLUTTER_SKEW * far * f.depth, f)
+	)
+
+	# 가슴이 벌어지면 앞손은 앞으로, 뒷손은 뒤로 밀린다.
+	var offset_x := depth_sign * HAND_SPREAD * _breath(t, delay + HAND_SPREAD_DELAY, f)
+	# 몸의 앞뒤 무게 이동을 더 늦게 끌고 온다.
+	offset_x += HAND_CARRY * motion * _sway(t, delay + HAND_CARRY_DELAY, f)
 
 	pose.positions[part] += Vector2(offset_x * f.arc, offset_y)
-	# 뜨면서 바깥으로 젖혀진다. 오른손(`outward = +1`)의 위쪽이 `+x` 로 가므로 음수다.
-	pose.rotations[part] = -outward * HAND_TILT * _breath(t, delay + HAND_TILT_DELAY, f)
-	pose.scales[part] = _volume_scale(-HAND_SQUASH * breath * f.squash)
+	# 두 손이 같은 각도에서 보이므로 회전 방향도 같다 — 정면처럼 거울로 뒤집지 않는다.
+	pose.rotations[part] = HAND_TILT * motion * _breath(t, delay + HAND_TILT_DELAY, f)
+	pose.scales[part] = CharClip.volume_scale(-HAND_SQUASH * breath * f.squash)
 
 
-## 발 — 안 움직이는 것이 무게다.
+## 발 — **뒤꿈치가 들린다.** 이것이 측면 문법의 핵심이다.
 ##
-## **호흡을 안 받는다.** 발까지 같이 떠 있으면 캐릭터가 땅에 서 있지 않고 물에 떠 있다.
-## 발이 하는 일은 무게 이동뿐이고, 그것이 전부 `asymmetry` 에 걸려 있다.
+## 정면에서는 무게가 빠진 발이 통째로 들렸다. 옆에서 그렇게 하면 발이 공중에 뜬 채
+## 평행이동하는 것으로 보여 서 있는 것이 아니게 된다. 옆에서 사람이 하는 일은
+## **발끝을 땅에 붙인 채 뒤꿈치를 드는 것**이다.
 ##
-## 들리는 양이 1 px 도 안 되는데 효과가 큰 것은 **비대칭이 곧 생명이라서** 그렇다.
+## 피벗은 밑면 한가운데에 고정되어 있으므로, 회전만 시키면 발끝이 땅을 파고든다.
+## 그래서 회전이 발끝을 내린 만큼을 다시 들어 올린다 — 그 보정이 아래의 `toe_drop` 이다.
 func _apply_foot(pose: CharPose, t: float, f: AnimFeatures, part: CharPart.Id) -> void:
-	var outward := CharPart.outward_sign(part)
-	# 무게가 `+x` 쪽에 실리면 `drift > 0`. 그때 오른발이 「실린 발」이다.
-	var weight := outward * _drift(t, 0.0, f) * f.asymmetry
+	var depth_sign := CharPart.depth_sign(part)
+	var far := 1.0 if CharPart.is_far(part) else 0.0
+	var motion := lerpf(1.0, FAR_MOTION, far * f.depth)
+
+	# 몸이 앞(`+x`)으로 가면 앞발에 무게가 실린다. 뒤로 가면 뒷발이 받는다.
+	var weight := depth_sign * _sway(t, 0.0, f) * f.asymmetry
 	var loaded := maxf(weight, 0.0)
 	var freed := maxf(-weight, 0.0)
 
-	pose.positions[part] += Vector2(outward * FOOT_SPLAY * loaded, FOOT_LIFT * freed)
-	pose.rotations[part] = -outward * FOOT_TILT * freed
-	# 피벗이 밑면이라 눌려도 밑면이 정확히 땅에 남는다 (`char_rig.gd` §피벗).
-	pose.scales[part] = _volume_scale(-FOOT_SQUASH * loaded * f.squash)
-
-
-## 지연이 걸린 사인파. **모든 것이 「시각의 함수」인 지점이 여기다.**
-##
-## `features.delay` 가 0 이면 지연이 통째로 사라져 모든 파츠가 같은 위상이 된다.
-func _wave(cycles: float, t: float, delay: float, f: AnimFeatures) -> float:
-	return sin(TAU * cycles * (t - delay * f.delay) / LOOP)
+	var heel := -FOOT_HEEL_LIFT * motion * freed
+	# 발끝을 축으로 돌리려면 피벗을 그만큼 들어 올려야 한다. **이 값이 유일한 상승분이다** —
+	# 여기에 「전체를 조금 더 띄우는」 항을 더하면 그만큼 발끝이 땅에서 떠 버린다.
+	# 처음에 0.5 를 더했다가 발끝이 정확히 그만큼 뜨는 것을 테스트가 잡았다.
+	var toe_drop := rig.half_sizes[part].x * absf(sin(heel))
+	pose.positions[part] += Vector2(-FOOT_SLIDE * freed, toe_drop)
+	pose.rotations[part] = heel
+	# 피벗이 밑면이라 눌려도 밑면이 정확히 자기 지면에 남는다.
+	pose.scales[part] = CharClip.volume_scale(-FOOT_SQUASH * loaded * f.squash)
 
 
 func _breath(t: float, delay: float, f: AnimFeatures) -> float:
-	return _wave(BREATH_CYCLES, t, delay, f)
+	return wave(BREATH_CYCLES, t, delay, f)
 
 
-func _drift(t: float, delay: float, f: AnimFeatures) -> float:
-	return _wave(DRIFT_CYCLES, t, delay, f)
+func _sway(t: float, delay: float, f: AnimFeatures) -> float:
+	return wave(SWAY_CYCLES, t, delay, f)
 
 
 func _flutter(t: float, delay: float, f: AnimFeatures) -> float:
-	return _wave(FLUTTER_CYCLES, t, delay, f)
-
-
-## 면적을 보존하는 배율. `stretch` 가 0 이면 정확히 `Vector2.ONE` 이다.
-##
-## `1.0 / 1.0` 이 부동소수점에서도 정확히 `1.0` 이므로 "배율 끄기" 가 근사가 아니라 등식이다.
-func _volume_scale(stretch: float) -> Vector2:
-	var sy := 1.0 + stretch
-	return Vector2(1.0 / sy, sy)
+	return wave(FLUTTER_CYCLES, t, delay, f)
