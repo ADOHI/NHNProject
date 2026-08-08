@@ -105,8 +105,8 @@ func test_the_same_event_always_gets_the_same_grade() -> void:
 	var actor: Actor = ActorScript.new("mina", "두더지 미나", Actor.Kind.NPC_EXPLORER, 3)
 	var room: Room = RoomScript.new("store", "수장고")
 	var event: GameEvent = EventScript.new(4, GameEvent.Kind.ACQUIRED, actor, room, 5)
-	var first := PromptScript.grade_slot(event)
+	var first := PromptScript.grade_of(event)
 
-	assert_eq(first, "수확=한몫")
+	assert_eq(first, "한몫")
 	for _i in 20:
-		assert_eq(PromptScript.grade_slot(event), first)
+		assert_eq(PromptScript.grade_of(event), first)
