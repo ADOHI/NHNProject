@@ -39,8 +39,13 @@ const FORMS: Array[PlateForm.Kind] = [
 	PlateForm.Kind.RIFT,
 	PlateForm.Kind.LEAN,
 	PlateForm.Kind.FANG,
+	PlateForm.Kind.WIRE,
+	PlateForm.Kind.SPLIT,
 ]
-const FORM_NAMES: Array[String] = ["쐐기", "어긋난 판 둘", "기운 판", "뿔 (과한 것)"]
+const FORM_NAMES: Array[String] = ["쐐기", "어긋난 판 셋", "기운 판", "뿔 (과한 것)", "선만", "흩어진 조각"]
+
+## 한 줄에 넣을 수 있는 폭. 넘으면 다음 줄로 접는다.
+const ROW_WIDTH: float = 1180.0
 
 ## 상태 넷을 펼쳐 볼 형태. 파격이 상태 구분을 깨지 않는지 보는 자리다.
 const STATE_FORM: PlateForm.Kind = PlateForm.Kind.FANG
@@ -55,6 +60,7 @@ const LOOP: float = 3.60
 var _live: Array[ActionButton] = []
 var _previews: Array[ActionButton] = []
 var _rank: Array[ActionButton] = []
+var _states_top := 380.0
 var _clock := 0.0
 var _frozen := false
 var _driven := false
@@ -76,12 +82,20 @@ func drive_externally() -> void:
 
 func _build() -> void:
 	var x := 64.0
+	var y := 118.0
+	var tallest := 0.0
 	for i in FORMS.size():
-		var button := _make("출격", FORMS[i], 0.0)
-		button.position = Vector2(x, 150.0 - PlateForm.height(FORMS[i]) * 0.5)
+		var button := _make("출격", FORMS[i])
+		if x + button.size.x > ROW_WIDTH:
+			x = 64.0
+			y += tallest + 62.0
+			tallest = 0.0
+		button.position = Vector2(x, y)
 		button.pressed.connect(_on_pressed.bind(FORM_NAMES[i]))
 		_live.append(button)
 		x += button.size.x + 58.0
+		tallest = maxf(tallest, PlateForm.height(FORMS[i]))
+	_states_top = y + tallest + 128.0
 
 	var states: Array[ActionButtonMotion.State] = [
 		MOTION_STATE.NORMAL,
@@ -91,26 +105,16 @@ func _build() -> void:
 	]
 	x = 64.0
 	for state in states:
-		var button := _make("출격", STATE_FORM, 0.0)
-		button.position = Vector2(x, 356.0 - PlateForm.height(STATE_FORM) * 0.5)
+		var button := _make("출격", STATE_FORM)
+		button.position = Vector2(x, _states_top)
 		button.disabled = state == MOTION_STATE.DISABLED
 		button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		button.preview(state)
 		_previews.append(button)
 		x += button.size.x + 60.0
 
-	# 위계 — 같은 색 · 같은 거동인데 형태만으로 무게가 갈린다.
-	var sortie := _make("출격", PlateForm.Kind.FANG, 0.0)
-	sortie.position = Vector2(64.0, 548.0)
-	sortie.pressed.connect(_on_pressed.bind("출격"))
-	_rank.append(sortie)
-	var cancel := _make("취소", PlateForm.Kind.SLAB, 0.0)
-	cancel.position = Vector2(64.0 + sortie.size.x + 26.0, 560.0)
-	cancel.pressed.connect(_on_pressed.bind("취소"))
-	_rank.append(cancel)
 
-
-func _make(label: String, kind: PlateForm.Kind, _spare: float) -> ActionButton:
+func _make(label: String, kind: PlateForm.Kind) -> ActionButton:
 	var button := ActionButton.new()
 	button.form = kind
 	button.text = label
@@ -170,18 +174,18 @@ func set_clock(t: float) -> void:
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), BACKDROP)
-	_band("형태 넷 — 색도 거동도 같다. 윤곽만 다르다", 52.0)
+	_band("형태 — 색도 거동도 같다. 윤곽만 다르다", 52.0)
 	for i in _live.size():
-		_label(FORM_NAMES[i], Vector2(_live[i].position.x, 216.0), 15, DIM)
+		var at := _live[i].position
+		_label(FORM_NAMES[i], Vector2(at.x, at.y + PlateForm.height(FORMS[i]) + 24.0), 15, DIM)
 
-	_band("상태 넷 — 파격이 상태 구분을 깨지 않는지", 268.0)
+	_band("상태 넷 — 파격이 상태 구분을 깨지 않는지", _states_top - 46.0)
 	var names := ["평상", "커서 올림", "눌림", "비활성"]
 	for i in _previews.size():
-		_label(names[i], Vector2(_previews[i].position.x, 424.0), 15, DIM)
-
-	_band("위계 — 색을 안 바꾸고 형태만으로 출격과 취소를 가른다", 496.0)
+		var at := _previews[i].position
+		_label(names[i], Vector2(at.x, at.y + PlateForm.height(STATE_FORM) + 26.0), 15, DIM)
 	if not _last_pressed.is_empty():
-		_label("마지막 입력  " + _last_pressed, Vector2(64.0, 648.0), 15, MARK)
+		_label("마지막 입력  " + _last_pressed, Vector2(64.0, size.y - 24.0), 15, MARK)
 
 
 func _band(title: String, y: float) -> void:

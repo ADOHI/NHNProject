@@ -198,7 +198,7 @@ func _draw() -> void:
 
 	var body := Vector2(size.x, PlateForm.height(form))
 	var shape := PlateForm.outline(form, body)
-	var box := PlateForm.bounds(shape)
+	var box := PlateForm.hull(form, body)
 	var lift := _motion.lift()
 	var squash := _motion.squash()
 
@@ -223,7 +223,7 @@ func _draw() -> void:
 		_draw_brackets(box)
 		_draw_impact(box)
 	if has_focus():
-		_dashed(_closed(PlateForm.shrink(shape, -3.0)), INK, 1.0, 3.0, 3.0)
+		_dashed(_closed(PlateShape.octagon(box.grow(3.0), 8.0)), INK, 1.0, 3.0, 3.0)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -234,13 +234,12 @@ func _draw_shadow(shape: PackedVector2Array, lift: float) -> void:
 	var moved := shape.duplicate()
 	for i in moved.size():
 		moved[i] += drop
-	draw_colored_polygon(moved, SHADOW)
-	var extra := PlateForm.second(form, Vector2(size.x, PlateForm.height(form)))
-	if extra.is_empty():
-		return
-	for i in extra.size():
-		extra[i] += drop
-	draw_colored_polygon(extra, SHADOW)
+	if PlateForm.filled(form):
+		draw_colored_polygon(moved, SHADOW)
+	for piece in PlateForm.extras(form, Vector2(size.x, PlateForm.height(form))):
+		for i in piece.size():
+			piece[i] += drop
+		draw_colored_polygon(piece, SHADOW)
 
 
 ## 판. **단색이다.** 세로 그라디언트를 조금이라도 주면 플라스틱 사출물로 보였고,
@@ -251,12 +250,18 @@ func _draw_plate(shape: PackedVector2Array, body: Vector2, warmth: float, dead: 
 		tone = DEAD_TOP
 	else:
 		tone = tone.lerp(PRESS_PLATE, _motion.inversion())
-	var extra := PlateForm.second(form, body)
-	if not extra.is_empty():
-		# 어긋난 두 번째 조각은 본판보다 한 단 어둡다. 같은 색이면 한 장으로 붙어 보인다.
-		draw_colored_polygon(extra, tone.lerp(RULE, 0.35))
-		draw_polyline(_closed(extra), RULE if not dead else DEAD_RULE, 1.0, true)
-	draw_colored_polygon(shape, tone)
+	for piece in PlateForm.extras(form, body):
+		# 어긋난 조각은 본판보다 한 단 어둡다. 같은 색이면 한 장으로 붙어 보인다.
+		draw_colored_polygon(piece, tone.lerp(RULE, 0.35))
+		draw_polyline(_closed(piece), RULE if not dead else DEAD_RULE, 1.0, true)
+	if PlateForm.filled(form):
+		draw_colored_polygon(shape, tone)
+		return
+	# 채운 판이 없는 형태. 평상에는 글자와 선뿐이고 **커서에서 판이 배어 나온다.**
+	# 그래야 「눌러도 되나」가 손이 닿는 순간 확실해진다.
+	var bleed := maxf(warmth, _motion.inversion())
+	if bleed > 0.01:
+		draw_colored_polygon(shape, Color(tone, 0.30 + 0.70 * bleed))
 
 
 ## 판 위쪽의 눈금 띠. **커서가 붙어야 생긴다.**
@@ -291,11 +296,15 @@ func _draw_ticks(body: Vector2, dead: bool) -> void:
 ## 비활성은 바깥 줄이 **점선**이 된다 — 색을 흐리는 것보다 훨씬 확실하게 갈린다.
 func _draw_rules(shape: PackedVector2Array, warmth: float, dead: bool) -> void:
 	var inner := PlateForm.shrink(shape, INSET)
+	var open_lines := PlateForm.strokes(form, Vector2(size.x, PlateForm.height(form)))
 	var line := RULE.lerp(INK, 0.35 * warmth)
 	var soft := RULE_SOFT.lerp(RULE, warmth)
 	if dead:
-		_dashed(_closed(shape), DEAD_RULE, 1.5, 5.0, 4.0)
-		draw_polyline(_closed(inner), Color(DEAD_RULE, 0.55), 1.0, true)
+		for open_line in open_lines:
+			_dashed(open_line, DEAD_RULE, 1.5, 5.0, 4.0)
+		if PlateForm.filled(form):
+			_dashed(_closed(shape), DEAD_RULE, 1.5, 5.0, 4.0)
+			draw_polyline(_closed(inner), Color(DEAD_RULE, 0.55), 1.0, true)
 		return
 	var invert := _motion.inversion()
 	if invert > 0.0:
@@ -303,6 +312,10 @@ func _draw_rules(shape: PackedVector2Array, warmth: float, dead: bool) -> void:
 		soft = soft.lerp(Color("#7f93a8"), invert)
 	# 눌린 순간 테두리가 굵어지며 강세색이 된다. 사건은 **여럿이 같이** 번쩍여야 한다.
 	var flare := _motion.flare()
+	for open_line in open_lines:
+		draw_polyline(open_line, line.lerp(ACCENT, flare), 1.5 + 2.0 * flare, true)
+	if not PlateForm.filled(form):
+		return
 	draw_polyline(_closed(shape), line.lerp(ACCENT, flare), 1.5 + 2.0 * flare, true)
 	draw_polyline(
 		_closed(inner), Color(soft.lerp(ACCENT_SOFT, flare), 0.75 + 0.25 * flare), 1.0, true
