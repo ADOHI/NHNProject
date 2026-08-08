@@ -476,6 +476,23 @@ func _stats_text() -> String:
 			% [field.orders.size(), _obstacle_seed, tuning.changed_count(), _camera.zoom.x]
 		)
 	)
+	# **전파와 재계산이 도는지 여기서 보인다.** 조절판에서 껐다 켜며 이 숫자를 견주면
+	# 무엇이 일을 하고 있는지 눈으로 갈린다.
+	(
+		lines
+		. append(
+			(
+				"전파 %d 회 (옮김 %d, 고리 %d)  길 다시 찾기 %d 회  흐름장 %.1f ms"
+				% [
+					field.propagate_runs,
+					field.propagate_moves,
+					field.propagate_cycles,
+					field.rebake_count,
+					float(field.flow_build_peak) / 1000.0,
+				]
+			)
+		)
+	)
 	lines.append(_group_text())
 	return "\n".join(lines)
 
