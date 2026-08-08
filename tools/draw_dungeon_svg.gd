@@ -41,14 +41,16 @@ const _SEEDS: Array[int] = [11, 23, 47, 91]
 
 ## 던전 성격 후보. [이름, 방 개수, 흔드는 축]
 ##
+## 「먼 출구」는 뺐다 — 탈출구 거리의 신호대잡음이 0.75 로 떨어져 성격이 되지 못한다
+## (§17.17.12). 거리가 아니라 개수를 흔들어야 하고 그 파라미터는 아직 없다.
+##
 ## **한 던전에서 흔드는 축은 둘까지다.** 셋 이상 흔들면 어느 것이 그 던전의 성격인지
 ## 읽히지 않는다 — 봉우리를 판에 하나만 두는 것과 같은 이유다
 ## (docs/design/07-level-design.md §7.3, docs/design/17-dungeon-generation.md §17.16).
 const _CHARACTERS := [
-	["얕은 갱도", 14, {"extra_edge_ratio": 0.10, "elevation_gain": 0.35}],
+	["얕은 갱도", 14, {"extra_edge_ratio": 0.10, "elevation_gain": 1.0}],
 	["벌집", 34, {"extra_edge_ratio": 0.46}],
-	["수직 회랑", 24, {"elevation_gain": 1.60}],
-	["먼 출구", 40, {"exit_distance_ratio": 0.95}],
+	["수직 회랑", 24, {"elevation_gain": 4.0}],
 	["금고층", 28, {"treasure_ratio": 0.05, "hazard_ratio": 0.36}],
 ]
 

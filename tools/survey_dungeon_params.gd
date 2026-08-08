@@ -16,12 +16,15 @@ const _RUNS := 24
 const _ROOMS := 50
 
 ## 흔들 축. [이름, 필드, 낮음, 지금, 높음]
+##
+## **고도 축의 뜻이 바뀌었다** (덩어리 3). `elevation_gain` 은 이제 "입구에서 방 하나
+## 거리당 상승"이 아니라 **"구역 등급 하나당 단차"** 다. 그래서 값의 범위도 다시 잡았다.
 const _AXES := [
 	["곁가지 비율", "extra_edge_ratio", 0.08, 0.24, 0.48],
 	["막다른 방 하한", "dead_end_ratio_min", 0.06, 0.14, 0.30],
-	["고도 상승", "elevation_gain", 0.30, 0.85, 1.70],
-	["지형 기복", "elevation_amplitude", 0.8, 2.6, 5.2],
-	["기복의 잔 정도", "elevation_frequency", 0.07, 0.16, 0.34],
+	["구역 단차", "elevation_gain", 1.0, 2.0, 4.0],
+	["층 안 기복", "elevation_amplitude", 0.4, 1.0, 2.4],
+	["기복의 잔 정도", "elevation_frequency", 0.10, 0.22, 0.44],
 	["탈출구 최소 거리", "exit_distance_ratio", 0.30, 0.65, 0.95],
 	["귀중품 비율", "treasure_ratio", 0.05, 0.14, 0.30],
 	["위험방 비율", "hazard_ratio", 0.05, 0.16, 0.36],

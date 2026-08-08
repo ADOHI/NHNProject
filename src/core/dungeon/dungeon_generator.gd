@@ -48,14 +48,25 @@ class Params:
 	var dead_end_ratio_min := 0.14
 	var dead_end_ratio_max := 0.30
 
-	## 입구에서 방 하나 거리만큼 멀어질 때 오르는 고도.
-	var elevation_gain := 0.85
+	## **구역 등급 하나가 오를 때의 단차.**
+	##
+	## 예전에는 "입구에서 방 하나 거리만큼 멀어질 때 오르는 고도"였다. 거리 원뿔은
+	## 어디를 봐도 기울기가 같아 절벽이 생기지 않았다 (DungeonTerrain 주석 참고).
+	##
+	## **기본값이 2 인 것은 스쿼드 기본 민첩으로 넘을 수 있는 크기이기 때문이다.**
+	## 지형으로 판 전체를 막지 않는다 — 벽은 보상 봉우리와 지름길에만 세운다.
+	var elevation_gain := 2.0
 
-	## 지형 기복의 크기. 0 이면 입구를 꼭짓점으로 하는 매끈한 원뿔이 된다.
-	var elevation_amplitude := 2.6
+	## 층 안의 잔 기복. 0 이면 구역마다 칼같이 평평해진다.
+	##
+	## 단차(2)보다 작아야 층이 읽힌다. 크면 노이즈가 층을 덮어 구역 경계가 사라진다.
+	var elevation_amplitude := 1.0
 
 	## 기복의 잔 정도. 크면 옆방끼리 고도가 널뛴다.
-	var elevation_frequency := 0.16
+	##
+	## 이 값은 **던전 성격으로 흔들지 않는다.** 실측에서 신호대잡음이 0.12 였고
+	## 단조롭지도 않았다 (§17.16.3).
+	var elevation_frequency := 0.22
 
 	## 탈출구로 삼을 방을 고를 때의 최소 거리 (최대 거리 대비).
 	##
@@ -101,9 +112,13 @@ func generate() -> DungeonBlueprint:
 		zone_count,
 		zones[entrance]
 	)
+	var ranks := DungeonZones.ranks(zone_links, zones[entrance], zone_count)
 
+	# 고도는 구역 등급에서 나온다. 구역 안은 평탄하고 경계에서만 층이 진다.
 	var elevations := DungeonTerrain.assign(
 		points,
+		zones,
+		ranks,
 		entrance,
 		_seed,
 		_params.elevation_gain,
