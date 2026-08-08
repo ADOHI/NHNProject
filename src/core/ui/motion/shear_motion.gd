@@ -23,11 +23,12 @@ const INK := Color(0.039, 0.039, 0.043)
 ## 벤 선의 법선. 살짝 기울어야 「가로로 자른 것」이 아니라 「벤 것」이 된다.
 const CUT_NORMAL := Vector2(0.46, -0.89)
 
-## idle 에서 이음매가 다시 붙는 박자. 초당 세 번 덜컥인다.
-const IDLE_STEPS: float = 3.0
+## idle 에서 이음매가 다시 붙는 박자.
+## 3 이 아니라 2.5 인 이유는 20fps 인화와 정수배로 맞추기 위해서다 (20/2.5 = 8).
+const IDLE_STEPS: float = 2.5
 
 ## 호버 · 눌림에서 시간을 끊는 칸. 이 값이 「부드럽지 않음」의 전부다.
-const SNAP_STEPS: float = 18.0
+const SNAP_STEPS: float = 20.0
 
 
 static func evaluate(

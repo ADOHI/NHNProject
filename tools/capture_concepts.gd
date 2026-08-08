@@ -9,7 +9,17 @@ extends SceneTree
 ##
 ## **정지 스틸을 뽑지 않는다.** 「톡톡 튀는가」는 정지 화면으로 판단할 수 없다.
 
-const FPS: float = 25.0
+## **내용의 칸 수와 정수배여야 한다.** 25fps 로 8칸/초를 찍으면 25/8 = 3.125 라
+## 한 포즈가 3프레임 또는 4프레임 유지되어 **불규칙**해진다. 규칙적인 끊김은
+## 스타일이지만 불규칙한 끊김은 고장이다 — 실제로 그 질문을 받았다 (§20.8).
+##
+## 20fps 를 고른 이유: GIF 의 지연 단위가 1/100초라 20fps = 정확히 5 단위다.
+## 25fps(4단위)도 정확하지만 8·10칸과 정수배가 안 된다.
+const FPS: float = 20.0
+
+## 표본을 칸 경계에서 떼어 놓는다. 경계에 딱 걸리면 부동소수 오차로
+## 어떤 포즈는 한 프레임 더, 어떤 포즈는 덜 찍힌다.
+const PHASE_OFFSET: float = 0.25
 const LOOP: float = 3.2
 
 ## 첫 프레임이 도입부 찌꺼기를 찍지 않게 한 바퀴 미리 돌린다.
@@ -39,7 +49,7 @@ func _process(delta: float) -> bool:
 		return false
 	# 프레임 수가 아니라 **시간**으로 찍는다. 창이 60Hz 인지 165Hz 인지에 따라
 	# 같은 프레임 수가 전혀 다른 길이가 되기 때문이다.
-	var want := WARMUP + float(_saved) / FPS
+	var want := WARMUP + (float(_saved) + PHASE_OFFSET) / FPS
 	if _clock < want:
 		return false
 	var image := root.get_texture().get_image()

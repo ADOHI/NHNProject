@@ -14,7 +14,8 @@ import sys
 
 from PIL import Image
 
-FPS = 25
+# 캡처와 같아야 한다. 20fps = GIF 지연 5/100초 (정확히 표현된다).
+FPS = 20
 
 
 def main() -> int:

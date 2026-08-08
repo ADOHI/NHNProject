@@ -16,7 +16,7 @@ import sys
 
 from PIL import Image, ImageDraw, ImageFont
 
-FPS = 25
+FPS = 20
 
 ## 대본을 받는 판과 아래 idle 판 하나가 들어오는 창.
 CROP = (250, 170, 720, 330)
