@@ -51,6 +51,17 @@ static func review(field: ProtoUnitField, frame: int) -> void:
 		return
 	if field.tuning.get_value("repath") < 0.5:
 		return
+	# **아무도 안 움직이면 길을 다시 찾을 이유가 없다.**
+	#
+	# 전원이 멎은 뒤에도 굽고 있었고, 그것이 계약 위반을 만들었다. 새 흐름장은 칸마다 방향을
+	# 바꾸고, 기다리던 유닛은 그 바뀐 방향으로 조향을 다시 잡아 깨어난다. 깨어난 유닛이
+	# 조금 가다 다시 서면 그것이 또 막힘으로 잡혀 다음 굽기를 부른다 - 되먹임이다.
+	# 열린 방 40 명에서 멎은 뒤 3 초 동안 9.8 픽셀이 움직였고, **전파와 재계산을 둘 다 켰을
+	# 때만** 났다. 어느 한쪽만 켜면 0 이다.
+	#
+	# 움직이는 유닛이 없으면 잼도 안 바뀐다. 굽는 값을 치를 이유가 없다.
+	if field.moving_count() == 0:
+		return
 	var grid := field.grid
 	var count := grid.cols * grid.rows
 	var away := field.tuning.get_value("slow_radius") * _JAM_AWAY

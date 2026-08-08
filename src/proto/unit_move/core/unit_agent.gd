@@ -89,6 +89,53 @@ var speed: float = 0.0
 ## 도리어 유리하다 — 같은 것을 계속 고르면 방향이 아예 안 바뀐다.
 var detour: float = 0.0
 
+## **비켜서기로 정한 자리**와 누구를 위해 비키는지. 0 이면 비켜서는 중이 아니다.
+##
+## 양보가 **명령이 아니라 상태**여야 하는 이유는 쟀기 때문이다 - 한 프레임짜리 변위로
+## 두었더니 잼에서 절반 이상이 다음 프레임에 지워졌다(맞교차 18 %, 한 칸 문 47 %,
+## 좁은 통로 100 은 58 %). 밀어 놓아도 조향이 곧바로 목적지를 다시 가리키고, 잼에서는
+## 목적지 방향이 곧 되돌아오는 방향이라 밀어 준 것이 그대로 사라진다.
+##
+## 상태로 두면 **비켜설 자리에 닿을 때까지** 그쪽으로 간다. 푸는 조건은 시간이 아니라
+## 확인이다 - 자리에 닿았거나, **부탁한 쪽이 더 이상 나에게 막혀 있지 않거나**.
+## 시간으로 풀면 앞이 아직 안 트였는데 도로 당겨지고, 그것이 돌아가기에서 겪은 실패다.
+var yield_goal: Vector2 = Vector2.ZERO
+var yield_for: int = 0
+
+## 비켜서기를 시작할 때 기다리는 중이었는가. 끝나면 그 상태로 돌려놓는다.
+var yield_was_holding: bool = false
+
+## 양보를 받은 순간의 자리와 그때 밀린 거리.
+##
+## **"비키라고 해 놓고 다음 프레임에 도로 돌아오는가"를 재려고 있는 값이다.**
+##
+## 밀어 놓은 그 프레임의 이동량만 보면 "옮겼다"고 나온다. 그런데 그다음 프레임에 조향이
+## 다시 목적지를 가리키면 유닛은 왔던 자리로 되돌아간다. 그러면 **순수 변위는 0 에 가깝고
+## 아무 일도 안 일어난 것과 같다.** 밀린 거리와 얼마 뒤의 순수 변위를 나란히 놓아야 갈린다.
+var yield_mark_pos: Vector2 = Vector2.ZERO
+var yield_mark_frame: int = -1
+var yield_mark_push: float = 0.0
+
+## 그때 밀린 **방향**(단위 벡터).
+##
+## 순수 변위를 그냥 재면 유닛이 제 발로 걸은 거리가 섞여 답을 못 준다. **밀린 방향으로만
+## 투영해야** "밀어 준 그 방향으로 실제로 남아 있는가"가 갈린다.
+var yield_mark_dir: Vector2 = Vector2.ZERO
+
+## 내가 "비켜라"를 건넨 상대의 번호와, 그것이 몇 프레임 전인지, 어느 간선이었는지.
+##
+## **화면에 사슬을 그리려고 있는 값이다.** 주황 고리만으로는 의뢰인이 못 봤다 —
+## 누가 누구에게 말을 걸었는지가 안 보이면 "나 때문에 저 유닛이 비켰다"가 읽히지 않는다.
+## 선으로 이으면 사슬이 앞으로 뻗는지 뒤로 뻗는지도 그 그림에서 바로 보인다.
+var chain_to: int = 0
+var chain_ago: int = 999
+
+## 0 이면 진로를 막은 상대, 1 이면 **내가 비켜설 자리**를 막은 상대.
+##
+## 둘을 색으로 갈라 그린다. 진단에서 밝힌 대로 이 둘은 다른 유닛이고, 그 구분이
+## 이번 고침의 핵심이라 화면에서도 갈려 보여야 한다.
+var chain_kind: int = 0
+
 ## 전파가 나를 옆으로 밀어낸 뒤 지난 프레임 수. **화면에 보이라고 있는 값이다.**
 ##
 ## 의뢰인이 "전파가 안 되고 있다"고 했는데, 실제로 되는지 안 되는지를 **볼 방법이 없었다.**
@@ -180,6 +227,22 @@ func _init(agent_id: int, agent_kind: int, spawn: Vector2) -> void:
 	speed_scale = KIND_SHAPES[kind].y
 
 
+## 지금 비켜서는 중인가.
+func is_yielding() -> bool:
+	return yield_for != 0
+
+
+## 비켜서기를 끝낸다. 기다리던 중이었으면 그 자리로 돌려놓는다.
+func end_yield() -> void:
+	yield_for = 0
+	yield_goal = Vector2.ZERO
+	if yield_was_holding and state == State.MOVING:
+		state = State.HOLDING
+		velocity = Vector2.ZERO
+		speed = 0.0
+	yield_was_holding = false
+
+
 func kind_name() -> String:
 	return KIND_NAMES[kind]
 
@@ -201,6 +264,9 @@ func accept_order(new_order_id: int, slot: Vector2, sight_interval: float) -> vo
 	grind_frames = 0
 	press_frames = 0
 	hold_retries = 0
+	yield_for = 0
+	yield_goal = Vector2.ZERO
+	yield_was_holding = false
 	pace = 1.0
 	speed = velocity.length()
 	detour = 0.0
@@ -244,6 +310,13 @@ func resume() -> void:
 	best_distance = position.distance_to(goal)
 	grind_frames = 0
 	press_frames = 0
+	# **묵은 조향을 버린다.** 기다리는 동안 `steer_dir` 은 갱신되지 않으므로, 그대로 두면
+	# 깨어난 유닛이 **서기 직전에 향하던 쪽**으로 한 박자 걸어 나간다. 그 방향은 대개
+	# 막힌 곳을 돌아 나가려던 우회 방향이라 목적지에서 멀어지는 쪽이다.
+	# 전원이 멎은 뒤에도 유닛 하나가 9.3 픽셀을 움직이고 목적지에서 5 픽셀 멀어진 것이
+	# 이것이었다. 다시 갈 때는 자기 자리 쪽에서 시작한다 - `accept_order` 와 같다.
+	var to_goal := goal - position
+	steer_dir = to_goal.normalized() if to_goal.length_squared() > 0.0001 else steer_dir
 
 
 ## 목적지까지 남은 거리.

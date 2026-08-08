@@ -17,7 +17,17 @@ const _SEPARATION_COLOR := Color(0.45, 0.70, 1.00)
 const _PUSHED_COLOR := Color(1.00, 0.55, 0.15)
 
 ## 그 표시를 몇 프레임 남길지. 한 프레임만 그리면 눈에 안 걸린다.
-const _PUSHED_FRAMES := 24
+##
+## 24 프레임(0.4 초)이었는데 의뢰인이 못 봤다. 1.5 초로 늘렸다.
+const _PUSHED_FRAMES := 90
+
+## 사슬 선의 색. 노랑은 **진로를 막은 상대**, 하늘은 **내가 비켜설 자리를 막은 상대**다.
+##
+## 둘을 갈라 그리는 이유는 이 구분이 이번 고침의 핵심이기 때문이다. 진단에서 밝혔듯
+## 그 둘은 다른 유닛이고, 예전에는 앞엣것만 알고 뒤엣것은 몰라서 시도의 54 퍼센트가
+## 자리 없이 실패했다. 화면에서도 갈려 보여야 무엇이 일하는지 읽힌다.
+const _CHAIN_COLOR := Color(1.00, 0.85, 0.25)
+const _RELAY_COLOR := Color(0.35, 0.85, 1.00)
 const _GOAL_COLOR := Color(0.60, 0.60, 0.68, 0.55)
 const _SLOT_COLOR := Color(0.95, 0.55, 0.85, 0.85)
 const _FLOW_COLOR := Color(0.35, 0.45, 0.60, 0.75)
@@ -94,6 +104,15 @@ func _draw_slots() -> void:
 
 
 func _draw_agent(agent: ProtoUnitAgent) -> void:
+	# **누가 누구에게 비켜라를 건넸는지 선으로 잇는다.** 고리만으로는 "나 때문에 저 유닛이
+	# 비켰다"가 안 읽힌다. 선을 그리면 사슬이 앞으로 뻗는지 뒤로 뻗는지도 함께 보인다.
+	if agent.chain_ago < _PUSHED_FRAMES and field != null:
+		var target: ProtoUnitAgent = field.agent_of(agent.chain_to)
+		if target != null:
+			var line := _RELAY_COLOR if agent.chain_kind == 1 else _CHAIN_COLOR
+			line.a = 1.0 - float(agent.chain_ago) / float(_PUSHED_FRAMES)
+			draw_line(agent.position, target.position, line, 2.0)
+			_draw_arrow(agent.position, target.position, line, 2.0)
 	if agent.pushed_ago < _PUSHED_FRAMES:
 		var fade := 1.0 - float(agent.pushed_ago) / float(_PUSHED_FRAMES)
 		var ring := _PUSHED_COLOR
