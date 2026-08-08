@@ -68,6 +68,27 @@ var grind_frames: int = 0
 ## 떨림을 걸러내는 것이고, 넘어간 상태는 언제든 되돌아온다.
 var press_frames: int = 0
 
+## 직전 프레임에 **실제로 옮겨 간 속도**(초당 픽셀 벡터).
+##
+## `velocity` 는 조향의 뜻이고 이것은 그 뜻이 이웃의 몸에 막히고 남은 결과다. 둘은 다르다 —
+## 앞이 막힌 유닛은 `velocity` 가 초당 200 픽셀을 가리키면서 이 값은 0 이다.
+## 뒤따르는 유닛이 **앞선 유닛의 실제 속도**에 맞춰 줄을 서려면 뜻이 아니라 결과를 봐야 한다.
+var advance: Vector2 = Vector2.ZERO
+
+## 앞을 막은 가장 가까운 이웃 쪽 단위 벡터. 없으면 영벡터다.
+##
+## 이 방향으로는 앞선 유닛보다 빨리 갈 수 없다(`contact_speed`). 위치를 잘라 막는 것과 달리
+## **속도 단계에서 미리 막으므로** 몸이 부딪히는 순간의 뜀이 없다.
+var contact_normal: Vector2 = Vector2.ZERO
+
+## 그 이웃이 `contact_normal` 방향으로 실제로 나아가는 속도(초당 픽셀).
+var contact_speed: float = 0.0
+
+## 그 이웃에 얼마나 다가섰는가. 따라가기 간격 끝에서 0, 몸이 닿으면 1.
+##
+## 제약을 거리로 켜고 끄면 그 켜짐이 곧 뜀이 된다. 세기로 서서히 들어야 조용하다.
+var contact_near: float = 0.0
+
 ## 이번 프레임에 **이미 자리를 잡은 아군**이 진행 방향을 막고 있는가.
 ##
 ## 분리력을 구하며 이웃을 훑는 김에 함께 채운다. 이 판정 하나를 위해 이웃을 또 훑으면
@@ -115,6 +136,8 @@ func accept_order(new_order_id: int, slot: Vector2, sight_interval: float) -> vo
 	grind_frames = 0
 	press_frames = 0
 	pace = 1.0
+	contact_normal = Vector2.ZERO
+	contact_speed = 0.0
 	# 조향을 자기 자리 쪽으로 미리 맞춰 둔다. 평활을 영벡터에서 시작하면 명령 직후 한 박자 뜬다.
 	var to_slot := slot - position
 	steer_dir = to_slot.normalized() if to_slot.length_squared() > 0.0001 else Vector2.ZERO
@@ -127,6 +150,9 @@ func settle(final_state: State) -> void:
 	state = final_state
 	order_id = 0
 	velocity = Vector2.ZERO
+	advance = Vector2.ZERO
+	contact_normal = Vector2.ZERO
+	contact_speed = 0.0
 	pace = 1.0
 	debug_seek = Vector2.ZERO
 	debug_separation = Vector2.ZERO
@@ -140,6 +166,9 @@ func settle(final_state: State) -> void:
 func hold() -> void:
 	state = State.HOLDING
 	velocity = Vector2.ZERO
+	advance = Vector2.ZERO
+	contact_normal = Vector2.ZERO
+	contact_speed = 0.0
 	pace = 1.0
 	debug_seek = Vector2.ZERO
 	debug_separation = Vector2.ZERO

@@ -6,11 +6,27 @@ extends RefCounted
 ##
 ## | 지점 | 여기서의 처리 |
 ## | --- | --- |
-## | 뭉침 | 대형 자리 배정(각자 다른 목표) + 분리력 + 양보 + 위치 겹침 해소 |
+## | 뭉침 | 대형 자리 배정(각자 다른 목표) + 분리력 + 양보 + **이동 막기** |
 ## | 도착 | 감속 반경 · 도착 반경 · **상태로 묻는 정지 판정** (`_update_states`) |
 ## | 반응 | 가속과 회전 제한만으로 지연을 만든다. 명령 처리 자체는 그 프레임에 끝낸다 |
 ## | 대형 | 명령마다 남은 거리를 비교해 앞선 유닛의 속도를 깎는다 |
-## | 지터 | 조향 평활 + 한쪽 손 비껴가기 + 겹침 해소 상한 (아래) |
+## | 지터 | 조향 평활 + 한쪽 손 비껴가기 + **접촉 제약** (아래) |
+##
+## **이 게임은 물리력 게임이 아니다. 유닛은 다른 유닛을 밀쳐서 갈 수 없다.**
+##
+## 예전에는 겹친 몸을 위치로 떼어 놓아 겹침을 풀었고, 서 있는 쪽이 더 많이 밀려나도록
+## 되어 있어서(0.75) 지나가려는 유닛이 남을 밀쳐 내고 그 자리를 차지했다. 그것이 물리
+## 시뮬레이션 같은 모습을 만들었고 지터의 큰 몫이기도 했다 — 조향이 몸을 밀어 넣고 겹침
+## 해소가 그만큼 도로 밀어내는 왕복이 매 프레임 벌어졌다. **그 왕복은 속도계에 잡히지 않고
+## 위치에만 나타나서** 예전 지표(속도의 꺾임)로는 보이지도 않았다.
+##
+## 지금은 세 겹으로 막는다.
+##
+## | 겹 | 어디 | 하는 일 |
+## | --- | --- | --- |
+## | 속도 | `_steer` 접촉 제약 | 앞선 유닛보다 빨리 그쪽으로 갈 수 없다. 부딪히기 전에 맞춘다 |
+## | 위치 | `_advance` `_clip_move` | 그래도 남는 다가감을 잘라 낸다. **통과는 여기서 불가능해진다** |
+## | 뒤처리 | `_resolve_overlaps` | 벽 보정 따위가 만든 겹침만 푼다. 서 있는 유닛은 안 움직인다 |
 ##
 ## **지터의 원인은 조향이 가리키는 방향 자체가 튀는 것이었다.** 재어 보니 좁은 통로에서
 ## 조향 방향의 꺾임이 열린 곳의 다섯 배였고, 흐름장을 읽는 프레임 비율과 그대로 맞물렸다.
@@ -96,6 +112,37 @@ const _MIN_PUSH_RATE := 1.2
 ## 힘이 그대로 흔들림이 된다.** 밀지 않는 것만으로 교착은 이미 풀리므로 옆걸음은 거들기만 하면 된다.
 const _YIELD_SIDE := 0.4
 
+## 앞을 막은 **서 있는** 아군을 돌아 나갈 때 옆으로 비껴가기에 얹는 배수.
+##
+## 밀치기를 걷어내면서 필요해졌다. 밀 수 있을 때는 반경 방향 힘이 곧 전진이었지만, 밀 수 없는
+## 몸에게 반경 방향 힘은 **서게 만들 뿐이다.** 앞으로 나아가게 하는 것은 몸을 타고 도는 접선
+## 힘이고, 그래서 서 있는 상대에게만 이 배수를 얹는다.
+##
+## 움직이는 상대에게는 쓰지 않는다. 그쪽은 양보 규칙이 맡는다 — 스쳐 지나갈 뿐인 상대에게
+## 같은 세기를 주면 크게 휘어 도리어 꺾임이 는다.
+const _ROUND_SETTLED := 1.4
+
+## 이 거리 안에 앞선 유닛이 있으면 그 유닛보다 빨리 그쪽으로 가지 않는다(픽셀, 몸 사이 간격).
+##
+## **줄 세우기의 전부다.** 넓게 잡으면 멀리서부터 굼떠지고, 0 으로 잡으면 몸이 닿은 다음에야
+## 알아채서 위치 자르기가 대신 일하게 된다 — 그것이 그대로 지터다.
+##
+## 재어 보고 골랐다(좁은 통로 100 명 꺾임 / 열린 곳 100 명 정지).
+##
+## | 간격 | 5 | 8 | 10 | 14 |
+## | --- | --- | --- | --- | --- |
+## | 좁은 통로 100 꺾임 | 246 | **211** | 223 | 281 |
+## | 열린 곳 100 정지 | 11.50 s | **9.02 s** | 11.63 s | 10.28 s |
+const _FOLLOW_GAP := 8.0
+
+## 따라가기가 "앞"으로 치는 각도의 코사인. 0.2 는 대략 좌우 78 도다.
+##
+## 막힘 판정(`_AHEAD_CONE`, 57 도)보다 넓게 잡는다. 둘은 묻는 것이 다르다 — 막힘은 "이 유닛
+## 때문에 내가 멈춰야 하는가"라 좁아야 하고, 따라가기는 "이쪽으로 더 빨리 가면 부딪히는가"라
+## 비스듬한 상대도 봐야 한다. 좁게 잡았더니 잼 한가운데에서 비스듬히 낀 유닛들을 못 보고
+## 그 사이로 빠르게 비집으려 들었고, 그 옆걸음이 그대로 꺾임이 됐다.
+const _FOLLOW_CONE := 0.2
+
 ## 최단 거리가 줄지 않은 채 이만큼 지나면 지형에 낀 것으로 본다(프레임).
 ##
 ## **이것은 포기 시간이 아니다.** 아군이 막은 경우는 상태로 걸러지고 목적지가 갈린 경우는
@@ -134,6 +181,27 @@ var overlap_push_total: float = 0.0
 ## 총량은 붙어서 지나가는 시간이 길수록 커져서, 줄을 잘 서서 오래 붙어 있는 쪽이
 ## 도리어 나쁘게 나온다. 한 프레임에 몸이 얼마나 순간이동했는가가 튕김의 정체다.
 var overlap_push_peak: float = 0.0
+
+## **움직이는 유닛이 서 있는 유닛을 밀어낸 누적 거리(픽셀). 밀치기의 직접 계기다.**
+##
+## "밀치기를 없앴다"는 말은 증명할 수 있어야 한다. 이 값이 0 이 아니면 없애지 못한 것이다.
+## `overlap_push_total` 은 누가 누구를 밀었는지 가리지 않아 이 질문에 답하지 못한다.
+var settled_push_total: float = 0.0
+
+## 몸이 서로 파고든 최대 깊이(픽셀). **통과가 일어났는지 보는 계기다.**
+##
+## 한 유닛이 다른 유닛을 통과하려면 그 전에 반드시 겹침이 몸 지름까지 자라야 한다.
+## 이동을 몸에 막히는 만큼 깎으면 겹침은 애초에 자랄 수 없고, 이 값이 그것을 보여 준다.
+var max_penetration: float = 0.0
+
+## 이동이 이웃의 몸에 막혀 깎여 나간 누적 거리(픽셀). **막힘의 크기다.**
+##
+## 밀치기를 걷어내면 이 거리가 그만큼 생긴다. 예전에는 이 거리가 남의 몸을 밀어내는 데
+## 쓰였다. 지금은 어디에도 쓰이지 않고 그냥 사라진다 — 그것이 "밀고 갈 수 없다"의 실체다.
+##
+## 접촉 제약이 잘 듣고 있으면 이 값은 작아야 한다. 크다는 것은 **속도 단계에서 못 막아
+## 위치 단계까지 왔다**는 뜻이고, 그 차이가 곧 지터다.
+var blocked_move_total: float = 0.0
 
 var _by_id: Dictionary = {}
 var _next_id := 1
@@ -292,9 +360,7 @@ func step(delta: float) -> void:
 	_update_pace()
 	for agent in agents:
 		_steer(agent, delta)
-	for agent in agents:
-		agent.position += agent.velocity * delta
-	_resolve_overlaps()
+	_advance(delta)
 	_clamp_positions()
 	_update_states(delta)
 	for order in orders:
@@ -314,8 +380,16 @@ func _cache_orders() -> void:
 ##
 ## 웹은 단일 스레드라 전수 비교(인원의 제곱)가 그대로 프레임 예산을 먹는다.
 ## 인원을 늘려 한계를 재려면 이 구조가 먼저 있어야 한다.
+##
+## 칸 크기는 **분리 반경이 아니라 몸이 닿는 거리로 바닥을 잡는다.** 3x3 을 훑으면 칸 크기만큼
+## 떨어진 이웃까지 반드시 잡히는데, 칸이 몸 지름 + 한 프레임 이동 거리보다 작으면 부딪힐 이웃을
+## 놓친다. 분리 반경을 슬라이더로 최소까지 내려도 몸끼리 통과하지 않아야 하므로 여기서 막는다.
 func _rebuild_buckets() -> void:
-	_bucket_size = maxf(tuning.get_value("separation_radius"), 16.0)
+	var body := 1.0
+	for agent in agents:
+		body = maxf(body, agent.radius)
+	var contact := body * 2.0 + tuning.get_value("max_speed") / 60.0 + 1.0
+	_bucket_size = maxf(tuning.get_value("separation_radius"), contact)
 	_buckets.clear()
 	for agent in agents:
 		var key := Vector2i(
@@ -369,6 +443,7 @@ func _steer(agent: ProtoUnitAgent, delta: float) -> void:
 		agent.velocity = agent.velocity.move_toward(Vector2.ZERO, acceleration)
 		agent.debug_seek = Vector2.ZERO
 		agent.debug_separation = Vector2.ZERO
+		agent.contact_normal = Vector2.ZERO
 		return
 
 	var distance := agent.goal_distance
@@ -391,8 +466,52 @@ func _steer(agent: ProtoUnitAgent, delta: float) -> void:
 	var max_turn := deg_to_rad(tuning.get_value("turn_rate")) * delta
 	var difference := wrapf(combined.angle() - current, -PI, PI)
 	agent.facing = current + clampf(difference, -max_turn, max_turn)
-	var desired := Vector2.from_angle(agent.facing) * target_speed
+	var desired := _follow(agent, Vector2.from_angle(agent.facing) * target_speed)
 	agent.velocity = agent.velocity.move_toward(desired, acceleration)
+
+
+## **앞선 유닛보다 그쪽으로 빨리 갈 수 없다.** 줄 세우기이자 지터를 잡는 마지막 장치다.
+##
+## 밀치기를 걷어내고 나서 좁은 통로의 꺾임이 도리어 두 배가 됐다. 항을 하나씩 꺼 보아도
+## 범인이 없었다 — 조향 평활 · 양보 · 비껴가기 · 겹침 상한 어느 것을 꺼도 초당 215 도 언저리로
+## 같았다. 원인은 힘이 아니라 **아무도 기다리지 않는다는 것**이었다. 밀 수 있을 때는 앞이
+## 막혀도 밀고 나가면 됐지만, 밀 수 없게 되자 전원이 같은 자리로 계속 파고들었고 위치
+## 자르기가 매 프레임 다른 접선으로 튕겨 냈다. 그 접선의 뒤바뀜이 그대로 꺾임이었다.
+##
+## 그래서 **부딪히기 전에 속도를 맞춘다.** 앞선 유닛이 실제로 나아가는 만큼만 그쪽으로 간다.
+## 앞선 유닛이 서 있으면 0 이 되어 그 자리에 선다 — 막혔으면 막힌 티가 난다.
+## 옆으로 도는 성분은 건드리지 않으므로 돌아갈 길이 있으면 돌아간다.
+##
+## 위치 자르기(`_clip_move`)를 대신하지는 않는다. 이웃 하나만 보고 거는 제약이라 셋에
+## 둘러싸이면 새는데, 그 새는 몫을 위치 단계가 막는다. 순서가 중요하다 — **속도로 먼저 막을수록
+## 위치로 자를 일이 줄고, 자를 일이 줄수록 조용하다.**
+##
+## **방향은 건드리지 않고 크기만 줄인다.** 다가가는 성분을 잘라 내는 방식으로 먼저 만들었다가
+## 걷어냈다. 앞을 막은 이웃이 프레임마다 바뀌면 잘라 내는 축도 같이 바뀌어 속도 방향이
+## 널뛰었고, 좁은 통로 100 명에서 꺾임이 423 에서 619 로 도리어 늘었다. **자르는 축이 곧
+## 지터의 씨앗이다** — 위치 자르기에서 배운 것과 같은 교훈인데 한 층 위에서 되풀이했다.
+##
+## 그다음엔 다가가는 성분의 비율만큼 속도를 통째로 줄여 봤다. 지터는 없어졌는데(꺾임 91)
+## **아무도 못 갔다** — 좁은 통로 100 명 중 86 명이 문을 못 넘었다. 앞이 0 이면 비스듬히
+## 가려는 속도까지 0 이 되어, 정확히 직각으로만 움직일 수 있었기 때문이다.
+##
+## 그래서 **얼마나 정면으로 가려는지에 따라 제약을 걷어 준다.** 앞선 유닛을 똑바로 향하면
+## 그 유닛의 속도에 맞춰지고, 방향을 옆으로 틀수록 제 속도를 되찾는다. 돌아갈 뜻이 있는
+## 유닛은 붙잡지 않고 파고들 뜻만 있는 유닛을 붙잡는다. 축이 아니라 세기를 다루므로
+## 이웃이 바뀌어도 방향이 튀지 않는다.
+func _follow(agent: ProtoUnitAgent, desired: Vector2) -> Vector2:
+	if agent.contact_normal == Vector2.ZERO:
+		return desired
+	var speed := desired.length()
+	if speed <= 0.001:
+		return desired
+	var ahead := desired.dot(agent.contact_normal) / speed
+	var head_on := (ahead - _FOLLOW_CONE) / (1.0 - _FOLLOW_CONE)
+	var blend := clampf(head_on, 0.0, 1.0) * agent.contact_near
+	if blend <= 0.0:
+		return desired
+	var allowed := lerpf(speed, maxf(agent.contact_speed, 0.0), blend)
+	return desired * (minf(speed, allowed) / speed)
 
 
 ## 자기 자리를 향한 힘. 감속 반경 안에서는 남은 거리에 비례해 속도를 줄인다.
@@ -458,8 +577,12 @@ func _smoothed(current: Vector2, wanted: Vector2, delta: float) -> Vector2:
 ## 좌우로 비집는 힘을 걷어내면 유닛이 문 입구에 자기를 맞추지 못해 그대로 벽에 붙어 막힌다.
 ## 줄을 세우려면 밀치기를 깎을 게 아니라 **통로 한가운데로 끌어당겨야** 한다 — 그건 벽까지의
 ## 거리를 재는 별도의 조회가 필요해서 이번에는 손대지 않았다.
+## 이웃을 훑는 김에 **앞을 막은 가장 가까운 몸**도 함께 잡아 둔다(`contact_normal`).
+## 그 제약 하나를 위해 이웃을 또 훑으면 유닛이 늘 때 비용이 배로 든다.
 func _separation(agent: ProtoUnitAgent, forward: Vector2, speed_cap: float) -> Vector2:
 	agent.blocked_by_settled = false
+	agent.contact_normal = Vector2.ZERO
+	agent.contact_speed = 0.0
 	var weight := tuning.get_value("separation_weight")
 	if weight <= 0.0:
 		return Vector2.ZERO
@@ -469,6 +592,7 @@ func _separation(agent: ProtoUnitAgent, forward: Vector2, speed_cap: float) -> V
 	var hand := Vector2(-forward.y, forward.x)
 	_collect_neighbors(agent, _scratch)
 	var total := Vector2.ZERO
+	var tightest := INF
 	for other in _scratch:
 		var offset := agent.position - other.position
 		var distance := offset.length()
@@ -479,12 +603,36 @@ func _separation(agent: ProtoUnitAgent, forward: Vector2, speed_cap: float) -> V
 		)
 		var strength := 1.0 - distance / reach
 		var ahead := forward.dot(-away)
+		var blocking := ahead > _AHEAD_CONE
+		var touch := agent.radius + other.radius
+		if ahead > _FOLLOW_CONE and distance <= touch + _FOLLOW_GAP:
+			# 앞선 유닛이 **실제로** 나아가는 만큼만 따라간다. 뜻이 아니라 결과를 본다 —
+			# 막혀 있는 유닛은 속도계가 살아 있어도 한 뼘도 못 간다.
+			#
+			# 여럿이 앞을 막으면 **가장 가까운 쪽이 아니라 나를 가장 늦추는 쪽**을 고른다.
+			# 가까운 쪽으로 골랐더니 잼 한가운데에서 정작 나를 세우는 유닛을 놓쳤고,
+			# 그 몫이 위치 자르기로 넘어가 그대로 꺾임이 됐다.
+			var limit := other.advance.dot(-away)
+			# 간격 끝에서 0, 몸이 닿으면 1. 제약이 켜졌다 꺼졌다 하지 않고 서서히 든다.
+			var near := clampf((touch + _FOLLOW_GAP - distance) / _FOLLOW_GAP, 0.0, 1.0)
+			var head_on := clampf((ahead - _FOLLOW_CONE) / (1.0 - _FOLLOW_CONE), 0.0, 1.0)
+			var cap := lerpf(speed_cap, maxf(limit, 0.0), near * head_on)
+			if cap < tightest:
+				tightest = cap
+				agent.contact_normal = -away
+				agent.contact_speed = limit
+				agent.contact_near = near
 		if not other.is_moving():
-			# 이미 자리에 선 유닛은 덜 버틴다. 지나가는 쪽이 길을 얻어야 대열이 흐른다.
-			strength *= 0.55
-			if ahead > _AHEAD_CONE and distance <= agent.radius + other.radius + _HOLD_RELEASE:
-				agent.blocked_by_settled = true
-		elif ahead > _AHEAD_CONE:
+			# **서 있는 유닛은 벽이다.** 예전에는 여기서 버티는 힘을 절반으로 깎았다 —
+			# 밀고 지나갈 수 있었으니 가까이 붙어도 됐기 때문이다. 이제는 통과할 수 없으므로
+			# 깎지 않고, 대신 앞을 막았을 때 몸을 타고 도는 힘을 크게 준다.
+			total += away * strength
+			if blocking:
+				if distance <= touch + _HOLD_RELEASE:
+					agent.blocked_by_settled = true
+				total += hand * strength * bias * _ROUND_SETTLED
+			continue
+		if blocking:
 			# 양보 규칙. 목적지에 더 가까운 쪽에 우선권을 주고, 뒤에 있는 쪽은 밀지 말고 비킨다.
 			# 서로 반대로 미는 순간 둘 다 제자리에서 떤다 — 미는 힘을 줄이는 것이 핵심이다.
 			total += away * strength * (1.0 - yielding)
@@ -492,67 +640,146 @@ func _separation(agent: ProtoUnitAgent, forward: Vector2, speed_cap: float) -> V
 				total += hand * strength * yielding * _YIELD_SIDE
 			continue
 		total += away * strength
-		if bias > 0.0 and ahead > 0.6:
-			total += hand * strength * bias
 	return total.limit_length(_SEPARATION_LIMIT) * weight * speed_cap
 
 
-## 몸이 겹친 쌍을 위치로 직접 떼어 놓는다.
+## 속도를 위치로 옮긴다. **이웃의 몸에 막히는 만큼 깎아서 옮긴다.**
 ##
-## 속도로만 밀면 가속 한계 때문에 겹침이 몇 프레임 남고, 그 사이 유닛이 서로를 파고든다.
-## 서 있는 쪽이 더 많이 밀려나게 해서 지나가는 유닛이 길을 얻는다.
+## 예전에는 속도를 그대로 더한 뒤 겹친 몸을 위치로 떼어 놓았다. 그러면 유닛이 남의 몸 안으로
+## 걸어 들어가고 겹침 해소가 **양쪽을 다 옮겨** 그 겹침을 풀었다. 서 있는 쪽이 더 많이 밀리도록
+## 되어 있어서, 지나가려는 유닛은 남을 밀쳐 내고 그 자리를 차지했다. **밀쳐서 가는 길이 거기
+## 있었다.** 이 게임은 물리력 게임이 아니므로 그렇게 갈 수 있으면 안 된다.
 ##
-## **한 프레임에 미는 양에 상한을 둔다.** 위치를 직접 옮기는 이 처리는 속도 적분과 싸운다.
-## 상한이 없으면 깊이 겹친 쌍이 한 프레임에 몸 하나만큼 튕겨 나갔다가 조향에 다시
-## 빨려 들어오고, 그 왕복이 눈에는 튕김으로 보인다. 나눠서 여러 프레임에 걸쳐 풀면
-## 결과는 같은데 도중의 모습이 조용하다.
+## 지금은 겹침을 사후에 푸는 대신 **애초에 만들지 않는다.**
 ##
-## 다만 그 상한은 **한 프레임에 다가오는 거리보다 커야 한다.** 작으면 겹침이 매 프레임 자라
-## 결국 서로를 통과한다(`_MIN_PUSH_RATE`).
+## 순서대로 처리해 앞선 유닛의 **새 위치**에 맞춘다. 전원의 옛 위치로 한꺼번에 맞추면 둘이
+## 같은 빈 자리로 동시에 들어가 겹침이 남고, 그 겹침을 다시 위치로 풀어야 한다 — 그것이 바로
+## 걷어내려는 장치다. 처리 순서는 유닛 번호 순이라 프레임마다 뒤바뀌지 않는다.
 ##
-## 미는 방향을 진행 방향의 접선 쪽으로 돌려 스쳐 지나가게 하는 것도 해 봤는데 걷어냈다.
-## 한 칸 폭 복도에서는 접선이 곧 벽 쪽이라 몸이 벽으로 밀리고, `push_out` 이 그 몸을
-## 100 픽셀 너머 빈 곳으로 옮겨 버린다. 결과는 앞을 막은 유닛 여섯을 그대로 통과하는 것이었다.
-## 옆으로 흘려보내려면 그 옆이 비어 있는지 먼저 봐야 하는데, 겹친 쌍마다 격자를 조회하는 비용이
-## 얻는 것에 비해 크다.
-func _resolve_overlaps() -> void:
-	var strength := tuning.get_value("push_resolve")
-	if strength <= 0.0:
+## **속도는 건드리지 않는다.** 막혔다고 속도를 0 으로 눌러 쓰면 다음 프레임 조향이 그 눌린
+## 속도에서 방향을 다시 잡아 매 프레임 다른 쪽을 가리킨다. 재어 보니 좁은 통로 100 명에서
+## 눌러 쓰는 쪽이 꺾임 507, 그냥 두는 쪽이 423 이었다. 속도는 조향의 **뜻**이고 위치는
+## 그 뜻이 몸에 막히고 남은 **결과**다. 둘을 섞으면 뜻이 결과에 오염된다.
+## 어차피 속도는 최대 속도로 묶여 있어 눌러 두지 않아도 쌓였다 터지지 않는다.
+##
+## 뒤처리인 겹침 해소를 **같은 훑기 안에서** 끝낸다. 둘 다 유닛마다 이웃을 훑는 일이라
+## 따로 돌면 격자 조회가 한 벌 더 든다. 붙여 놓으니 100 명에서 이동 계산이 평균 3.96 에서
+## 2.90 밀리초로 내려갔다.
+func _advance(delta: float) -> void:
+	if delta <= 0.0:
 		return
+	var strength := tuning.get_value("push_resolve")
 	var floor_push := tuning.get_value("max_speed") * _MIN_PUSH_RATE / 60.0
 	var cap := tuning.get_value("push_cap")
 	for agent in agents:
 		_collect_neighbors(agent, _scratch)
-		for other in _scratch:
-			if other.id <= agent.id:
-				continue
-			var offset := agent.position - other.position
-			var distance := offset.length()
-			var minimum := agent.radius + other.radius
-			if distance >= minimum:
-				continue
-			var overlap := minimum - distance
-			if overlap < _OVERLAP_DEADZONE:
-				continue
-			var away := (
-				offset / distance if distance > 0.001 else Vector2.from_angle(float(agent.id) * 2.4)
-			)
-			var amount := overlap * strength
-			if overlap < minimum * _DEEP_OVERLAP:
-				amount = minf(amount, maxf(cap * minf(agent.radius, other.radius), floor_push))
-			var correction := away * amount
-			var share := _push_share(agent, other)
-			agent.position += correction * share
-			other.position -= correction * (1.0 - share)
-			overlap_push_total += amount
-			overlap_push_peak = maxf(overlap_push_peak, amount)
+		var wanted := agent.velocity * delta
+		if wanted == Vector2.ZERO:
+			agent.advance = Vector2.ZERO
+		else:
+			var allowed := _clip_move(agent, wanted)
+			blocked_move_total += (wanted - allowed).length()
+			agent.position += allowed
+			agent.advance = allowed / delta
+		_resolve_overlaps(agent, strength, cap, floor_push)
 
 
-## 겹침을 나눠 지는 비율. 움직이는 쪽이 덜 밀리고 서 있는 쪽이 더 밀린다.
+## 한 프레임의 이동을 이웃의 몸에 막히는 만큼 깎는다. **통과가 여기서 불가능해진다.**
+##
+## 이웃마다 "지금 거리 - 몸이 닿는 거리"가 다가갈 수 있는 여유다. 그 여유를 넘어서는 성분만
+## 덜어 낸다. 덜어 낸 뒤에도 접선 성분은 그대로라 몸을 타고 미끄러진다.
+##
+## 이미 겹쳐 있으면 여유가 0 이라 다가가는 성분이 통째로 사라진다 — **더 깊이 파고들 수 없다.**
+## 빠져나오는 방향은 성분 부호가 반대라 깎이지 않으므로 겹침이 풀리는 것은 막지 않는다.
+##
+## 한 프레임에 몸을 뛰어넘는 통과도 여기서 막힌다. 여유를 **이동 전 거리**로 재므로 아무리
+## 빨라도 닿는 순간까지만 갈 수 있다. 격자 해시가 그 거리 안의 이웃을 반드시 준다는 것은
+## `_rebuild_buckets` 가 칸 크기로 보장한다.
+func _clip_move(agent: ProtoUnitAgent, motion: Vector2) -> Vector2:
+	var result := motion
+	for other in _scratch:
+		var offset := agent.position - other.position
+		var distance := offset.length()
+		var minimum := agent.radius + other.radius
+		if distance > minimum + result.length():
+			continue
+		var away := (
+			offset / distance if distance > 0.001 else Vector2.from_angle(float(agent.id) * 2.4)
+		)
+		var into := -result.dot(away)
+		if into <= 0.0:
+			continue
+		var room := maxf(distance - minimum, 0.0)
+		if into <= room:
+			continue
+		result += away * (into - room)
+	return result
+
+
+## 남은 겹침을 떼어 놓는다. **이동을 위한 장치가 아니라 뒤처리다.**
+##
+## 예전에는 이것이 이동의 일부였다. 유닛이 남의 몸 안으로 걸어 들어가면 여기서 양쪽을 떼어
+## 놓았고, 서 있는 쪽이 더 많이 밀려나서(0.75) 지나가려는 유닛이 그 자리를 차지했다.
+## 지금은 `_advance` 가 애초에 파고들지 못하게 하므로 여기까지 오는 겹침은 이동이 만든 것이
+## 아니다 — 스폰이 겹쳐 놓았거나, 벽 보정(`push_out`)이 몸을 옮겼거나, 대형 자리가 붙어 있는
+## 경우뿐이고 전부 한두 프레임이면 풀린다.
+##
+## 그래서 **서 있는 유닛은 여기서도 움직이지 않는다**(`_push_share`). 서 있는 쪽을 조금이라도
+## 옮기면 그것이 곧 밀치기이고, 밀 수 있는 만큼 비집고 갈 수 있다.
+##
+## 한 프레임에 미는 양의 상한(`push_cap`)은 그대로 둔다. 위치를 직접 옮기는 처리는 속도 적분과
+## 싸우므로, 깊은 겹침을 한 프레임에 통째로 풀면 몸이 튕겨 나갔다가 조향에 다시 빨려 들어온다.
+##
+## 미는 방향을 진행 방향의 접선 쪽으로 돌려 스쳐 지나가게 하는 것도 해 봤는데 걷어냈다.
+## 한 칸 폭 복도에서는 접선이 곧 벽 쪽이라 몸이 벽으로 밀리고, `push_out` 이 그 몸을
+## 100 픽셀 너머 빈 곳으로 옮겨 버린다. 결과는 앞을 막은 유닛 여섯을 그대로 통과하는 것이었다.
+##
+## **자기 몸만 옮긴다.** 예전에는 겹친 쌍을 한 번에 잡아 양쪽을 갈랐다. 지금은 유닛마다
+## 자기가 빠져나올 몫만 옮기고, 상대는 상대의 차례에 자기 몫을 옮긴다. 결과는 같은데
+## "남을 옮기는 코드"가 아예 없어져서, 밀치기가 되살아날 자리가 남지 않는다.
+func _resolve_overlaps(
+	agent: ProtoUnitAgent, strength: float, cap: float, floor_push: float
+) -> void:
+	for other in _scratch:
+		var offset := agent.position - other.position
+		var distance := offset.length()
+		var minimum := agent.radius + other.radius
+		if distance >= minimum:
+			continue
+		var overlap := minimum - distance
+		max_penetration = maxf(max_penetration, overlap)
+		if overlap < _OVERLAP_DEADZONE or strength <= 0.0:
+			continue
+		var share := _push_share(agent, other)
+		if share <= 0.0:
+			continue
+		var away := (
+			offset / distance if distance > 0.001 else Vector2.from_angle(float(agent.id) * 2.4)
+		)
+		var amount := overlap * strength
+		if overlap < minimum * _DEEP_OVERLAP:
+			amount = minf(amount, maxf(cap * minf(agent.radius, other.radius), floor_push))
+		var moved := amount * share
+		agent.position += away * moved
+		overlap_push_total += moved
+		overlap_push_peak = maxf(overlap_push_peak, moved)
+		if not agent.is_moving() and other.is_moving():
+			# 여기 걸리면 서 있는 유닛이 움직이는 유닛 때문에 옮겨졌다는 뜻이다.
+			# `_push_share` 가 0 을 주므로 위에서 걸러져 이 줄에는 오지 않아야 한다.
+			settled_push_total += moved
+
+
+## 겹침에서 **자기가 빠져나올 몫.** 서 있는 유닛의 몫은 0 이다 — 밀려나지 않는다.
+##
+## 예전에는 서 있는 쪽이 0.75 를 졌다. "지나가는 쪽이 길을 얻어야 대열이 흐른다"는 이유였는데,
+## 그것이 곧 **남을 밀쳐서 가는 길**이었다. 서 있는 유닛은 이제 벽과 같다 — 돌아가야 한다.
+##
+## 둘 다 서 있으면 반씩 나눈다. 이건 밀치기가 아니라 겹친 채로 굳는 것을 푸는 일이고,
+## 어느 쪽도 그렇게 해서 앞으로 나아가지 않는다.
 func _push_share(agent: ProtoUnitAgent, other: ProtoUnitAgent) -> float:
 	if agent.is_moving() == other.is_moving():
 		return 0.5
-	return 0.25 if agent.is_moving() else 0.75
+	return 1.0 if agent.is_moving() else 0.0
 
 
 func _clamp_positions() -> void:

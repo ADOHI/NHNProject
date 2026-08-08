@@ -16,10 +16,21 @@ extends SceneTree
 ## | 역주행 | 제 목표에서 멀어지는 쪽으로 움직인 프레임의 비율. **튕김의 크기다** |
 ## | 굽이 | 실제 이동 거리 / 직선 거리. 1.0 이 완전한 직선이다 |
 ## | 밀린거리 | 겹침 해소가 위치를 강제로 옮긴 총 거리 |
+## | 정지밀림 | **움직이는 유닛이 서 있는 유닛을 밀어낸 총 거리. 0 이어야 한다** |
+## | 최대겹침 | 몸이 서로 파고든 최대 깊이. 통과하려면 몸 지름까지 자라야 한다 |
+## | 막힌이동 | 이웃의 몸에 막혀 깎여 나간 이동 거리. 밀치기를 걷어낸 값이다 |
 ## | 정지 | 명령부터 전원이 멎기까지의 시간 |
 ## | 90% | 열에 아홉이 멎기까지의 시간. 정지와의 차이가 뒤끝이다 |
 ## | 통과 | 전원이 벽 너머로 넘어가기까지의 시간(괄호는 못 넘은 인원) |
 ## | 뒤진동 | 멎은 뒤 3 초 동안 움직인 총 거리 |
+##
+## **꺾임 · 역주행 · 굽이는 속도가 아니라 실제로 옮겨 간 위치로 잰다.**
+##
+## 속도로 재면 거짓말을 한다. 이웃의 몸에 막힌 유닛은 속도계가 초당 160 픽셀을 가리키면서
+## 한 뼘도 못 간다. 그 속도를 그대로 세면 **가지도 않은 거리를 갔다고 하고, 서 있는 유닛의
+## 꺾임을 이동의 꺾임으로 센다.** 사람 눈에 떨림으로 보이는 것은 조향의 의도가 아니라
+## 몸이 실제로 그린 자취다. 밀치기를 걷어내면서 "속도는 있는데 못 가는" 프레임이 크게 늘어
+## 이 구분이 결과를 뒤집을 만큼 커졌다.
 ##
 ## 처음에 "진행 방향이 한 프레임에 뒤집힌 횟수"를 세었더니 어느 상황에서도 0 에 붙었다.
 ## 회전 속도 제한이 프레임당 15 도로 걸려 있어 **한 프레임 안에서는 뒤집힐 수가 없기 때문이다.**
@@ -182,16 +193,22 @@ func _measure(
 	var heading := PackedVector2Array()
 	var travelled := PackedFloat32Array()
 	var origin := PackedVector2Array()
+	var previous := PackedVector2Array()
 	heading.resize(count)
 	travelled.resize(count)
 	origin.resize(count)
+	previous.resize(count)
 	for index in count:
 		heading[index] = Vector2.ZERO
 		travelled[index] = 0.0
 		origin[index] = field.agents[index].position
+		previous[index] = field.agents[index].position
 
 	field.overlap_push_total = 0.0
 	field.overlap_push_peak = 0.0
+	field.settled_push_total = 0.0
+	field.max_penetration = 0.0
+	field.blocked_move_total = 0.0
 	if other_target == Vector2.INF:
 		field.issue_move(field.all_ids(), target)
 	else:
@@ -238,8 +255,11 @@ func _measure(
 		step_frames += 1
 		for index in count:
 			var agent := field.agents[index]
-			var speed := agent.velocity.length()
-			travelled[index] += speed * _STEP
+			# **실제로 옮겨 간 거리로 잰다.** 막힌 유닛은 속도가 살아 있어도 위치가 그대로다.
+			var moved := agent.position - previous[index]
+			previous[index] = agent.position
+			var speed := moved.length() / _STEP
+			travelled[index] += moved.length()
 			# 이웃을 밀어내는 힘이 제 갈 길을 가리키는 힘보다 커진 프레임. 이때 유닛의 진행
 			# 방향은 목적지가 아니라 **주변 인원 배치**가 정한다. 그 배치는 매 프레임 바뀐다.
 			if agent.is_moving() and agent.debug_seek.length_squared() > 0.01:
@@ -256,7 +276,7 @@ func _measure(
 				seek_dir[index] = wanted
 			if speed < moving_speed:
 				continue
-			var direction := agent.velocity / speed
+			var direction := moved.normalized()
 			live_frames += 1
 			var to_goal := agent.goal - agent.position
 			if to_goal.length_squared() > 1.0 and direction.dot(to_goal.normalized()) < 0.0:
@@ -317,9 +337,23 @@ func _measure(
 		"blocked": giving_up,
 		"waiting": waiting,
 		"peak": field.overlap_push_peak,
+		"settled_push": field.settled_push_total,
+		"pierce": field.max_penetration,
+		# 통과가 일어나려면 겹침이 여기까지 자라야 한다. 최대겹침을 이것과 나란히 놓아야
+		# "겹치긴 했는데 얼마나 겹쳤나"에 답이 된다.
+		"body": _smallest_body(field),
+		"blocked_move": field.blocked_move_total,
 		"step_ms": float(step_total) / maxf(float(step_frames - 1), 1.0) / 1000.0,
 		"worst_ms": float(worst_usec) / 1000.0,
 	}
+
+
+## 가장 작은 두 몸이 닿는 거리. 겹침이 이만큼 자라면 중심이 반대편으로 넘어간 것이다.
+func _smallest_body(field: ProtoUnitField) -> float:
+	var smallest := INF
+	for agent in field.agents:
+		smallest = minf(smallest, agent.radius)
+	return 0.0 if smallest == INF else smallest * 2.0
 
 
 func _all_past(field: ProtoUnitField, cross_x: float) -> bool:
@@ -332,16 +366,20 @@ func _all_past(field: ProtoUnitField, cross_x: float) -> bool:
 # ----------------------------------------------------------------- 내보내기
 
 
+## 표를 둘로 나눈다. **묻는 질문이 다르기 때문이다.**
+##
+## 하나는 "얼마나 떠는가 · 언제 멎는가", 다른 하나는 "정말 밀치지 않는가"다.
+## 한 줄에 열여섯 칸을 밀어 넣으면 어느 쪽도 읽히지 않는다.
 func _print_table(rows: Array[Dictionary]) -> void:
 	print(
 		(
 			"| 상황 | 꺾임 도/초 | 조향꺾임 도/초 | 흐름장 % | 역주행 % | 굽이 | 튕김 최대 "
-			+ "| 밀린거리 | 정지 | 90% | 통과 | 뒤진동 | 막힘 | 양보 | step 평균 | step 최악 |"
+			+ "| 정지 | 90% | 통과 | 뒤진동 | 막힘 | 양보 | step 평균 | step 최악 |"
 		)
 	)
 	print(
 		(
-			"| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- "
+			"| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- "
 			+ "| --- | --- |"
 		)
 	)
@@ -349,7 +387,7 @@ func _print_table(rows: Array[Dictionary]) -> void:
 		print(
 			(
 				(
-					"| %s | %.0f | %.0f | %.0f | %.1f | %.2f | %.1f px | %.0f px | %s | %s | %s "
+					"| %s | %.0f | %.0f | %.0f | %.1f | %.2f | %.1f px | %s | %s | %s "
 					+ "| %.1f px | %d | %d | %.3f ms | %.2f ms |"
 				)
 				% [
@@ -360,7 +398,6 @@ func _print_table(rows: Array[Dictionary]) -> void:
 					row["back"],
 					row["wiggle"],
 					row["peak"],
-					row["push"],
 					_seconds(row["settle"]),
 					_seconds(row["ninety"]),
 					_crossing(row["cross"], row["stranded"]),
@@ -369,6 +406,23 @@ func _print_table(rows: Array[Dictionary]) -> void:
 					row["waiting"],
 					row["step_ms"],
 					row["worst_ms"],
+				]
+			)
+		)
+	print("")
+	print("| 상황 | 정지밀림 | 최대겹침 | 몸 지름 | 막힌이동 | 밀린거리 |")
+	print("| --- | --- | --- | --- | --- | --- |")
+	for row in rows:
+		print(
+			(
+				"| %s | %.2f px | %.2f px | %.0f px | %.0f px | %.0f px |"
+				% [
+					row["label"],
+					row["settled_push"],
+					row["pierce"],
+					row["body"],
+					row["blocked_move"],
+					row["push"],
 				]
 			)
 		)

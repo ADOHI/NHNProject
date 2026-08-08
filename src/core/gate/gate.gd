@@ -1,0 +1,81 @@
+class_name Gate
+extends RefCounted
+## 열린 게이트 하나. 아웃게임에서 고르는 대상이다.
+##
+## ## 게이트와 던전은 다른 것이다
+##
+## 게이트는 **문**이고 던전은 **안쪽 공간**이다 (docs/design/22-guild-base.md §22.0).
+## 그래서 이 클래스는 방도 간선도 들지 않는다 — 등급 · 이름 · 공개 수준 · 씨앗만 든다.
+## 안쪽은 기존 생성기가 그대로 만든다 (src/core/dungeon/).
+##
+## ## 씨앗이 고정인 이유
+##
+## 같은 게이트를 고르면 언제나 같은 던전이 나와야 한다.
+## 고를 때마다 안쪽이 달라지면 "이 게이트를 고른다" 는 결정이 도박이 되고,
+## 정보실이 미리 보여 준 것(§22.5)도 거짓말이 된다.
+## 정보를 파는 시스템은 그 정보가 참일 때만 성립한다.
+
+## 목록에서 이 게이트를 가리키는 식별자.
+var id: String
+
+## 표시명.
+var display_name: String
+
+## 등급. 안쪽 던전의 크기와 보상 배수를 정한다.
+var rank: GateRank.Kind
+
+## 안쪽 던전의 씨앗. 이 값이 고정이라 같은 게이트가 같은 판을 낸다.
+var dungeon_seed: int
+
+## 해부 수준에서만 만들어지는 설계도. 만들기 전에는 null 이다.
+var _blueprint: DungeonBlueprint = null
+
+
+func _init(gate_id: String, name: String, gate_rank: GateRank.Kind, seed_value: int) -> void:
+	id = gate_id
+	display_name = name
+	rank = gate_rank
+	dungeon_seed = seed_value
+
+
+## 안쪽 던전의 크기 단계. SampleDungeons 의 크기 축과 같다.
+func dungeon_size() -> int:
+	return GateRank.dungeon_size(rank)
+
+
+## 안쪽 던전을 실제로 세운다.
+##
+## **생성은 기존 것을 그대로 쓴다.** 게이트가 넘겨받은 것은
+## "어떤 판을 열 것인가" 이지 "판을 어떻게 만드는가" 가 아니다.
+func create_run() -> DungeonRun:
+	return SampleDungeons.create_run(dungeon_seed, dungeon_size())
+
+
+## 설계도만 본다. 처음 한 번만 만들고 이후에는 같은 것을 돌려준다.
+##
+## 존재 배치 없이 구조만 필요할 때 쓴다 — 해부 수준의 미리보기가 그것이다.
+func blueprint() -> DungeonBlueprint:
+	if _blueprint == null:
+		var generator := DungeonGenerator.new(
+			dungeon_seed, SampleDungeons.params_for_size(dungeon_size())
+		)
+		_blueprint = generator.generate()
+	return _blueprint
+
+
+## 입장 전에 보이는 줄들. 공개 수준이 높을수록 길어진다.
+##
+## 문자열을 여기서 만드는 이유는 화면이 여럿이기 때문이다.
+## 임시 화면과 나중에 올 조형 화면이 같은 문장을 봐야 정보량이 어긋나지 않는다.
+func preview_lines(level: GateDisclosure.Level) -> Array[String]:
+	var lines: Array[String] = ["등급 %s" % GateRank.label(rank)]
+	if level >= GateDisclosure.Level.SURVEYED:
+		lines.append("예상 규모 %d 개 방" % SampleDungeons.room_estimate(dungeon_size()))
+	if GateDisclosure.needs_blueprint(level):
+		var plan := blueprint()
+		lines.append("실제 방 %d 개" % plan.room_ids().size())
+		lines.append("고가치 방 %d 개" % plan.rooms_of_kind(Room.Kind.TREASURE).size())
+		lines.append(
+			"보스 %s" % ("있음" if not plan.rooms_of_kind(Room.Kind.BOSS).is_empty() else "없음")
+		)
+	return lines
