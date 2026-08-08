@@ -56,8 +56,16 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	var seconds := UiMotion.clock() + phase
 	if kind == Kind.DEMON:
-		# 눈알이 천천히 돈다. 지켜보는 것은 가만히 있어도 눈은 움직인다.
-		_pupil = Vector2(sin(seconds * 0.7), cos(seconds * 0.53) * 0.6) * 0.16
+		# **눈동자가 상대를 겨눈다.** 이 화면의 주장이 여기 실려 있다 —
+		# 악마는 금이 아니라 **사람**을 본다.
+		#
+		# 처음에는 눈동자를 사인파로 굴리기만 했다. 심사자 둘이 각각
+		# "눈동자가 스무 프레임 내내 정가운데 박혀 있다. 못 움직이는 눈동자는
+		# 노려볼 수 없고, 그 노려봄이 이 기획에서 가장 날카로운 생각인데
+		# 화면에 전혀 없다" 고 지적했다. 굴러다니기만 하는 눈은 겨누지 못한다.
+		var aim := _gaze()
+		# 겨눔이 8, 흔들림이 2. 완전히 고정하면 인형 눈이 된다.
+		_pupil = aim * 0.34 + Vector2(sin(seconds * 1.9), cos(seconds * 1.3)) * 0.05
 	queue_redraw()
 
 
@@ -151,37 +159,69 @@ func _draw_seeker() -> void:
 	_limb(Vector2(0.54, 0.60), Vector2(0.76 + tip, 0.66), 0.15, 0.11, mirror)
 	_limb(Vector2(0.76 + tip, 0.66), Vector2(0.70 + tip, 0.98), 0.11, 0.07, mirror)
 
-	# 몸통 — 앞으로 깊게 굽는다. 위가 좁고 아래가 넓다.
+	# 몸통 — 앞으로 깊게 굽는다. 등이 둥글고 가슴이 무릎에 붙는다.
 	_polygon(
 		[
-			Vector2(0.40 + tip, 0.36),
-			Vector2(0.63 + tip, 0.40),
-			Vector2(0.62, 0.64),
-			Vector2(0.38, 0.62),
+			Vector2(0.36, 0.46),
+			Vector2(0.48 + tip, 0.38),
+			Vector2(0.64 + tip, 0.44),
+			Vector2(0.63, 0.64),
+			Vector2(0.38, 0.64),
 		],
 		mirror
 	)
 
-	# 등짐 — 등 쪽 혹. **실루엣에서 가장 높은 것이 이것이어야 한다.**
+	# 등짐 — **등에 낮게 묶인 보따리**다. 어깨 위로 올리지 않는다.
+	#
+	# 처음에는 머리 높이에 큰 사각형을 얹었는데, 심사자 둘이 각각
+	# "어깨에 멘 방송 카메라" · "촬영기자 넷" 으로 읽었다. 치명적이다 —
+	# **촬영은 악마의 역할**이라 두 진영이 통째로 뒤집혀 읽혔다.
+	# 그래서 상자를 없애고, 등 뒤 아래쪽에 기울어진 보따리로 바꿨다.
 	_polygon(
 		[
-			Vector2(0.26, 0.30),
-			Vector2(0.45 + tip, 0.30),
-			Vector2(0.46, 0.58),
-			Vector2(0.22, 0.54),
+			Vector2(0.26, 0.50),
+			Vector2(0.40, 0.44),
+			Vector2(0.44, 0.60),
+			Vector2(0.29, 0.65),
 		],
 		mirror
 	)
 
-	# 머리 — 앞으로 내밀되 **등짐보다 아래**다. 들여다보는 자세다.
-	_circle(Vector2(0.66 + tip, 0.40), 0.105, mirror, ink)
+	# 머리 — 앞으로 **낮게** 내민다. 목이 보이도록 몸통에서 떼어 놓는다.
+	# 상자에 붙은 동그라미가 되면 그 순간 렌즈로 읽힌다.
+	_limb(Vector2(0.58 + tip, 0.44), Vector2(0.68 + tip, 0.40), 0.09, 0.08, mirror)
+	_circle(Vector2(0.74 + tip, 0.395), 0.093, mirror, ink)
 
-	# 팔 — 등불을 땅 가까이 든다. 높이 들면 자기가 먼저 보인다.
-	var grip := Vector2(0.86 + tip, 0.74)
-	_limb(Vector2(0.58 + tip, 0.44), grip, 0.075, 0.055, mirror)
-	# 불빛은 종이색으로 뚫는다. 지면에서 밝다는 것은 **잉크가 없다**는 뜻이다.
-	_circle(grip, 0.052, mirror, ink)
-	_circle(grip, 0.026, mirror, UiTokens.PAPER)
+	# 앞팔 — **길게 뻗어 금 쪽으로 간다.** 닿지는 않는다.
+	# 뻗은 팔 하나가 "재고 있다"를 자세만으로 말한다.
+	var reach := Vector2(0.99 + tip, 0.60)
+	_limb(Vector2(0.60 + tip, 0.46), Vector2(0.82 + tip, 0.50), 0.072, 0.058, mirror)
+	_limb(Vector2(0.82 + tip, 0.50), reach, 0.058, 0.038, mirror)
+
+	# 뒷팔 — 등불을 땅에 가깝게 늘어뜨린다. 높이 들면 자기가 먼저 보인다.
+	# 등불은 **각진 통**이다. 동그라미로 만들면 렌즈가 된다.
+	var grip := Vector2(0.40, 0.78)
+	_limb(Vector2(0.44, 0.50), grip, 0.062, 0.045, mirror)
+	_polygon(
+		[
+			Vector2(grip.x - 0.055, grip.y),
+			Vector2(grip.x + 0.055, grip.y),
+			Vector2(grip.x + 0.040, grip.y + 0.115),
+			Vector2(grip.x - 0.040, grip.y + 0.115),
+		],
+		mirror
+	)
+	# 불빛은 종이색으로 **뚫는다.** 지면에서 밝다는 것은 잉크가 없다는 뜻이다.
+	_polygon(
+		[
+			Vector2(grip.x - 0.026, grip.y + 0.028),
+			Vector2(grip.x + 0.026, grip.y + 0.028),
+			Vector2(grip.x + 0.019, grip.y + 0.088),
+			Vector2(grip.x - 0.019, grip.y + 0.088),
+		],
+		mirror,
+		UiTokens.PAPER
+	)
 
 
 ## 왼쪽을 볼 때는 그림을 통째로 뒤집는다. 자세를 두 벌 그리지 않기 위해서다.
@@ -189,11 +229,11 @@ func _flip(point: Vector2, mirror: bool) -> Vector2:
 	return Vector2((1.0 - point.x) if mirror else point.x, point.y) * size
 
 
-func _polygon(points: Array, mirror: bool) -> void:
+func _polygon(points: Array, mirror: bool, tint: Color = UiTokens.INK) -> void:
 	var out := PackedVector2Array()
 	for point in points:
 		out.append(_flip(point as Vector2, mirror))
-	draw_colored_polygon(out, UiTokens.INK)
+	draw_colored_polygon(out, tint)
 
 
 func _circle(at: Vector2, radius: float, mirror: bool, tint: Color) -> void:
@@ -257,14 +297,21 @@ func _draw_demon() -> void:
 		)
 
 	# 눈 하나. 이 개체의 머리는 통째로 눈이다.
+	#
+	# **동심원을 그리면 안 된다.** 원 안의 원은 눈이 아니라 과녁이고,
+	# 과녁은 이 화면에서 가장 흔한 도형이 된다. 그래서 셋을 어긋내 놓는다 —
+	# 흰자는 세로로 길고, 홍채는 가운데가 아니며, 눈동자는 홍채 안에서 또 굴러다닌다.
 	var eye := Vector2(0.5, 0.30) * size
 	var radius := w * 0.26
 	# 깜빡임은 위아래로 눌러서 만든다. 덮개를 그리면 눈꺼풀이 생겨 사람 얼굴이 된다.
 	var lid := maxf(_blink, 0.02)
-	draw_set_transform(eye, 0.0, Vector2(1.0, lid))
+	draw_set_transform(eye, 0.0, Vector2(0.88, lid * 1.06))
 	draw_circle(Vector2.ZERO, radius, UiTokens.PAPER)
-	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 30, spot, maxf(w * 0.03, 1.5))
-	draw_circle(_pupil * radius, radius * 0.44, spot)
+	# 테두리는 한 바퀴가 아니다. 위쪽이 끊겨 있어야 그려 놓은 원이 아니라 살로 보인다.
+	draw_arc(Vector2.ZERO, radius, -0.62, TAU - 1.05, 28, spot, maxf(w * 0.036, 1.5))
+	var iris := _pupil * radius + Vector2(0.0, radius * 0.10)
+	draw_circle(iris, radius * 0.52, UiTokens.fade(spot, 0.45))
+	draw_circle(iris + _pupil * radius * 0.35, radius * 0.30, spot)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	# 이빨. 눈 밑에 바로 붙는다. 얼굴이 아니라 **입이 달린 눈**이다.

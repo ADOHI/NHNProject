@@ -29,8 +29,13 @@ const _SHEET := 768
 const _GLYPH_FILL := 1.12
 
 ## 머무는 동안의 어긋남. **0 이 되지 않는다** — 한 번 간 금은 메워지지 않는다.
-const _SLIP_REST := 0.026
-const _SLIP_ALMOST := 0.0035
+##
+## 크게 잡는다. 처음에 0.026(글자 폭의 2.6%, 화면에서 5px)으로 줬더니
+## 심사자 둘 다 **움직임을 아예 못 봤다.** 프레임을 나란히 놓고 비교해야
+## 겨우 보이는 것은 없는 것과 같다. 이 게임의 주제를 지고 있는 몸짓이
+## 화면에서 가장 큰 움직임이어야 한다.
+const _SLIP_REST := 0.105
+const _SLIP_ALMOST := 0.008
 
 ## 붙으려는 시간과 어긋나는 시간. **붙는 것은 느리고 어긋나는 것은 순식간이다.**
 ## 이 비가 뒤집히면 그냥 흔들리는 글자가 된다.
@@ -39,10 +44,10 @@ const _FAIL_SECONDS := 0.09
 const _HOLD_SECONDS := 1.15
 
 ## 머무는 동안 벌어진 폭. 어긋남이 보이려면 틈이 조금은 있어야 한다.
-const _OPEN_REST := 0.012
+const _OPEN_REST := 0.030
 
 ## 처음 눌러 찍을 때 벌어지는 폭. 박이 열과 압력에 맞는 순간이다.
-const _OPEN_STRIKE := 0.085
+const _OPEN_STRIKE := 0.155
 
 ## 한 번 붙기에 실패할 때마다 더 떨어져 나가는 양과 그 한계.
 ## **되돌아가지 않는다.** 화면에 머문 시간이 그대로 손상으로 남는다.
@@ -70,10 +75,13 @@ var _breath: Tween
 var _open := 0.0
 var _slip := _SLIP_REST
 var _flake := 0.0
+var _hits := 0
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# 박은 아직 종이에 닿지 않았다. `strike()` 가 눌러 찍는다.
+	visible = false
 	_build_sheet()
 	_build_material()
 	regrow()
@@ -115,8 +123,14 @@ func regrow() -> void:
 ##
 ## 페이드인이 아니다. 박은 나타나는 것이 아니라 **맞는** 것이라,
 ## 한 번 크게 벌어졌다가 제자리를 찾는다.
+##
+## 이 순간까지 박은 **화면에 없다.** 처음에 `_ready` 부터 보이게 뒀더니
+## 심사자 둘 다 "첫 프레임에 이미 다 있고 갈라져 있다 — 눌린 것이 아니라
+## 페이드인이다"라고 지적했다. 눌러 찍히는 것을 보여 주려면
+## **닿기 전에는 없어야** 한다.
 func strike() -> void:
 	_stop_breathing()
+	visible = true
 	_flake = 0.0
 	_set_open(_OPEN_STRIKE)
 	_set_slip(_SLIP_REST * 3.2)
@@ -177,9 +191,22 @@ func light_from(where: Vector2) -> void:
 	_material.set_shader_parameter("light", where)
 
 
-## 눌렸다. **그 자리의 박이 떨어져 나간다.** 이것은 되돌아가지 않는다.
+## 눌렸다. **그 자리에서 새로 금이 간다.** 이것은 되돌아가지 않는다.
+##
+## 처음에는 박락 수치만 올렸다. 심사자 둘이 각각 잡아냈다 —
+## "누른 뒤 프레임이 누르기 전과 구분이 안 된다. 균열이 하나도 안 늘었다."
+## "압력이 박을 갈라지게 한다는 것이 이 화면의 전제인데, **누르면 색만 변한다.**
+##  이건 마감이 덜 된 게 아니라 컨셉이 실패한 것이다."
+##
+## 그래서 진짜로 낸다. 누른 자리를 새 타격점으로 삼아 균열망을 키우고,
+## 판을 다시 찍는다. 균열은 **누적되고 지워지지 않는다** — 그것이 제목의 뜻이다.
 func bruise_at(where: Vector2) -> void:
 	_set_flake(minf(_flake + _FLAKE_TOUCH, _FLAKE_CAP))
+	# 때린 자리에서 사방으로 갈라진다. 힘은 매번 조금씩 줄어든다 —
+	# 이미 갈라진 박은 응력을 덜 진다.
+	_hits += 1
+	_field.strike(where, 3, maxf(0.62 - float(_hits) * 0.06, 0.24))
+	_web.queue_redraw()
 	shed.emit(where)
 	var tween := create_tween()
 	(

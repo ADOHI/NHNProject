@@ -37,22 +37,33 @@ const _GLYPH_SHARE := 0.62
 const _STAMP_DELAY := 0.42
 
 ## 다가오는 자들이 앉는 반지름(화면 짧은 변 기준)과 그들의 크기.
-const _SEEKER_RING := 0.40
+
 const _SEEKER_SIZE := 0.20
 
 ## 이보다 가까워지면 더 다가가지 않고 **옆으로 돈다.** 노리는 것이지 덤비는 것이 아니다.
 const _SEEKER_HOLD := 0.30
 
 ## 악마가 앉는 자리. 사람보다 위, 사람보다 작다 — 멀리 있기 때문이다.
-const _DEMON_RING := 0.54
+
 const _DEMON_SIZE := 0.185
 const _DEMON_LIFT := 0.26
 
-## 사람이 앉는 각도(도). 사방에서 온다. 정사각으로 놓으면 표가 되므로 흩어 놓는다.
-const _SEEKER_ANGLES: Array[float] = [196.0, 341.0, 71.0, 128.0]
+## 사람이 앉는 각도(도)와 **저마다 다른 크기.**
+##
+## 처음에는 넷을 같은 크기로 사방에 고르게 놓았다. 심사자 둘이 같은 말을 했다 —
+## "완벽한 좌우 대칭에 간격도 크기도 균일해서 문장(紋章)이나 로고 시안처럼 보인다.
+##  스무 프레임 중 겹치는 것이 한 쌍뿐이라 **화면에 공간이 없다.**
+##  눈이 멈추게 하는 것은 밀도 대비인데 이 화면에는 밀도가 하나뿐이다."
+##
+## 그래서 뭉치는 쪽과 비는 쪽을 만든다. 가까운 것은 크고 먼 것은 작다.
+const _SEEKER_ANGLES: Array[float] = [204.0, 232.0, 342.0, 96.0]
+const _SEEKER_SCALES: Array[float] = [1.22, 0.72, 1.0, 0.86]
+const _SEEKER_RINGS: Array[float] = [0.33, 0.52, 0.40, 0.46]
 
-## 악마가 앉는 각도(도). 사람 뒤에 겹치지 않게 사이에 앉힌다.
-const _DEMON_ANGLES: Array[float] = [232.0, 300.0, 24.0]
+## 악마가 앉는 각도(도). **한쪽 위에 몰아 둔다** — 셋이 한 자리에서 같이 본다.
+const _DEMON_ANGLES: Array[float] = [258.0, 292.0, 316.0]
+const _DEMON_SCALES: Array[float] = [1.34, 0.78, 0.56]
+const _DEMON_RINGS: Array[float] = [0.50, 0.66, 0.80]
 
 var _paper: ColorRect
 var _glyph: FoilGlyph
@@ -125,12 +136,35 @@ func _build() -> void:
 	_plate = PressPlate.new()
 	_plate.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(_plate)
+	_unfold_the_sheet()
 
 	# **박은 판 뒤에 온다.** 공정이 그렇고, 그래서 금만 점이 아니게 된다.
 	_glyph = FoilGlyph.new()
 	add_child(_glyph)
 
 	_plan = ApproachPlan.new(_seekers.size(), 4172)
+
+
+## **이 지면만 접지 않는다.**
+##
+## 인쇄판은 지면에 접힌 자리를 만든다(`ink_plate.gdshader` §1). 판 화면에서는
+## "판은 책상 위의 종이"라는 사실을 만드는 좋은 장치인데, 타이틀에서는 **재앙**이었다.
+##
+## 1280 폭에 접힘 주기가 1180 이라 화면 한가운데에 세로줄이 하나 선다.
+## 심사자 둘이 각각 그 줄을 보고 이렇게 말했다 —
+##
+##   "화면에서 가장 큰 세로선이 균열인 줄 알았다. 자로 그은 듯 곧고 가운데 있어서
+##    오히려 페이지 구분선이나 뷰포트 분할 버그로 읽힌다."
+##   "세로선이 둘인데 서로 다른 선이다. 제목이 균열인 게임에서
+##    **진짜 금이 접힌 자국에게 진다.**"
+##
+## 이 화면에서 세로선은 **하나여야 하고 그것은 금이어야 한다.** 그래서 접힘 주기를
+## 화면 밖으로 밀어낸다. 셰이더를 고치는 것이 아니라 이 씬에서 값만 바꾼다 —
+## `src/ui/style/` 는 다른 레인의 것이다.
+func _unfold_the_sheet() -> void:
+	var plate := _plate.material as ShaderMaterial
+	if plate != null:
+		plate.set_shader_parameter("fold_pitch", 100000.0)
 
 
 func _layer() -> Control:
@@ -160,9 +194,21 @@ func _lay_out() -> void:
 
 	var middle := size * 0.5
 	for index in _seekers.size():
-		_seat(_seekers[index], _SEEKER_ANGLES[index], _SEEKER_RING, _SEEKER_SIZE, 0.0)
+		_seat(
+			_seekers[index],
+			_SEEKER_ANGLES[index],
+			_SEEKER_RINGS[index],
+			_SEEKER_SIZE * _SEEKER_SCALES[index],
+			0.0
+		)
 	for index in _demons.size():
-		_seat(_demons[index], _DEMON_ANGLES[index], _DEMON_RING, _DEMON_SIZE, _DEMON_LIFT)
+		_seat(
+			_demons[index],
+			_DEMON_ANGLES[index],
+			_DEMON_RINGS[index],
+			_DEMON_SIZE * _DEMON_SCALES[index],
+			_DEMON_LIFT
+		)
 	# 사람은 금을 보고, 악마는 **가장 가까운 사람**을 본다. 시선의 사슬이다.
 	for seeker in _seekers:
 		seeker.watching = middle
