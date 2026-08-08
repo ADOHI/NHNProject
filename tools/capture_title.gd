@@ -52,6 +52,12 @@ func _plan() -> void:
 	_call(func() -> void: _sway(Vector2(0.94, 0.86)))
 	_wait(0.9)
 	_shot("sway_right")
+	# 시차는 **정지 화면 두 장으로 증명되지 않는다.** 왼쪽 끝과 오른쪽 끝만 있으면
+	# 겹이 각자 다른 속도로 흐르는 것이 아니라 그냥 두 배치로 보인다.
+	# 커서를 화면 가로로 천천히 훑으면서 매 프레임 찍어야 **속도 차이**가 드러난다.
+	_call(func() -> void: _sway(Vector2(0.08, 0.5)))
+	_wait(1.2)
+	_sweep("sweep", 24, 0.055)
 	_call(_measure)
 
 
@@ -80,6 +86,18 @@ func _process(delta: float) -> bool:
 				job["saved"] = saved + 1
 				if job["saved"] >= int(job["count"]):
 					_advance()
+		"sweep":
+			_clock += delta
+			var done: int = job["saved"]
+			if _clock >= float(job["gap"]) * float(done + 1):
+				# 커서를 왼쪽 끝에서 오른쪽 끝으로 옮기며 찍는다. 판은 무거워서
+				# 곧바로 안 따라오므로(`_sway` 가 lerp 다) 프레임마다 목표만 옮긴다.
+				var at := float(done) / maxf(1.0, float(int(job["count"]) - 1))
+				_sway(Vector2(lerpf(0.08, 0.92, at), 0.5))
+				_save("%s_%02d" % [job["tag"], done + 1])
+				job["saved"] = done + 1
+				if job["saved"] >= int(job["count"]):
+					_advance()
 	return false
 
 
@@ -98,6 +116,11 @@ func _call(action: Callable) -> void:
 
 func _film(tag: String, count: int, gap: float) -> void:
 	_queue.append({"kind": "film", "tag": tag, "count": count, "gap": gap, "saved": 0})
+
+
+## 커서를 가로로 훑으면서 이어 찍는다. **시차 전용**이다.
+func _sweep(tag: String, count: int, gap: float) -> void:
+	_queue.append({"kind": "sweep", "tag": tag, "count": count, "gap": gap, "saved": 0})
 
 
 ## 한 장만 필요할 때. 값이 화면에 반영될 시간을 조금 준다.
