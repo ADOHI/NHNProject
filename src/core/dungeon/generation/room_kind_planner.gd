@@ -30,10 +30,16 @@ const _NAMES_BY_KIND := {
 
 
 ## 방 id -> Room.Kind.
+##
+## **보스 방은 생성기가 정해서 넘긴다.** 예전에는 여기서 「필요 민첩이 가장 높은 방」을
+## 골랐는데, 그러면 보상이 구조를 만들지 못하고 구조에 얹힐 뿐이었다 —
+## 보스 방의 차수가 1.08 이었고(판 평균 3.00) 대안 경로가 있는 판이 7.5% 였다.
+## 지금은 자리를 먼저 정하고 그 주변을 설계한다 (`DungeonRouteBuilder`, §17.17).
 static func plan(
 	graph: DungeonGraph,
 	entrance: String,
 	exit_id: String,
+	boss_id: String,
 	rng: RandomNumberGenerator,
 	treasure_ratio: float,
 	hazard_ratio: float
@@ -42,9 +48,11 @@ static func plan(
 	var assignments := {entrance: Room.Kind.ENTRANCE}
 	if not exit_id.is_empty() and exit_id != entrance:
 		assignments[exit_id] = Room.Kind.EXIT
+	if not boss_id.is_empty() and not assignments.has(boss_id):
+		assignments[boss_id] = Room.Kind.BOSS
 
 	var ranked := _by_cost_descending(graph, entrance, costs, assignments)
-	_place_valuables(assignments, ranked, costs, treasure_ratio)
+	_place_valuables(graph, assignments, ranked, costs, treasure_ratio)
 	_place_hazards(assignments, ranked, rng, hazard_ratio)
 	return assignments
 
@@ -88,24 +96,38 @@ static func _by_cost_descending(
 	return result
 
 
-## V3 — 보스와 귀중품은 **필요 민첩이 0 보다 큰 방에만** 놓는다.
+## V3 — 귀중품은 **필요 민첩이 0 보다 큰 방에만** 놓는다.
 ##
 ## 0 인 방에 놓으면 기본 탈출구와 같은 값으로 닿게 되어 보상이 대가를 요구하지 않는다.
 ## 자격이 되는 방이 모자라면 그만큼만 놓는다. 억지로 채우면 규칙이 깨진다.
+##
+## **막다른 방을 먼저 쓴다** (P4). 차수 1 인 방에 귀중품을 두면 들어갔다 도로 나와야 해서
+## 위험이 커진다 — 「들어갔다 나올까」가 걸리는 결정이다.
+##
+## 보스 방(P3, 차수 4 이상)과는 **반대 방향의 설계**다. 둘은 같은 방에서 성립할 수 없으므로
+## 역할을 나눈다 — 보스는 노출된 목적지, 부차 귀중품은 매달린 곳 (§17.12.4).
+## 그래서 두 지표를 한 평균으로 재면 둘 다 실패로 보인다. 종류별로 나눠 재야 한다.
 static func _place_valuables(
-	assignments: Dictionary, ranked: Array[String], costs: Dictionary, treasure_ratio: float
+	graph: DungeonGraph,
+	assignments: Dictionary,
+	ranked: Array[String],
+	costs: Dictionary,
+	treasure_ratio: float
 ) -> void:
 	var budget := maxi(1, int(round(float(ranked.size()) * treasure_ratio)))
-	var boss_placed := false
+	var dead_ends: Array[String] = []
+	var others: Array[String] = []
 	for id in ranked:
 		if int(costs.get(id, 0)) <= 0:
-			break
-		if not boss_placed:
-			assignments[id] = Room.Kind.BOSS
-			boss_placed = true
 			continue
+		if graph.neighbors_of(id).size() <= 1:
+			dead_ends.append(id)
+		else:
+			others.append(id)
+
+	for id in dead_ends + others:
 		if budget <= 0:
-			break
+			return
 		assignments[id] = Room.Kind.TREASURE
 		budget -= 1
 
