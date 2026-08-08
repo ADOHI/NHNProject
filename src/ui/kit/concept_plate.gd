@@ -10,7 +10,7 @@ extends BaseButton
 ## 요소가 영원히 도착하지 않아 타격감이 생기지 않는다 (앞 판이 그래서 죽었다).
 
 ## 어느 컨셉으로 움직일 것인가.
-enum Concept { SLAM, SHEAR }
+enum Concept { SLAM, SHEAR, HOLD }
 
 const FONT := preload("res://assets/fonts/song_myung/SongMyung-Regular.ttf")
 
@@ -67,6 +67,8 @@ func _process(delta: float) -> void:
 
 func _evaluate() -> PlateState:
 	match concept:
+		Concept.HOLD:
+			return HoldMotion.evaluate(_time, _hover_time, _hovering, _press_time, _pressing, _seed)
 		Concept.SHEAR:
 			return ShearMotion.evaluate(
 				_time, _hover_time, _hovering, _press_time, _pressing, _seed
