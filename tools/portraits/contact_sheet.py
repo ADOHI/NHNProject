@@ -127,11 +127,21 @@ def build(folder: str, out: str) -> int:
     else:
         print(f"  [!] 타이틀 판을 못 찾았다: {TITLE_ART}", file=sys.stderr)
 
+    placed: set[str] = set()
     for name, ko, _p in DISCIPLINES:
         plates = _row_of(d, name)
         if plates:
+            placed.update(p.name for p in plates)
             rows.append((f"{ko} ({name})", [_tile(p) for p in plates],
                          [p.stem.split("_", 1)[1] for p in plates]))
+
+    # 격자 이름이 아닌 판(캐스트 초상 `13_v2.png` 등)은 한 줄에 모아 놓는다.
+    # **격자를 폐기했어도 이 도구는 산다** — 나란히 놓고 보는 것이 화풍 판정의
+    # 권위 있는 방법이기 때문이다 (§27.12).
+    rest = sorted(p for p in d.glob("*.png")
+                  if not p.name.startswith("_") and p.name not in placed)
+    if rest:
+        rows.append(("이번 초상", [_tile(p) for p in rest], [p.stem for p in rest]))
 
     if not rows:
         print(f"  [x] 놓을 판이 없다: {d}", file=sys.stderr)
