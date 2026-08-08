@@ -15,6 +15,8 @@ var _plates: Array[ConceptPlate] = []
 var _guide: Label
 var _time: float = 0.0
 var _scripted: bool = true
+var _concept: ConceptPlate.Concept = ConceptPlate.Concept.SLAM
+var _guide_wanted: bool = true
 
 
 func _ready() -> void:
@@ -51,12 +53,31 @@ func _run_script() -> void:
 	_plates[0].scripted_press = press
 
 
+## 컨셉을 갈아 끼운다. 배치와 글자는 그대로 두고 **움직임만** 바뀌어야
+## 넷을 나란히 놓았을 때 무엇 때문에 달라 보이는지 알 수 있다.
+func set_concept(name: String) -> void:
+	match name.to_lower():
+		"shear":
+			_concept = ConceptPlate.Concept.SHEAR
+		_:
+			_concept = ConceptPlate.Concept.SLAM
+	# 판이 아직 없을 수 있다 (위 설명 참고). 그때는 `_build_plates()` 가 집어 간다.
+	for plate in _plates:
+		plate.concept = _concept
+
+
 func stage_time() -> float:
 	return _time
 
 
 ## 캡처가 안내 글자를 끈다. 조작 안내가 그림에 남으면 조형이 아니라 스크린샷을 보게 된다.
+##
+## **`_ready()` 보다 먼저 불릴 수 있다.** SceneTree 스크립트의 `_initialize()` 안에서
+## `add_child()` 해도 `_ready()` 는 그 자리에서 돌지 않는다 — 실제로 이걸 몰라서
+## 컨셉 전환이 통째로 먹히지 않았고 안내 글자가 캡처에 남았다.
+## 그래서 뜻만 받아 두고 실제 적용은 `_ready()` 가 한다.
 func set_guide_visible(shown: bool) -> void:
+	_guide_wanted = shown
 	if _guide != null:
 		_guide.visible = shown
 
@@ -95,6 +116,7 @@ func _build_plates() -> void:
 		var plate := ConceptPlate.new()
 		plate.text = LABELS[i]
 		plate.font_size = 22 if i == 0 else 18
+		plate.concept = _concept
 		plate.position = at + Vector2(float(i) * 34.0, float(i) * 104.0)
 		plate.size = Vector2(300.0 if i == 0 else 236.0, 68.0 if i == 0 else 56.0)
 		add_child(plate)
@@ -111,6 +133,7 @@ func _build_guide() -> void:
 	_guide.position = Vector2(28.0, 668.0)
 	_guide.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_guide.text = _guide_text()
+	_guide.visible = _guide_wanted
 	add_child(_guide)
 
 

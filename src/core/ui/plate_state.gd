@@ -28,8 +28,17 @@ var ink: Color = Color.WHITE
 ## 강세 막대의 길이 (판 폭에 대한 비율).
 var bar: float = 0.0
 
-## 판을 위아래로 갈라 서로 반대로 밀어낸 거리(px). 0 이면 안 갈라진다.
-var split: float = 0.0
+## 판을 벤 자리들. 판 복판을 원점으로 한 좌표이고, 비어 있으면 안 갈라진다.
+var cuts: Array[Vector2] = []
+
+## 벤 선의 법선. 조각은 이 선을 **따라** 미끄러진다 — 가로지르는 것이 아니라.
+var cut_normal: Vector2 = Vector2(0.26, -0.97)
+
+## 조각마다 밀린 거리. `cuts` 보다 하나 많은 것이 정상이다.
+var piece_slide: Array[Vector2] = []
+
+## 조각마다 틀어진 각. 평행이동만 하면 잘린 조각이 아니라 미끄러진 판이다.
+var piece_spin: Array[float] = []
 
 ## 충격 고리. 0 이면 없고 1 이면 막 터진 것이다.
 var shock: float = 0.0

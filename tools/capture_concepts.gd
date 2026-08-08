@@ -28,6 +28,8 @@ func _initialize() -> void:
 		_prefix = "res://%s" % args[0]
 	_stage = load("res://src/ui/kit/concept_stage.tscn").instantiate()
 	root.add_child(_stage)
+	if args.size() > 1:
+		_stage.call("set_concept", args[1])
 	_stage.call("set_guide_visible", false)
 
 

@@ -10,7 +10,7 @@ extends BaseButton
 ## 요소가 영원히 도착하지 않아 타격감이 생기지 않는다 (앞 판이 그래서 죽었다).
 
 ## 어느 컨셉으로 움직일 것인가.
-enum Concept { SLAM }
+enum Concept { SLAM, SHEAR }
 
 const FONT := preload("res://assets/fonts/song_myung/SongMyung-Regular.ttf")
 
@@ -67,6 +67,10 @@ func _process(delta: float) -> void:
 
 func _evaluate() -> PlateState:
 	match concept:
+		Concept.SHEAR:
+			return ShearMotion.evaluate(
+				_time, _hover_time, _hovering, _press_time, _pressing, _seed
+			)
 		_:
 			return SlamMotion.evaluate(_time, _hover_time, _hovering, _press_time, _pressing, _seed)
 
@@ -78,9 +82,17 @@ func _draw() -> void:
 
 	# 잔상부터. 뒤에 남은 것이 먼저 깔려야 본체가 앞에 선다.
 	for ghost in state.ghosts:
-		_draw_body(ghost["offset"], ghost["scale"], ghost["skew"], 0.0, ghost["color"], 0.0)
+		draw_colored_polygon(
+			_quad(ghost["offset"], ghost["scale"], ghost["skew"], 0.0), ghost["color"]
+		)
 
-	_draw_body(state.offset, state.scale, state.skew, state.rotation, state.body, state.bar)
+	var quad := _quad(state.offset, state.scale, state.skew, state.rotation)
+	if state.cuts.is_empty():
+		draw_colored_polygon(quad, state.body)
+	else:
+		_draw_sliced(state, quad)
+	if state.bar > 0.001:
+		_draw_bar(quad, state.bar)
 
 	if state.shock > 0.001:
 		_draw_shock(state)
@@ -88,15 +100,38 @@ func _draw() -> void:
 	_draw_label(state)
 
 
-## 판 하나. 기울이면 사각형이 평행사변형이 된다 — 직각은 기본값의 얼굴이다.
-func _draw_body(
-	at: Vector2,
-	body_scale: Vector2,
-	body_skew: float,
-	body_rotation: float,
-	color: Color,
-	bar_amount: float
-) -> void:
+## 벤 판. **밑에 강세색을 깔고 그 위에 조각을 얹는다.**
+##
+## 조각이 미끄러져 벌어진 자리에서 강세색이 저절로 드러난다. 틈을 따로 그리는 것보다
+## 정확하다 — 조각이 얼마나 어긋났든 드러나는 넓이가 알아서 맞는다.
+func _draw_sliced(state: PlateState, quad: PackedVector2Array) -> void:
+	draw_colored_polygon(quad, state.accent)
+	var pieces := PolygonCut.slice(quad, state.cuts, state.cut_normal)
+	for i in range(pieces.size()):
+		var piece := pieces[i]
+		var slide: Vector2 = state.piece_slide[i] if i < state.piece_slide.size() else Vector2.ZERO
+		var spin: float = state.piece_spin[i] if i < state.piece_spin.size() else 0.0
+		if absf(spin) > 0.0001:
+			var pivot := _centroid(piece)
+			var turn := Transform2D(spin, Vector2.ZERO)
+			for j in range(piece.size()):
+				piece[j] = turn * (piece[j] - pivot) + pivot
+		for j in range(piece.size()):
+			piece[j] += slide
+		draw_colored_polygon(piece, state.body)
+
+
+func _centroid(piece: PackedVector2Array) -> Vector2:
+	var total := Vector2.ZERO
+	for point in piece:
+		total += point
+	return total / maxf(1.0, float(piece.size()))
+
+
+## 판의 네 귀퉁이. 기울이면 사각형이 평행사변형이 된다 — 직각은 기본값의 얼굴이다.
+func _quad(
+	at: Vector2, body_scale: Vector2, body_skew: float, body_rotation: float
+) -> PackedVector2Array:
 	var half := size * 0.5
 	var lean := tan(body_skew) * size.y * 0.5
 	var corners := PackedVector2Array(
@@ -110,10 +145,7 @@ func _draw_body(
 	var transform_matrix := Transform2D(body_rotation, half + at)
 	for i in range(corners.size()):
 		corners[i] = transform_matrix * (corners[i] * body_scale)
-	draw_colored_polygon(corners, color)
-
-	if bar_amount > 0.001:
-		_draw_bar(corners, bar_amount)
+	return corners
 
 
 ## 강세 막대. 판의 아래 모서리를 따라 자란다.
