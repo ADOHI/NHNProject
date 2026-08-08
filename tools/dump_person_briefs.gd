@@ -72,13 +72,68 @@ const _TRAITS_HEAD := "[성향]"
 ## 관계 칸의 머리. 없으면 **가족이 없는 사람이라** 없다고 적어 넣는다.
 const _RELATIONS_HEAD := "[관계]"
 
+## 데모 캐스트의 자리표. **인덱스가 아니라 성질로 고른다** (§27.21).
+##
+## **인구가 두 번 바뀌었다** — `924fab1`(성) 과 `91fd59b`(성별) 이 RNG 흐름에
+## 들어가면서 같은 시드의 같은 인덱스가 다른 사람이 됐다. 앞 레인의 `#13 오라빈` 은
+## 이제 없다. **인덱스를 적어 두면 다음 머지에 통째로 버린다.**
+##
+## 성질로 적어 두면 인구가 바뀌어도 **기준이 산다.** 같은 조건에 맞는 다른 사람이
+## 뽑힐 뿐이고, 캐스트가 무엇을 시험하려던 것인지는 그대로다.
+##
+## **자리 열다섯이다.** 앞 다섯이 계열이고 나머지 열이 시험할 극단들이다.
+## 계열 다섯은 §24.20.4 가 계열별로 풀을 갈라 뒀으므로 **하나도 빠지면 안 된다.**
+const CAST_SLOTS := [
+	# 계열 다섯. **가족이 있고 극이 둘 이상** — 열전이 쓸 재료가 가장 많은 인물이다.
+	"계열-전투",
+	"계열-정찰",
+	"계열-기공",
+	"계열-교섭",
+	"계열-감식",
+	# 무색 둘. **극이 하나도 없는 사람이 34% 라 다수다** (§27.5).
+	# 가족이 있는 쪽과 없는 쪽을 나눈다 — **없는 쪽이 모델에게 가장 재료가 적다.**
+	"무색-가족있음",
+	"무색-혼자",
+	# 유명세 상위 1%. **알려진 이유가 있어야 한다** — 열전이 그것을 대야 한다.
+	"유명함",
+	# 나이 양 끝. 16 과 55 는 같은 일을 해도 다른 사람이다.
+	"가장어림",
+	"가장늙음",
+	# 관계 양 끝. **가족을 어떻게 쓰나 · 없을 때 무엇을 지어내나.**
+	"가족많음",
+	"혈혈단신",
+	# 소속 없음. §24.2 의 "기본은 모르는 사이" 가 사람으로 나온 자리다.
+	"무소속",
+	# 극이 넷 이상. 22% 다 (§24.16.3). **여섯 축이 얼굴을 두고 싸우는 자리** (§27.5.1).
+	"극단적",
+	# **여성 전투.** 시안이 성별 쏠림을 냈다 (전투 7장 전부 남자, §27.19.1).
+	# 레코드가 성별을 갖게 됐으니 **쏠림이 실제로 풀렸는지 볼 대조군이 필요하다.**
+	"여성-전투",
+]
+
+## 「가장 어림」 · 「가장 늙음」의 경계. `PersonGenerator` 의 상하한에서 끌어온다 —
+## 베껴 적으면 상수를 고쳤을 때 거짓말한다 (`survey_npc_kin.gd` 의 규율).
+const _YOUNG_MAX := PersonGenerator.AGE_MIN + 3
+const _OLD_MIN := PersonGenerator.AGE_MAX - 8
+
+## 「유명함」의 경계. §24.16.9 실측 — 90 이상이 상위 1.2% 다.
+const _FAMOUS_MIN := 90
+
+## 「가족 많음」의 경계. 차수 중위 1 · 90% 2 라(실측) 5 면 꼬리 끝이다.
+const _MANY_KIN := 5
+
+## 「극단적」의 경계. §24.16.3 의 가중치에서 넷 이상이 22% 다.
+const _MANY_POLES := 4
+
 
 func _initialize() -> void:
 	var args := _args()
 	var registry := PersonGenerator.new(_SEED, _POPULATION).generate()
 	var graph := _seed_kin(registry)
 
-	if args.has("pick"):
+	if args.has("cast"):
+		_print_cast(registry, graph)
+	elif args.has("pick"):
 		_print_candidates(registry, graph, int(args["pick"]), String(args.get("mode", "poles")))
 	else:
 		var index := int(args.get("index", 0))
@@ -153,6 +208,118 @@ func _print_candidates(
 		if shown >= want:
 			break
 	print("\n  소속 분포는 참고: 소속 %d개" % factions.populated_count())
+
+
+## 데모 캐스트를 자리표대로 채운다 (§27.21). **인덱스가 아니라 성질이 기준이다.**
+##
+## 인구를 앞에서부터 훑으며 각 자리에 **처음 맞는 사람**을 넣는다. 훑는 순서가
+## 인덱스 순이라 결정론적이다 — 같은 인구면 같은 캐스트가 나온다.
+##
+## 한 사람이 두 자리를 채우지 않는다. 겹치면 캐스트가 열다섯이 아니라 열둘이 되고,
+## **자리마다 다른 것을 시험하려던 뜻이 사라진다.**
+func _print_cast(registry: PersonRegistry, graph: RelationGraph) -> void:
+	var taken := {}
+	var chosen := {}
+	for slot in CAST_SLOTS:
+		for person in registry.size():
+			if taken.has(person):
+				continue
+			if not _fills_slot(registry, graph, person, String(slot)):
+				continue
+			taken[person] = true
+			chosen[slot] = person
+			break
+
+	print("=== 데모 캐스트 (시드 %d · 인구 %d) ===" % [_SEED, _POPULATION])
+	var males := 0
+	var missing := PackedStringArray()
+	for slot in CAST_SLOTS:
+		if not chosen.has(slot):
+			missing.append(String(slot))
+			print("  %-14s  **빈자리 — 인구에 맞는 사람이 없다**" % slot)
+			continue
+		var person: int = chosen[slot]
+		if registry.gender_of(person) == PersonGender.Kind.MALE:
+			males += 1
+		print(
+			(
+				"  %-14s %5d  %-10s %-4s %s %2d세 유명세%3d 관계%2d  %s"
+				% [
+					slot,
+					person,
+					registry.name_of(person),
+					MemberDiscipline.label(registry.discipline_of(person)),
+					PersonGender.label(registry.gender_of(person)),
+					registry.age_of(person),
+					registry.fame_of(person),
+					graph.degree_of(person),
+					PersonTag.of(registry.traits_of(person)),
+				]
+			)
+		)
+	# **성별 쏠림을 세어서 찍는다.** 시안이 낸 걱정거리가 그것이고(§27.19.1),
+	# 레코드가 성별을 갖게 된 뒤에도 캐스트가 한쪽으로 쏠리면 자리표가 틀린 것이다.
+	print(
+		(
+			"\n  뽑힌 사람 %d/%d · 남 %d 여 %d"
+			% [chosen.size(), CAST_SLOTS.size(), males, chosen.size() - males]
+		)
+	)
+	if not missing.is_empty():
+		print("  **빈자리: %s** — 조건을 낮추거나 인구를 늘려야 한다" % " ".join(missing))
+
+
+## 자리 하나의 조건. **여기가 캐스트의 정의다** — 인덱스는 어디에도 안 적힌다.
+##
+## 돌려주는 자리를 하나로 모은다. 자리마다 `return` 을 두면 열다섯 개가 되고
+## `gdlint` 의 `max-returns` 에 걸린다 — 그리고 자리를 더할 때마다 더 걸린다.
+func _fills_slot(registry: PersonRegistry, graph: RelationGraph, person: int, slot: String) -> bool:
+	var poles := PersonTag.poles_of(registry.traits_of(person)).size()
+	var kin := graph.degree_of(person)
+	var ok := false
+	match slot:
+		"계열-전투":
+			ok = _discipline_slot(registry, person, MemberDiscipline.Kind.COMBAT, poles, kin)
+		"계열-정찰":
+			ok = _discipline_slot(registry, person, MemberDiscipline.Kind.SCOUT, poles, kin)
+		"계열-기공":
+			ok = _discipline_slot(registry, person, MemberDiscipline.Kind.ENGINEER, poles, kin)
+		"계열-교섭":
+			ok = _discipline_slot(registry, person, MemberDiscipline.Kind.BROKER, poles, kin)
+		"계열-감식":
+			ok = _discipline_slot(registry, person, MemberDiscipline.Kind.APPRAISER, poles, kin)
+		"무색-가족있음":
+			ok = poles == 0 and kin > 0
+		"무색-혼자":
+			ok = poles == 0 and kin == 0
+		"유명함":
+			ok = registry.fame_of(person) >= _FAMOUS_MIN
+		"가장어림":
+			ok = registry.age_of(person) <= _YOUNG_MAX
+		"가장늙음":
+			ok = registry.age_of(person) >= _OLD_MIN
+		"가족많음":
+			ok = kin >= _MANY_KIN
+		"혈혈단신":
+			ok = kin == 0
+		"무소속":
+			ok = registry.faction_of(person) == PersonRegistry.NO_FACTION
+		"극단적":
+			ok = poles >= _MANY_POLES
+		"여성-전투":
+			ok = (
+				registry.gender_of(person) == PersonGender.Kind.FEMALE
+				and registry.discipline_of(person) == MemberDiscipline.Kind.COMBAT
+			)
+	return ok
+
+
+## 계열 자리의 공통 조건 — **가족이 있고 극이 둘 이상.**
+## 열전이 원인을 대려면 재료가 있어야 한다 (§27.19.2).
+func _discipline_slot(
+	registry: PersonRegistry, person: int, kind: MemberDiscipline.Kind, poles: int, kin: int
+) -> bool:
+	return registry.discipline_of(person) == kind and poles >= 2 and kin > 0
 
 
 func _matches(registry: PersonRegistry, graph: RelationGraph, person: int, mode: String) -> bool:
