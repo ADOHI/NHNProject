@@ -65,6 +65,9 @@ const _VALUE_UNITS := "골드|원|냥|피해|데미지|대미지|딜|뎀|체력|
 const _SYLLABLE_FIRST := 0xAC00
 const _SYLLABLE_LAST := 0xD7A3
 
+## 반복 검출에서 훑는 음절 수. 넷이면 어미가 갈라져도 앞쪽이 남는다.
+const _GRAM := 4
+
 ## 한글 호환 자모 영역. `ㅋㅋ` `ㄹㅇ` `ㅠㅠ` 가 여기 있다. 커뮤니티 말투의 절반이다.
 const _JAMO_FIRST := 0x3131
 const _JAMO_LAST := 0x3163
@@ -244,6 +247,82 @@ static func title_of(text: String) -> String:
 			continue
 		return _retag(trimmed, "")
 	return ""
+
+
+## 최근 게시글에서 **이미 두 번 이상 나온 말.**
+##
+## 이것을 다음 턴 입력의 `이미 써먹은 말` 로 되돌려 준다.
+## 제목만 되돌려 줬을 때 `학계 정설` 이 7편에서 3편으로 줄었다 — **되돌려 주면 준다.**
+## 그런데 제목만으로는 본문과 댓글의 버릇을 못 잡는다.
+## `A가 아니라 B다` 구문이 28편 중 18편에 있었다 (§19.B.8).
+##
+## ## 낱말이 아니라 음절 덩어리로 센다
+##
+## 한국어는 같은 말이 어미로 갈라진다 — `학계 정설임` 과 `학계 정설이지` 는
+## 낱말로 맞추면 서로 다른 말이다. 그래서 **띄어쓰기를 지우고 네 음절씩 훑는다.**
+## 어미가 달라도 앞쪽 네 음절이 같으면 같은 버릇으로 잡힌다.
+##
+## **이미 반복된 것만 고른다.** 한 번 나온 말까지 금지하면 화자의 어휘가 매 턴 깎이고,
+## 무엇을 금지할지 사람이 정하면 그 목록이 곧 새로운 틀이 된다.
+## 두 번 나왔다는 사실 자체가 고르는 기준이라 목록이 저절로 판을 따라간다.
+##
+## `exclude` 는 이번 턴 입력이다. 거기 있는 말(인물 · 방 · 등급)은 금지하면 안 된다 —
+## 사실을 말하지 못하게 막는 꼴이 된다.
+static func repeated_phrases(
+	recent: Array[String], exclude: String = "", limit: int = 5
+) -> Array[String]:
+	var barred := _hangul_only(exclude)
+	var counts: Dictionary = {}
+	for post in recent:
+		for gram in _grams_in(post):
+			counts[gram] = int(counts.get(gram, 0)) + 1
+
+	var ranked: Array[String] = []
+	for gram in counts:
+		if int(counts[gram]) >= 2 and not barred.contains(gram):
+			ranked.append(gram)
+	ranked.sort_custom(func(a: String, b: String) -> bool: return int(counts[a]) > int(counts[b]))
+
+	# 한 구절에서 나온 이웃 덩어리들을 다 싣지 않는다. `학계정설` 과 `계정설임` 을
+	# 둘 다 주면 금지 목록이 같은 말로 채워져 정작 다른 버릇이 밀려난다.
+	var found: Array[String] = []
+	for gram in ranked:
+		if found.size() >= maxi(0, limit):
+			break
+		if not _overlaps(found, gram):
+			found.append(gram)
+	return found
+
+
+## 그 글에 나오는 서로 다른 음절 덩어리들.
+static func _grams_in(post: String) -> Array[String]:
+	var text := _hangul_only(post)
+	var seen: Dictionary = {}
+	for i in maxi(0, text.length() - _GRAM + 1):
+		seen[text.substr(i, _GRAM)] = true
+	var result: Array[String] = []
+	for gram in seen:
+		result.append(gram)
+	return result
+
+
+## 이미 고른 것과 겹치는가. 절반 넘게 같으면 같은 구절에서 나온 것으로 본다.
+static func _overlaps(found: Array[String], gram: String) -> bool:
+	var half := gram.substr(0, _GRAM / 2 + 1)
+	for kept in found:
+		if kept.contains(half) or gram.contains(kept.substr(0, _GRAM / 2 + 1)):
+			return true
+	return false
+
+
+## 한글 음절만 남긴다. 띄어쓰기와 부호는 버린다.
+static func _hangul_only(text: String) -> String:
+	var kept := ""
+	for i in text.length():
+		var code := text[i].unicode_at(0)
+		if code >= _SYLLABLE_FIRST and code <= _SYLLABLE_LAST:
+			kept += text[i]
+	return kept
 
 
 ## 이 게시글이 쓴 서로 다른 닉의 수. 다음 편의 시작 번호를 이만큼 밀면 겹치지 않는다.

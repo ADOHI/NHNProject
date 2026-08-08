@@ -29,9 +29,14 @@ extends RefCounted
 
 ## 한 번에 넘길 문맥 줄 수의 상한.
 ##
-## 프롬프트가 길수록 산출이 나빠진다(§19.A.2 발견 1). 검증된 표본이 다섯 줄이었고,
-## 여섯이 그 위로 한 칸이다. 더 늘리려면 재측정이 필요하다.
-const MAX_FACTS := 6
+## 프롬프트가 길수록 산출이 나빠진다(§19.A.2 발견 1).
+##
+## **여섯에서 넷으로 줄였다.** 여섯을 주면 모델이 그것을 다 쓴다 — 실측 사용률이
+## 90~100%였고, 한 편은 입력 여섯 줄이 본문 여섯 줄에 순서까지 1:1 로 옮겨졌다.
+## 그 편에는 판단도 의심도 없어서 기사가 아니라 로그 뷰어가 됐다.
+## **본문이 대여섯 줄인데 사건 넷에 문맥 여섯이면 받아쓰기 말고는 할 수가 없다.**
+## 넷이면 자리가 남고, 남은 자리를 화자가 채운다.
+const MAX_FACTS := 4
 
 ## 종류별로 뽑을 줄 수의 상한. 한 종류가 판을 다 차지하면 나머지가 안 나간다.
 const _ROOM_CAP := 2
@@ -93,6 +98,11 @@ static func for_turn(
 	var rooms := _rooms_in(events)
 	if rooms.is_empty():
 		return _quiet_facts(run).slice(0, maxi(0, limit))
+	# 스쿼드가 나가는 턴은 이 판의 마지막 편이다. 그 편에서 방 이름과 옆방 상황을
+	# 알려 줘 봐야 쓸 턴이 없다. **다음 판으로 넘어가는 것만 남긴다** —
+	# 어느 방이 끝까지 안 털렸고 누가 아직 안에 있는가.
+	if _player_left(run, events):
+		return _quiet_facts(run).slice(0, maxi(0, limit))
 	var facts: Array[String] = []
 	facts.append_array(_state_facts(run, rooms, events))
 	facts.append_array(_neighbor_facts(run, rooms))
@@ -100,6 +110,14 @@ static func for_turn(
 	facts.append_array(_relation_facts(run, events, names))
 	facts.append_array(_room_facts(run, rooms))
 	return facts.slice(0, maxi(0, limit))
+
+
+## 이번 턴에 플레이어 스쿼드가 던전을 빠져나갔는가.
+static func _player_left(run: DungeonRun, events: Array[GameEvent]) -> bool:
+	for event in events:
+		if event.kind == GameEvent.Kind.ESCAPED and event.actor_id == run.player.id:
+			return true
+	return false
 
 
 ## 아무 일도 없는 턴에 넘길 것.

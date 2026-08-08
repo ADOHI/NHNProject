@@ -207,6 +207,17 @@ func test_a_quiet_turn_reports_what_absence_tells_us() -> void:
 	assert_string_contains(joined, "아무도 손대지 않은 귀중품 방이다")
 
 
+func test_the_turn_the_squad_leaves_carries_over_to_the_next_run() -> void:
+	# 스쿼드가 나가면 이 판의 마지막 편이다. 방 이름과 옆방 상황을 알려 줘도 쓸 턴이 없다.
+	# 심사자 둘이 각각 판마다 마지막 한 편이 통째로 죽어 있다고 셌다.
+	_graph.place_actor(_npc("bern", "웃는 베른"), "gate")
+	var events: Array[GameEvent] = [_event(GameEvent.Kind.ESCAPED, _run.player, "gate", 5, 0)]
+	var joined := _joined(events)
+
+	assert_string_contains(joined, "아무도 손대지 않은 귀중품 방이다")
+	assert_false(joined.contains("옆방에"), joined)
+
+
 func test_a_run_with_no_history_still_yields_room_facts() -> void:
 	var johan := _npc("johan", "칼날의 요한")
 	var events: Array[GameEvent] = [_event(GameEvent.Kind.MOVED, johan, "hall")]

@@ -88,6 +88,34 @@ func test_handles_carry_no_digits() -> void:
 			assert_false(handle.contains(digit), handle)
 
 
+func test_a_different_run_reorders_the_pool_not_just_its_start() -> void:
+	# 시작점만 옮기면 순서가 그대로라 판이 바뀌어도 같은 셋이 늘 붙어 다닌다.
+	# 심사자가 서른여섯 개짜리 고리를 통째로 복원해 냈다.
+	var first: Array[String] = []
+	var second: Array[String] = []
+	for index in 6:
+		first.append(HandlesScript.handle_for(index, 20260808))
+		second.append(HandlesScript.handle_for(index, 771))
+	# 두 배열이 서로의 회전이기만 하면 안 된다. 이어지는 짝이 달라야 한다.
+	var pairs: Dictionary = {}
+	for index in 5:
+		pairs["%s>%s" % [first[index], first[index + 1]]] = true
+	var shared := 0
+	for index in 5:
+		if pairs.has("%s>%s" % [second[index], second[index + 1]]):
+			shared += 1
+	assert_eq(shared, 0, "판이 바뀌어도 같은 닉이 같은 닉을 따라온다: %s / %s" % [first, second])
+
+
+func test_every_handle_still_appears_once_per_cycle_under_any_salt() -> void:
+	# 걸음이 목록 길이와 서로소가 아니면 어떤 닉은 영영 안 나오고 어떤 닉은 두 배로 나온다.
+	for salt in [0, 771, 20260808, 31337, 9042]:
+		var seen: Dictionary = {}
+		for index in HandlesScript.HANDLES.size():
+			seen[HandlesScript.handle_for(index, salt)] = true
+		assert_eq(seen.size(), HandlesScript.HANDLES.size(), "소금 %d 에서 닉이 빠진다" % salt)
+
+
 func test_handles_do_not_march_down_the_list() -> void:
 	# 실측 결함이다. 순서대로 소비했더니 `낄낄이` 다음은 언제나 `지하실단골` 이었고,
 	# 심사자가 다음 편 댓글자 명단을 미리 적어 보였다.
@@ -125,6 +153,46 @@ func test_consecutive_posts_do_not_share_handles() -> void:
 	for index in 2:
 		assert_false(second.contains(HandlesScript.handle_for(index)), second)
 	assert_true(first.contains(HandlesScript.handle_for(0)), first)
+
+
+func test_only_phrases_that_already_repeated_are_reported() -> void:
+	# 한 번 나온 말까지 금지하면 화자의 어휘가 매 턴 깎인다.
+	# 두 번 나왔다는 사실 자체가 고르는 기준이라 목록이 저절로 판을 따라간다.
+	var recent: Array[String] = ["이건 학계 정설임", "저것도 학계 정설이지", "혼자만 아는 얘기"]
+	var found := PostScript.repeated_phrases(recent)
+
+	assert_true(found.has("학계정설"), str(found))
+	for gram in found:
+		assert_false(gram.contains("혼자"), str(found))
+
+
+func test_inflected_endings_do_not_hide_a_habit() -> void:
+	# 한국어는 같은 말이 어미로 갈라진다. 낱말로 맞추면 `정설임` 과 `정설이지` 가
+	# 서로 다른 말이 되어 버릇이 통째로 안 잡힌다.
+	var recent: Array[String] = ["그건 손절각이다", "이것도 손절각이지"]
+
+	assert_false(PostScript.repeated_phrases(recent).is_empty())
+
+
+func test_words_from_this_turn_are_never_banned() -> void:
+	# 이번 턴 입력에 있는 말(인물 · 방 · 등급)을 금지하면 사실을 못 쓰게 막는 꼴이 된다.
+	var recent: Array[String] = ["회랑에서 대박 터짐", "회랑에서 또 대박"]
+	var barred := PostScript.repeated_phrases(recent, "<회랑>에서 대박을 챙겼다")
+
+	assert_false(barred.has("회랑에서"), str(barred))
+	# 같은 글에 소금 없이 걸면 잡힌다는 것도 확인한다. 안 그러면 무엇도 안 잡혀서
+	# 통과한 것인지 걸러서 통과한 것인지 구분되지 않는다.
+	assert_true(PostScript.repeated_phrases(recent).has("회랑에서"), "아무것도 못 잡는다")
+
+
+func test_the_ban_list_is_capped() -> void:
+	# 금지 목록이 길어지면 그것 자체가 프롬프트를 늘린다 (발견 1).
+	var recent: Array[String] = [
+		"학계 정설이고 손절각이고 통행세고 국룰이고 나락이다",
+		"학계 정설이며 손절각이며 통행세며 국룰이며 나락이다",
+	]
+
+	assert_lte(PostScript.repeated_phrases(recent, "", 3).size(), 3)
 
 
 func test_title_is_returned_without_its_tag() -> void:

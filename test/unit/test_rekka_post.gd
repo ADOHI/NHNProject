@@ -123,4 +123,4 @@ func test_a_clean_post_survives_untouched_except_for_the_tag() -> void:
 
 	assert_string_contains(cleaned, "회랑에서 그냥 지나감")
 	assert_string_contains(cleaned, "실화냐")
-	assert_string_contains(cleaned, HandlesScript.HANDLES[0])
+	assert_string_contains(cleaned, HandlesScript.handle_for(0))

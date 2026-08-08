@@ -44,11 +44,23 @@ const TAGS: Array[String] = [
 	"[논란]",
 ]
 
-## 접두어를 건너뛰는 걸음. `TAGS.size()` 와 서로소여야 한 바퀴가 온전히 돈다.
-const TAG_STRIDE := 5
+## 목록을 건너뛰는 걸음의 후보. **판마다 다른 걸음을 고른다.**
+##
+## 걸음이 하나면 소금은 시작점만 옮긴다 — 순서는 그대로고 한 칸 밀릴 뿐이다.
+## 심사자가 그것을 잡았다: *"동일 순서, 한 칸 밀림"*.
+## 걸음이 바뀌어야 배열 자체가 달라진다.
+##
+## 값은 전부 홀수이고 3 의 배수가 아니다. 그래야 12(접두어)와 36(닉네임) 양쪽에
+## 서로소라 한 바퀴가 온전히 돌고, 어떤 항목도 빠지거나 두 배로 나오지 않는다.
+##
+## **1 은 뺐다.** 걸음이 1 이면 목록 순서 그대로 행진하는데, 그것이 바로
+## 심사자가 잡아낸 결함이다. 어떤 소금에서도 그 배열이 나오면 안 된다.
+const STRIDES: Array[int] = [5, 7, 11, 13, 17, 19, 23, 25, 29, 31, 35]
 
-## 닉네임을 건너뛰는 걸음. `HANDLES.size()` 와 서로소여야 한다.
-const HANDLE_STRIDE := 11
+## 소금을 섞는 상수. 그냥 나누면 서로 다른 시드가 같은 걸음에 몰린다.
+const _MIX_MULTIPLIER := 3266489917
+const _MIX_ADDEND := 1013904223
+const _MIX_MODULUS := 1048573
 
 ## 댓글 닉네임 목록.
 ##
@@ -107,7 +119,7 @@ const HANDLES: Array[String] = [
 ## 소금 없이 돌렸더니 두 판이 하나의 카운터를 공유해서, 앞 판이 `[제보]` 로 끝나고
 ## 뒷 판이 링의 다음 항목으로 시작했다. 심사자 둘이 그 표를 그대로 그려 왔다.
 static func tag_for(index: int, salt: int = 0) -> String:
-	return TAGS[posmod(index * TAG_STRIDE + _offset(salt, TAGS.size()), TAGS.size())]
+	return TAGS[_slot(index, salt, TAGS.size())]
 
 
 ## `index` 번째 댓글의 닉네임. 판 전체에서 이어지는 번호다.
@@ -115,9 +127,18 @@ static func tag_for(index: int, salt: int = 0) -> String:
 ## 여기도 걸음으로 건너뛴다. 순서대로 쓰면 같은 셋이 늘 붙어 다니고
 ## (`낄낄이` 다음은 언제나 `지하실단골`), 다음 편의 댓글자 명단을 미리 적을 수 있다.
 static func handle_for(index: int, salt: int = 0) -> String:
-	return HANDLES[posmod(index * HANDLE_STRIDE + _offset(salt, HANDLES.size()), HANDLES.size())]
+	return HANDLES[_slot(index, salt, HANDLES.size())]
 
 
-## 소금을 목록 안의 자리로 접는다. 같은 소금이면 언제나 같은 자리라 재현된다.
-static func _offset(salt: int, size: int) -> int:
-	return posmod(salt * 2654435761, size)
+## 소금과 번호를 목록 안의 자리로 접는다. 같은 소금이면 언제나 같은 자리라 재현된다.
+##
+## **걸음과 시작점을 둘 다 소금에서 뽑는다.** 시작점만 옮기면 순서가 그대로라
+## 판이 바뀌어도 같은 셋이 늘 붙어 다닌다 — 심사자가 서른여섯 개짜리 고리를
+## 통째로 복원해 냈다. 걸음이 바뀌면 고리 자체가 다시 꿰인다.
+##
+## 소금을 그대로 나누면 시드끼리 같은 걸음에 몰린다 — 20260808 과 771 이 같은 걸음을
+## 골라서 배열이 회전으로만 갈렸다. 곱하고 더해 섞은 뒤에 나눈다.
+static func _slot(index: int, salt: int, size: int) -> int:
+	var mixed := posmod(salt * _MIX_MULTIPLIER + _MIX_ADDEND, _MIX_MODULUS)
+	var stride: int = STRIDES[posmod(mixed, STRIDES.size())]
+	return posmod(index * stride + posmod(mixed / STRIDES.size(), size), size)
