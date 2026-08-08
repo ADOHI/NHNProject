@@ -10,10 +10,13 @@ extends Node2D
 ## 렌더 경로와 스레드 차이만 남는다.
 
 const _PROTO := "res://src/proto/unit_move/unit_move_proto.tscn"
-const _FRAMES := 600
+## 웹에서는 rAF 이 조절되어 프레임이 느리게 흐른다. 600 프레임을 세 번 모으면 몇 분이 걸려
+## 결과를 못 본다. 300 이면 95 분위가 흔들릴 만큼 적지는 않다.
+const _FRAMES := 300
 const _WARMUP := 60
 const _BUDGET := 16.7
-const _COUNTS: Array[int] = [40, 100, 200]
+## 200 명은 안전선 밖이고 웹에서는 한 판에 몇 분이 걸린다. 40 과 100 만 잰다.
+const _COUNTS: Array[int] = [40, 100]
 
 var _proto: Node2D
 var _label: Label
@@ -64,8 +67,7 @@ func _next() -> void:
 	_index += 1
 	_show()
 	if _index >= _COUNTS.size():
-		for line in _lines:
-			print(line)
+		_emit("측정 끝")
 		return
 	_frame_ms = PackedFloat32Array()
 	_step_ms = PackedFloat32Array()
@@ -94,26 +96,31 @@ func _record() -> void:
 		over += 1
 		if _step_ms[i] > _BUDGET * 0.5:
 			ours += 1
-	(
-		_lines
-		. append(
-			(
-				"| %d | %.2f | %.2f | %.2f | %.2f | %.2f | %.2f | %d / %d | %d |"
-				% [
-					_COUNTS[_index],
-					_at(steps, 0.50),
-					_at(steps, 0.95),
-					_at(steps, 1.0),
-					_at(frames, 0.50),
-					_at(frames, 0.95),
-					_at(frames, 0.99),
-					over,
-					_frame_ms.size(),
-					ours,
-				]
-			)
+	# **행이 끝나는 대로 바로 낸다.** 마지막에 몰아서 내면 마지막 인원이 안 끝날 때
+	# 앞의 결과도 못 본다 - 웹에서 실제로 그렇게 막혔다.
+	_emit(
+		(
+			"| %d | %.2f | %.2f | %.2f | %.2f | %.2f | %.2f | %d / %d | %d |"
+			% [
+				_COUNTS[_index],
+				_at(steps, 0.50),
+				_at(steps, 0.95),
+				_at(steps, 1.0),
+				_at(frames, 0.50),
+				_at(frames, 0.95),
+				_at(frames, 0.99),
+				over,
+				_frame_ms.size(),
+				ours,
+			]
 		)
 	)
+
+
+## 화면과 콘솔에 함께 남긴다. 브라우저에서는 콘솔이 확실하고 화면은 사람이 바로 본다.
+func _emit(line: String) -> void:
+	_lines.append(line)
+	print(line)
 
 
 func _show() -> void:
