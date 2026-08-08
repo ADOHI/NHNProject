@@ -257,7 +257,9 @@ func _uniform_registry() -> PersonRegistry:
 		var traits := PackedInt32Array()
 		for _axis in NpcAxis.count():
 			traits.append(rng.randi_range(NpcAxis.MIN_VALUE, NpcAxis.MAX_VALUE))
-		registry.add("표본", MemberDiscipline.Kind.COMBAT, 1, 1, PersonRegistry.NO_FACTION, 0, traits)
+		registry.add(
+			"표본", MemberDiscipline.Kind.COMBAT, 1, 1, PersonRegistry.NO_FACTION, 0, 30, traits
+		)
 	return registry
 
 

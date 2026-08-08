@@ -32,6 +32,7 @@ var _threats := PackedInt32Array()
 var _agilities := PackedInt32Array()
 var _factions := PackedInt32Array()
 var _fames := PackedInt32Array()
+var _ages := PackedInt32Array()
 
 ## 성향 전체. 인물 i 의 축 a 는 _traits[i * NpcAxis.count() + a] 다.
 var _traits := PackedInt32Array()
@@ -52,6 +53,7 @@ func add(
 	agility: int,
 	faction: int,
 	fame: int,
+	age: int,
 	traits: PackedInt32Array
 ) -> int:
 	if traits.size() != NpcAxis.count():
@@ -65,6 +67,7 @@ func add(
 	_agilities.append(agility)
 	_factions.append(faction)
 	_fames.append(fame)
+	_ages.append(age)
 	_traits.append_array(traits)
 	return index
 
@@ -101,6 +104,16 @@ func fame_of(person: int) -> int:
 	return _fames[person]
 
 
+## 나이. **가족 관계가 여기서 나온다** (설계 24.22) — 부모는 자식보다 위고 형제는 비슷하다.
+func age_of(person: int) -> int:
+	return _ages[person]
+
+
+## 성. **따로 저장하지 않고 이름에서 읽는다** — 열을 두면 두 진실이 생긴다 (설계 24.22.7).
+func surname_of(person: int) -> String:
+	return MemberNames.surname_of(_names[person])
+
+
 func trait_of(person: int, axis: NpcAxis.Kind) -> int:
 	return _traits[person * NpcAxis.count() + int(axis)]
 
@@ -129,10 +142,11 @@ func summary_of(person: int) -> String:
 			poles.append(NpcAxis.pole_label(axis as NpcAxis.Kind, value))
 	var mark := "-".join(poles) if poles.size() > 0 else "무색"
 	return (
-		"%s (%s) 전투 %d 민첩 %d 소속 %s 유명 %d [%s]"
+		"%s (%s) %d세 전투 %d 민첩 %d 소속 %s 유명 %d [%s]"
 		% [
 			name_of(person),
 			MemberDiscipline.label(discipline_of(person)),
+			age_of(person),
 			threat_of(person),
 			agility_of(person),
 			"없음" if faction_of(person) == NO_FACTION else str(faction_of(person)),

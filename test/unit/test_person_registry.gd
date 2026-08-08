@@ -16,7 +16,9 @@ func _traits(values: Array) -> PackedInt32Array:
 
 
 func _person(registry: PersonRegistry, values: Array, fame: int = 0, faction: int = 0) -> int:
-	return registry.add("김지호", MemberDiscipline.Kind.COMBAT, 4, 1, faction, fame, _traits(values))
+	return registry.add(
+		"김지호", MemberDiscipline.Kind.COMBAT, 4, 1, faction, fame, 30, _traits(values)
+	)
 
 
 func test_registry_starts_empty() -> void:
@@ -68,7 +70,7 @@ func test_has_marks_registered_people_only() -> void:
 func test_record_fields_survive_round_trip() -> void:
 	var registry := PersonRegistry.new()
 	var person := registry.add(
-		"윤태산", MemberDiscipline.Kind.SCOUT, 2, 5, 7, 93, _traits([0, 0, 0, 0, 0, 0])
+		"윤태산", MemberDiscipline.Kind.SCOUT, 2, 5, 7, 93, 41, _traits([0, 0, 0, 0, 0, 0])
 	)
 	assert_eq(registry.name_of(person), "윤태산")
 	assert_eq(registry.discipline_of(person), MemberDiscipline.Kind.SCOUT)

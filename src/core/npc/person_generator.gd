@@ -48,6 +48,31 @@ const FAME_EXPONENT := 8.0
 ## 유명세 상한. 0 ~ 이 값 사이의 정수다.
 const FAME_MAX := 100
 
+## 나이의 아래끝. 던전에 들어가는 직업이라 그 아래는 탐험가가 아니라 아이다 (설계 24.22.2).
+const AGE_MIN := 16
+
+## 나이의 위끝. 균등하게 뽑으면 여든 살 탐험가가 나온다 —
+## **살아서 늙는 사람이 드문 직업**이므로 위끝을 낮춘다.
+const AGE_MAX := 58
+
+## 나이의 치우침 지수. 클수록 젊다. 1.8 이면 중위가 28 쯤이다.
+##
+## 젊은 쪽에 몰린 것은 **생존 편향**이다 — 위험한 일을 오래 하면 설계 24.5 의 전멸을 만난다.
+## 그리고 설계 06 §6.1 의 영입과 성장이 뜻을 가지려면 젊은 후보가 많아야 한다.
+const AGE_EXPONENT := 1.8
+
+## 유명세가 천장에 닿는 나이. 이 나이부터는 나이가 유명세를 안 누른다.
+##
+## 설계 24.7 이 유명세를 **누적**이라 못 박았으므로 시간이 든다 —
+## 스무 살에 유명세 100 은 그럴듯하지 않다.
+## 이 뒤로도 계속 오르게 하면 **나이가 곧 유명세**가 되어 유명세가
+## "무엇을 했는가" 가 아니라 "얼마나 오래 살았는가" 를 뜻하게 된다 (설계 24.22.4).
+const FAME_PRIME_AGE := 35
+
+## 가장 어릴 때의 유명세 계수. 0 이 아닌 이유는 **어린 유명인이 없어지면 안 되고
+## 드물어야** 하기 때문이다.
+const FAME_YOUNG_FACTOR := 0.35
+
 ## 계열 기본값에 얹는 편차의 폭. 계열 기본값이 1~4 라(MemberDiscipline)
 ## 이보다 넓히면 계열의 뜻이 사라진다.
 const STAT_SPREAD := 1
@@ -117,9 +142,10 @@ func _append_one(registry: PersonRegistry) -> void:
 	var threat := _stat(MemberDiscipline.base_threat(discipline))
 	var agility := _stat(MemberDiscipline.base_agility(discipline))
 	var faction := _pick_faction()
-	var fame := _pick_fame()
+	var age := _pick_age()
+	var fame := _pick_fame(age)
 	var traits := TraitDistribution.sample_person(_rng)
-	registry.add(person_name, discipline, threat, agility, faction, fame, traits)
+	registry.add(person_name, discipline, threat, agility, faction, fame, age, traits)
 
 
 ## 계열 기본값 주변의 값. 1 미만으로는 내리지 않는다 —
@@ -128,8 +154,21 @@ func _stat(base: int) -> int:
 	return maxi(1, base + _rng.randi_range(-STAT_SPREAD, STAT_SPREAD))
 
 
-func _pick_fame() -> int:
-	return int(round(float(FAME_MAX) * pow(_rng.randf(), FAME_EXPONENT)))
+func _pick_age() -> int:
+	return AGE_MIN + int(pow(_rng.randf(), AGE_EXPONENT) * float(AGE_MAX - AGE_MIN))
+
+
+## 유명세. **상한만 나이로 누른다** — 분포의 치우침은 그대로 두고 젊은 쪽 꼬리만 깎는다.
+func _pick_fame(age: int) -> int:
+	var raw := float(FAME_MAX) * pow(_rng.randf(), FAME_EXPONENT)
+	return int(round(raw * _fame_age_factor(age)))
+
+
+func _fame_age_factor(age: int) -> float:
+	if age >= FAME_PRIME_AGE:
+		return 1.0
+	var grown := float(age - AGE_MIN) / float(maxi(FAME_PRIME_AGE - AGE_MIN, 1))
+	return FAME_YOUNG_FACTOR + (1.0 - FAME_YOUNG_FACTOR) * clampf(grown, 0.0, 1.0)
 
 
 func _pick_faction() -> int:

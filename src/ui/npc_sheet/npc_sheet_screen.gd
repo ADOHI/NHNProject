@@ -40,6 +40,8 @@ var _seed := FIRST_SEED
 var _registry: PersonRegistry
 var _factions: FactionIndex
 var _generator: PersonGenerator
+var _graph: RelationGraph
+var _kin: KinSeeder
 var _person := 0
 var _pick := RandomNumberGenerator.new()
 var _build_msec := 0.0
@@ -56,16 +58,32 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	if _generator == null:
+	if _generator == null and _kin == null:
 		return
-	var started := Time.get_ticks_usec()
-	var done := _generator.append_to(_registry, CHUNK)
-	_build_msec += float(Time.get_ticks_usec() - started) / 1000.0
-	if not done:
-		_status.text = "인구 생성 중 %d / %d" % [_registry.size(), POPULATION]
+	if _generator != null:
+		var started := Time.get_ticks_usec()
+		var done := _generator.append_to(_registry, CHUNK)
+		_build_msec += float(Time.get_ticks_usec() - started) / 1000.0
+		if not done:
+			_status.text = "인구 생성 중 %d / %d" % [_registry.size(), POPULATION]
+			return
+
+	if _generator != null:
+		_generator = null
+		# 태생 관계도 조각으로 심는다 — 인구 생성과 같은 규율이다 (설계 24.22).
+		_graph = RelationGraph.new(_registry.size())
+		_kin = KinSeeder.new(_seed, _registry, _graph)
+		_status.text = "가족 관계 심는 중"
 		return
 
-	_generator = null
+	var kin_started := Time.get_ticks_usec()
+	var kin_done := _kin.seed_chunk(CHUNK)
+	_build_msec += float(Time.get_ticks_usec() - kin_started) / 1000.0
+	if not kin_done:
+		_status.text = "가족 관계 심는 중 %d / %d" % [_kin.seeded(), _registry.size()]
+		return
+
+	_kin = null
 	_factions = FactionIndex.new(_registry)
 	_pick.seed = _seed
 	_show(0)
@@ -73,7 +91,7 @@ func _process(_delta: float) -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
-	if key == null or not key.pressed or key.echo or _generator != null:
+	if key == null or not key.pressed or key.echo or _factions == null:
 		return
 
 	match key.keycode:
@@ -104,6 +122,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _restart() -> void:
 	_registry = PersonRegistry.new()
 	_generator = PersonGenerator.new(_seed, POPULATION)
+	_graph = null
+	_kin = null
 	_factions = null
 	_build_msec = 0.0
 	_view.show_sections([] as Array[SheetSection])
@@ -113,10 +133,12 @@ func _restart() -> void:
 func _show(person: int) -> void:
 	# 생성이 끝나기 전에는 아무것도 안 보인다. 소속 색인이 아직 없어서다 —
 	# 입력은 이미 막혀 있지만 도구가 직접 부를 수 있으므로 여기서도 막는다.
-	if _registry == null or _registry.size() == 0 or _generator != null or _factions == null:
+	if _registry == null or _registry.size() == 0 or _factions == null:
 		return
 	_person = wrapi(person, 0, _registry.size())
-	_view.show_sections(PersonSheet.build(_registry, _person, _factions))
+	_view.show_sections(
+		PersonSheet.build(_registry, _person, _factions, SheetDisclosure.Level.DEV, _graph)
+	)
 	_status.text = _status_text()
 
 

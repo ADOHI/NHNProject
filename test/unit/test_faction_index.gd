@@ -20,7 +20,7 @@ func _world(factions: Array) -> PersonRegistry:
 	var registry := PersonRegistry.new()
 	for slot in factions.size():
 		registry.add(
-			"표본%d" % slot, MemberDiscipline.Kind.COMBAT, 1, 1, int(factions[slot]), 0, _traits()
+			"표본%d" % slot, MemberDiscipline.Kind.COMBAT, 1, 1, int(factions[slot]), 0, 30, _traits()
 		)
 	return registry
 

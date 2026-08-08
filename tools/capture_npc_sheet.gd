@@ -17,7 +17,7 @@ extends SceneTree
 const _SCREEN := "res://src/ui/npc_sheet/npc_sheet_screen.tscn"
 
 ## 인구 생성이 끝나기를 기다리는 최대 프레임. 3000명 / 조각 250명이면 12 프레임이다.
-const _WAIT_FRAMES := 90
+const _WAIT_FRAMES := 200
 
 ## 찍을 인물. 골라 놓은 이유는 §24.17.8 의 무작위 뽑기를 재현할 수 없어서다 —
 ## 대신 **성향이 뚜렷한 인물과 무색한 인물을 골라** 딱지 규칙이 둘 다 보이게 한다.
@@ -46,11 +46,12 @@ func _process(_delta: float) -> bool:
 	if _frames < 3:
 		return false
 
-	# 생성이 **끝났는지**를 본다. registry.size() 만 보면 조각 하나가 들어온 순간
-	# 참이 되어 소속 색인이 아직 없는 화면을 찍는다.
+	# 준비가 **끝났는지**를 본다. registry.size() 나 _generator 만 보면
+	# 인구 뒤에 오는 가족 심기(설계 24.22)를 놓쳐 빈 화면을 찍는다.
+	# **_factions 가 마지막에 서므로 그것 하나가 준비 신호다.**
 	var registry: PersonRegistry = _screen.get("_registry")
-	var pending: Variant = _screen.get("_generator")
-	if registry == null or registry.size() == 0 or pending != null:
+	var ready: Variant = _screen.get("_factions")
+	if registry == null or registry.size() == 0 or ready == null:
 		if _frames > _WAIT_FRAMES:
 			push_error("인구 생성이 %d 프레임 안에 끝나지 않았다" % _WAIT_FRAMES)
 			return true
