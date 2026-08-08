@@ -1,7 +1,7 @@
 extends GutTest
 ## 격자가 「무엇이 어디에 있는가」를 틀리지 않는가.
 ##
-## `docs/design/28-combat.md` §28.10.1.
+## `docs/design/28-combat.md` §28.20.1.
 ##
 ## 가장 잘 틀리는 것은 **자기 자신을 조금 옮기는 것**이다. 옛 자리를 겹침 검사에서
 ## 빼 두지 않으면 한 칸 옆으로도 못 움직인다.
@@ -96,7 +96,7 @@ func test_move_keeps_the_same_placement_object() -> void:
 
 
 func test_start_nodes_are_a_list_not_a_single_cell() -> void:
-	# 개수가 미정이라 목록으로 들고 있다 (§28.10.7).
+	# 개수가 미정이라 목록으로 들고 있다 (§28.20.7).
 	var grid := GridScript.new(4, 4, [Vector2i(0, 0), Vector2i(3, 3)] as Array[Vector2i])
 	assert_eq(grid.start_nodes.size(), 2)
 	assert_true(grid.is_start_node(Vector2i(3, 3)))

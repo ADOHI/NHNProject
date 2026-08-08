@@ -2,7 +2,7 @@ class_name ChainResult
 extends RefCounted
 ## 시작 노드 하나에서 풀려 나온 콤보 순서. **그리고 어디서 왜 멈췄는가.**
 ##
-## `docs/design/28-combat.md` §28.10.5.
+## `docs/design/28-combat.md` §28.20.5.
 ##
 ## ## 멈춘 이유를 왜 같이 내는가
 ##
@@ -53,7 +53,7 @@ func length() -> int:
 
 ## 끊긴 것이 아니라 **끝난** 것인가.
 ##
-## 전리품에 닿아 멈춘 것만이 정상 종료다 (§28.10.5). 나머지는 전부
+## 전리품에 닿아 멈춘 것만이 정상 종료다 (§28.20.5). 나머지는 전부
 ## "여기서 더 갈 수 있었는데 못 갔다" 는 뜻이다.
 func is_complete() -> bool:
 	return stop_reason == StopReason.NO_OUTPUT

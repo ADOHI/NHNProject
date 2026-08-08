@@ -2,7 +2,7 @@ class_name BackpackBoard
 extends Control
 ## 백팩 격자와 대기줄을 그리고 드래그를 받는다. **판정 수단이지 게임 화면이 아니다.**
 ##
-## `docs/design/28-combat.md` §28.10.9.
+## `docs/design/28-combat.md` §28.20.9.
 ##
 ## ## 꾸미지 않는다
 ##
@@ -25,10 +25,14 @@ const GRID_ORIGIN := Vector2(40.0, 110.0)
 const CELL := 72.0
 
 const TRAY_ORIGIN := Vector2(560.0, 110.0)
-const TRAY_CELL := 34.0
-const TRAY_WIDTH := 200.0
-const TRAY_ROW_GAP := 18.0
-const TRAY_LABEL_HEIGHT := 22.0
+const TRAY_CELL := 28.0
+const TRAY_ROW_GAP := 14.0
+const TRAY_LABEL_HEIGHT := 20.0
+
+## 대기줄은 두 줄로 세운다. 아이템을 늘리자 한 줄로는 화면 밖으로 넘쳤다.
+const TRAY_COLUMNS := 2
+const TRAY_COL_WIDTH := 100.0
+const TRAY_WIDTH := TRAY_COLUMNS * TRAY_COL_WIDTH
 
 const _BACKDROP := Color(0.09, 0.10, 0.13)
 const _CELL_FILL := Color(0.16, 0.17, 0.21)
@@ -36,7 +40,7 @@ const _CELL_LINE := Color(0.28, 0.30, 0.36)
 const _START_LINE := Color(1.0, 0.84, 0.35)
 const _CHAIN_LINE := Color(0.45, 0.92, 1.0)
 const _BREAK_LINE := Color(1.0, 0.38, 0.38)
-const _LOOT_FILL := Color(0.38, 0.34, 0.28)
+const _LOOT_FILL := Color(0.33, 0.33, 0.31)
 const _TEXT := Color(0.93, 0.95, 0.98)
 const _DIM_TEXT := Color(0.62, 0.66, 0.72)
 const _BADGE_FILL := Color(0.06, 0.08, 0.11)
@@ -69,6 +73,9 @@ var _mouse := Vector2.ZERO
 ## 아이템 id -> 색 번호. 본 순서대로 채워진다.
 var _color_slots: Dictionary = {}
 
+## 지금 어느 체인엔가 들어가 있는 배치들. 나머지는 흐리게 그린다.
+var _chained: Dictionary = {}
+
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -82,6 +89,10 @@ func bind(grid: BackpackGrid, tray: Array[BackpackItem]) -> void:
 
 func set_chains(chains: Array[ChainResult]) -> void:
 	_chains = chains
+	_chained.clear()
+	for chain in chains:
+		for placement in chain.steps:
+			_chained[placement] = true
 	queue_redraw()
 
 
@@ -258,23 +269,29 @@ func _placement_under_mouse() -> BackpackPlacement:
 	return _grid.placement_at(_grid_cell_at(_mouse))
 
 
-func _tray_row_top(index: int) -> float:
+## 한 줄의 높이는 그 줄에서 **가장 키 큰 아이템**이 정한다.
+func _tray_row_height(row: int) -> float:
+	var tallest := 1
+	var first := row * TRAY_COLUMNS
+	for index in range(first, mini(first + TRAY_COLUMNS, _tray.size())):
+		tallest = maxi(tallest, _tray[index].bounds_size().y)
+	return TRAY_LABEL_HEIGHT + float(tallest) * TRAY_CELL + TRAY_ROW_GAP
+
+
+## 대기줄 한 자리가 차지하는 네모. 그리기와 집기가 **같은 식**을 쓴다 —
+## 따로 적으면 눈에 보이는 자리와 집히는 자리가 어긋난다.
+func _tray_slot_rect(index: int) -> Rect2:
+	var row := index / TRAY_COLUMNS
 	var top := TRAY_ORIGIN.y
-	for i in index:
-		top += _tray_row_height(_tray[i])
-	return top
-
-
-func _tray_row_height(item: BackpackItem) -> float:
-	return TRAY_LABEL_HEIGHT + item.bounds_size().y * TRAY_CELL + TRAY_ROW_GAP
+	for earlier in row:
+		top += _tray_row_height(earlier)
+	var left := TRAY_ORIGIN.x + float(index % TRAY_COLUMNS) * TRAY_COL_WIDTH
+	return Rect2(Vector2(left, top), Vector2(TRAY_COL_WIDTH, _tray_row_height(row)))
 
 
 func _tray_index_at(point: Vector2) -> int:
-	if not _is_over_tray(point):
-		return -1
 	for index in _tray.size():
-		var top := _tray_row_top(index)
-		if point.y >= top and point.y < top + _tray_row_height(_tray[index]):
+		if _tray_slot_rect(index).has_point(point):
 			return index
 	return -1
 
@@ -312,30 +329,68 @@ func _draw_empty_cells() -> void:
 			draw_rect(rect, _CELL_LINE, false, 1.0)
 
 
+## 체인에 든 것은 또렷하게, 안 든 것은 흐리게.
+##
+## **이것이 이 화면의 값어치다** — 어느 아이템이 루트에서 빠졌는지가 한눈에 보여야
+## "왜 이것만 안 걸리지" 를 눈으로 찾지 않는다.
 func _draw_placement(placement: BackpackPlacement) -> void:
 	var color := _color_for(placement.item)
+	var faded := not _chained.is_empty() and not _chained.has(placement)
+	if faded:
+		color = color.darkened(0.55)
 	for cell in placement.cells():
 		var rect := _cell_rect(cell).grow(-2.0)
 		draw_rect(rect, color)
 		draw_rect(rect, color.lightened(0.25), false, 2.0)
-	_draw_label_in_cell(placement.cells()[0], placement.item.display_name, _TEXT, 16)
+		if placement.item.kind == BackpackItem.Kind.LOOT:
+			_draw_hatch(rect, color.lightened(0.30))
+	_draw_label_in_cell(
+		placement.cells()[0], placement.item.display_name, _DIM_TEXT if faded else _TEXT, 16
+	)
 	if placement.has_output():
 		_draw_output_arrow(placement.output_cell(), placement.item.output_direction, color)
+
+
+## 전리품은 빗금으로 긋는다.
+##
+## 색만으로 가르면 무기 색 하나와 반드시 비슷해진다 — 실제로 창(주황)과 원석이
+## 화면에서 헷갈렸다. 빗금은 색과 무관하게 **"이건 짐이다"** 로 읽힌다.
+func _draw_hatch(rect: Rect2, color: Color) -> void:
+	var step := 12.0
+	var offset := step
+	while offset < rect.size.x + rect.size.y:
+		var from := Vector2(rect.position.x + minf(offset, rect.size.x), 0.0)
+		from.y = rect.position.y + maxf(0.0, offset - rect.size.x)
+		var to := Vector2(0.0, rect.position.y + minf(offset, rect.size.y))
+		to.x = rect.position.x + maxf(0.0, offset - rect.size.y)
+		draw_line(from, to, color, 1.5)
+		offset += step
 
 
 ## 출력 블럭이 가리키는 쪽으로 삼각형을 그린다. **글자가 아니라 도형이다.**
 func _draw_output_arrow(cell: Vector2i, direction: ChainDirection.Kind, base: Color) -> void:
 	var rect := _cell_rect(cell)
+	_draw_arrow_in(rect, direction, base.lightened(0.55), 10.0)
+	# 출력 블럭 자체도 표시한다 — 여러 칸짜리 무기에서 어느 칸이 출력인지 보여야 한다.
+	draw_rect(rect.grow(-6.0), base.lightened(0.55), false, 2.0)
+
+
+## 방향 삼각형 하나. **격자에서도 대기줄에서도 같은 식을 쓴다** —
+## 두 번 적으면 한쪽만 고쳤을 때 두 곳의 화살표가 서로 다른 데를 가리킨다.
+func _draw_arrow_in(
+	rect: Rect2, direction: ChainDirection.Kind, color: Color, half_width: float
+) -> void:
+	if direction == ChainDirection.Kind.NONE:
+		return
 	var center := rect.get_center()
 	var forward := Vector2(ChainDirection.to_vector(direction))
 	var side := Vector2(-forward.y, forward.x)
-	var reach := CELL * 0.5 - 6.0
+	var reach := minf(rect.size.x, rect.size.y) * 0.5 - 4.0
 	var tip := center + forward * reach
-	var back := center + forward * (reach - 15.0)
-	var points := PackedVector2Array([tip, back + side * 10.0, back - side * 10.0])
-	draw_colored_polygon(points, base.lightened(0.55))
-	# 출력 블럭 자체도 표시한다 — 여러 칸짜리 무기에서 어느 칸이 출력인지 보여야 한다.
-	draw_rect(rect.grow(-6.0), base.lightened(0.55), false, 2.0)
+	var back := center + forward * (reach - half_width * 1.5)
+	draw_colored_polygon(
+		PackedVector2Array([tip, back + side * half_width, back - side * half_width]), color
+	)
 
 
 func _draw_start_nodes() -> void:
@@ -409,23 +464,25 @@ func _draw_tray() -> void:
 
 	for index in _tray.size():
 		var item := _tray[index]
-		var top := _tray_row_top(index)
+		var slot := _tray_slot_rect(index)
 		draw_string(
 			font,
-			Vector2(TRAY_ORIGIN.x, top + 15.0),
+			slot.position + Vector2(0.0, 14.0),
 			_tray_caption(item),
 			HORIZONTAL_ALIGNMENT_LEFT,
-			-1.0,
-			15,
+			TRAY_COL_WIDTH,
+			14,
 			_DIM_TEXT
 		)
-		_draw_small_shape(item, Vector2(TRAY_ORIGIN.x, top + TRAY_LABEL_HEIGHT))
+		_draw_small_shape(item, slot.position + Vector2(0.0, TRAY_LABEL_HEIGHT))
 
 
+## 방향은 글자로 적지 않고 **작은 삼각형으로** 보여 준다. 두 줄이 되면서 폭이
+## 좁아져 "장검 (오른쪽)" 같은 글자가 옆 칸을 침범했다.
 func _tray_caption(item: BackpackItem) -> String:
 	if not item.has_output():
-		return "%s (전리품)" % item.display_name
-	return "%s (%s)" % [item.display_name, ChainDirection.label(item.output_direction)]
+		return "%s (짐)" % item.display_name
+	return item.display_name
 
 
 ## 대기줄과 손에 든 것을 작게 그린다. 출력 블럭은 밝은 테두리로만 표시한다.
@@ -435,11 +492,14 @@ func _draw_small_shape(item: BackpackItem, at: Vector2) -> void:
 		var rect := Rect2(at + Vector2(cell) * TRAY_CELL, Vector2(TRAY_CELL, TRAY_CELL)).grow(-1.0)
 		draw_rect(rect, color)
 		draw_rect(rect, color.lightened(0.25), false, 1.0)
+		if item.kind == BackpackItem.Kind.LOOT:
+			_draw_hatch(rect, color.lightened(0.30))
 	if item.has_output():
 		var out_rect := Rect2(
 			at + Vector2(item.output_cell) * TRAY_CELL, Vector2(TRAY_CELL, TRAY_CELL)
 		)
 		draw_rect(out_rect.grow(-3.0), color.lightened(0.55), false, 2.0)
+		_draw_arrow_in(out_rect, item.output_direction, color.lightened(0.6), 5.0)
 
 
 ## 끌고 있는 것. 놓을 수 있으면 격자에 미리 비추고, 없으면 커서를 따라다닌다.

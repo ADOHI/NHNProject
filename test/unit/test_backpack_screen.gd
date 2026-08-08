@@ -1,7 +1,7 @@
 extends GutTest
 ## 백팩 확인 화면의 **배선** 테스트.
 ##
-## `docs/design/28-combat.md` §28.10.9.
+## `docs/design/28-combat.md` §28.20.9.
 ##
 ## 화면은 규칙을 갖지 않는다. 규칙은 전부 `src/core/combat/` 에 있고 그쪽에
 ## 테스트가 따로 있다. 여기서 볼 것은 하나다 — **배치를 만지면 화면의 글자가

@@ -2,7 +2,7 @@ class_name ChainResolver
 extends RefCounted
 ## 백팩 배치를 읽어 **콤보 순서**를 낸다. 이 시스템의 심장이다.
 ##
-## `docs/design/28-combat.md` §28.2 · §28.10.4.
+## `docs/design/28-combat.md` §28.2 · §28.20.4.
 ##
 ## [codeblock]
 ## 시작 노드를 덮고 있는 아이템  ->  그 아이템의 출력 블럭
@@ -33,7 +33,7 @@ const MAX_CHAIN_LENGTH := 64
 
 ## 격자의 **모든 시작 노드**에서 체인을 푼다.
 ##
-## 시작 노드가 하나라는 보장이 없다 (§28.10.7). 그래서 결과도 목록이다.
+## 시작 노드가 하나라는 보장이 없다 (§28.20.7). 그래서 결과도 목록이다.
 static func resolve_all(grid: BackpackGrid, rule: ChainLinkRule = null) -> Array[ChainResult]:
 	var results: Array[ChainResult] = []
 	for start_node in grid.start_nodes:

@@ -1,7 +1,7 @@
 extends GutTest
 ## **이 시스템의 심장을 덮는 테스트다** — 백팩 배치가 콤보 루트를 정하는가.
 ##
-## `docs/design/28-combat.md` §28.2 · §28.10.4 · §28.10.5.
+## `docs/design/28-combat.md` §28.2 · §28.20.4 · §28.20.5.
 ##
 ## 여기서 제일 중요한 것은 `test_moving_one_item_rewrites_the_chain` 이다.
 ## 그것이 깨지면 §28.2 의 *"백팩 정리가 곧 콤보 루트 설계다"* 가 거짓이 된다.
@@ -70,7 +70,7 @@ func test_diagonal_neighbours_do_not_connect() -> void:
 
 
 func test_chain_steps_one_cell_and_does_not_scan_the_ray() -> void:
-	# §28.10.4 — 「그 방향으로 쭉 훑기」가 아니라 「한 칸」이다.
+	# §28.20.4 — 「그 방향으로 쭉 훑기」가 아니라 「한 칸」이다.
 	# 한 칸 띄워 두면 저 너머에 아이템이 있어도 이어지지 않아야 한다.
 	var grid := _grid()
 	grid.place(_pip("a", ChainDirection.Kind.RIGHT), Vector2i(0, 0))
@@ -187,7 +187,7 @@ func test_a_rule_can_look_at_what_the_items_are() -> void:
 	assert_eq(strict.stop_reason, ChainResult.StopReason.LINK_REJECTED)
 
 
-# ---------------------------------------------------------------- 시작 노드 여럿 (§28.10.7)
+# ---------------------------------------------------------------- 시작 노드 여럿 (§28.20.7)
 
 
 func test_every_start_node_produces_its_own_chain() -> void:
@@ -231,7 +231,7 @@ func test_moving_one_item_rewrites_the_chain() -> void:
 
 
 func test_loot_on_the_route_cuts_the_combo_short() -> void:
-	# §28.10.3 — 칸 압박이 규칙 없이 격자에서 나온다.
+	# §28.20.3 — 칸 압박이 규칙 없이 격자에서 나온다.
 	var grid := _grid()
 	grid.place(_pip("start", ChainDirection.Kind.RIGHT), Vector2i(0, 0))
 	grid.place(_pip("second", ChainDirection.Kind.RIGHT), Vector2i(1, 0))
@@ -258,4 +258,4 @@ func test_sample_backpack_opens_with_a_readable_chain() -> void:
 	var chains := ResolverScript.resolve_all(grid)
 	assert_eq(chains.size(), 1)
 	assert_eq(Array(chains[0].item_names()), ["단검", "건틀릿", "철퇴", "창", "원석"])
-	assert_true(chains[0].is_complete(), "표본은 전리품에 닿아 끝난다 (§28.10.3)")
+	assert_true(chains[0].is_complete(), "표본은 전리품에 닿아 끝난다 (§28.20.3)")

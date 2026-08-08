@@ -21,7 +21,7 @@ const _VECTORS := {
 }
 
 ## 화면에 나가는 이름. **한글만 쓴다** — 본문 폰트에 화살표 글리프가 하나도 없다
-## (`docs/design/28-combat.md` §28.10.9).
+## (`docs/design/28-combat.md` §28.20.9).
 const _LABELS := {
 	Kind.NONE: "없음",
 	Kind.UP: "위",

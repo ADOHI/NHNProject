@@ -2,7 +2,7 @@ class_name BackpackItem
 extends RefCounted
 ## 백팩에 들어가는 물건 하나. **여러 칸을 차지하고, 그중 한 칸이 출력 방향을 가진다.**
 ##
-## `docs/design/28-combat.md` §28.2 · §28.10.2 를 그대로 옮긴 것이다.
+## `docs/design/28-combat.md` §28.2 · §28.20.2 를 그대로 옮긴 것이다.
 ##
 ## ## 출력이 없는 아이템이 있다
 ##
@@ -81,7 +81,7 @@ func output_cell_at(origin: Vector2i) -> Vector2i:
 
 ## 출력 블럭에서 **한 칸 딛은** 자리. 체인이 다음 아이템을 찾는 곳이다.
 ##
-## 「그 방향으로 쭉 훑기」가 아니라 「한 칸」인 이유는 §28.10.4 에 있다.
+## 「그 방향으로 쭉 훑기」가 아니라 「한 칸」인 이유는 §28.20.4 에 있다.
 func output_target_at(origin: Vector2i) -> Vector2i:
 	return output_cell_at(origin) + ChainDirection.to_vector(output_direction)
 
@@ -99,7 +99,7 @@ func bounds_size() -> Vector2i:
 ## 모양 · 출력 블럭 · 출력 방향이 **함께** 돈다. 셋 중 하나라도 빠지면
 ## 돌린 무기가 엉뚱한 데를 가리킨다.
 ##
-## **회전을 게임에서 허용할지는 미정이다** (§28.10.8). 확인 화면이 루트를 여러 개
+## **회전을 게임에서 허용할지는 미정이다** (§28.20.8). 확인 화면이 루트를 여러 개
 ## 시험해 보려고 쓰는 것이지 규칙이 정해진 것이 아니다.
 func rotated() -> BackpackItem:
 	var turned: Array[Vector2i] = []

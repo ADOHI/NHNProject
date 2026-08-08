@@ -1,7 +1,7 @@
 extends Control
 ## 백팩을 만지고 **체인이 어느 순서로 도는지 보는** 화면.
 ##
-## `docs/design/28-combat.md` §28.10.9.
+## `docs/design/28-combat.md` §28.20.9.
 ##
 ## ## 이것이 판정 수단이다
 ##
@@ -45,7 +45,7 @@ func _help_text() -> String:
 
 
 ## 체인을 읽을 수 있는 글자로. **번호는 아라비아 숫자, 방향은 한글이다** —
-## 본문 폰트에 원문자도 화살표도 없다 (§28.10.9).
+## 본문 폰트에 원문자도 화살표도 없다 (§28.20.9).
 func _chain_text(chains: Array[ChainResult]) -> String:
 	var lines := PackedStringArray()
 	for index in chains.size():

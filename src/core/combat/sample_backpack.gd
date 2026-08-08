@@ -10,7 +10,7 @@ extends RefCounted
 ## 열자마자 보이는 체인이 **단검 -> 건틀릿 -> 철퇴 -> 창 -> 원석**이고
 ## 마지막 원석은 출력이 없어서 거기서 끝난다.
 ##
-## 일부러 그렇게 뒀다. `docs/design/28-combat.md` §28.10.3 —
+## 일부러 그렇게 뒀다. `docs/design/28-combat.md` §28.20.3 —
 ## **루팅한 물건이 콤보 루트 위에 놓이면 체인이 끊긴다**는 것이 이 시스템의
 ## 요점이고, 그것이 설명이 아니라 첫 화면에 보여야 한다.
 ## 원석을 집어 옆으로 치우면 체인이 어떻게 되는지 바로 만져 볼 수 있다.
@@ -18,7 +18,7 @@ extends RefCounted
 const GRID_WIDTH := 6
 const GRID_HEIGHT := 6
 
-## 시작 노드. **목록인 이유는 §28.10.7 에 있다** — 개수가 미정이라 하나만 꽂아 둔다.
+## 시작 노드. **목록인 이유는 §28.20.7 에 있다** — 개수가 미정이라 하나만 꽂아 둔다.
 const START_NODES: Array[Vector2i] = [Vector2i(0, 0)]
 
 
@@ -80,6 +80,44 @@ static func create_items() -> Array[BackpackItem]:
 			BackpackItem.Kind.LOOT,
 			[Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]
 		),
+		# --- 아래는 배치를 실제로 어렵게 만드는지 보려고 늘린 것들 ---
+		# 활은 출력이 **가운데 칸**이다. 지금껏 표본이 전부 끝 칸이라
+		# "출력은 끝에 있다" 는 것을 우연히 참으로 만들고 있었다.
+		BackpackItem.new(
+			"bow",
+			"활",
+			BackpackItem.Kind.WEAPON,
+			[Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2)],
+			Vector2i(0, 1),
+			ChainDirection.Kind.LEFT
+		),
+		# 낫은 출력이 ㄱ 자의 **바깥 끝**이고 안쪽을 등진다.
+		BackpackItem.new(
+			"sickle",
+			"낫",
+			BackpackItem.Kind.WEAPON,
+			[Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1)],
+			Vector2i(0, 0),
+			ChainDirection.Kind.UP
+		),
+		BackpackItem.new(
+			"boots",
+			"각반",
+			BackpackItem.Kind.WEAPON,
+			[Vector2i(0, 0)],
+			Vector2i(0, 0),
+			ChainDirection.Kind.UP
+		),
+		# 방패는 2x2 인데 출력이 아래쪽 칸이라 **자기 몸에 막히기 쉽다.**
+		BackpackItem.new(
+			"shield",
+			"방패",
+			BackpackItem.Kind.WEAPON,
+			[Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)],
+			Vector2i(0, 1),
+			ChainDirection.Kind.DOWN
+		),
+		BackpackItem.new("skull", "두개골", BackpackItem.Kind.LOOT, [Vector2i(0, 0), Vector2i(1, 0)]),
 	]
 
 
