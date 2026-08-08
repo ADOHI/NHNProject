@@ -45,6 +45,17 @@ class MoveOrder:
 	var slots := PackedVector2Array()
 	var member_ids := PackedInt32Array()
 
+	## 칸마다 "여기 막혀 있다"를 몇 번 더 믿어 줄지. 0 이면 안 막혔다.
+	##
+	## **기억의 주인은 유닛이 아니라 명령을 받은 무리다.** 유닛마다 들면 흐름장을 유닛마다
+	## 구워야 하고 그건 8 밀리초 곱하기 인원이다. 무리가 공유하면 한 번으로 끝난다.
+	## 대가는 한 명이 막힌 것을 전원이 피하는 것인데, 같은 목적지로 같이 가는 무리라
+	## 실제로 같은 곳에서 막힌다.
+	var jam := PackedByteArray()
+
+	## 이 명령의 흐름장을 마지막으로 다시 구운 프레임.
+	var baked_frame := 0
+
 	## 명령 지점 표시를 언제까지 그릴지. 화면 전용이라 시뮬레이션은 보지 않는다.
 	var age := 0.0
 
@@ -151,6 +162,8 @@ const _WALL_STEP := 3.0
 ##
 ## 세 칸이면 96 픽셀이라 몸 반지름 12 에 내다보는 거리 32 를 더해도 벽에 닿을 수 없다.
 const _WALL_CLEAR := 3
+
+## 벽까지의 빈 거리를 이 거리까지만 촘촘히 훑는다(픽셀). 그 너머는 몸이 정하는 값을 쓴다.
 const _WALL_NEAR := 15.0
 
 ## 최단 거리가 줄지 않은 채 이만큼 지나면 지형에 낀 것으로 본다(프레임).
@@ -223,6 +236,9 @@ var flow_build_usec: int = 0
 
 ## 명령마다 잰 흐름장 생성 시간의 최댓값(마이크로초). 사람은 평균이 아니라 최악을 느낀다.
 var flow_build_peak: int = 0
+
+## 막힘을 알고 흐름장을 다시 구운 횟수. **굽는 빈도가 곧 프레임 위험이다.**
+var rebake_count: int = 0
 
 var _by_id: Dictionary = {}
 var _next_id := 1
@@ -343,6 +359,7 @@ func issue_move(ids: PackedInt32Array, target: Vector2) -> MoveOrder:
 		members[index].accept_order(order.id, slot, _SIGHT_INTERVAL)
 		order.member_ids.append(members[index].id)
 
+	order.baked_frame = _frame
 	orders.append(order)
 	order_issued.emit(safe_target)
 	return order
@@ -393,6 +410,7 @@ func step(delta: float) -> void:
 	_walk(delta)
 	_clamp_positions()
 	_update_states(delta)
+	ProtoUnitJam.review(self, _frame)
 	for order in orders:
 		order.age += delta
 	_drop_finished_orders()
@@ -660,6 +678,7 @@ func _room(agent: ProtoUnitAgent, direction: Vector2, note_block: bool) -> float
 	if note_block:
 		agent.blocked_by_settled = false
 		agent.pressed = false
+		agent.blocker_id = 0
 	for other in _scratch:
 		var offset := other.position - agent.position
 		var distance := offset.length()
@@ -672,6 +691,7 @@ func _room(agent: ProtoUnitAgent, direction: Vector2, note_block: bool) -> float
 			limit = 0.0
 			if note_block:
 				agent.pressed = true
+				agent.blocker_id = other.id
 				if not other.is_moving():
 					agent.blocked_by_settled = true
 			continue
@@ -689,6 +709,7 @@ func _room(agent: ProtoUnitAgent, direction: Vector2, note_block: bool) -> float
 			continue
 		if reach < _DETOUR_ENTER:
 			agent.pressed = true
+			agent.blocker_id = other.id
 		if not other.is_moving() and distance <= minimum + _HOLD_RELEASE:
 			agent.blocked_by_settled = true
 	return minf(limit, _wall_room(agent, direction, limit))
