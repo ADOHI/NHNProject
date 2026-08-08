@@ -146,6 +146,11 @@ const _DETOUR_RELEASE := 24.0
 ## 벽은 움직이지 않으므로 멀리까지 볼 필요가 없다. 가까운 곳만 촘촘히 보고, 그 너머는
 ## 몸이 정하는 빈 거리를 그대로 쓴다 - 표본 수를 다섯으로 묶는 방법이기도 하다.
 const _WALL_STEP := 3.0
+
+## 벽 거리가 이 칸 이상이면 벽이 없는 것으로 본다.
+##
+## 세 칸이면 96 픽셀이라 몸 반지름 12 에 내다보는 거리 32 를 더해도 벽에 닿을 수 없다.
+const _WALL_CLEAR := 3
 const _WALL_NEAR := 15.0
 
 ## 최단 거리가 줄지 않은 채 이만큼 지나면 지형에 낀 것으로 본다(프레임).
@@ -207,6 +212,17 @@ var max_penetration: float = 0.0
 ## 예전에는 이 거리가 남의 몸을 밀어내는 데 쓰였다. 지금은 어디에도 쓰이지 않고 그냥
 ## 사라진다 — 그것이 "밀고 갈 수 없다"의 실체다.
 var blocked_move_total: float = 0.0
+
+## 마지막 명령에서 흐름장을 만드는 데 걸린 시간(마이크로초).
+##
+## **이것이 지금까지 지표에 안 잡히던 값이다.** 지표 도구는 명령 한 번 주고 40 초를 굴리므로
+## 명령 한 번의 비용은 평균에 묻힌다. `last_step_usec` 은 매 프레임 조향 비용이라 이것을
+## 아예 안 센다. 그런데 이 계산은 **우클릭을 처리하는 그 프레임 안에서 동기로 돈다** -
+## 크면 클릭할 때마다 화면이 멎는다. 안 보이던 값이라 따로 낸다.
+var flow_build_usec: int = 0
+
+## 명령마다 잰 흐름장 생성 시간의 최댓값(마이크로초). 사람은 평균이 아니라 최악을 느낀다.
+var flow_build_peak: int = 0
 
 var _by_id: Dictionary = {}
 var _next_id := 1
@@ -307,7 +323,10 @@ func issue_move(ids: PackedInt32Array, target: Vector2) -> MoveOrder:
 	order.id = _next_order_id
 	_next_order_id += 1
 	order.target = safe_target
+	var flow_started := Time.get_ticks_usec()
 	order.flow = grid.build_flow_field(safe_target)
+	flow_build_usec = Time.get_ticks_usec() - flow_started
+	flow_build_peak = maxi(flow_build_peak, flow_build_usec)
 
 	var clearance := _largest_radius(members)
 	var spacing := tuning.get_value("formation_spacing") * clearance * 2.0
@@ -362,6 +381,8 @@ func step(delta: float) -> void:
 	_cache_orders()
 	for agent in agents:
 		agent.goal_distance = agent.position.distance_to(agent.goal)
+		# 벽이 내다보는 거리 밖에 있는가. 한 번 물어 두고 이 프레임 내내 쓴다.
+		agent.wall_far = grid.clearance_at(grid.world_to_cell(agent.position)) >= _WALL_CLEAR
 	_update_pace()
 	# **뜻과 결과를 두 벌로 나눈다.** 먼저 전원이 이웃을 보지 않고 가고 싶은 방향을 정하고,
 	# 그다음에 순서대로 실제로 걷는다. 걷는 쪽만 이웃을 보므로 "가고 싶었던 것"이 남의
@@ -457,6 +478,8 @@ func _update_pace() -> void:
 ## 답한다. 예전에는 이 함수 안에서 분리력을 더하고 접촉 제약을 걸어 **뜻과 사정이 뒤섞였다.**
 ## 갈라 두면 지표에서도 갈라 볼 수 있다 - `debug_seek` 이 뜻이고 `velocity` 가 결과다.
 func _plan(agent: ProtoUnitAgent, delta: float) -> void:
+	# 비켜주기는 이 뒤에 돈다. 여기서 비워 두면 그 프레임에 옮겨진 만큼만 담긴다.
+	agent.yield_shift = Vector2.ZERO
 	if not agent.is_moving():
 		agent.speed = maxf(agent.speed - tuning.get_value("acceleration") * delta, 0.0)
 		agent.velocity = Vector2.ZERO
@@ -678,6 +701,12 @@ func _room(agent: ProtoUnitAgent, direction: Vector2, note_block: bool) -> float
 func _wall_room(agent: ProtoUnitAgent, direction: Vector2, limit: float) -> float:
 	if limit <= 0.0:
 		return 0.0
+	# **둘레에 벽이 아예 없으면 표본을 하나도 안 뜬다.** 걸음 고르기는 잼에 낀 유닛마다
+	# 후보를 열둘까지 재고 후보마다 벽 표본이 다섯이라, 열린 방에서는 이 검사 하나가
+	# 유닛당 예순 번의 `is_circle_free` 를 통째로 걷어낸다. 벽 거리는 지형이 만들어질 때
+	# 한 번 구워 둔 값이라 조회가 배열 읽기 한 번이다.
+	if agent.wall_far:
+		return limit
 	var near := minf(limit, _WALL_NEAR)
 	var travelled := _WALL_STEP
 	var free := 0.0

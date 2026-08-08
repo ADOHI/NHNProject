@@ -66,6 +66,9 @@ static func apply(field: ProtoUnitField, delta: float) -> void:
 		return
 	var reach := _YIELD_RATE * delta
 	var scratch: Array[ProtoUnitAgent] = []
+	# 비켜설 자리를 볼 때 쓸 목록. **한 번만 만들어 돌려 쓴다** - 쌍마다 새로 만들면
+	# 잼 한가운데에서 프레임마다 배열이 수백 개씩 생겼다 사라진다.
+	var bystanders: Array[ProtoUnitAgent] = []
 	for agent in field.agents:
 		if not _is_advancing(field, agent):
 			continue
@@ -87,10 +90,11 @@ static func apply(field: ProtoUnitField, delta: float) -> void:
 			# **늘 같은 손으로 고정한다** - 매번 다시 고르면 그 고름이 곧 좌우 왕복이다.
 			var away := side / lateral if lateral > 0.001 else Vector2(-heading.y, heading.x)
 			var want := minf(touch - lateral + _YIELD_MARGIN, reach)
-			var room := _yield_room(field, other, away, want)
+			var room := _yield_room(field, other, away, want, bystanders)
 			if room <= 0.0:
 				continue
 			other.position += away * room
+			other.yield_shift += away * room
 			# **비켜준 거리를 튕김 계기에 넣지 않는다.** 튕김은 "뜻 없이 위치가 뛰었다"를
 			# 재는 값이고, 비켜주기는 뜻이 있는 이동이다. 섞으면 지형 보정이 만든 진짜 튐이
 			# 비켜준 거리에 묻혀 안 보인다.
@@ -110,9 +114,12 @@ static func _is_advancing(field: ProtoUnitField, agent: ProtoUnitAgent) -> bool:
 ## **막히면 안 비킨다.** 그러면 미는 쪽이 못 가고 그 자리에 선다 - 한 칸 폭 복도에서
 ## 앞을 막고 선 아군을 지나갈 수 없는 것이 이 때문이고, 그것이 지켜야 할 성질이다.
 static func _yield_room(
-	field: ProtoUnitField, agent: ProtoUnitAgent, direction: Vector2, want: float
+	field: ProtoUnitField,
+	agent: ProtoUnitAgent,
+	direction: Vector2,
+	want: float,
+	bystanders: Array[ProtoUnitAgent]
 ) -> float:
-	var bystanders: Array[ProtoUnitAgent] = []
 	field.collect_neighbors(agent, bystanders)
 	var limit := want
 	for other in bystanders:

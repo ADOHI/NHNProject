@@ -12,7 +12,9 @@ extends SceneTree
 ##
 ## | 지표 | 무엇의 크기인가 |
 ## | --- | --- |
-## | 꺾임 | 유닛당 초당 진행 방향이 꺾인 각도. **지터의 크기다** |
+## | 걸음꺾임 | 유닛당 초당 진행 방향이 꺾인 각도. **비켜서느라 옮겨진 거리는 뺀다** |
+## | 방향반전 | 유닛당 초당 조향 방향이 좌우로 뒤집힌 횟수. **이것이 진짜 지터다** |
+## | 옆걸음 | 유닛당 비켜주기가 옮긴 거리. 의도된 것이라 크다고 나쁘지 않다 |
 ## | 역주행 | 제 목표에서 멀어지는 쪽으로 움직인 프레임의 비율. **튕김의 크기다** |
 ## | 굽이 | 실제 이동 거리 / 직선 거리. 1.0 이 완전한 직선이다 |
 ## | 벽보정 | 지형 보정이 위치를 강제로 옮긴 총 거리. 평상시에는 0 이다 |
@@ -23,6 +25,15 @@ extends SceneTree
 ## | 90% | 열에 아홉이 멎기까지의 시간. 정지와의 차이가 뒤끝이다 |
 ## | 통과 | 전원이 벽 너머로 넘어가기까지의 시간(괄호는 못 넘은 인원) |
 ## | 뒤진동 | 멎은 뒤 3 초 동안 움직인 총 거리 |
+##
+## **꺾임에서 옆걸음을 빼야 한다.** 비켜주기가 들어가면서 몸이 초당 140 픽셀로 옆으로
+## 옮겨지는데, 위치만 보면 그 프레임의 진행 방향은 옆이고 지표는 그것을 "방향이 꺾였다"로
+## 읽는다. 그런데 그건 **의도한 이동**이지 떨림이 아니다. 둘이 한 숫자에 섞여 있으면
+## 무엇을 고쳐도 효과를 읽을 수 없다. 그래서 `yield_shift` 를 빼고 **자기 걸음만** 센다.
+##
+## 그리고 진짜 지터는 따로 잰다. **목표 방향이 좌우로 뒤집히는 횟수**다. 누적 꺾임 각도는
+## 크게 도는 것과 잘게 떠는 것을 못 가르지만, 부호가 뒤집힌 횟수는 떨림에만 반응한다.
+## 몸의 걸음이 아니라 조향이 가리키는 방향을 보므로 옆걸음과도 섞이지 않는다.
 ##
 ## **꺾임 · 역주행 · 굽이는 속도가 아니라 실제로 옮겨 간 위치로 잰다.**
 ##
@@ -51,6 +62,11 @@ const _CELL := 32.0
 
 ## 이 속도 아래에서는 방향이 의미 없어 꺾임도 역주행도 세지 않는다(최대 속도 배수).
 const _MOVING_RATIO := 0.25
+
+## 조향 방향의 회전이 이보다 작은 프레임은 반전 판정에서 무시한다(도).
+##
+## 없으면 거의 직진하는 유닛의 수치 잡음이 매 프레임 부호를 바꿔 반전으로 세인다.
+const _REVERSAL_DEADBAND := 0.5
 
 
 func _initialize() -> void:
@@ -205,6 +221,7 @@ func _measure(
 	field.settled_push_total = 0.0
 	field.max_penetration = 0.0
 	field.blocked_move_total = 0.0
+	field.flow_build_peak = 0
 	if other_target == Vector2.INF:
 		field.issue_move(field.all_ids(), target)
 	else:
@@ -231,8 +248,14 @@ func _measure(
 	var seek_churn := 0.0
 	var seek_dir := PackedVector2Array()
 	seek_dir.resize(count)
+	# 직전 프레임에 조향이 어느 쪽으로 돌았는가(부호). 이 부호가 뒤집힌 횟수가 지터다.
+	var seek_turn := PackedFloat32Array()
+	seek_turn.resize(count)
 	for index in count:
 		seek_dir[index] = Vector2.ZERO
+		seek_turn[index] = 0.0
+	var reversals := 0
+	var yield_total := 0.0
 	var elapsed := 0.0
 	var settle_time := -1.0
 	var ninety_time := -1.0
@@ -252,7 +275,9 @@ func _measure(
 		for index in count:
 			var agent := field.agents[index]
 			# **실제로 옮겨 간 거리로 잰다.** 막힌 유닛은 속도가 살아 있어도 위치가 그대로다.
-			var moved := agent.position - previous[index]
+			# **비켜주기가 옮긴 몫을 뺀다.** 남는 것이 이 유닛이 제 발로 간 거리다.
+			var moved := agent.position - previous[index] - agent.yield_shift
+			yield_total += agent.yield_shift.length()
 			previous[index] = agent.position
 			var speed := moved.length() / _STEP
 			travelled[index] += moved.length()
@@ -269,7 +294,14 @@ func _measure(
 				# 거친 결과라 원인을 감춘다. 입력이 튀는지 결과가 튀는지를 갈라야 한다.
 				var wanted := agent.debug_seek.normalized()
 				if seek_dir[index] != Vector2.ZERO:
-					seek_churn += absf(rad_to_deg(wanted.angle_to(seek_dir[index])))
+					var turn := rad_to_deg(seek_dir[index].angle_to(wanted))
+					seek_churn += absf(turn)
+					# **부호가 뒤집혔는가.** 왼쪽으로 돌다가 오른쪽으로 도는 것이 떨림이고,
+					# 한쪽으로 계속 크게 도는 것은 그냥 방향을 트는 것이다.
+					if absf(turn) >= _REVERSAL_DEADBAND:
+						if seek_turn[index] != 0.0 and signf(turn) != signf(seek_turn[index]):
+							reversals += 1
+						seek_turn[index] = turn
 				seek_dir[index] = wanted
 			if speed < moving_speed:
 				continue
@@ -323,6 +355,8 @@ func _measure(
 		"back": 100.0 * float(back_frames) / maxf(float(live_frames), 1.0),
 		"overrun": 100.0 * float(overrun_frames) / maxf(float(force_frames), 1.0),
 		"seek_churn": seek_churn / maxf(float(force_frames), 1.0) * 60.0,
+		"reversal": float(reversals) / maxf(float(force_frames), 1.0) * 60.0,
+		"yielded": yield_total / float(count),
 		"flow": 100.0 * float(flow_frames) / maxf(float(force_frames), 1.0),
 		"wiggle": wiggle / float(count),
 		"push": field.overlap_push_total,
@@ -340,6 +374,7 @@ func _measure(
 		# "겹치긴 했는데 얼마나 겹쳤나"에 답이 된다.
 		"body": _smallest_body(field),
 		"blocked_move": field.blocked_move_total,
+		"flow_ms": float(field.flow_build_peak) / 1000.0,
 		"step_ms": float(step_total) / maxf(float(step_frames - 1), 1.0) / 1000.0,
 		"worst_ms": float(worst_usec) / 1000.0,
 	}
@@ -370,27 +405,28 @@ func _all_past(field: ProtoUnitField, cross_x: float) -> bool:
 func _print_table(rows: Array[Dictionary]) -> void:
 	print(
 		(
-			"| 상황 | 꺾임 도/초 | 조향꺾임 도/초 | 눌림 % | 역주행 % | 굽이 | 튕김 최대 "
-			+ "| 정지 | 90% | 통과 | 뒤진동 | 막힘 | 양보 | step 평균 | step 최악 |"
+			"| 상황 | 걸음꺾임 | 방향반전 /초 | 옆걸음 px | 눌림 % | 역주행 % | 굽이 | 튕김 최대 "
+			+ "| 정지 | 90% | 통과 | 뒤진동 | 막힘 | 양보 | 흐름장 | step 평균 | step 최악 |"
 		)
 	)
 	print(
 		(
 			"| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- "
-			+ "| --- | --- |"
+			+ "| --- | --- | --- | --- |"
 		)
 	)
 	for row in rows:
 		print(
 			(
 				(
-					"| %s | %.0f | %.0f | %.0f | %.1f | %.2f | %.1f px | %s | %s | %s "
-					+ "| %.1f px | %d | %d | %.3f ms | %.2f ms |"
+					"| %s | %.0f | %.2f | %.0f | %.0f | %.1f | %.2f | %.1f px | %s | %s | %s "
+					+ "| %.1f px | %d | %d | %.1f ms | %.3f ms | %.2f ms |"
 				)
 				% [
 					row["label"],
 					row["churn"],
-					row["seek_churn"],
+					row["reversal"],
+					row["yielded"],
 					row["overrun"],
 					row["back"],
 					row["wiggle"],
@@ -401,6 +437,7 @@ func _print_table(rows: Array[Dictionary]) -> void:
 					row["after"],
 					row["blocked"],
 					row["waiting"],
+					row["flow_ms"],
 					row["step_ms"],
 					row["worst_ms"],
 				]
