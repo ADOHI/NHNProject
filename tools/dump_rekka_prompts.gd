@@ -23,10 +23,11 @@ extends SceneTree
 
 ## 표본을 뽑을 판들. 시드를 적어 두지 않으면 다시 못 만든다 (§17.7).
 ##
-## 두 판인 이유는 한 판이 열몇 턴이면 끝나기 때문이다. 표본은 이어서 읽었을 때
-## 기계 같은지를 보는 것이므로 스무 편은 있어야 한다.
-## 판이 갈리면 방 이름과 지형이 통째로 바뀌어서 수집기도 함께 검증된다.
-const SEEDS: Array[int] = [20260808, 771]
+## 네 판인 이유는 한 판이 스쿼드 퇴장과 함께 예닐곱 턴이면 끝나기 때문이다.
+## 표본은 이어서 읽었을 때 기계 같은지를 보는 것이므로 스무 편은 있어야 한다.
+## 판이 갈리면 방 이름과 지형이 통째로 바뀌어서 수집기도 함께 검증되고,
+## 접두어·닉네임이 판마다 다시 섞이는지도 여기서만 드러난다.
+const SEEDS: Array[int] = [20260808, 771, 31337, 9042]
 const SIZE := 5
 const TURNS := 16
 
@@ -132,12 +133,27 @@ func _advance(turn: int) -> void:
 	_resolve_meetings(turn)
 
 
+## 그 민첩으로 아직 닿을 수 있는, 안 뒤진 귀중품 방이 남아 있는가.
+func _has_loot_left(actor: Actor) -> bool:
+	var here := _run.graph.find_actor_room(actor)
+	if here.is_empty():
+		return false
+	var costs := _run.graph.required_agility_from(here)
+	for room_id in _run.graph.room_ids():
+		if _searched.has(room_id) or int(costs.get(room_id, 99)) > actor.agility:
+			continue
+		if _run.graph.get_room(room_id).kind == Room.Kind.TREASURE:
+			return true
+	return false
+
+
 ## 그 방에서 할 일이 있으면 한다. 했으면 이번 턴은 안 움직인다.
 func _try_room_business(turn: int, actor: Actor, here: String) -> bool:
 	var room := _run.graph.get_room(here)
-	# 빈손으로 나가는 것도 탈출이다. 수확을 조건으로 걸면 허탕 친 자가
-	# 출구에 눌러앉아 판이 끝나지 않는다.
-	if room.kind == Room.Kind.EXIT:
+	# 출구를 **지나가는** 것과 나가는 것은 다르다. 지나가기만 해도 나가게 했더니
+	# 스쿼드가 첫 수색도 하기 전에 빈손으로 퇴장해 버렸다.
+	# 빈손 탈출 자체는 막지 않는다 — 털 것이 남지 않았으면 그때는 나가는 게 맞다.
+	if room.kind == Room.Kind.EXIT and (_hauls[actor.id] > 0 or not _has_loot_left(actor)):
 		_record(turn, GameEvent.Kind.ESCAPED, actor, room, _hauls[actor.id])
 		_run.graph.remove_actor(actor)
 		_retired[actor.id] = true
