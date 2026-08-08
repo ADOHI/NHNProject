@@ -30,6 +30,9 @@ const _COLUMNS: Array[String] = [
 	"climb_fast",
 	"climb_slow",
 	"valuable_degree",
+	"boss_degree",
+	"treasure_degree",
+	"exit_free_pct",
 	"valuable_elev_pct",
 ]
 
@@ -42,7 +45,8 @@ func _initialize() -> void:
 	print("")
 	print("cycles=E-V+1 · diam=지름 · reach=민첩 2 로 닿는 방 %")
 	print("alt=귀중 방 중 대안 경로 보유 % · dom=최단이 더 완만하기까지 한 %")
-	print("valDeg=귀중 방의 평균 연결 수 · valEl=귀중 방 고도 백분위 · ms=생성 시간")
+	print("bossDeg=보스 방 차수(P3, 4 이상 목표) · trDeg=부차 귀중품 차수(P4, 1 목표)")
+	print("exitV2=민첩 0 으로 탈출구에 닿는 판의 비율 (V2) · ms=생성 시간")
 	quit()
 
 
@@ -50,7 +54,7 @@ func _table(title: String, current: bool) -> void:
 	print("-- %s --" % title)
 	print(
 		(
-			"%-6s %6s %6s %6s %5s %5s %5s %5s %5s %6s %5s %6s %5s %6s %6s %6s %6s"
+			"%-6s %6s %6s %6s %5s %5s %5s %5s %5s %6s %5s %6s %5s %6s %6s %6s %6s %6s %6s"
 			% [
 				"want",
 				"rooms",
@@ -67,7 +71,9 @@ func _table(title: String, current: bool) -> void:
 				"dom%",
 				"climbF",
 				"climbS",
-				"valDeg",
+				"bossDeg",
+				"trDeg",
+				"exitV2",
 				"ms"
 			]
 		)
@@ -99,7 +105,7 @@ func _row(wanted: int, current: bool) -> void:
 		(
 			(
 				"%-6d %6.1f %6.1f %6.1f %5.2f %5.1f %5.1f %5.1f %5.1f %6.1f"
-				+ " %5.1f %6.1f %5.1f %6.2f %6.2f %6.2f %6.2f"
+				+ " %5.1f %6.1f %5.1f %6.2f %6.2f %6.2f %6.2f %6.1f %6.2f"
 			)
 			% [
 				wanted,
@@ -117,7 +123,9 @@ func _row(wanted: int, current: bool) -> void:
 				totals["dominated_pct"] / seen,
 				totals["climb_fast"] / seen,
 				totals["climb_slow"] / seen,
-				totals["valuable_degree"] / seen,
+				totals["boss_degree"] / seen,
+				totals["treasure_degree"] / seen,
+				totals["exit_free_pct"] / seen,
 				elapsed / float(_RUNS),
 			]
 		)

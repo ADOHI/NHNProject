@@ -23,6 +23,18 @@ const _NOISE_FREQUENCY := 0.22
 ## 구역 하나가 담을 방의 대략적인 수. 작을수록 관문이 늘고 판이 길어진다.
 const _ROOMS_PER_REGION := 6.0
 
+## 보상 봉우리가 주변보다 얼마나 높은가. 필요 민첩이 곧 이 값이다.
+const _PEAK_RISE := 3
+
+## 급경사 지름길의 마지막 한 칸 상승폭. 완경사 우회는 1 이므로 차이가 이만큼 벌어진다.
+const _SHORTCUT_CLIMB := 3
+
+## 허브에 붙은 가브리엘 간선을 실제로 채택할 확률. 순환 계수를 여기서 조인다.
+const _HUB_BRANCH_CHANCE := 0.62
+
+## 구역마다 간선을 몰아 줄 방의 수. 갈림길의 밀도를 정하는 손잡이다.
+const _HUBS_PER_ZONE := 2
+
 ## 보상 방이 가져야 할 최소 연결 수. **보상이 곧 노출이다.**
 ##
 ## 조우는 방에서만 일어나므로(05-rules.md §5.6) 차수가 곧 들어오는 길의 수다.
@@ -65,11 +77,16 @@ static func build(seed_value: int, room_count: int) -> Dictionary:
 	var boss := _prize_room(points, zones, elevations, prize_zone, entrance)
 	edges = _expose(points, delaunay, edges, boss)
 	edges = _ensure_two_routes(points.size(), delaunay, edges, entrance, boss)
-	var routes := _routes(points.size(), edges, entrance, boss)
-	elevations = _sharpen(elevations, routes, edges, entrance)
 
+	# **고도를 건드리는 순서가 여기 전부다.** 예전에는 _sharpen 뒤에 _carve 가 와서
+	# 방금 세운 경사로를 탈출 통로가 도로 0 으로 깎았고, 그래서 두 경로의 상승폭 차가
+	# 0.13 까지 무너졌다 (§17.12.7). 깎는 것을 **먼저** 하고, 깎은 자리를 보호한 채
+	# 마지막에 한 번만 경로를 세운다.
 	var exit_index := _exit_room(points, zones, ranks, edges, entrance)
-	elevations = _carve(elevations, _path(points.size(), edges, entrance, exit_index))
+	var exit_route := _path(points.size(), edges, entrance, exit_index)
+	elevations = _carve(elevations, exit_route)
+	var routes := _routes(points.size(), edges, entrance, boss)
+	elevations = _sharpen(elevations, routes, edges, entrance, exit_route)
 
 	return {
 		"points": points,
@@ -319,7 +336,7 @@ static func _edges(
 		# 허브에 닿는 간선만 받는다. 그 방이 판의 갈림길이 된다.
 		if not (hubs.has(edge.x) or hubs.has(edge.y)):
 			continue
-		if rng.randf() > 0.75:
+		if rng.randf() > _HUB_BRANCH_CHANCE:
 			continue
 		taken[key] = true
 		chosen.append(key)
@@ -343,16 +360,23 @@ static func _hubs(count: int, inside: Array[Vector2i], zones: PackedInt32Array) 
 		degrees[edge.x] = int(degrees.get(edge.x, 0)) + 1
 		degrees[edge.y] = int(degrees.get(edge.y, 0)) + 1
 
-	var best := {}
+	# 구역마다 상위 둘. 하나만 두면 구역 안이 그 방을 지나는 별 모양이 되어
+	# 차수 3 이상이 45% 까지 떨어졌다 (§17.12.7). 둘이면 갈림길이 두 군데 생긴다.
+	var ranked := {}
 	for index in count:
 		var zone := zones[index]
-		var current: int = best.get(zone, -1)
-		if current < 0 or int(degrees.get(index, 0)) > int(degrees.get(current, 0)):
-			best[zone] = index
+		if not ranked.has(zone):
+			ranked[zone] = [] as Array[int]
+		(ranked[zone] as Array[int]).append(index)
 
 	var result := {}
-	for zone in best:
-		result[best[zone]] = true
+	for zone in ranked:
+		var members: Array[int] = ranked[zone]
+		members.sort_custom(
+			func(a: int, b: int) -> bool: return int(degrees.get(a, 0)) > int(degrees.get(b, 0))
+		)
+		for slot in mini(_HUBS_PER_ZONE, members.size()):
+			result[members[slot]] = true
 	return result
 
 
@@ -486,13 +510,25 @@ static func _routes(count: int, edges: Array[Vector2i], entrance: int, target: i
 	return {"fast": fast, "slow": _path(count, reduced, entrance, target)}
 
 
-## 두 경로의 성격을 **일부러 벌린다.**
+## 두 경로의 성격을 **일부러 벌린다. 고도를 쓰는 마지막 한 곳이다.**
 ##
-## 대안이 있기만 해서는 선택이 되지 않는다. 실측에서 대안 경로는 더 길고 더 위험하고
-## 기울기는 같았다 — 그러면 아무도 고르지 않는다 (§17.11.6).
-## 그래서 빠른 길에는 절벽을 하나 세우고, 돌아가는 길은 기본 민첩으로 넘게 깎는다.
+## 대안이 있기만 해서는 선택이 되지 않는다. 실측에서 대안 경로는 더 길고 더 위험한데
+## 기울기는 같았다 — 그러면 아무도 고르지 않는다 (§17.11.7-1).
+##
+## **여기서 두 번 틀렸다.**
+## 처음에는 목표 방의 고도를 올렸다. 두 길이 같은 방으로 들어오므로 양쪽이 똑같이
+## 가팔라졌다. 다음에는 우회로를 "한 칸에 1 씩" 으로 깎았는데, 경사로가 시작하는
+## 지점에서 앞 칸과의 차이가 그대로 절벽이 됐고 최대 상승폭은 그대로였다.
+##
+## 지금은 우회로를 **끝에서부터 역산한 계단**으로 통째로 다시 쓴다.
+## 마지막 칸이 목표보다 1 낮고, 그 앞이 2 낮고, … 로 내려오다 바닥에서 평평해진다.
+## 그러면 **경로 위 어느 간선도 1 을 넘지 않는다** — 계산이 아니라 구성으로 보장된다.
 static func _sharpen(
-	elevations: PackedInt32Array, routes: Dictionary, edges: Array[Vector2i], entrance: int
+	elevations: PackedInt32Array,
+	routes: Dictionary,
+	edges: Array[Vector2i],
+	entrance: int,
+	protected: PackedInt32Array
 ) -> PackedInt32Array:
 	var result := elevations.duplicate()
 	var fast: PackedInt32Array = routes["fast"]
@@ -500,32 +536,46 @@ static func _sharpen(
 	if fast.size() < 2 or slow.size() < 2:
 		return result
 	var goal := fast[fast.size() - 1]
+	if _has(protected, goal):
+		return result
 
-	# 0) 돌아가는 길을 **한 칸에 1 씩만** 오르도록 깎는다. 관문의 층까지 함께 눕는다.
-	#    이 길이 「고도 낮은 차이를 여러 번 거쳐서 가는 길」이다.
+	# 1) 우회로가 **실제로 1 씩 올라가며 닿을 수 있는 높이**를 먼저 구한다.
+	#
+	#    봉우리를 먼저 세우고 계단을 맞추는 순서로 두 번 실패했다. 경로가 짧거나
+	#    탈출 통로와 겹치면 계단이 목표 높이에 못 미쳐 **마지막 한 칸이 절벽**이 된다.
+	#    순서를 뒤집는다 — 계단이 닿을 수 있는 높이를 먼저 재고 봉우리를 거기에 맞춘다.
+	#    그러면 우회로의 최대 상승폭이 **1 임이 구성으로 보장된다.**
+	var base: int = result[slow[0]]
+	var last := slow.size() - 1
+	var reach := PackedInt32Array()
+	reach.resize(slow.size())
+	reach[0] = base
 	for index in range(1, slow.size()):
-		result[slow[index]] = mini(result[slow[index]], result[slow[index - 1]] + 1)
+		if _has(protected, slow[index]):
+			# 탈출 통로는 민첩 0 으로 닿아야 한다 (V2). 그 칸의 높이는 못 건드린다.
+			reach[index] = result[slow[index]]
+		else:
+			reach[index] = reach[index - 1] + 1
 
-	# 1) 보상 방을 **봉우리**로 세운다. 이웃 어디에서 보든 올려다보는 자리가 된다.
+	# 2) 보상 방을 **봉우리**로 세운다 (P1). 다만 계단이 닿는 높이를 넘지 않는다.
 	var around := 0
 	for edge in edges:
 		if edge.x == goal:
 			around = maxi(around, result[edge.y])
 		elif edge.y == goal:
 			around = maxi(around, result[edge.x])
-	result[goal] = around + 3
+	result[goal] = maxi(around + 1, mini(around + _PEAK_RISE, reach[last - 1] + 1))
 
-	# 2) 돌아가는 길에만 **경사로**를 놓는다. 목표에 가까울수록 한 칸씩 올라오게.
-	for index in range(slow.size() - 2, 0, -1):
-		var wanted := result[goal] - (slow.size() - 1 - index)
-		if wanted <= result[slow[index]]:
-			break
-		result[slow[index]] = wanted
+	# 3) 계단을 목표에서 거꾸로 놓는다. 닿을 수 있는 높이 안에서만 올린다.
+	for index in range(1, last):
+		if _has(protected, slow[index]):
+			continue
+		result[slow[index]] = clampi(result[goal] - (last - index), base, reach[index])
 
-	# 3) 빠른 길의 마지막 한 칸은 **떨어뜨린다.** 짧은 쪽은 기어올라야 한다.
+	# 4) 급경사 지름길 (P2). 마지막 한 칸을 떨어뜨린다. 짧은 쪽은 기어올라야 한다.
 	var steep := fast[fast.size() - 2]
-	if steep != entrance and not _has(slow, steep):
-		result[steep] = maxi(0, result[goal] - 3)
+	if steep != entrance and not _has(slow, steep) and not _has(protected, steep):
+		result[steep] = maxi(0, result[goal] - _SHORTCUT_CLIMB)
 	return result
 
 

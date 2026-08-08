@@ -39,6 +39,12 @@ static func measure(board: Dictionary) -> Dictionary:
 		if int(costs[index]) <= 2:
 			open += 1
 
+	var exit_free := 0.0
+	for index in count:
+		if kinds.get(index, Room.Kind.EMPTY) == Room.Kind.EXIT:
+			exit_free = 100.0 if int(costs.get(index, 99)) == 0 else 0.0
+			break
+
 	var floor_count := maxf(float(count), 1.0)
 	var result := {
 		"rooms": float(count),
@@ -50,6 +56,7 @@ static func measure(board: Dictionary) -> Dictionary:
 		"deg3_pct": 100.0 * deg3 / floor_count,
 		"diameter": float(diameter(count, edges)),
 		"reach_pct": 100.0 * float(open) / floor_count,
+		"exit_free_pct": exit_free,
 	}
 	result.merge(_valuables(board, count, edges, elevations, kinds, degrees, entrance))
 	return result
@@ -72,6 +79,9 @@ static func _valuables(
 	var climb_slow := 0.0
 	var length_fast := 0.0
 	var length_slow := 0.0
+	var boss_degree := 0.0
+	var treasure_degree := 0.0
+	var treasure_seen := 0.0
 	var degree_total := 0.0
 	var elevation_rank := 0.0
 	var boss_alt := 0.0
@@ -83,6 +93,13 @@ static func _valuables(
 			continue
 		seen += 1.0
 		degree_total += float(int(degrees.get(index, 0)))
+		# **P3(노출된 보상)과 P4(막다른 보물)는 서로 반대다.** 한 평균으로 재면 둘 다
+		# 실패로 보인다. 보스는 차수가 높아야 하고 부차 귀중품은 1 이어야 한다.
+		if kind == Room.Kind.BOSS:
+			boss_degree += float(int(degrees.get(index, 0)))
+		else:
+			treasure_degree += float(int(degrees.get(index, 0)))
+			treasure_seen += 1.0
 		elevation_rank += _percentile(elevations, elevations[index])
 		if kind == Room.Kind.BOSS:
 			boss_seen += 1.0
@@ -123,6 +140,8 @@ static func _valuables(
 		"climb_fast": climb_fast / alt,
 		"climb_slow": climb_slow / alt,
 		"valuable_degree": degree_total / maxf(seen, 1.0),
+		"boss_degree": boss_degree / maxf(boss_seen, 1.0),
+		"treasure_degree": treasure_degree / maxf(treasure_seen, 1.0),
 		"valuable_elev_pct": elevation_rank / maxf(seen, 1.0),
 	}
 
