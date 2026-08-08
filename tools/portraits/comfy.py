@@ -96,6 +96,53 @@ def queue_depth() -> tuple[int, int]:
     return len(q.get("queue_running", [])), len(q.get("queue_pending", []))
 
 
+def free(unload_models: bool = True, free_memory: bool = True) -> None:
+    """VRAM 을 내린다. **모델을 갈아 끼울 때마다 부른다.**
+
+    zitani 와 Klein 을 번갈아 쓰는데 16GB 에 둘을 같이 올리면 경합한다
+    (`minimal-char-studio/docs/ARCHITECTURE.md` §4). 예전에 인스턴스를 둘 띄웠다가
+    블루스크린이 났고, **모델 둘을 한 인스턴스에 같이 올리는 것도 같은 위험이다.**
+    """
+    data = json.dumps({"unload_models": unload_models, "free_memory": free_memory}).encode()
+    req = urllib.request.Request(HOST + "/free", data=data,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        r.read()
+
+
+def submit(graph: dict, dest: str) -> float:
+    """API 형식 워크플로 하나를 제출하고 결과를 `dest` 에 쓴다. 걸린 초를 돌려준다.
+
+    **그래프를 안 만든다.** 어떤 모델이든 그래프만 넘기면 여기서 돌아간다 —
+    `run()` 은 초상용 Klein 그래프를 만들어 이걸 부르고, `gen_illust.py` 는
+    zitani · klein_edit 그래프를 만들어 이걸 부른다.
+    """
+    cid = str(uuid.uuid4())
+    name = os.path.splitext(os.path.basename(dest))[0]
+    started = time.time()
+    pid = post("/prompt", {"prompt": graph, "client_id": cid})["prompt_id"]
+    while True:
+        time.sleep(1.5)
+        hist = get("/history/" + pid)
+        if pid in hist:
+            break
+    files: list[dict] = []
+    for node in hist[pid]["outputs"].values():
+        files.extend(node.get("images", []))
+    if not files:
+        raise RuntimeError("판이 안 나왔다: " + name)
+    im = files[-1]
+    q = urllib.parse.urlencode({"filename": im["filename"],
+                                "subfolder": im.get("subfolder", ""),
+                                "type": im.get("type", "output")})
+    with urllib.request.urlopen(HOST + "/view?" + q, timeout=300) as r:
+        blob = r.read()
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    with open(dest, "wb") as f:
+        f.write(blob)
+    return time.time() - started
+
+
 def run(dest: str, prompt: str, w: int, h: int, seed: int, steps: int = 24,
         refs: list[str] | None = None) -> float:
     """판 하나를 뽑아 `dest` 에 쓴다. 걸린 초를 돌려준다."""
