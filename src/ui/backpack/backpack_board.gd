@@ -69,6 +69,8 @@ const _ITEM_COLORS := [
 var _grid: BackpackGrid
 var _tray: Array[BackpackItem] = []
 var _chains: Array[ChainResult] = []
+var _outcomes: Array[ChainBreakOutcome] = []
+var _break_tuning: BreakTuning = null
 
 var _drag_item: BackpackItem = null
 var _drag_grab: Vector2i = Vector2i.ZERO
@@ -99,6 +101,13 @@ func set_chains(chains: Array[ChainResult]) -> void:
 	for chain in chains:
 		for placement in chain.steps:
 			_chained[placement] = true
+	queue_redraw()
+
+
+## 체인이 상대를 얼마나 무너뜨렸나 (§28.5). 눈금을 격자 아래에 그린다.
+func set_break(outcomes: Array[ChainBreakOutcome], tuning: BreakTuning) -> void:
+	_outcomes = outcomes
+	_break_tuning = tuning
 	queue_redraw()
 
 
@@ -323,6 +332,7 @@ func _draw() -> void:
 	_draw_start_nodes()
 	for chain in _chains:
 		_draw_chain(chain)
+	_draw_break_gauge()
 	_draw_tray()
 	_draw_dragged()
 
@@ -599,3 +609,71 @@ func _draw_label_below(rect: Rect2, text: String, color: Color) -> void:
 		14,
 		color
 	)
+
+
+## 무너짐 눈금을 격자 아래에 막대로 그린다 (§28.5).
+##
+## **체인 길이가 여기서 값을 한다** — 짧은 체인은 눈금이 다 차기 전에 끝나고,
+## 긴 체인은 문턱을 넘긴다. 숫자로만 적으면 그 차이가 안 보인다.
+##
+## 문턱 눈금은 `BreakTuning` 이 정한다. 여기 수치를 따로 적지 않는다 —
+## 두 곳에 적으면 막대가 옛 문턱을 그린다.
+func _draw_break_gauge() -> void:
+	if _break_tuning == null or _outcomes.is_empty():
+		return
+	var top := GRID_ORIGIN.y + float(_grid.height) * CELL + 26.0
+	var width := float(_grid.width) * CELL
+	var font := get_theme_default_font()
+
+	var peak := 0.0
+	var highest := BreakState.Kind.NONE
+	for outcome in _outcomes:
+		peak = maxf(peak, outcome.peak)
+		if BreakState.is_worse(outcome.highest, highest):
+			highest = outcome.highest
+
+	draw_string(
+		font,
+		Vector2(GRID_ORIGIN.x, top - 8.0),
+		"무너짐 눈금",
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1.0,
+		14,
+		_TEXT
+	)
+
+	var bar := Rect2(Vector2(GRID_ORIGIN.x, top), Vector2(width, 26.0))
+	draw_rect(bar, _CELL_FILL)
+	draw_rect(bar, _CELL_LINE, false, 1.0)
+
+	var ratio := clampf(peak / maxf(1.0, _break_tuning.max_value), 0.0, 1.0)
+	var filled := Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y))
+	draw_rect(filled, _state_color(highest))
+
+	var thresholds: Array[float] = [
+		_break_tuning.stagger_at, _break_tuning.launch_at, _break_tuning.knockdown_at
+	]
+	for threshold in thresholds:
+		var x := bar.position.x + bar.size.x * (threshold / maxf(1.0, _break_tuning.max_value))
+		draw_line(Vector2(x, bar.position.y), Vector2(x, bar.end.y), _TEXT, 1.5)
+
+	draw_string(
+		font,
+		Vector2(bar.position.x + 6.0, bar.end.y + 16.0),
+		"%.0f / %.0f    %s" % [peak, _break_tuning.max_value, BreakState.label(highest)],
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1.0,
+		14,
+		_state_color(highest)
+	)
+
+
+## 단계가 심할수록 뜨거운 색. `match` 를 쓰면 gdlint 가 터진다(gdtoolkit 버그).
+func _state_color(kind: BreakState.Kind) -> Color:
+	if kind == BreakState.Kind.KNOCKDOWN:
+		return Color(0.95, 0.45, 0.35)
+	if kind == BreakState.Kind.LAUNCH:
+		return Color(0.96, 0.72, 0.30)
+	if kind == BreakState.Kind.STAGGER:
+		return Color(0.60, 0.78, 0.45)
+	return Color(0.36, 0.40, 0.48)

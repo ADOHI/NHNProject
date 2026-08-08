@@ -15,6 +15,9 @@ extends Control
 
 var _grid: BackpackGrid
 
+## 무너짐 수치들. **확정이 아니다** (§28.8). 여기서 갈아 끼우면 화면이 따라온다.
+var _break_tuning := BreakTuning.new()
+
 @onready var _board: BackpackBoard = %Board
 @onready var _help_label: Label = %HelpLabel
 @onready var _chain_label: Label = %ChainLabel
@@ -32,8 +35,12 @@ func _ready() -> void:
 ## 배치가 바뀌었다. 체인을 다시 풀어 화면과 글자에 함께 반영한다.
 func _refresh() -> void:
 	var chains := ChainResolver.resolve_all(_grid)
+	var outcomes: Array[ChainBreakOutcome] = []
+	for chain in chains:
+		outcomes.append(ChainBreakSim.run(chain, _break_tuning))
 	_board.set_chains(chains)
-	_chain_label.text = _chain_text(chains)
+	_board.set_break(outcomes, _break_tuning)
+	_chain_label.text = _chain_text(chains, outcomes)
 
 
 func _help_text() -> String:
@@ -46,13 +53,35 @@ func _help_text() -> String:
 
 ## 체인을 읽을 수 있는 글자로. **번호는 아라비아 숫자, 방향은 한글이다** —
 ## 본문 폰트에 원문자도 화살표도 없다 (§28.20.9).
-func _chain_text(chains: Array[ChainResult]) -> String:
+func _chain_text(chains: Array[ChainResult], outcomes: Array[ChainBreakOutcome]) -> String:
 	var lines := PackedStringArray()
 	for index in chains.size():
 		if index > 0:
 			lines.append("")
 		lines.append_array(_one_chain_text(chains[index], index + 1))
+		lines.append_array(_break_text(outcomes[index]))
 	return "\n".join(lines)
+
+
+## **긴 체인이 왜 좋은가**를 글자로도 적는다 (§28.5).
+##
+## 격자 아래 막대가 눈금을 보여 주고, 여기는 **몇 번째 타에서** 넘겼는지를 적는다.
+func _break_text(outcome: ChainBreakOutcome) -> PackedStringArray:
+	var lines := PackedStringArray()
+	lines.append("")
+	lines.append("    무너짐: %s" % outcome.summary_line())
+	if outcome.hits() == 0:
+		return lines
+	var stages: Array[BreakState.Kind] = [
+		BreakState.Kind.STAGGER, BreakState.Kind.LAUNCH, BreakState.Kind.KNOCKDOWN
+	]
+	for kind in stages:
+		var step := outcome.first_step_reaching(kind)
+		if step > 0:
+			lines.append("      %s  %d번째 타에서" % [BreakState.label(kind), step])
+	if outcome.highest == BreakState.Kind.NONE:
+		lines.append("      문턱을 못 넘었다. 체인이 더 길어야 한다")
+	return lines
 
 
 func _one_chain_text(chain: ChainResult, number: int) -> PackedStringArray:
