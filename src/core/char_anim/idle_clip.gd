@@ -181,7 +181,7 @@ func _apply_foot(pose: CharPose, t: float, f: AnimFeatures, part: CharPart.Id) -
 	# 발끝을 축으로 돌리려면 피벗을 그만큼 들어 올려야 한다. **이 값이 유일한 상승분이다** —
 	# 여기에 「전체를 조금 더 띄우는」 항을 더하면 그만큼 발끝이 땅에서 떠 버린다.
 	# 처음에 0.5 를 더했다가 발끝이 정확히 그만큼 뜨는 것을 테스트가 잡았다.
-	var toe_drop := rig.half_sizes[part].x * absf(sin(heel))
+	var toe_drop := rig.sole_drop(part, heel)
 	pose.positions[part] += Vector2(-FOOT_SLIDE * freed, toe_drop)
 	pose.rotations[part] = heel
 	# 피벗이 밑면이라 눌려도 밑면이 정확히 자기 지면에 남는다.

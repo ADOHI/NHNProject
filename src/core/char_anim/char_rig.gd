@@ -23,6 +23,27 @@ const FOOT_NEAR_HALF := Vector2(11.0, 11.0)
 const FOOT_FAR_POS := Vector2(-13.0, 5.0)
 const FOOT_FAR_HALF := Vector2(9.5, 9.5)
 
+## 부츠 실루엣. 한 바퀴를 다 적었고 `x` 는 반너비의 비율, `y` 는 밑창(0)에서 목(1)까지다.
+##
+## **밑창이 `±1` 이 아니다** — 발끝 `+0.82`, 뒤꿈치 `−0.60` 으로 **비대칭**이고 둘 다
+## 반너비보다 좁다. 그래서 발을 기울일 때 들어 올릴 양을 반너비로 계산하면 **뜬다.**
+##
+## `TORSO_PROFILE` 과 같은 이유로 리그가 갖는다 — 접지 기하는 그림이 아니라 치수다.
+const FOOT_PROFILE: Array[Vector2] = [
+	Vector2(-0.52, 1.00),
+	Vector2(0.44, 1.00),
+	Vector2(0.50, 0.72),
+	Vector2(0.62, 0.52),
+	Vector2(0.86, 0.34),
+	Vector2(1.00, 0.18),
+	Vector2(0.98, 0.06),
+	Vector2(0.82, 0.00),
+	Vector2(-0.60, 0.00),
+	Vector2(-0.74, 0.10),
+	Vector2(-0.70, 0.40),
+	Vector2(-0.58, 0.72),
+]
+
 ## 몸은 두 발 사이. 옆으로 돌아섰으므로 정면보다 좁다 (반너비 20 에서 17 로).
 const TORSO_POS := Vector2(-2.0, 34.0)
 const TORSO_HALF := Vector2(17.0, 21.0)
@@ -154,12 +175,53 @@ func local_bottom(part: CharPart.Id) -> Vector2:
 	return local_centers[part] - Vector2(0.0, half_sizes[part].y)
 
 
-## 파츠 지역 공간에서의 **발끝**(앞쪽 밑 모서리).
+## 파츠 지역 공간에서의 **발끝**(밑창의 앞쪽 끝).
 ##
 ## 뒤꿈치를 드는 동작이 이 점을 축으로 돈다. 피벗은 밑면 한가운데에 고정되어 있으므로
-## 회전만 시키면 발끝이 땅을 파고든다 — `CharIdleClip` 이 그만큼 들어 올려 보정한다.
+## 회전만 시키면 발끝이 땅을 파고든다 — 클립이 `sole_drop()` 만큼 들어 올려 보정한다.
 func local_toe(part: CharPart.Id) -> Vector2:
-	return local_bottom(part) + Vector2(half_sizes[part].x, 0.0)
+	return local_bottom(part) + Vector2(sole_front(part), 0.0)
+
+
+## 파츠 지역 공간에서의 **뒤꿈치**(밑창의 뒤쪽 끝).
+##
+## **idle 때는 없어도 됐다.** 발이 한쪽으로만(뒤꿈치 들림) 돌아서 낮은 쪽이 늘 발끝이었다.
+## walk 는 뒤꿈치가 **닿는** 구간이 있어 반대로도 돈다 — 그때 낮은 쪽은 뒤꿈치다.
+func local_heel(part: CharPart.Id) -> Vector2:
+	return local_bottom(part) - Vector2(sole_back(part), 0.0)
+
+
+## 밑창이 피벗에서 앞으로 · 뒤로 뻗은 거리. **반너비가 아니다.**
+##
+## 부츠는 발끝이 `0.82`, 뒤꿈치가 `0.60` 이라 **좌우 비대칭이고 둘 다 반너비보다 좁다.**
+## 접지 계산에 반너비를 쓰면 기울일 때 그 차이만큼 발이 뜬다 (`FOOT_PROFILE`).
+func sole_front(part: CharPart.Id) -> float:
+	return _sole_reach(part, true)
+
+
+func sole_back(part: CharPart.Id) -> float:
+	return _sole_reach(part, false)
+
+
+## 발을 `angle` 만큼 돌렸을 때 **낮아지는 쪽 밑창 끝이 내려간 깊이.**
+##
+## 피벗이 밑면 한가운데라 회전만 시키면 그만큼 땅을 파고든다. 클립은 이 값을 그대로
+## 다시 들어 올린다 — **그것이 유일한 상승분이다.** 여기에 뭔가를 더하면 발이 뜬다.
+##
+## 부호에 따라 **닿는 끝이 바뀐다.** 뒤꿈치를 들면(음수) 발끝이 닿고,
+## 발끝을 들면(양수) 뒤꿈치가 닿는다. 둘의 길이가 다르므로 한쪽 값만 쓰면 한쪽이 틀린다.
+func sole_drop(part: CharPart.Id, angle: float) -> float:
+	var reach := sole_front(part) if angle < 0.0 else sole_back(part)
+	return reach * absf(sin(angle))
+
+
+func _sole_reach(part: CharPart.Id, forward: bool) -> float:
+	var best := 0.0
+	for p in FOOT_PROFILE:
+		if not is_zero_approx(p.y):
+			continue
+		best = maxf(best, p.x if forward else -p.x)
+	return best * half_sizes[part].x
 
 
 ## 윤곽표를 높이 `at` 에서 선형 보간한다. 표의 `y` 는 오름차순이다.

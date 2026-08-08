@@ -2,17 +2,24 @@ extends SceneTree
 ## 애니메이션 한 바퀴를 PNG 묶음으로 남긴다. `tools/make_gif.py` 가 GIF 로 잇는다.
 ##
 ##     godot --path . -s res://tools/capture_char_anim.gd -- .renders-char-anim/idle
-##     godot --path . -s res://tools/capture_char_anim.gd -- .renders-char-anim/doll off
+##     godot --path . -s res://tools/capture_char_anim.gd -- .renders-char-anim/walk walk
+##     godot --path . -s res://tools/capture_char_anim.gd -- .renders-char-anim/skate walk noplant
 ##
-## 두 번째 인자로 조절판 축을 지정한다 — `off`(넷 다 끔) 또는 축 이름 하나
-## (`delay` `arc` `squash` `asymmetry`)를 주면 **그 축만 켠** 상태를 찍는다.
+## 첫 인자가 저장 접두사이고, 나머지는 **순서에 상관없는 낱말**이다.
+##
+## * 클립: `idle`(기본) · `walk` · `front`(정면 문법 대조군)
+## * 조절판: `off`(다 끔) · `on`(다 켬) · 축 이름 하나면 **그 축만 켠** 상태 ·
+##   `no<축>` 이면 **그 축만 끈** 상태 (`noplant` 처럼)
+##
 ## 무엇이 무엇을 만드는지 GIF 를 나란히 놓고 가르기 위한 것이다.
+##
+## **`--headless` 로는 못 돌린다.** 렌더러가 없어 `get_image()` 가 널을 준다.
 ##
 ## **실시간을 안 기다린다.** 시각을 직접 넣는다(`§25.3`). 그래서
 ##
 ## * 이음매가 정확히 맞는다 — `t = 0` 과 `t = LOOP` 가 같은 포즈다
 ## * 프레임률이 튀어도 찍히는 내용이 안 변한다
-## * 25 fps · 100 프레임이면 GIF 프레임 지연이 정확히 40 ms 라 시간이 안 밀린다
+## * 25 fps 면 GIF 프레임 지연이 정확히 40 ms 라 시간이 안 밀린다
 ##
 ## **함정:** `_initialize()` 에서 `add_child()` 해도 `_ready()` 가 그 자리에서 안 돈다.
 ## 이 저장소에서 그 때문에 **A 를 캡처했는데 B 가 나온** 사고가 있었다. 그래서
@@ -20,7 +27,6 @@ extends SceneTree
 ## **실제로 무엇이 찍혔는지 읽어서 확인한다**(§25.7.1).
 
 const FPS := 25
-const FRAMES := 100
 
 ## 캡처 화면. 캐릭터 키 146 을 배율 3.0 으로 보므로 438 px, 위아래 여백을 두어 520.
 const VIEW_SIZE := Vector2i(400, 520)
@@ -43,6 +49,10 @@ const WARMUP_FRAMES := 8
 ## 그대로 통과했다. 배경이 화려하면 색 수는 아무것도 증명하지 않는다.
 const MIN_SUBJECT_RATIO := 0.03
 
+## 낱말로 고를 수 있는 클립과 조절판 축.
+const CLIPS: Array[String] = ["idle", "walk", "front"]
+const AXES: Array[String] = ["delay", "arc", "squash", "asymmetry", "depth", "plant"]
+
 var _out_prefix := ".renders-char-anim/idle"
 var _features := AnimFeatures.all_on()
 var _clip: CharClip
@@ -52,16 +62,19 @@ var _warmup := WARMUP_FRAMES
 var _next_frame := 0
 var _pending := -1
 var _verified := false
-var _front := false
+var _frames := 0
 
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		_out_prefix = args[0]
-	if args.size() > 1:
-		_features = _parse_features(args[1])
-	_front = args.has("front")
+	var clip_name := "idle"
+	for token: String in args.slice(1):
+		if token in CLIPS:
+			clip_name = token
+		else:
+			_features = _parse_features(token)
 
 	# **`SubViewport` 에 그린다.** 창 크기를 바꾸는 방법은 안 통했다 — `get_root().size` 를
 	# 400x520 으로 넣어도 찍히는 것은 1280x720 이었다(늘리기 설정이 이겼다). 자기 크기를
@@ -73,7 +86,7 @@ func _initialize() -> void:
 	get_root().add_child(_viewport)
 
 	var rig := CharRig.new()
-	_clip = CharFrontIdleClip.new(rig) if _front else CharIdleClip.new(rig)
+	_clip = _make_clip(clip_name, rig)
 
 	var stage := _make_stage()
 	_viewport.add_child(stage)
@@ -88,10 +101,11 @@ func _initialize() -> void:
 	DirAccess.make_dir_recursive_absolute(
 		ProjectSettings.globalize_path(_out_prefix).get_base_dir()
 	)
-	print("캡처: %s  프레임 %d  %d fps" % [_out_prefix, FRAMES, FPS])
+	_frames = frame_count(_clip.loop_seconds())
+	print("캡처: %s  프레임 %d  %d fps  한 바퀴 %.2f 초" % [_out_prefix, _frames, FPS, _clip.loop_seconds()])
 	print(
 		(
-			"클립 %s / 지연 %.1f 호 %.1f 배율 %.1f 비대칭 %.1f 앞뒤 %.1f"
+			"클립 %s / 지연 %.1f 호 %.1f 배율 %.1f 비대칭 %.1f 앞뒤 %.1f 디딤 %.1f"
 			% [
 				_clip.clip_name(),
 				_features.delay,
@@ -99,6 +113,7 @@ func _initialize() -> void:
 				_features.squash,
 				_features.asymmetry,
 				_features.depth,
+				_features.plant,
 			]
 		)
 	)
@@ -115,16 +130,32 @@ func _process(_delta: float) -> bool:
 			return true
 		_pending = -1
 
-	if _next_frame >= FRAMES:
-		print("완료: %d 장" % FRAMES)
+	if _next_frame >= _frames:
+		print("완료: %d 장" % _frames)
 		return true
 
-	# 시각을 직접 넣는다. 한 바퀴를 FRAMES 등분하므로 마지막 다음이 정확히 처음이다.
-	var t := _clip.loop_seconds() * float(_next_frame) / float(FRAMES)
+	# 시각을 직접 넣는다. 한 바퀴를 장수로 등분하므로 마지막 다음이 정확히 처음이다.
+	var t := _clip.loop_seconds() * float(_next_frame) / float(_frames)
 	_view.apply_pose(_clip.sample(t, _features))
 	_pending = _next_frame
 	_next_frame += 1
 	return false
+
+
+## 장수는 **한 바퀴 × fps** 로 정한다. 고정값으로 두면 클립마다 재생 속도가 달라지는데
+## 그것을 알아챌 방법이 없다 — idle(4.0 s)은 100 장으로 전과 같고 walk(1.2 s)는 30 장이다.
+static func frame_count(loop_seconds: float) -> int:
+	return maxi(1, int(roundf(loop_seconds * float(FPS))))
+
+
+func _make_clip(name: String, rig: CharRig) -> CharClip:
+	match name:
+		"walk":
+			return CharWalkClip.new(rig)
+		"front":
+			return CharFrontIdleClip.new(rig)
+		_:
+			return CharIdleClip.new(rig)
 
 
 func _parse_features(spec: String) -> AnimFeatures:
@@ -132,10 +163,11 @@ func _parse_features(spec: String) -> AnimFeatures:
 		return AnimFeatures.all_off()
 	if spec == "on":
 		return AnimFeatures.all_on()
-	if spec == "front":
-		return AnimFeatures.all_on()
-	if spec in ["delay", "arc", "squash", "asymmetry", "depth"]:
+	if spec in AXES:
 		return AnimFeatures.only(spec)
+	# `no<축>` 은 그 축 **하나만** 끈다. 「있음 / 없음」을 나란히 놓을 때 쓴다.
+	if spec.begins_with("no") and spec.substr(2) in AXES:
+		return AnimFeatures.without(spec.substr(2))
 	push_error("모르는 조절판 지정: %s" % spec)
 	return AnimFeatures.all_on()
 

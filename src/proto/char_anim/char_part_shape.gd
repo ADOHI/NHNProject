@@ -60,24 +60,10 @@ const ARC_STEPS := 32
 ## 그 정도로는 A 라인이 안 읽히고 그냥 민소매 상의로 보였다.
 ## 점을 촘촘히 둔 이유도 있다 — 적으면 윤곽선에 각이 생겨 종이봉투가 된다.
 
-## 부츠 실루엣. 한 바퀴를 다 적었고, `x` 는 **바깥 방향으로** 잰 값이라 좌우가 자동으로 뒤집힌다.
+## 부츠 실루엣은 **`CharRig.FOOT_PROFILE` 에 있다.** 밑창의 앞뒤 끝이 접지 계산에
+## 쓰이므로 코어가 봐야 한다 — 여기 두면 리그가 반너비로 어림잡다 발을 띄운다.
 ##
-## **좁은 목(위쪽 폭 0.96)과 넓은 발(아래쪽 폭 1.42) 그리고 바깥으로 나온 발끝(1.00).**
-## 이 셋이 없으면 위가 넓고 아래가 좁은 통이 되어 쓰레기통으로 보인다 (첫 판이 그랬다).
-const BOOT_PROFILE: Array[Vector2] = [
-	Vector2(-0.52, 1.00),
-	Vector2(0.44, 1.00),
-	Vector2(0.50, 0.72),
-	Vector2(0.62, 0.52),
-	Vector2(0.86, 0.34),
-	Vector2(1.00, 0.18),
-	Vector2(0.98, 0.06),
-	Vector2(0.82, 0.00),
-	Vector2(-0.60, 0.00),
-	Vector2(-0.74, 0.10),
-	Vector2(-0.70, 0.40),
-	Vector2(-0.58, 0.72),
-]
+## **좁은 목(위쪽 폭 0.96)과 넓은 발(아래쪽 폭 1.42) 그리고 바깥으로 나온 발끝.**
 
 var part := CharPart.Id.HEAD
 var rig: CharRig
@@ -174,7 +160,7 @@ func _draw_hand() -> void:
 func _draw_foot() -> void:
 	var half := _half()
 	# 발끝이 **둘 다 앞(`+x`)** 을 본다. 거울로 뒤집으면 그 순간 정면 자세가 된다.
-	var points := _loop_profile(BOOT_PROFILE, half, 1.0)
+	var points := _loop_profile(CharRig.FOOT_PROFILE, half, 1.0)
 	_blob(points, _ink(BOOT))
 	# 목 안쪽. 좁은 목이 있어야 이것이 통 뚜껑이 아니라 부츠 입구로 읽힌다.
 	_fill(_ellipse(Vector2(0.0, -half.y * 1.86), half.x * 0.40, half.y * 0.11), _ink(BOOT_LIGHT))

@@ -1,9 +1,11 @@
 class_name AnimTuningPanel
 extends PanelContainer
-## 지연 · 호 · 배율 · 비대칭을 실시간으로 끄는 조절판.
+## 지연 · 호 · 배율 · 비대칭 · 앞뒤 · 디딤을 실시간으로 끄는 조절판.
 ##
-## **결과물의 일부다.** 넷을 다 끄면 "위아래로 뻣뻣하게 진동하는 도형 여섯" 이 되고,
+## **결과물의 일부다.** 다 끄면 "위아래로 뻣뻣하게 진동하는 도형 여섯" 이 되고,
 ## 그 상태와의 차이가 이 작업의 전부다. 사람이 직접 갈라 보게 하는 것이 목적이다.
+##
+## `디딤` 은 walk 부터 쓴다 — idle 은 두 발이 둘 다 디딘 발이라 끄고 켤 것이 없다.
 ##
 ## 글리프 주의: 화면에 뿌리는 문자열은 SongMyung 에 있는 글자만 쓴다.
 ## 화살표 · 삼각형 · 가운뎃점은 폰트에 없어서 웹 빌드에서 두부가 된다
@@ -18,6 +20,7 @@ const ROWS: Array[Array] = [
 	["squash", "배율", "눌림과 늘어남 (면적 보존)"],
 	["asymmetry", "비대칭", "무게가 앞뒤로 옮겨 다니는 것"],
 	["depth", "앞뒤", "뒷손이 작고 느려 보이는 것"],
+	["plant", "디딤", "디딘 발이 땅에 붙어 등속으로 흐르는 것 (walk)"],
 ]
 
 const SPEED_MIN := 0.1
@@ -52,7 +55,7 @@ func _init() -> void:
 	_add_speed_row(column)
 
 	var note := Label.new()
-	note.text = "다섯을 다 0 으로 내리면 관절 없는 인형이 된다"
+	note.text = "다 0 으로 내리면 관절 없는 인형이 된다"
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(note)
 

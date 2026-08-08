@@ -27,6 +27,15 @@ var asymmetry := 1.0
 ## 셋째가 「느려 보인다」를 만든다 — 사람은 잔떨림의 양으로 속도를 읽기 때문이다.
 var depth := 1.0
 
+## **디딘 발을 땅에 붙여 두는가.** `walk` 부터 쓴다 (idle 은 안 본다).
+##
+## `1` 이면 땅에 닿아 있는 동안 앞뒤 속도가 **일정**하다 — 지면이 흐르는 속도와 같다.
+## `0` 이면 발이 사인파로 앞뒤로 흔들려 **속도가 계속 변하고, 그래서 미끄러진다.**
+##
+## 걸음에서 가장 잘 보이는 실패가 이것이라 껐다 켤 수 있게 두었다
+## (`docs/design/25-character-animation.md` §25.10.4).
+var plant := 1.0
+
 
 static func all_on() -> AnimFeatures:
 	return AnimFeatures.new()
@@ -39,6 +48,14 @@ static func all_off() -> AnimFeatures:
 	f.squash = 0.0
 	f.asymmetry = 0.0
 	f.depth = 0.0
+	f.plant = 0.0
+	return f
+
+
+## 하나만 끄고 나머지를 켠 상태. 「그 축이 있고 없고」를 나란히 놓을 때 쓴다.
+static func without(field: String) -> AnimFeatures:
+	var f := AnimFeatures.all_on()
+	f.set(field, 0.0)
 	return f
 
 
@@ -56,4 +73,5 @@ func copy() -> AnimFeatures:
 	f.squash = squash
 	f.asymmetry = asymmetry
 	f.depth = depth
+	f.plant = plant
 	return f

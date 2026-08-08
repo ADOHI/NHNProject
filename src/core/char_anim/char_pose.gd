@@ -64,6 +64,23 @@ func part_toe(part: CharPart.Id, rig: CharRig) -> Vector2:
 	return core_transform(part) * rig.local_toe(part)
 
 
+## 파츠의 **뒤꿈치**가 캐릭터 공간에서 어디에 있는가. 뒤꿈치가 닿는 구간에서 쓴다.
+func part_heel(part: CharPart.Id, rig: CharRig) -> Vector2:
+	return core_transform(part) * rig.local_heel(part)
+
+
+## 발이 실제로 땅에 닿는 점. **발끝 · 뒤꿈치 · 밑면 중 가장 낮은 것**이다.
+##
+## 미끄러짐을 재려면 이 점의 앞뒤 움직임을 봐야 한다 — 발이 구르는 동안 접지점이
+## 뒤꿈치에서 발끝으로 옮겨 가기 때문이다.
+func part_ground_point(part: CharPart.Id, rig: CharRig) -> Vector2:
+	var lowest := part_bottom(part, rig)
+	for corner in [part_toe(part, rig), part_heel(part, rig)]:
+		if corner.y < lowest.y:
+			lowest = corner
+	return lowest
+
+
 ## 파츠가 자기 지면 아래로 얼마나 파고들었는가. 음수면 떠 있는 것이라 문제가 없다.
 ##
 ## **지면이 파츠마다 다르다** — 사이드 사선에서는 뒷발의 바닥이 앞발보다 높다.
@@ -71,7 +88,7 @@ func part_toe(part: CharPart.Id, rig: CharRig) -> Vector2:
 func sink_depth(part: CharPart.Id, rig: CharRig) -> float:
 	var lowest := part_bottom(part, rig).y
 	if CharPart.is_foot(part):
-		lowest = minf(lowest, part_toe(part, rig).y)
+		lowest = minf(lowest, part_ground_point(part, rig).y)
 	return rig.ground_y(part) - lowest
 
 
