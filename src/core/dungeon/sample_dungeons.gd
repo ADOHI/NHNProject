@@ -27,11 +27,12 @@ const SIZE_MAX := 5
 ## 예전에는 층 수와 층당 방 수를 함께 늘렸다. 지금은 방 개수 하나만 준다 —
 ## 자리를 블루 노이즈로 뿌리므로 개수가 늘면 영역이 같은 밀도로 넓어진다
 ## (docs/design/17-dungeon-generation.md §17.3). 판 모양을 따로 손볼 필요가 없다.
-static func params_for_size(size: int) -> DungeonGenerator.Params:
+static func params_for_size(size: int, character: int = 0) -> DungeonGenerator.Params:
 	var clamped := clampi(size, SIZE_MIN, SIZE_MAX)
 	var params := DungeonGenerator.Params.new()
 	params.room_count = 7 + clamped * 5
-	return params
+	# 크기가 방 개수를 정하고 **성격이 나머지를 손본다** (DungeonCatalog 참고).
+	return DungeonCatalog.apply(params, character)
 
 
 ## 크기 단계에서 나오는 대략적인 방 개수. 슬라이더 옆에 보여 준다.
@@ -44,8 +45,8 @@ static func room_estimate(size: int) -> int:
 
 
 ## 판 하나를 통째로 만든다.
-static func create_run(seed_value: int = 0, size: int = 3) -> DungeonRun:
-	var generator := DungeonGenerator.new(seed_value, params_for_size(size))
+static func create_run(seed_value: int = 0, size: int = 3, character: int = 0) -> DungeonRun:
+	var generator := DungeonGenerator.new(seed_value, params_for_size(size, character))
 	var blueprint := generator.generate()
 	var graph := blueprint.build()
 

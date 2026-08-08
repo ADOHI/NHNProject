@@ -27,6 +27,13 @@ var rank: GateRank.Kind
 ## 안쪽 던전의 씨앗. 이 값이 고정이라 같은 게이트가 같은 판을 낸다.
 var dungeon_seed: int
 
+## 안쪽 던전의 **성격** (DungeonCatalog 의 색인).
+##
+## 등급이 크기를 정하는 것과 **다른 축**이다. 같은 등급의 「벌집」과 「수직 회랑」이
+## 따로 있을 수 있어야 §7.3 의 "선택이 곧 난이도 선택" 이 성립한다.
+## 아직 이 값을 고르는 아웃게임 화면이 없어서 기본값은 0 이다.
+var dungeon_character := 0
+
 ## 해부 수준에서만 만들어지는 설계도. 만들기 전에는 null 이다.
 var _blueprint: DungeonBlueprint = null
 
@@ -48,7 +55,7 @@ func dungeon_size() -> int:
 ## **생성은 기존 것을 그대로 쓴다.** 게이트가 넘겨받은 것은
 ## "어떤 판을 열 것인가" 이지 "판을 어떻게 만드는가" 가 아니다.
 func create_run() -> DungeonRun:
-	return SampleDungeons.create_run(dungeon_seed, dungeon_size())
+	return SampleDungeons.create_run(dungeon_seed, dungeon_size(), dungeon_character)
 
 
 ## 설계도만 본다. 처음 한 번만 만들고 이후에는 같은 것을 돌려준다.
@@ -57,7 +64,7 @@ func create_run() -> DungeonRun:
 func blueprint() -> DungeonBlueprint:
 	if _blueprint == null:
 		var generator := DungeonGenerator.new(
-			dungeon_seed, SampleDungeons.params_for_size(dungeon_size())
+			dungeon_seed, SampleDungeons.params_for_size(dungeon_size(), dungeon_character)
 		)
 		_blueprint = generator.generate()
 	return _blueprint
@@ -71,6 +78,9 @@ func preview_lines(level: GateDisclosure.Level) -> Array[String]:
 	var lines: Array[String] = ["등급 %s" % GateRank.label(rank)]
 	if level >= GateDisclosure.Level.SURVEYED:
 		lines.append("예상 규모 %d 개 방" % SampleDungeons.room_estimate(dungeon_size()))
+		# 성격은 **값을 치르고 얻는 정보**다. 소문 수준에서는 등급만 보인다
+		# (test_gate.gd 가 그 계약을 지킨다).
+		lines.append("성격 %s" % DungeonCatalog.name_of(dungeon_character))
 	if GateDisclosure.needs_blueprint(level):
 		var plan := blueprint()
 		lines.append("실제 방 %d 개" % plan.room_ids().size())
