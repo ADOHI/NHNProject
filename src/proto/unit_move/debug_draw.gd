@@ -28,6 +28,13 @@ const _PUSHED_FRAMES := 90
 ## 자리 없이 실패했다. 화면에서도 갈려 보여야 무엇이 일하는지 읽힌다.
 const _CHAIN_COLOR := Color(1.00, 0.85, 0.25)
 const _RELAY_COLOR := Color(0.35, 0.85, 1.00)
+
+## 분홍은 **뒤로 물러나라**를 전한 상대. 옆이 막혔을 때만 나오는 색이라, 이 색이 많으면
+## 그 자리가 옆으로는 못 비키는 곳이라는 뜻이다.
+const _RECOIL_COLOR := Color(1.00, 0.45, 0.85)
+
+## 길이 막혔다고 적혀 있어 비켜선 자리에서 **기다리는** 유닛. 되돌아가지 않는다는 표시다.
+const _WAITING_COLOR := Color(0.55, 1.00, 0.55)
 const _GOAL_COLOR := Color(0.60, 0.60, 0.68, 0.55)
 const _SLOT_COLOR := Color(0.95, 0.55, 0.85, 0.85)
 const _FLOW_COLOR := Color(0.35, 0.45, 0.60, 0.75)
@@ -109,10 +116,17 @@ func _draw_agent(agent: ProtoUnitAgent) -> void:
 	if agent.chain_ago < _PUSHED_FRAMES and field != null:
 		var target: ProtoUnitAgent = field.agent_of(agent.chain_to)
 		if target != null:
-			var line := _RELAY_COLOR if agent.chain_kind == 1 else _CHAIN_COLOR
+			var line := _CHAIN_COLOR
+			if agent.chain_kind == 1:
+				line = _RELAY_COLOR
+			elif agent.chain_kind == 2:
+				line = _RECOIL_COLOR
 			line.a = 1.0 - float(agent.chain_ago) / float(_PUSHED_FRAMES)
 			draw_line(agent.position, target.position, line, 2.0)
 			_draw_arrow(agent.position, target.position, line, 2.0)
+	if agent.waiting_for_path:
+		# 비켜선 자리에서 기다리는 중. **되돌아가지 않는다는 것이 여기서 보인다.**
+		draw_arc(agent.position, agent.radius + 3.0, 0.0, TAU, 20, _WAITING_COLOR, 2.5)
 	if agent.pushed_ago < _PUSHED_FRAMES:
 		var fade := 1.0 - float(agent.pushed_ago) / float(_PUSHED_FRAMES)
 		var ring := _PUSHED_COLOR

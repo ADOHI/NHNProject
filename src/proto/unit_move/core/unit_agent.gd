@@ -122,6 +122,17 @@ var yield_mark_push: float = 0.0
 ## 투영해야** "밀어 준 그 방향으로 실제로 남아 있는가"가 갈린다.
 var yield_mark_dir: Vector2 = Vector2.ZERO
 
+## 길이 막혔다고 적혀 있어 **비켜선 자리에서 기다리는 중인가.**
+##
+## 의뢰인이 시연을 보고 짚은 것이다 - "뒷자리 애들 길 비키다가 바로 되돌아가더라."
+##
+## 맞다. **비켜선 유닛은 자기가 막힌 게 아니다.** 막힌 것은 앞의 유닛이고 비켜선 놈은 길이
+## 트여 있으니, 비킨 직후 제 목적지로 다시 간다. 지금 구조가 "내가 막혔나"만 물었기 때문이다.
+##
+## 그래서 **길에 적힌 통행 상태를 읽는다.** 직접 부딪혀 보지 않아도 "저 앞이 지금 막혔다"를
+## 알 수 있고, 그러면 비켜선 자리에서 기다린다. 뚫리면 표시가 풀리고 다시 간다.
+var waiting_for_path: bool = false
+
 ## 내가 "비켜라"를 건넨 상대의 번호와, 그것이 몇 프레임 전인지, 어느 간선이었는지.
 ##
 ## **화면에 사슬을 그리려고 있는 값이다.** 주황 고리만으로는 의뢰인이 못 봤다 —
@@ -236,6 +247,7 @@ func is_yielding() -> bool:
 func end_yield() -> void:
 	yield_for = 0
 	yield_goal = Vector2.ZERO
+	waiting_for_path = false
 	if yield_was_holding and state == State.MOVING:
 		state = State.HOLDING
 		velocity = Vector2.ZERO
@@ -267,6 +279,7 @@ func accept_order(new_order_id: int, slot: Vector2, sight_interval: float) -> vo
 	yield_for = 0
 	yield_goal = Vector2.ZERO
 	yield_was_holding = false
+	waiting_for_path = false
 	pace = 1.0
 	speed = velocity.length()
 	detour = 0.0

@@ -217,10 +217,25 @@ static func begin(
 ## **"앞이 실제로 트였는지"** 로 바꿔 물으면 된다. 시간으로 풀면 아직 안 트였는데
 ## 도로 당겨지고, 그것이 의뢰인이 본 "살짝 돌았다가 바로 다시 막힌 길로"다.
 static func finished(field: ProtoUnitField, agent: ProtoUnitAgent) -> bool:
+	var asker: ProtoUnitAgent = field.agent_of(agent.yield_for)
+	if asker == null:
+		agent.waiting_for_path = false
+		return true
+	if agent.waiting_for_path:
+		# **물러난 뒤 대기 중이다. 부탁한 쪽이 풀려야 나도 푼다.**
+		#
+		# 대기가 종점이 아니다. 여전히 막혀 있으면 전파가 다시 나고 또 물러난다
+		# (`unit_field.gd` `_review_hold`). 그렇게 **공간이 쌓여 언젠가 뚫린다.**
+		if asker.state == ProtoUnitAgent.State.ARRIVED:
+			agent.waiting_for_path = false
+			return true
+		if asker.is_moving() and asker.blocker_id == 0:
+			agent.waiting_for_path = false
+			return true
+		return false
 	if agent.position.distance_to(agent.yield_goal) <= _YIELD_REACHED:
 		return true
-	var asker: ProtoUnitAgent = field.agent_of(agent.yield_for)
-	if asker == null or not asker.is_moving():
+	if not asker.is_moving():
 		return true
 	return asker.blocker_id != agent.id
 

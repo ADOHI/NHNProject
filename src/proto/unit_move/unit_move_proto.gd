@@ -482,19 +482,30 @@ func _stats_text() -> String:
 		lines
 		. append(
 			(
-				"전파 %d 회 (옮김 %d, 고리 %d)  길 다시 찾기 %d 회  흐름장 %.1f ms"
+				"전파 %d (옮김 %d, 고리 %d)  물러남 %d (자리없음 %d)  길찾기 %d  길막힘 대기 %d 명"
 				% [
 					field.propagate_runs,
 					field.propagate_moves,
 					field.propagate_cycles,
+					field.propagate_recoils,
+					field.propagate_recoil_skips,
 					field.rebake_count,
-					float(field.flow_build_peak) / 1000.0,
+					_waiting_count(),
 				]
 			)
 		)
 	)
 	lines.append(_group_text())
 	return "\n".join(lines)
+
+
+## 길이 막혔다고 적혀 있어 비켜선 자리에서 기다리는 유닛 수. **되돌아가지 않는다는 계기다.**
+func _waiting_count() -> int:
+	var count := 0
+	for agent in field.agents:
+		if agent.waiting_for_path:
+			count += 1
+	return count
 
 
 func _group_text() -> String:
