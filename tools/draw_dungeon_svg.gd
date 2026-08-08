@@ -39,6 +39,19 @@ const _MARGIN := 44.0
 
 const _SEEDS: Array[int] = [11, 23, 47, 91]
 
+## 던전 성격 후보. [이름, 방 개수, 흔드는 축]
+##
+## **한 던전에서 흔드는 축은 둘까지다.** 셋 이상 흔들면 어느 것이 그 던전의 성격인지
+## 읽히지 않는다 — 봉우리를 판에 하나만 두는 것과 같은 이유다
+## (docs/design/07-level-design.md §7.3, docs/design/17-dungeon-generation.md §17.16).
+const _CHARACTERS := [
+	["얕은 갱도", 14, {"extra_edge_ratio": 0.10, "elevation_gain": 0.35}],
+	["벌집", 34, {"extra_edge_ratio": 0.46}],
+	["수직 회랑", 24, {"elevation_gain": 1.60}],
+	["먼 출구", 40, {"exit_distance_ratio": 0.95}],
+	["금고층", 28, {"treasure_ratio": 0.05, "hazard_ratio": 0.36}],
+]
+
 ## 사용자 요구 방 개수. 지금 슬라이더 최대(32 안팎) 밖이다.
 const _ROOMS := 50
 
@@ -68,6 +81,21 @@ func _initialize() -> void:
 	if not arguments.is_empty():
 		target = "res://%s" % arguments[0]
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(target))
+
+	var characters := _sheet("던전 성격 후보 — 같은 시드 %d, 파라미터만 다르다" % _SEEDS[0], _character_boards())
+	_write("%s/dungeon_characters.svg" % target, characters, "성격")
+	_write(
+		"%s/dungeon_characters.html" % target,
+		(
+			(
+				'<!doctype html><meta charset="utf-8"><title>던전 성격 후보</title>'
+				+ '<body style="margin:0;background:#0e0e12;color:#e8e8ee;font-family:sans-serif">'
+				+ "%s</body>"
+			)
+			% characters
+		),
+		"성격 묶음"
+	)
 
 	var now := _sheet("지금 생성기", _current_boards())
 	var proto := _sheet("설계안 프로토타입", _proto_boards())
@@ -113,6 +141,25 @@ func _current_boards() -> Array[Dictionary]:
 		params.room_count = _ROOMS
 		var board := Metrics.from_blueprint(DungeonGenerator.new(seed_value, params).generate())
 		board["seed"] = seed_value
+		_attach_routes(board)
+		result.append(board)
+	return result
+
+
+## 던전마다 파라미터를 달리 준 판들. **시드는 전부 같다.**
+##
+## 시드를 같이 두는 것이 요점이다. 판이 달라 보이는 이유가 운이 아니라
+## **파라미터**라는 것을 한눈에 보이게 한다.
+func _character_boards() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for entry in _CHARACTERS:
+		var params := DungeonGenerator.Params.new()
+		params.room_count = int(entry[1])
+		for field in entry[2] as Dictionary:
+			params.set(String(field), float((entry[2] as Dictionary)[field]))
+		var board := Metrics.from_blueprint(DungeonGenerator.new(_SEEDS[0], params).generate())
+		board["seed"] = _SEEDS[0]
+		board["label"] = String(entry[0])
 		_attach_routes(board)
 		result.append(board)
 	return result
@@ -248,7 +295,16 @@ func _board(board: Dictionary, origin: Vector2) -> String:
 			% [origin.x + 6.0, origin.y + 6.0, _CELL.x - 12.0, _CELL.y - 12.0]
 		)
 	)
-	parts.append(_caption(board, origin))
+	if board.has("label"):
+		parts.append(
+			(
+				'<text x="%.0f" y="%.0f" fill="#e8e8ee" font-size="20" font-weight="bold">%s</text>'
+				% [origin.x + 18.0, origin.y + 26.0, board["label"]]
+			)
+		)
+		parts.append(_caption(board, origin + Vector2(0.0, 18.0)))
+	else:
+		parts.append(_caption(board, origin))
 
 	parts.append(_route(placed, board.get("slow", PackedInt32Array()), "#2fbf8f", 13.0))
 	parts.append(_route(placed, board.get("fast", PackedInt32Array()), "#ff8a3d", 13.0))
@@ -288,8 +344,9 @@ func _caption(board: Dictionary, origin: Vector2) -> String:
 			% [origin.x + 18.0, origin.y + 30.0]
 		)
 		+ (
-			"seed %d · 방 %d · 간선 %d · 고리 %d · 평지 %d%% · 최고 고도 %d</text>"
+			"%sseed %d · 방 %d · 간선 %d · 고리 %d · 평지 %d%% · 최고 고도 %d</text>"
 			% [
+				("%s — " % board["label"]) if board.has("label") else "",
 				int(board["seed"]),
 				points.size(),
 				edges.size(),
