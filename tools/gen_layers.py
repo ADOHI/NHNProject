@@ -245,8 +245,39 @@ DEMONS: list[tuple[str, str]] = [
         "demon_b",
         # 앞 판에서 "drooping with boredom" 이 얼굴까지 끌어내려 우는 상이 됐다.
         # 늘어짐은 **몸에만** 건다.
-        "Long and thin, its lanky body loosely coiled in the air, arms folded, "
-        "leaning back as if reclining on nothing. Its hands are empty. "
+        #
+        # **팔짱을 뺀다** (§21.13.12). 심사자 둘이 이것 하나를 같은 범인으로 댔다 —
+        # 팔짱은 「닫힘 · 시큰둥」을 뜻하는 가장 읽기 쉬운 몸짓이라 즐거움과 정면으로 싸운다.
+        #
+        # 그렇다고 팔을 좌우로 던지면 안 된다. **「벌린 팔다리」는 광기의 어휘**다(§21.11.5).
+        # 열림에는 두 종류가 있고 가르는 것은 넓이가 아니라 **무게**다 —
+        # 뻗친 열림은 팔다리가 몸에서 밀려 나가고(힘이 들었다),
+        # 늘어진 열림은 몸에서 떨어져 내린다(힘이 빠졌다). 뒤쪽을 시킨다.
+        #
+        # 그래서 **팔이 갈 자리를 둘 다 지정한다.** 그러면 팔짱은 갈 데가 없다 —
+        # `not folded` 라고 쓸 필요가 없고, 써서도 안 된다
+        # (부정문은 그 낱말을 모델에 먹인다, §21.13.8).
+        #
+        # **3차 판이 여기서 두 번 졌다** (§21.11.6). 팔짱은 실제로 없어졌는데:
+        #
+        #   1. `cradles its own skull like a pillow` → 모델이 **진짜 해골을 그렸다.**
+        #      머리 옆에 눈구멍 둘 뚫린 두개골이 붙어 나왔고 심사자 둘이 **그것을**
+        #      가장 눈에 걸리는 것으로 꼽았다. 한 명은 그것 때문에 "미쳐 보인다"로 넘어갔다.
+        #      → **비유로 쓴 명사도 물건으로 그려진다.** 부정문 함정과 같은 뿌리다.
+        #        `skull` · `pillow` · `couch` 같은 낱말은 자세를 설명하려고 써도 소품이 된다.
+        #   2. `one knee loosely bent` → 심사자 둘 다 **"웅크렸다 · 튀어나갈 준비"** 로 읽었다.
+        #      접힌 무릎 하나가 팔짱만큼 센 닫힘 신호다. 팔을 열어 놔도 다리가 닫는다.
+        #      → **늘어뜨림은 팔다리 전부에 걸어야 한다. 접힌 관절이 하나도 없어야 한다.**
+        #
+        # 아래는 그 둘을 고친 문장이다. **아직 안 돌려 봤다** — 다음 판에 낼 것.
+        # 소품이 될 만한 명사를 다 걷어내고, 사지를 전부 아래로 늘어뜨린다.
+        "Long and thin, drifting at a lazy backward-leaning diagonal as though the air "
+        "were holding it up, shoulders rolled back and belly turned up toward us so the "
+        "whole front of its body stays open and unguarded. Both of its long arms hang "
+        "straight down from the shoulders, well clear of its body on either side, wrists "
+        "limp and both hands empty. Its long thin legs hang straight down too, slack and "
+        "heavy, the feet loose. Every limb drops under its own weight, unhurried and at "
+        "ease — it has settled in to watch for a long time. "
         "The half-lidded eye is rolled down and slightly to the LEFT.",
     ),
     (
