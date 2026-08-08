@@ -48,6 +48,23 @@ extends RefCounted
 ##
 ## 깎는 것이 먼저이고, 깎인 자리는 뒤 단계에 **건드리지 말 자리로 넘긴다.**
 
+## 보상 봉우리가 주변보다 얼마나 높은가. 보스 방의 필요 민첩이 곧 이 값이다.
+##
+## 3 인 것은 스쿼드 기본 민첩(2)보다 하나 크기 때문이다 — **능력이 올라야 손이 닿는다.**
+const PEAK_RISE := 3
+
+## 급경사 지름길의 마지막 한 칸 상승폭.
+const SHORTCUT_CLIMB := 3
+
+## 완경사 우회가 한 칸에 오를 수 있는 최대 상승폭.
+##
+## **1 이 아니라 2 인 것이 판단이다.** 1 로 묶었더니 봉우리 높이가 우회로 길이에 갇혀
+## 낮아졌고, 그러면 **보상 방이 평범한 깊은 방보다 싸게 닿는다** (V3 정신이 깨진다).
+##
+## 2 는 스쿼드 기본 민첩과 같다 — **여전히 걸어서 올라갈 수 있다.**
+## 지름길은 3 이므로 성격은 그대로 갈린다.
+const GENTLE_SLOPE := 2
+
 
 ## 방마다 고도를 매긴다. 결과의 최솟값은 0 이고 입구가 그 최솟값이다.
 ##
@@ -117,6 +134,104 @@ static func carve_route(elevations: PackedInt32Array, route: PackedInt32Array) -
 	for index in route:
 		result[index] = 0
 	return result
+
+
+## 두 경로의 성격을 **일부러 벌린다.** 고도를 건드리는 마지막 단계다.
+##
+## 대안이 있기만 해서는 선택이 아니다. 실측에서 대안 경로는 더 길고 더 위험한데 기울기는
+## 같았다 — 그러면 아무도 고르지 않는다 (§17.11.7-1).
+##
+## ## 프로토타입에서 세 번 틀렸다. 순서를 뒤집는 것이 답이었다
+##
+## | # | 무엇을 했나 | 왜 틀렸나 |
+## | --- | --- | --- |
+## | 1 | 목표 방의 고도를 올렸다 | 두 길이 **같은 방으로 들어온다.** 양쪽이 똑같이 가팔라진다 |
+## | 2 | 우회로를 "한 칸에 1 씩" 깎았다 | 경사로가 **시작하는 지점**이 그대로 절벽이 됐다 |
+## | 3 | 봉우리를 세운 뒤 계단을 맞췄다 | 경로가 짧거나 탈출 통로와 겹치면 **마지막 한 칸이 절벽**이 됐다 |
+##
+## 지금은 **계단이 1 씩 올라 닿을 수 있는 높이를 먼저 재고 봉우리를 거기에 맞춘다.**
+## 그러면 우회로의 최대 상승폭이 1 임이 계산이 아니라 **구성으로 보장된다** (§17.5).
+##
+## `protected` 는 건드리면 안 되는 방들이다 — 보통 탈출 경로다.
+## 민첩 0 으로 닿는 탈출구가 하나는 있어야 하므로(V2) 계단보다 그쪽이 우선한다.
+static func sharpen(
+	elevations: PackedInt32Array,
+	fast: PackedInt32Array,
+	slow: PackedInt32Array,
+	edges: Array[Vector2i],
+	entrance: int,
+	protected: PackedInt32Array
+) -> PackedInt32Array:
+	var result := elevations.duplicate()
+	if fast.size() < 2:
+		return result
+	var goal := fast[fast.size() - 1]
+	if _holds(protected, goal):
+		return result
+
+	# 우회로를 못 낸 판에서도 **봉우리는 세운다.** 그러지 않으면 보상 방이 평지에 놓여
+	# 필요 민첩이 0 이 되고 V3 가 깨진다. 경사로가 없으니 그 판은 그냥 어렵다.
+	if slow.size() < 2:
+		result[goal] = _around(result, edges, goal) + PEAK_RISE
+		return result
+
+	# 1) 우회로가 1 씩 올라 닿을 수 있는 높이를 잰다.
+	var base: int = result[slow[0]]
+	var last := slow.size() - 1
+	var reach := PackedInt32Array()
+	reach.resize(slow.size())
+	reach[0] = base
+	for index in range(1, slow.size()):
+		if _holds(protected, slow[index]):
+			reach[index] = result[slow[index]]
+		else:
+			reach[index] = reach[index - 1] + GENTLE_SLOPE
+
+	# 2) 보상 방을 봉우리로 세운다 (P1). 계단이 닿는 높이를 넘지 않는다.
+	# **경사로 보장이 봉우리 높이보다 앞선다.**
+	#
+	# 처음에는 `maxi(around + 1, ...)` 로 "이웃보다 최소 1 은 높게" 를 함께 요구했다.
+	# 그게 경사로를 깼다 — 이웃이 높고 우회로가 짧으면 계단이 닿을 수 있는 높이를 넘어서
+	# **마지막 한 칸이 절벽**이 됐다. 시드 넷 중 둘에서 우회로 최대 상승폭이 5 로 나왔다
+	# (빠른 길은 3 이었으니 성격이 거꾸로 뒤집힌 것이다).
+	#
+	# 그래서 봉우리는 **계단이 닿는 높이까지만** 올린다. 그 판에서 보상 방이 이웃보다
+	# 낮을 수는 있지만, 「빨리 가는 길과 돌아가는 길」이 사용자가 요구한 것이다.
+	# V3 는 그대로다 — 계단이 최소 1 은 올라오므로 필요 민첩이 0 이 되지 않는다.
+	var around := _around(result, edges, goal)
+	result[goal] = maxi(1, mini(around + PEAK_RISE, reach[last - 1] + GENTLE_SLOPE))
+
+	# 3) 계단을 목표에서 거꾸로 놓는다. 닿을 수 있는 높이 안에서만 올린다.
+	for index in range(1, last):
+		if _holds(protected, slow[index]):
+			continue
+		result[slow[index]] = clampi(
+			result[goal] - (last - index) * GENTLE_SLOPE, base, reach[index]
+		)
+
+	# 4) 급경사 지름길. 마지막 한 칸을 떨어뜨린다 — 짧은 쪽은 기어올라야 한다.
+	var steep := fast[fast.size() - 2]
+	if steep != entrance and not _holds(slow, steep) and not _holds(protected, steep):
+		result[steep] = maxi(0, result[goal] - SHORTCUT_CLIMB)
+	return result
+
+
+## 그 방에 붙은 이웃들 중 가장 높은 고도.
+static func _around(elevations: PackedInt32Array, edges: Array[Vector2i], node: int) -> int:
+	var highest := 0
+	for edge in edges:
+		if edge.x == node:
+			highest = maxi(highest, elevations[edge.y])
+		elif edge.y == node:
+			highest = maxi(highest, elevations[edge.x])
+	return highest
+
+
+static func _holds(route: PackedInt32Array, node: int) -> bool:
+	for index in route:
+		if index == node:
+			return true
+	return false
 
 
 ## 판에 오르막이 하나도 없으면 하나 만든다.

@@ -88,6 +88,23 @@ func _init(
 	_boundaries = DungeonZones.readable_boundaries(points, delaunay, zones)
 
 
+## V5 하한을 **다시** 맞춘다. 보상 노출과 경로 시공이 끝난 뒤 부르는 것이다.
+##
+## 막다른 방 비율은 `select()` 안에서 맞추는데, 그 뒤에 오는 단계들(보상 방을 사방으로
+## 뚫기, 두 경로 시공)이 간선을 더하면서 **정찰 지점을 먹는다.** 실측에서 비율이 4.8% 까지
+## 떨어져 하한을 깼다.
+##
+## **그래서 막다른 방 관리가 위상의 마지막 단계여야 한다.** 다만 방금 시공한 두 경로를
+## 끊어 버리면 안 되므로 `protected` 로 받는다.
+func enforce_dead_end_floor(
+	edges: Array[Vector2i], protected_edges: Array[Vector2i]
+) -> Array[Vector2i]:
+	var guarded := {}
+	for edge in protected_edges:
+		guarded[DelaunayTriangulation.edge_key(edge.x, edge.y)] = true
+	return _carve_dead_ends(edges, guarded)
+
+
 ## 최종 간선 목록.
 func select(rng: RandomNumberGenerator) -> Array[Vector2i]:
 	var chosen := _skeleton()
@@ -95,7 +112,7 @@ func select(rng: RandomNumberGenerator) -> Array[Vector2i]:
 	var used := _add_extras(chosen, pool, int(round(float(_points.size()) * extra_ratio)))
 	chosen = _ensure_entrance_choice(chosen)
 	chosen = _relieve_dead_ends(chosen, pool, used)
-	chosen = _carve_dead_ends(chosen)
+	chosen = _carve_dead_ends(chosen, {})
 	return chosen
 
 
@@ -269,7 +286,7 @@ func _hubs(inside: Array[Vector2i]) -> Dictionary:
 ## 다리(bridge)를 따로 계산하는 것보다 짧고, 판이 수십 개 방이라 비용도 무시할 만하다.
 ##
 ## 깊은 쪽부터 끊는다. 깊은 막다른 방이 정찰 대 퇴로의 거래를 더 날카롭게 만든다.
-func _carve_dead_ends(chosen: Array[Vector2i]) -> Array[Vector2i]:
+func _carve_dead_ends(chosen: Array[Vector2i], guarded: Dictionary) -> Array[Vector2i]:
 	var result := chosen.duplicate()
 	var target := int(ceil(float(_points.size()) * dead_end_ratio_min))
 	if _dead_end_count(result) >= target:
@@ -284,18 +301,23 @@ func _carve_dead_ends(chosen: Array[Vector2i]) -> Array[Vector2i]:
 	# 여러 번 훑는다. 차수 3 인 방은 한 번에 막다른 방이 되지 못하고,
 	# 옆 간선이 먼저 끊겨 차수 2 가 된 뒤에야 후보가 되기 때문이다.
 	for pass_index in _CARVE_PASSES:
-		if not _carve_once(result, order, target):
+		if not _carve_once(result, order, target, guarded):
 			break
 	return result
 
 
 ## 한 바퀴 돌며 끊는다. 하나라도 끊었으면 true.
-func _carve_once(edges: Array[Vector2i], order: Array[Vector2i], target: int) -> bool:
+func _carve_once(
+	edges: Array[Vector2i], order: Array[Vector2i], target: int, guarded: Dictionary
+) -> bool:
 	var cut := false
 	for edge in order:
 		if _dead_end_count(edges) >= target:
 			return cut
 		if not edges.has(edge) or edge.x == _entrance or edge.y == _entrance:
+			continue
+		# 방금 시공한 두 경로는 끊지 않는다. 끊으면 「빨리 가는 길」이 사라진다.
+		if guarded.has(DelaunayTriangulation.edge_key(edge.x, edge.y)):
 			continue
 		if not _makes_one_dead_end(_degrees(edges), edge):
 			continue
