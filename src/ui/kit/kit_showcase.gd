@@ -21,6 +21,10 @@ var _guide: Label
 var _buttons: Array[KitButton] = []
 var _time: float = 0.0
 var _all_disabled: bool = false
+var _demo_states: bool = true
+
+## 어느 판이 어느 상태에 붙박여 있는가. 0 호버 / 1 포커스 / 2 눌림.
+var _pinned: Dictionary = {}
 
 
 func _ready() -> void:
@@ -28,6 +32,7 @@ func _ready() -> void:
 	_build_ground()
 	_build_buttons()
 	_build_guide()
+	_set_demo_states(true)
 	if not _buttons.is_empty():
 		_buttons[0].grab_focus()
 
@@ -45,6 +50,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var key := event as InputEventKey
 	match key.keycode:
+		KEY_S:
+			_set_demo_states(not _demo_states)
 		KEY_D:
 			_all_disabled = not _all_disabled
 			for button in _buttons:
@@ -53,6 +60,30 @@ func _unhandled_input(event: InputEvent) -> void:
 			_guide.visible = not _guide.visible
 		KEY_ESCAPE:
 			get_tree().quit()
+
+
+## 상태 고정을 켜고 끈다.
+##
+## 켜져 있으면 판 셋이 호버 · 포커스 · 눌림에 **붙박여** 있어서 다섯 상태를 한 장에
+## 담을 수 있다. 그대로 두면 사람이 마우스를 올려도 이미 호버인 판이 있어 헷갈리므로,
+## 직접 만질 때는 꺼야 한다. 캡처는 켠 채로 찍는다.
+func _set_demo_states(on: bool) -> void:
+	_demo_states = on
+	for button in _buttons:
+		var pinned: float = _pinned.get(button, -1.0)
+		button.demo_hover = -1.0
+		button.demo_press = -1.0
+		button.demo_focus = -1.0
+		if not on or pinned < 0.0:
+			continue
+		match int(pinned):
+			0:
+				button.demo_hover = 1.0
+			1:
+				button.demo_focus = 1.0
+			2:
+				button.demo_press = 1.0
+	_guide.text = _guide_text()
 
 
 ## 심사 캡처가 조작 안내를 끈다. 안내 글자가 그림에 남으면 조형이 아니라
@@ -88,14 +119,14 @@ func _build_buttons() -> void:
 	_place("탐사 개시", KitMetrics.Grade.GRAVE, Vector2(296.0, 206.0))
 
 	var tend := _place("장비 정비", KitMetrics.Grade.MAIN, Vector2(320.0, 302.0))
-	tend.demo_hover = 1.0
+	_pinned[tend] = 0.0
 	# **한 몸** — 4px. 자개 띠가 두 판을 가로질러 그대로 이어진다.
 	_place(
 		"보급", KitMetrics.Grade.MAIN, Vector2(320.0 + tend.size.x + KitMetrics.GAP_ONE_BODY, 302.0)
 	)
 
 	var record := _place("탐사 기록", KitMetrics.Grade.MINOR, Vector2(344.0, 382.0))
-	record.demo_focus = 1.0
+	_pinned[record] = 1.0
 	# **한 묶음** — 16px. 띠는 끊기고 황동 실선만 이어진다.
 	_place(
 		"설정", KitMetrics.Grade.MINOR, Vector2(344.0 + record.size.x + KitMetrics.GAP_GROUP, 382.0)
@@ -106,7 +137,7 @@ func _build_buttons() -> void:
 
 	# **남남** — 계단에서 떨어져 나와 혼자 서 있다. 아무것도 이어지지 않는다.
 	var launch := _place("출격", KitMetrics.Grade.MAIN, Vector2(752.0, 486.0))
-	launch.demo_press = 1.0
+	_pinned[launch] = 2.0
 
 
 func _place(label: String, grade: KitMetrics.Grade, at: Vector2) -> KitButton:
@@ -120,6 +151,13 @@ func _place(label: String, grade: KitMetrics.Grade, at: Vector2) -> KitButton:
 	return button
 
 
+## 지금 상태 고정이 켜져 있는지를 안내에 적는다. 켜져 있으면 마우스를 올려도
+## 이미 호버인 판이 있어서, 모르면 버튼이 고장 난 줄 안다.
+func _guide_text() -> String:
+	var mode := "상태 고정 켬 (심사용)" if _demo_states else "상태 고정 끔 (직접 조작)"
+	return "S %s   Tab 포커스   D 비활성   H 안내 숨김   Esc 닫기" % mode
+
+
 func _build_guide() -> void:
 	_guide = Label.new()
 	var variation := FontVariation.new()
@@ -130,7 +168,7 @@ func _build_guide() -> void:
 	_guide.add_theme_color_override("font_color", Color(0.55, 0.55, 0.52, 0.72))
 	_guide.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 	_guide.add_theme_constant_override("outline_size", 4)
-	_guide.text = "Tab 포커스   D 비활성   H 안내 숨김   Esc 닫기"
+	_guide.text = _guide_text()
 	_guide.position = Vector2(28.0, 664.0)
 	_guide.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_guide)
