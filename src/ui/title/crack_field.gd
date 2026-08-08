@@ -93,7 +93,11 @@ const _ENERGY_KEEP := 0.962
 const _ENERGY_FLOOR := 0.085
 
 ## 에너지를 굵기로 바꾸는 배율(정규화 좌표).
-const _WIDTH_SCALE := 0.0075
+##
+## 균열을 보여 주는 일은 **조각을 벌리는 것이 아니라 이 선이** 한다.
+## 벌려서 말하면 글자가 부서지고, 그으면 글자 위에 금이 간다
+## (docs/design/21-title.md §21.11.5).
+const _WIDTH_SCALE := 0.0125
 
 ## 한 가닥의 최대 걸음 수. 발산을 막는 안전장치다.
 const _MAX_STEPS := 260

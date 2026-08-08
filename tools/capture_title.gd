@@ -11,7 +11,7 @@ extends SceneTree
 ## 프레임 수가 아니라 **시간 간격**으로 띄운다 — 창이 60Hz 인지 165Hz 인지에 따라
 ## 같은 프레임 수가 전혀 다른 길이가 되어 어떤 기계에서는 연출이 끝난 뒤만 찍힌다.
 
-const _TITLE := "res://src/ui/title/title_screen.tscn"
+const _TITLE := "res://src/ui/title/title_stage.tscn"
 
 ## 화면이 자리를 잡기까지 두는 프레임. 등장을 찍어야 하므로 최소한만 둔다.
 const _WARMUP := 3
@@ -25,7 +25,6 @@ var _step := 0
 var _clock := 0.0
 var _warmed := 0
 var _screen: Control
-var _glyph: FoilGlyph
 var _perf: Array[float] = []
 var _measuring := false
 
@@ -42,26 +41,17 @@ func _initialize() -> void:
 
 ## 무엇을 어떤 순서로 뽑는가. 이 배열이 곧 심사에 낼 필름이다.
 func _plan() -> void:
-	# 등장 — 종이가 찍히고 그 위에 박이 눌린다.
-	_film("boot", 10, 0.075)
-	# 머무름 — 붙으려다 어긋나는 한 바퀴(2.4 + 0.09 + 1.15 = 3.64초)를 통째로 덮는다.
-	_wait(0.6)
-	_film("idle", 12, 0.30)
-	# 호버 — 빛이 커서를 따라 흐르는가. 자리를 옮겨 가며 세 장.
-	_call(func() -> void: _light(Vector2(0.12, 0.10)))
-	_shot("hover_1")
-	_call(func() -> void: _light(Vector2(0.86, 0.24)))
-	_shot("hover_2")
-	_call(func() -> void: _light(Vector2(0.5, 1.05)))
-	_shot("hover_3")
-	# 눌림 — 그 자리의 박이 떨어져 나간다. 되돌아오지 않는 것을 보여야 한다.
-	_call(func() -> void: _glyph.bruise_at(Vector2(0.38, 0.44)))
-	_film("press", 8, 0.06)
+	# 배치 — 겹이 제자리에 앉았는가. 한 장이면 된다.
+	_shot("stage")
+	# 머무름 — 아무도 안 건드려도 살아 있는가. 사람이 한 번에 하나씩 다가오는지 본다.
+	_film("idle", 14, 0.45)
+	# 커서 — 판이 커서를 밀어내며 기운다. 시차가 겹마다 다른지 본다.
+	_call(func() -> void: _sway(Vector2(0.06, 0.12)))
 	_wait(0.9)
-	_shot("press_after")
-	# 전환 — 두 조각이 끝내 갈라진다.
-	_call(_tear)
-	_film("descend", 10, 0.08)
+	_shot("sway_left")
+	_call(func() -> void: _sway(Vector2(0.94, 0.86)))
+	_wait(0.9)
+	_shot("sway_right")
 	_call(_measure)
 
 
@@ -116,29 +106,14 @@ func _shot(tag: String) -> void:
 	_film(tag, 1, 0.02)
 
 
-func _light(where: Vector2) -> void:
-	_find_glyph()
-	if _glyph != null:
-		_glyph.light_from(where)
-
-
-func _tear() -> void:
-	_find_glyph()
-	if _glyph == null:
-		return
-	var tween := _glyph.create_tween()
-	tween.tween_method(_glyph.tear_open, 0.0, 1.0, 0.8).set_ease(Tween.EASE_IN).set_trans(
-		Tween.TRANS_EXPO
-	)
-
-
-func _find_glyph() -> void:
-	if _glyph != null:
-		return
-	for node in root.find_children("*", "Control", true, false):
-		if node is FoilGlyph:
-			_glyph = node as FoilGlyph
-			return
+## 커서를 그 자리(화면 비율)에 둔 것처럼 판을 기울인다.
+##
+## 실제 마우스 이벤트를 주입하지 않는다. SceneTree 스크립트에서 넣은 입력은
+## 씬의 입력 처리까지 닿지 않는다(capture_scene.gd 가 같은 이유로 버튼을 직접 누른다).
+func _sway(where: Vector2) -> void:
+	var event := InputEventMouseMotion.new()
+	event.position = where * Vector2(_screen.size)
+	_screen.call("_gui_input", event)
 
 
 func _save(tag: String) -> void:
