@@ -7,13 +7,20 @@ The scene (client's own words):
 
 No title typography here — the logo is stamped on separately later.
 
-Setting detail that matters (docs/design/02-overview.md 2.6.1): the dungeon is a
-PURPOSE-BUILT BROADCAST FACILITY, not a natural cave. Cameras in every room.
-The demons opened the gate for entertainment; the humans came on their own for profit.
-So: nobody is a victim. Humans look covetous, demons look delighted.
+Setting detail that matters (docs/design/02-overview.md 2.6.1): beings from another
+dimension open the gate FOR AMUSEMENT. Humans walk in on their own because there is
+something worth taking. Both sides are there voluntarily, so nobody is a victim and
+there is no tragedy — only a deal, watched. Humans look covetous, demons look amused.
 
-Stage 1 (`full`) is the 시안 — one shot, also reused later as the style reference
-for per-layer generation (room-studio Approach C).
+**There is no studio.** They open the gate; they do not build a set. No trusses,
+no spotlights, no speakers, no cables, no audience seating. They watch in person.
+An earlier draft of this file described a purpose-built television set — that setting
+was discarded, and the picture it produced went on to poison every layer that used it
+as a style reference (docs/design/21-title.md 21.13.7). It stays corrected here.
+
+Stage 1 (`full`) is the 시안 — one shot only. **It is not the style reference.**
+Per-layer generation references `scene/backdrop.png` instead, because a backdrop has
+no creatures in it and therefore nothing that can leak into a cut-out layer.
 """
 
 from __future__ import annotations
@@ -150,12 +157,14 @@ STYLE = (
     "strong chiaroscuro, volumetric haze, warm gold key light against deep cold teal shadow"
 )
 
-# The room is a TV set, not a cave. This is the setting's load-bearing idea.
+# A hand-hewn stone chamber. NOT a studio — see the module docstring.
 ARENA = (
-    "a vast underground arena that is clearly a PURPOSE-BUILT TELEVISION SET rather than "
-    "a natural cave: carved stone walls studded with black camera housings and lenses, "
-    "cold stage spotlights hanging from steel trusses overhead, thick cables snaking "
-    "across the flagstone floor, tiered stone galleries fading into darkness"
+    "a vast ancient underground chamber of raw hand-carved stone: rough rock walls, "
+    "crumbling arches and pillars, a broken flagstone floor, dark tunnel mouths "
+    "receding into blackness on every side, cold teal gloom and drifting dust haze. "
+    "There is absolutely no man-made equipment anywhere: no lighting rigs, no trusses, "
+    "no spotlights, no lamps, no loudspeakers, no cameras, no cables, no scaffolding, "
+    "no railings, no audience seating, no signage, no machinery"
 )
 
 PRIZE = (
@@ -172,12 +181,14 @@ HUNTERS = (
     "hungry and eager, absolutely not frightened, nobody fleeing"
 )
 
+# Calm, not manic. The eyelid does the work — see docs/design/21-title.md 21.13.8.
 DEMONS = (
-    "high above in the darkness of the upper galleries, three grotesque floating demons, "
-    "each with ONE enormous single eye and a wide delighted grin full of teeth, "
-    "cackling with laughter and thoroughly entertained, gleefully broadcasting the scene, "
-    "leaning in to watch THE HUMANS rather than the gold, "
-    "amused spectators enjoying a show, not menacing attackers"
+    "high above in the darkness, three grotesque floating demons, each with ONE enormous "
+    "single eye, the upper lid drooping halfway across it in a heavy-lidded lazy gaze "
+    "angled down at THE HUMANS rather than at the gold. Their lips stay closed and only "
+    "one corner of each mouth curls up in a small private smirk. Their bodies hang slack "
+    "and unhurried, at ease, settled in to watch, mildly entertained by something they "
+    "have seen many times before"
 )
 
 FULL = "%s. %s. %s. %s. %s. No text, no letters, no logo, no watermark, no user interface." % (

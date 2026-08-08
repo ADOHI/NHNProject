@@ -44,7 +44,15 @@ func _draw() -> void:
 	# 다가오면서 커지면 화면 쪽으로 오는 것이 되고, 이 사람들은 **가운데로** 간다.
 	var box := Rect2(_home.position + offset + _toward * closed - position, _home.size)
 	if texture != null:
-		draw_texture_rect(texture, box, false)
+		# 원경은 근경만큼 또렷하면 안 된다. 아주 조금 차갑게, 아주 조금 옅게 —
+		# 배경의 청록 쪽으로 밀리면서 뒤로 물러난다. 가장자리를 물리는 것과 짝이다
+		# (docs/design/21-title.md §21.13.10).
+		var tone := Color.WHITE
+		if spec.role == TitleLayers.Role.DEMON:
+			tone = TitleLayers.DEMON_HAZE
+		elif spec.role == TitleLayers.Role.FOREGROUND:
+			tone = TitleLayers.FOREGROUND_SHADE
+		draw_texture_rect(texture, box, false, tone)
 		return
 	# 그림이 아직 없다. 자리와 크기만 표로 남긴다.
 	var tint: Color = _MARK.get(spec.role, Color.MAGENTA)

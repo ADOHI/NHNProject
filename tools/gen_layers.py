@@ -113,13 +113,22 @@ HOARD = _p(
 )
 
 #: 전경 — 가장 빨리 흐르는 겹. 화면 아래 가장자리에 걸치는 바위 턱.
+#:
+#: **캔버스가 화면과 같은 비(1536×864)여야 한다.** `rect_of` 는 span 0 인 겹을
+#: 가로세로비를 무시하고 화면에 꽉 채우므로, 캔버스 비가 다르면 그대로 늘어난다
+#: (docs/design/21-title.md §21.13.11). 그래서 `cut_layers.py` 도 이 겹은 잘라내지 않는다.
+#:
+#: 그리고 **빈 자리를 비워 두라고 강하게 말해야 한다.** 앞 판에서 이 겹의 빈 마젠타
+#: 한가운데에 이빨을 드러낸 외눈 괴물이 그려져 나왔고, 그것이 합성에서 상자를 가렸다
+#: (§21.13.7). 원인은 화풍 레퍼런스였지만 문장으로도 한 번 더 막는다.
 FOREGROUND = _p(
     STYLE,
-    "A ragged ledge of broken foreground rock and rubble running across the bottom of",
-    "the frame, seen very close to the camera, almost in silhouette,",
+    "A ragged ledge of broken foreground rock and rubble running across the BOTTOM THIRD",
+    "of the frame only, seen very close to the camera, almost in silhouette,",
     "rim-lit along its top edge by a warm glow coming from beyond it.",
-    "Only the rock band along the bottom — the entire upper two thirds of the picture",
-    "is empty flat magenta.",
+    "The upper two thirds of the picture is completely empty flat magenta —",
+    "there is nothing in it at all: no creature, no face, no eye, no figure,",
+    "no floating object, no sky, no wall, no haze. It is bare empty magenta.",
     NO_STUDIO,
     CHROMA,
     NO_TEXT,
@@ -191,34 +200,61 @@ HUNTERS: list[tuple[str, str, tuple[int, int]]] = [
 ]
 
 #: 악마 — **눈이 하나다.** 풀샷에서 모델이 자꾸 둘을 그려서 여기서는 한 마리씩,
-#: 그리고 여러 문장으로 눌러 말한다. 그리고 **비명이 아니라 웃음**이다 —
-#: 강요한 적이 없으니 죄책감도 없고, 그래서 태연하다. 그게 더 서늘하다.
+#: 그리고 여러 문장으로 눌러 말한다.
+#:
+#: **광기가 아니라 여유다** (docs/design/21-title.md §21.13.8). 앞 판이 여기서 졌다 —
+#: "다문 입"까지는 지켜졌는데 눈을 끝까지 크게 뜨고 있어서 전부 광기로 읽혔다.
+#: 외눈박이는 눈이 얼굴의 대부분이라 **눈꺼풀 하나로 성격이 정해진다.**
+#: 활짝 열린 안구는 무슨 표정을 붙여도 미친 것으로 간다.
+#:
+#: 그리고 **부정문을 걷어냈다.** `NOT screaming, NOT roaring, NOT snarling, howl` 은
+#: 모델에게 그 네 낱말을 들려주는 문장이다. 있어야 할 것만 적는다 —
+#: 늘어진 눈꺼풀 · 한쪽만 올라간 다문 입 · 축 처진 몸 · 서두를 것 없는 자세.
 DEMON_CORE = (
-    "a grotesque floating demon with exactly ONE single enormous eye — a cyclops, "
-    "one huge glossy eyeball taking up most of its face, "
-    "it has only ONE eye and there is no second eye anywhere on its head. "
-    "Below the eye a wide closed-lip smirk curls up at the corners. "
-    "It is thoroughly amused and relaxed, watching something below with lazy delight, "
-    "smug and entertained, chuckling to itself. "
-    "It is NOT screaming, NOT roaring, NOT snarling, NOT attacking, its mouth is not "
-    "stretched wide open in a howl — it is quietly enjoying the show"
+    "a grotesque floating demon with exactly ONE single eye — a cyclops, "
+    "one large eyeball taking up most of its face, "
+    "it has only ONE eye and there is no second eye anywhere on its head — "
+    "the rest of its face is bare skin with no other eye and no empty socket. "
+    "Its heavy upper eyelid droops halfway down across that eye in a lazy half-lidded "
+    "gaze, the lid creased and relaxed, the pupil rolled downward to watch something far "
+    "below it. "
+    # 앞 판이 여기서 한 번 더 졌다 — "한쪽 입꼬리만 올라간다"고 했더니 모델이 입 전체를
+    # **내려** 그려서 시무룩한 얼굴이 됐다. 올라간다는 것을 먼저, 세게 말한다.
+    "Its mouth is a small closed line that tilts clearly UPWARD at one end into a "
+    "lopsided smirk — the corner is lifted, pleased and amused, and the lips stay shut "
+    "so no teeth show. "
+    "Its body hangs loose and boneless in the air, utterly unhurried and at ease, "
+    "lounging as it watches. "
+    "The mood is calm, lazy, private amusement — a comfortable spectator who has seen "
+    "this many times before and still finds it funny, in no hurry at all"
 )
 
+#: 자리는 §21.13.9 의 배치표를 따른다. **자리와 시선이 따로 놀면 사슬이 끊긴다** —
+#: 프롬프트의 눈 방향은 `title_layers.gd` 의 `watching` 과 같은 것을 가리켜야 한다.
 DEMONS: list[tuple[str, str]] = [
     (
+        # 화면 왼쪽 끝 위. 왼쪽 아래의 사람을 본다.
         "demon_a",
-        "Large and close, hovering and leaning down to look, chin resting on one hand "
-        "like a bored spectator, the single eye swivelled downward to the LEFT.",
+        "Large and close, hovering, its chin propped lazily on one hand like a spectator "
+        "settled into a seat, the other hand hanging limp and empty. Both hands are empty "
+        "and idle — it is carrying nothing and holding no object of any kind. "
+        "The half-lidded eye is rolled down and slightly to the RIGHT.",
     ),
     (
+        # 화면 오른쪽 끝 위. 오른쪽 아래의 사람을 본다.
         "demon_b",
-        "Long and thin, coiling downward like smoke, arms folded, "
-        "the single eye turned downward to the RIGHT, smirking.",
+        # 앞 판에서 "drooping with boredom" 이 얼굴까지 끌어내려 우는 상이 됐다.
+        # 늘어짐은 **몸에만** 건다.
+        "Long and thin, its lanky body loosely coiled in the air, arms folded, "
+        "leaning back as if reclining on nothing. Its hands are empty. "
+        "The half-lidded eye is rolled down and slightly to the LEFT.",
     ),
     (
+        # 가장 위, 가장 작고 가장 멀다. 바로 아래 정면의 사람을 본다.
         "demon_c",
-        "Squat and bloated, drifting, one spindly finger pointing down at something below "
-        "while shaking with silent laughter, the single eye looking straight DOWN.",
+        "Squat and bloated, drifting slowly, belly slack, one spindly empty hand flopped "
+        "over to gesture vaguely at something below while its shoulders shake with quiet "
+        "private laughter. The half-lidded eye is rolled straight DOWN.",
     ),
 ]
 
@@ -234,7 +270,8 @@ def layers(lunge: bool = False) -> list[tuple[str, str, tuple[int, int]]]:
     out: list[tuple[str, str, tuple[int, int]]] = [
         ("backdrop", BACKDROP, (1536, 864)),
         ("hoard", HOARD, (1024, 768)),
-        ("foreground", FOREGROUND, (1536, 512)),
+        # 전경은 **화면과 같은 비**여야 한다 (§21.13.11). 잘라내지도 않는다.
+        ("foreground", FOREGROUND, (1536, 864)),
     ]
     for name, view, size in HUNTERS:
         out.append((name, _p(STYLE, pose + ".", view, SHADY, CHROMA, NO_TEXT), size))
@@ -247,8 +284,11 @@ def layers(lunge: bool = False) -> list[tuple[str, str, tuple[int, int]]]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ref", default=os.path.join(OUT, "full_2.png"),
-                    help="화풍 레퍼런스로 물릴 풀샷")
+    # **풀샷을 물리지 않는다.** 풀샷 안의 인물은 반드시 다른 겹으로 샌다 —
+    # 전경 한가운데에 이빨 드러낸 외눈 괴물이 나온 것이 그 증거다(§21.13.7).
+    # 배경은 화풍·팔레트·빛 온도를 그대로 들고 오면서 샐 형태가 없다.
+    ap.add_argument("--ref", default=os.path.join(OUT, "backdrop.png"),
+                    help="화풍 레퍼런스. 기본값은 배경 — 생물이 없어서 새어 나올 형태가 없다")
     ap.add_argument("--seed", type=int, default=61204)
     ap.add_argument("--only", default="", help="쉼표로 구분한 겹 이름만 생성")
     ap.add_argument("--lunge", action="store_true",

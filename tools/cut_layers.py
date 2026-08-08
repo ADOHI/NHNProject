@@ -21,7 +21,9 @@ import argparse
 import os
 import sys
 
+import numpy as np
 from PIL import Image
+from scipy import ndimage
 
 ROOM_STUDIO = r"C:\Users\adohi\2dAnim\room-studio\src"
 if ROOM_STUDIO not in sys.path:
@@ -49,6 +51,52 @@ SINGLE = {
 #: 크로마를 빼지 않는 겹. 배경은 화면을 꽉 채우는 그림이다.
 OPAQUE = {"backdrop"}
 
+#: **잘라내지 않는 겹.** `trim_alpha` 는 알파 경계로 캔버스를 줄이는데,
+#: 화면을 꽉 채우는 겹(`span` 0)은 그러면 남은 조각이 화면 전체로 늘어난다.
+#: 전경이 세로로 1.9배 늘어나 있던 원인이 이것이었다
+#: (docs/design/21-title.md §21.13.11). **전경은 자리가 곧 의미다.**
+NO_TRIM = {"foreground"}
+
+#: 가장자리를 물릴 겹과 그 폭(물체 짧은 변에 대한 비율).
+#:
+#: 컷아웃 경계가 칼로 자른 것처럼 서 있으면 오려 붙인 스티커로 보인다.
+#: **원경이 근경만큼 또렷하면 깊이가 죽는다** (§21.13.10).
+#: 이건 계단 없애기가 아니라 **공기 원근**이라 2~3px 이 아니라 수십 px 짜리 띠다.
+FEATHER = {"demon_a": 0.06, "demon_b": 0.06, "demon_c": 0.06}
+
+#: 가장자리에 남기는 알파. **0 이 아니다.**
+#:
+#: 처음에 0 까지 떨어뜨렸더니 팔다리와 뿔이 통째로 지워졌다 — 굵기가 띠의 두 배가
+#: 안 되는 부위는 한가운데까지 경사에 먹힌다. 화면에서 악마가 벽에 번진 얼룩으로
+#: 보이고 **시선의 사슬이 끊겼다.** 요구는 "반투명"이지 "없앰"이 아니다.
+FEATHER_EDGE_ALPHA = 0.35
+
+
+def feather_edge(img: Image.Image, band: float) -> Image.Image:
+    """실루엣 **안쪽으로** 들어가는 알파 경사를 넣는다.
+
+    흐리기(blur)를 쓰지 않는다. 흐리기는 경계 바깥으로도 번져서 실루엣이 커지고,
+    그러면 물체가 부풀어 보인다. 거리 변환은 원래 실루엣 안쪽만 깎는다.
+
+    가장자리에서 `FEATHER_EDGE_ALPHA` 이고 `band` 만큼 안으로 들어가면 1 이 된다.
+    사이는 smoothstep — 선형이면 띠가 끝나는 자리에 눈에 보이는 선이 남는다.
+    """
+    a = np.asarray(img.split()[-1], dtype=np.float32) / 255.0
+    if a.max() <= 0.0:
+        return img
+    width = max(1.0, band * min(img.width, img.height))
+    # 거리 변환은 0/1 을 받는다. 반투명 가장자리는 이미 물체 안쪽으로 친다.
+    inside = (a > 0.5).astype(np.uint8)
+    # 캔버스 테두리에 닿은 물체가 그 변에서 깎이지 않게 한 겹 덧대고 잰다.
+    padded = np.pad(inside, 1)
+    dist = ndimage.distance_transform_edt(padded)[1:-1, 1:-1]
+    t = np.clip(dist / width, 0.0, 1.0)
+    smooth = t * t * (3.0 - 2.0 * t)
+    ramp = FEATHER_EDGE_ALPHA + (1.0 - FEATHER_EDGE_ALPHA) * smooth
+    out = img.copy()
+    out.putalpha(Image.fromarray(np.uint8(np.clip(a * ramp, 0.0, 1.0) * 255.0 + 0.5)))
+    return out
+
 
 def cut(name: str) -> str | None:
     src = os.path.join(SRC, name + ".png")
@@ -62,7 +110,10 @@ def cut(name: str) -> str | None:
         out = compose.chroma_key(src)
         if name in SINGLE:
             out = compose.keep_main_object(out)
-        out = compose.trim_alpha(out)
+        if name not in NO_TRIM:
+            out = compose.trim_alpha(out)
+        if name in FEATHER:
+            out = feather_edge(out, FEATHER[name])
     os.makedirs(DST, exist_ok=True)
     dest = os.path.join(DST, name + ".png")
     out.save(dest)
