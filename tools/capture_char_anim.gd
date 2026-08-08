@@ -29,7 +29,10 @@ extends SceneTree
 const FPS := 25
 
 ## 캡처 화면. 캐릭터 키 146 을 배율 3.0 으로 보므로 438 px, 위아래 여백을 두어 520.
-const VIEW_SIZE := Vector2i(400, 520)
+##
+## **가로를 400 에서 480 으로 넓혔다.** 무기가 손에서 앞으로 뻗으면서 날 끝이
+## 오른쪽 변에 잘렸다. 무기는 캐릭터 폭 밖으로 나가는 유일한 것이라 여백이 더 필요하다.
+const VIEW_SIZE := Vector2i(480, 520)
 const VIEW_SCALE := 3.0
 const GROUND_Y := 476.0
 
@@ -50,7 +53,7 @@ const WARMUP_FRAMES := 8
 const MIN_SUBJECT_RATIO := 0.03
 
 ## 낱말로 고를 수 있는 클립과 조절판 축.
-const CLIPS: Array[String] = ["idle", "walk", "front"]
+const CLIPS: Array[String] = ["idle", "walk", "front", "swing", "swingup"]
 const AXES: Array[String] = ["delay", "arc", "squash", "asymmetry", "depth", "plant"]
 
 var _out_prefix := ".renders-char-anim/idle"
@@ -152,6 +155,10 @@ func _make_clip(name: String, rig: CharRig) -> CharClip:
 	match name:
 		"walk":
 			return CharWalkClip.new(rig)
+		"swing":
+			return CharSwingClip.new(rig, WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW)
+		"swingup":
+			return CharSwingClip.new(rig, WeaponGuard.Id.LOW, WeaponGuard.Id.HIGH)
 		"front":
 			return CharFrontIdleClip.new(rig)
 		_:

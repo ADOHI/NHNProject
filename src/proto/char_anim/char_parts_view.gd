@@ -7,6 +7,8 @@ extends Node2D
 ##
 ## 그림자는 여기서 그린다. 포즈에서 파생되는 값이라 코어에 둘 것이 아니고,
 ## **떠 있는 파츠에 접지감을 주는 가장 값싼 수단**이라 뺄 것도 아니다.
+##
+## 무기도 여기서 붙인다 — **든 손의 자식**이라 손의 트랜스폼을 그대로 물려받는다.
 
 const SHADOW := Color(0.145, 0.161, 0.196, 0.28)
 
@@ -16,6 +18,7 @@ const SHADOW_LIFT_RESPONSE := 0.030
 var rig: CharRig
 
 var _shapes: Array[CharPartShape] = []
+var _weapon: CharWeaponShape
 var _shadow_scale := 1.0
 var _shadow_offset := 0.0
 
@@ -33,7 +36,23 @@ func setup(p_rig: CharRig) -> void:
 		add_child(shape)
 		shape.setup(part, rig)
 		_shapes[part] = shape
+	_mount_weapon()
 	apply_pose(CharPose.from_rig(rig))
+
+
+## 무기를 **든 손의 자식으로** 붙인다.
+##
+## 자식이면 손의 트랜스폼을 그대로 물려받으므로 여기서 해 줄 일이 없다 —
+## 손이 돌면 무기가 손을 축으로 같이 돈다. `sample()` 은 무기를 모르고,
+## 파츠는 여섯 그대로다 (`CharWeapon`).
+func _mount_weapon() -> void:
+	_weapon = CharWeaponShape.new()
+	_weapon.name = "Weapon"
+	# 손 지역 좌표는 `+y` 가 아래다. 코어(`+y` 위)에서 잡은 자리를 뒤집어 넣는다.
+	var grip := CharWeapon.grip_offset(rig)
+	_weapon.position = Vector2(grip.x, -grip.y)
+	_weapon.rotation = -CharWeapon.REST_ANGLE
+	_shapes[CharWeapon.HOLDER].add_child(_weapon)
 
 
 func apply_pose(pose: CharPose) -> void:
