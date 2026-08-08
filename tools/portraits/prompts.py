@@ -64,13 +64,48 @@ FRAME = (
 
 #: 얼굴이 타이틀의 인간 넷과 같은 사람들이어야 한다 (§27.15.1).
 #: 1차 탐침의 얼굴은 **어리고 말끔했다** — `SHADY` 가 옷에만 앉고 얼굴에는 안 앉았다.
-#: 그래서 얼굴에 직접 건다. 살빛이 따뜻해지면서 **차가운 배경과의 대비도 같이 오른다** —
-#: `STYLE` 이 말하는 `warm gold key light against deep cold teal shadow` 가 그제야 선다.
-WEATHER = (
-    "This is a grown adult who works underground for a living: the skin is ruddy and "
-    "weathered, marked with grime, old sweat and small healed nicks, "
-    "the face lined and lived-in."
+#: 그래서 얼굴에 직접 건다. 살빛이 따뜻해지면서 **차가운 배경과의 대비도 같이 오른다**.
+#:
+#: **화풍 B 로 손봤다** (§27.16.2 · §27.18.2). 잔결을 부르던 두 자리를 뺐다 —
+#: `old sweat and small healed nicks` 와 `the face lined and lived-in` 이
+#: 살에 계조를 불러 타이틀의 **평평한 색면**과 반대로 당기고 있었다.
+#: 닳음의 근거를 **잔결에서 검댕과 흉터 하나로 갈아 끼운다** (§21.13.14 의 처방).
+#: 검댕과 흉터는 평평한 색면으로 그릴 수 있고 주름은 그릴 수 없다.
+#:
+#: **나이는 `{age}` 로 갈린다** (§27.18.1). 전에는 `a grown adult` 하나로 뭉갰는데
+#: 이제 레코드에 나이가 있다. **코드가 아는 것을 GPT 에게 다시 쓰게 하지 않는다** —
+#: 그래서 이 자리는 코드 고정 칸이고 GPT 의 겉모습에서는 나이를 뺐다.
+#: 관사를 낱말 쪽에 둔다 — `a old greying` 이 나왔다. 붙여 쓰는 자리를 하나로 모은다.
+WEATHER_TEMPLATE = (
+    "This is {age} adult who works underground for a living: the skin is ruddy and "
+    "warm, dusted with grime, and one old healed scar marks the face."
 )
+
+#: 나이를 말로 옮긴다. **숫자를 그대로 주지 않는다** — `a 52 year old` 는 낱말이 아니라
+#: 셈이고, §21.13.13 이 확인한 것은 모델이 **낱말**을 읽는다는 것이다.
+#: 경계는 `survey_npc_kin.gd` 의 실측 분포(16~58 · 중위 28)를 그대로 쓴다.
+_AGE_WORDS: list[tuple[int, str]] = [
+    (22, "a young"),
+    (30, "a young grown"),
+    (40, "a middle-aged"),
+    (50, "a greying middle-aged"),
+    (200, "an old greying"),
+]
+
+
+def weather(age: int = 0) -> str:
+    """닳음 문장. 나이를 받으면 그 나이의 낱말이 들어간다 (§27.18.1).
+
+    `age` 가 0 이면 나이를 모르는 것이라 `grown` 으로 뭉갠다 — **지어내지 않는다.**
+    """
+    word = "a grown"
+    if age > 0:
+        word = next(w for edge, w in _AGE_WORDS if age < edge)
+    return WEATHER_TEMPLATE.format(age=word)
+
+
+#: 나이를 모를 때의 문장. 격자 경로(`compose()`)와 자기 점검이 쓴다.
+WEATHER = weather()
 
 #: **사분의 삼을 방향이 아니라 도형으로 시킨다** (§27.8).
 #:
@@ -101,17 +136,31 @@ GEOMETRY = (
 #: room-studio 의 결함이 `lamp` · `flame` · `fire` 가 소품마다 등불을 그려 넣은 것이었다.
 #: `key light` 는 지시어라 안전하다 — `STYLE` 이 이미 들고 있는데 `hunter_*` 넷에
 #: 등불이 하나도 안 그려져 있다 (§21.13.16 ⑦ 의 「먹여도 되는 낱말」).
+#:
+#: **화풍 B 로 손봤다** (§27.16.2 · §27.18.2). `rakes across` 가 계조를 부르고 있었다 —
+#: 훑는 빛은 밝기가 이어지는 그림이고, 타이틀의 인간 넷은 **평평한 색면 + 딱 떨어지는
+#: 그림자 경계**다(§27.6.1). 그래서 **빛의 세기는 그대로 두고 경계만 세운다.**
+#: 방향은 그대로다 — 방향이 바뀌면 §27.8 의 비대칭이 같이 죽는다.
 LIGHT = (
-    "A warm gold key light rakes across one side of the face and the near shoulder; "
-    "the other side of the face and the far shoulder fall away into deep cold teal shadow."
+    "A warm gold key light falls on one side of the face and the near shoulder, and the "
+    "shade on the other side sits as one flat shape with a crisp clean edge. The colour "
+    "is laid down in flat blocks held together by a firm dark outline."
 )
 
 #: **테두리를 재는 관문이 이 문장을 검사한다** (§27.12).
 #: room-studio 가 얻은 것 — 프롬프트가 요구하는 것이 *"배경이 프레임의 모든 변과
 #: 모서리까지 이어진다"* 이면, **테두리를 재면 그 요구를 그대로 검사하게 된다.**
 #: 그래서 요구를 테두리의 말로 적는다.
+#:
+#: **화풍 B 로 손봤다** (§27.16.2 · §27.18.2). 청록을 **따뜻한 토프**로 바꿨다.
+#: 시안이 타이틀보다 어둡고 찬 이유가 이 문장이었다 — 청록 배경이 판의 절반을 덮고
+#: 살빛까지 끌어내렸다. 타이틀에서는 배경이 마젠타였다가 컷아웃으로 빠져서
+#: **청록이 화면을 덮은 적이 없다.**
+#:
+#: **`evenly dark` 는 그대로 둔다.** 테두리 관문의 평균 밝기 상한이 78 이고(§27.15.3)
+#: 밝은 토프로 가면 성한 판이 통째로 걸린다. **밝기가 아니라 색온도만 옮긴다.**
 BACKGROUND = (
-    "Behind the shoulders there is only plain dark cold teal, evenly dark and smooth "
+    "Behind the shoulders there is only plain deep warm taupe, evenly dark and smooth "
     "all the way out to every edge and corner of the picture."
 )
 
@@ -146,10 +195,19 @@ DISCIPLINES: list[tuple[str, str, str]] = [
         #
         # **어깨에 감은 줄을 두려다 뺐다.** `cable` · `wiring` 은 §21.13.4 가 폐기한
         # 방송 스튜디오 설정의 낱말이고, 줄 감은 기술자는 그 설정으로 읽힌다.
-        "a soot-marked human treasure hunter. A thick canvas apron bib is buckled over "
-        "both shoulders and a pair of heavy two-lens goggles is pushed up onto the "
-        "forehead. Soot streaks the face, and the wooden haft of a hammer rises past "
-        "one shoulder.",
+        #
+        # **`both shoulders` 를 뺐다** (§27.18.3). §27.15.1 이 `FRAME` 에서 같은 낱말을
+        # 1차 탐침의 범인으로 잡았는데 **여기 남아 있던 것을 그때 못 봤다.**
+        # 셈을 없애면서 §27.8 의 비대칭도 같이 벌었다 — 멜빵을 한쪽 어깨로 보낸다.
+        #
+        # **망치 자루를 뺐다** (§27.20). 초상이 스프라이트의 원본이 되고 무기는
+        # 손에 따로 붙으므로, 초상에 연장이 있으면 **연장이 둘이 된다.**
+        # 기공을 세 갈래(두 알 고글 · 검댕 · 앞치마)로 이미 갈라 뒀으므로
+        # 망치를 빼도 감식과 안 헷갈린다 — **가름의 근거를 연장에서 뺀 적이 없다.**
+        "a soot-marked human treasure hunter. A thick canvas apron bib is buckled up "
+        "across the chest with its strap crossing the near shoulder, and a pair of heavy "
+        "two-lens goggles is pushed up onto the forehead. Soot streaks the face and a "
+        "scorched leather guard covers the near shoulder.",
     ),
     (
         "broker", "교섭",
@@ -279,8 +337,37 @@ _SUSPECTS: list[tuple[str, str]] = [
     ("비유", r"\b(?:like a|like an|as if|as though|resembling)\b\s+\w+"),
     ("정면 지시", r"\b(?:toward us|towards us|facing the camera|at the camera|"
                   r"facing the viewer|head-?on|full frontal|symmetrical)\b"),
+    # **낱말이 아니라 셈과 자세가 정면을 부르는 자리** (§27.18.3).
+    #
+    # §27.15.1 이 `FRAME` 의 `both shoulders` 를 1차 탐침의 범인으로 잡고
+    # *"셈이 방향을 뜻하는 자리는 명사 목록으로 안 걸린다"* 고 적었는데,
+    # **그때는 규칙으로 만들지 않고 그 한 줄만 고쳤다.**
+    #
+    # 2차 실호출에서 GPT 가 `the shoulders are squared` 를 썼다 — 같은 부류의
+    # 두 번째 사례다. 어깨 둘이 나란하다는 것은 **어깨 둘이 다 보이는 각도**,
+    # 곧 정면이고, `GEOMETRY` 가 사분의 삼을 시키는 동안 반대로 당긴다.
+    # **사례가 둘이 되면 규칙이다.** 명사 목록이 못 잡으므로 정규식으로 내린다.
+    ("정면 부르는 어깨", r"\bboth shoulders\b|"
+                        r"\bshoulders?\s+(?:are\s+|is\s+|held\s+)?(?:squared|square|even|level)\b|"
+                        r"\bsquared?\s+shoulders\b|"
+                        r"\bshoulders?\s+back\b|"
+                        r"\bshoulders?\s+(?:are\s+)?(?:drawn\s+|pulled\s+)?straight\b"),
     ("램프 명사", r"\b(?:lamp|lantern|torch|candle|brazier|sconce|flame|fire|wick|bulb)\b"),
     ("크로마", r"\b(?:magenta|chroma|gradient|vignette)\b"),
+    # **초상에 도구와 무기를 그리지 않는다** (§27.20).
+    #
+    # 초상이 캐릭터 스프라이트의 원본이 되고, 그 스프라이트는 머리 · 몸 · 손 · 발
+    # 여섯 파츠의 레이맨식이다. **무기는 §28.7 대로 손에 따로 붙는 별개 스프라이트다.**
+    # 초상에 도구가 그려져 있으면 **무기가 이중으로 붙는다.**
+    #
+    # 「가슴 위만」으로는 안 걸린다 — 어깨에 멘 것도 목에 건 것도 가슴 위다.
+    # **그래서 프레임과 따로 거른다.** 남는 것은 옷 · 방어구 · 흉터 · 머리 · 장신구,
+    # 곧 **몸에 붙어 있고 손에 안 든 것**이다.
+    ("도구 · 무기", r"\b(?:pickaxe|pick-axe|hammer|mallet|axe|hatchet|sword|blade|knife|"
+                    r"dagger|spear|halberd|staff|club|bow|arrow|quiver|crossbow|gun|"
+                    r"pistol|rifle|shield|buckler|haft|hilt|scabbard|sheath|holster|"
+                    r"rope|coil|satchel|backpack|rucksack|knapsack|pouch|toolbelt|"
+                    r"wrench|chisel|crowbar|lockpick|weapon|tool)\b"),
     ("폐기 설정", r"\b(?:truss|trusses|spotlight|loudspeaker|cable|wiring|scaffold|"
                   r"audience|signage)\b"),
 ]
