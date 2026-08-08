@@ -270,6 +270,9 @@ var hold_confirms: int = 0
 var propagate_blocked: int = 0
 var propagate_distance: float = 0.0
 
+## 자리를 막은 상대로 사슬을 이어 간 횟수. **진단에서 가장 컸던 구멍을 메운 자리다.**
+var propagate_relays: int = 0
+
 var _by_id: Dictionary = {}
 var _next_id := 1
 var _next_order_id := 1
@@ -429,6 +432,7 @@ func step(delta: float) -> void:
 	for agent in agents:
 		agent.goal_distance = agent.position.distance_to(agent.goal)
 		agent.pushed_ago = mini(agent.pushed_ago + 1, 999)
+		agent.chain_ago = mini(agent.chain_ago + 1, 999)
 		# 벽이 내다보는 거리 밖에 있는가. 한 번 물어 두고 이 프레임 내내 쓴다.
 		var cell := grid.world_to_cell(agent.position)
 		agent.wall_far = grid.clearance_at(cell) >= _WALL_CLEAR
