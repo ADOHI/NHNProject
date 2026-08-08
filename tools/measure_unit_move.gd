@@ -228,6 +228,19 @@ func _measure(
 	field.blocked_move_total = 0.0
 	field.flow_build_peak = 0
 	field.rebake_count = 0
+	field.propagate_runs = 0
+	field.propagate_moves = 0
+	field.propagate_cycles = 0
+	field.propagate_forward = 0
+	field.propagate_backward = 0
+	field.propagate_depth_total = 0
+	field.propagate_cap_hits = 0
+	field.propagate_cycle_len_total = 0
+	field.propagate_cycle_len_two = 0
+	field.press_agent_frames = 0
+	field.hold_confirms = 0
+	field.propagate_blocked = 0
+	field.propagate_distance = 0.0
 	if other_target == Vector2.INF:
 		field.issue_move(field.all_ids(), target)
 	else:
@@ -378,6 +391,18 @@ func _measure(
 		"cycle_units": cycle_units_peak,
 		"cycle_longest": cycle_longest,
 		"rebakes": field.rebake_count,
+		"runs": field.propagate_runs,
+		"moves": field.propagate_moves,
+		"fwd": field.propagate_forward,
+		"chain_back": field.propagate_backward,
+		"depth": float(field.propagate_depth_total) / maxf(float(field.propagate_runs), 1.0),
+		"cap": field.propagate_cap_hits,
+		"cyc": field.propagate_cycles,
+		"cyc2": field.propagate_cycle_len_two,
+		"pressed": field.press_agent_frames,
+		"holds": field.hold_confirms,
+		"pblock": field.propagate_blocked,
+		"pdist": field.propagate_distance,
 		"flow": 100.0 * float(flow_frames) / maxf(float(force_frames), 1.0),
 		"wiggle": wiggle / float(count),
 		"push": field.overlap_push_total,
@@ -515,6 +540,30 @@ func _print_table(rows: Array[Dictionary]) -> void:
 					row["settled_push"],
 					row["pierce"],
 					row["blocked_move"],
+				]
+			)
+		)
+	print("")
+	print("| 상황 | 전파 | 옮김 | 앞으로 | 뒤로 | 평균깊이 | 상한걸림 | 고리 | 길이2 " + "| 못비킴 | 옮긴거리 | 눌린프레임 | 기다림확정 |")
+	print("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+	for row in rows:
+		print(
+			(
+				"| %s | %d | %d | %d | %d | %.1f | %d | %d | %d | %d | %.0f px | %d | %d |"
+				% [
+					row["label"],
+					row["runs"],
+					row["moves"],
+					row["fwd"],
+					row["chain_back"],
+					row["depth"],
+					row["cap"],
+					row["cyc"],
+					row["cyc2"],
+					row["pblock"],
+					row["pdist"],
+					row["pressed"],
+					row["holds"],
 				]
 			)
 		)

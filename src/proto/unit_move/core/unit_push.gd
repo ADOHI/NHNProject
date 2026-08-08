@@ -43,26 +43,41 @@ static func propagate(field: ProtoUnitField, agent: ProtoUnitAgent) -> int:
 	if field.tuning.get_value("propagate") < 0.5:
 		return 0
 	var scratch: Array[ProtoUnitAgent] = []
-	var seen := {}
+	var chain: Array[int] = [agent.id]
 	var current := agent
 	var moved := 0
-	seen[current.id] = true
-	for _depth in _MAX_DEPTH:
+	var depth := 0
+	while depth < _MAX_DEPTH:
 		var heading := current.steer_dir
 		if heading == Vector2.ZERO:
-			return moved
+			break
 		var blocker := field.agent_of(current.blocker_id)
 		if blocker == null:
-			return moved
-		if seen.has(blocker.id):
+			break
+		var seen_at := chain.find(blocker.id)
+		if seen_at >= 0:
 			# 고리다. **억지로 풀지 않는다** - 풀려고 밀면 그것이 대칭이 되고 진동이 된다.
-			# 재는 쪽이 볼 수 있게 세어 두기만 한다.
+			# 재는 쪽이 볼 수 있게 길이까지 적어 둔다. 길이 2 면 양보 우선순위가 이미
+			# 깰 수 있는 것이므로, 그런 고리가 많다면 여기서 포기하는 것이 잘못이다.
+			var length := chain.size() - seen_at
 			field.propagate_cycles += 1
-			return moved
-		seen[blocker.id] = true
+			field.propagate_cycle_len_total += length
+			if length == 2:
+				field.propagate_cycle_len_two += 1
+			break
+		# 사슬이 문 쪽으로 뻗는가 뒤로 뻗는가. 흐름장 비용이 낮을수록 목적지에 가깝다.
+		if blocker.rank < current.rank:
+			field.propagate_forward += 1
+		else:
+			field.propagate_backward += 1
+		chain.append(blocker.id)
 		if _step_aside(field, current, blocker, scratch):
 			moved += 1
 		current = blocker
+		depth += 1
+	if depth >= _MAX_DEPTH:
+		field.propagate_cap_hits += 1
+	field.propagate_depth_total += depth
 	return moved
 
 
@@ -90,11 +105,15 @@ static func _step_aside(
 	var want := minf(touch - lateral + _MARGIN, _NUDGE)
 	var room := ProtoUnitYield.yield_room(field, blocker, away, want, scratch)
 	if room <= 0.0:
+		# **비켜설 자리가 없다.** 비켜라는 전해졌는데 그 유닛도 갇혀 있다는 뜻이다.
+		# 이 수가 크면 필요한 것은 더 깊은 전파가 아니라 **자리를 막은 놈에게 말 거는 것**이다.
+		field.propagate_blocked += 1
 		return false
 	blocker.position += away * room
 	blocker.yield_shift += away * room
 	blocker.pushed_ago = 0
 	field.settled_push_total += room
+	field.propagate_distance += room
 	# 비켜선 유닛은 다시 가 볼 만하다. 기다리는 중이었으면 깨운다.
 	if blocker.state == ProtoUnitAgent.State.HOLDING:
 		blocker.resume()

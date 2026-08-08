@@ -248,6 +248,28 @@ var propagate_runs: int = 0
 var propagate_moves: int = 0
 var propagate_cycles: int = 0
 
+## 전파를 진단하는 계기들. **어디서 헛도는지 가르려고 단 것이다.**
+##
+## 계기가 "534 회 돌았다"고 말하는데 사람 눈에는 아무 일도 안 일어난다면, 도는 것과
+## 듣는 것 사이 어딘가가 끊겨 있다. 그 자리를 짐작으로 고치면 또 틀린다.
+##
+## | 계기 | 무엇을 가르는가 |
+## | --- | --- |
+## | 앞으로 · 뒤로 | 사슬이 문 쪽으로 뻗는가 뒤로 뻗는가 |
+## | 사슬 깊이 · 상한 걸림 | 깊이 8 이 얕은가 |
+## | 고리 길이 | 길이 2 면 양보 우선순위가 이미 깰 수 있는 것이다 |
+## | 눌린 프레임 · 기다림 확정 | 방아쇠가 늦은가 |
+var propagate_forward: int = 0
+var propagate_backward: int = 0
+var propagate_depth_total: int = 0
+var propagate_cap_hits: int = 0
+var propagate_cycle_len_total: int = 0
+var propagate_cycle_len_two: int = 0
+var press_agent_frames: int = 0
+var hold_confirms: int = 0
+var propagate_blocked: int = 0
+var propagate_distance: float = 0.0
+
 var _by_id: Dictionary = {}
 var _next_id := 1
 var _next_order_id := 1
@@ -822,6 +844,8 @@ func _review_moving(agent: ProtoUnitAgent, arrive: float, crawl: float) -> void:
 	# 지금은 **뭉치기 전에** 선다. 문에 가장 가까운 유닛부터 바깥으로 기다림이 번져 나가
 	# 줄이 서고, 앞이 비면 `_review_hold` 가 앞에서부터 하나씩 풀어 준다.
 	var progress := agent.goal_distance - distance
+	if agent.pressed:
+		press_agent_frames += 1
 	if agent.pressed and progress < crawl:
 		agent.press_frames += 1
 	else:
@@ -834,6 +858,7 @@ func _review_moving(agent: ProtoUnitAgent, arrive: float, crawl: float) -> void:
 			# **여기가 전파의 유일한 입구다.** 매 프레임 돌리면 그 자체가 지터가 된다.
 			# 기다림이 확정되는 순간 한 번만, 앞의 사슬에 비키라고 말한다.
 			agent.hold()
+			hold_confirms += 1
 			propagate_moves += ProtoUnitPush.propagate(self, agent)
 			propagate_runs += 1
 		return
