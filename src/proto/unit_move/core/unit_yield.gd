@@ -75,7 +75,7 @@ static func apply(field: ProtoUnitField, delta: float) -> void:
 		var heading := agent.advance.normalized()
 		field.collect_neighbors(agent, scratch)
 		for other in scratch:
-			if _is_advancing(field, other):
+			if not _outranks(agent, other, field):
 				continue
 			var offset := other.position - agent.position
 			var along := offset.dot(heading)
@@ -90,7 +90,7 @@ static func apply(field: ProtoUnitField, delta: float) -> void:
 			# **늘 같은 손으로 고정한다** - 매번 다시 고르면 그 고름이 곧 좌우 왕복이다.
 			var away := side / lateral if lateral > 0.001 else Vector2(-heading.y, heading.x)
 			var want := minf(touch - lateral + _YIELD_MARGIN, reach)
-			var room := _yield_room(field, other, away, want, bystanders)
+			var room := yield_room(field, other, away, want, bystanders)
 			if room <= 0.0:
 				continue
 			other.position += away * room
@@ -99,6 +99,36 @@ static func apply(field: ProtoUnitField, delta: float) -> void:
 			# 재는 값이고, 비켜주기는 뜻이 있는 이동이다. 섞으면 지형 보정이 만든 진짜 튐이
 			# 비켜준 거리에 묻혀 안 보인다.
 			field.settled_push_total += room
+
+
+## 내가 저쪽에게 비키라고 할 수 있는가. **전순서라 양쪽이 동시에 참일 수 없다.**
+##
+## 예전에는 "둘 다 전진 중이면 서로 안 민다"로 대칭을 피했다. 대칭은 확실히 없어졌지만
+## **둘 다 가는 중일 때 아무도 안 비켰고**, 그래서 문 앞에서 굳었다. 비대칭을 지키면서
+## 비키게 하려면 **누가 먼저인지 정하면 된다.**
+##
+## | 상대 | 판정 |
+## | --- | --- |
+## | 전진 중이 아니다 | 내가 앞선다. 서 있는 것은 길을 비켜 줘야 한다 |
+## | 같은 명령을 받았다 | **흐름장 비용이 낮은 쪽이 앞선다** - 문에 가까운 쪽이 먼저 나간다 |
+## | 다른 명령을 받았다 | 비용을 견줄 수 없다. **유닛 번호**로 가른다 |
+##
+## 다른 명령끼리 비용을 못 견주는 이유는 흐름장이 서로 다르기 때문이다. 마주 오는 두 무리는
+## 각자의 목적지까지의 비용을 들고 있어서 크기를 비교해도 뜻이 없다. 그래서 번호로 가른다 -
+## **난수를 쓰지 않는다.** 같은 판을 다시 굴리면 같은 결과가 나와야 재어서 고칠 수 있다.
+static func _outranks(agent: ProtoUnitAgent, other: ProtoUnitAgent, field: ProtoUnitField) -> bool:
+	if not _is_advancing(field, other):
+		return true
+	# **가는 유닛끼리는 정말 이 상대에게 막혔을 때만 순위를 따진다.**
+	#
+	# 처음에는 진로에 들기만 하면 순위로 밀게 했더니 옆걸음이 세 배 반으로 뛰고(17 -> 60 px)
+	# 좁은 문 40 명이 전원 통과에서 열 명 낙오로 되돌아갔다. 스쳐 지나가는 상대까지 계속
+	# 밀어 대면서 줄이 흐트러진 것이다. 순위는 **길을 다투는 자리에서만** 쓴다.
+	if agent.blocker_id != other.id:
+		return false
+	if agent.order_id == other.order_id:
+		return agent.rank < other.rank
+	return agent.id < other.id
 
 
 ## 전진 중인가. **상태가 아니라 실제로 옮겨 간 거리로 묻는다.**
@@ -113,7 +143,7 @@ static func _is_advancing(field: ProtoUnitField, agent: ProtoUnitAgent) -> bool:
 ##
 ## **막히면 안 비킨다.** 그러면 미는 쪽이 못 가고 그 자리에 선다 - 한 칸 폭 복도에서
 ## 앞을 막고 선 아군을 지나갈 수 없는 것이 이 때문이고, 그것이 지켜야 할 성질이다.
-static func _yield_room(
+static func yield_room(
 	field: ProtoUnitField,
 	agent: ProtoUnitAgent,
 	direction: Vector2,

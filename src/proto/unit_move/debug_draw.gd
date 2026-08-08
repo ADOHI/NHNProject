@@ -12,6 +12,12 @@ const _FONT_PATH := "res://assets/fonts/song_myung/SongMyung-Regular.ttf"
 
 const _SEEK_COLOR := Color(0.95, 0.85, 0.35)
 const _SEPARATION_COLOR := Color(0.45, 0.70, 1.00)
+
+## 전파가 방금 옆으로 밀어낸 유닛. **"비켜라"가 실제로 전해진 순간이 여기 보인다.**
+const _PUSHED_COLOR := Color(1.00, 0.55, 0.15)
+
+## 그 표시를 몇 프레임 남길지. 한 프레임만 그리면 눈에 안 걸린다.
+const _PUSHED_FRAMES := 24
 const _GOAL_COLOR := Color(0.60, 0.60, 0.68, 0.55)
 const _SLOT_COLOR := Color(0.95, 0.55, 0.85, 0.85)
 const _FLOW_COLOR := Color(0.35, 0.45, 0.60, 0.75)
@@ -88,6 +94,11 @@ func _draw_slots() -> void:
 
 
 func _draw_agent(agent: ProtoUnitAgent) -> void:
+	if agent.pushed_ago < _PUSHED_FRAMES:
+		var fade := 1.0 - float(agent.pushed_ago) / float(_PUSHED_FRAMES)
+		var ring := _PUSHED_COLOR
+		ring.a = fade
+		draw_arc(agent.position, agent.radius + 4.0 + fade * 6.0, 0.0, TAU, 20, ring, 2.0)
 	if agent.state == ProtoUnitAgent.State.BLOCKED:
 		draw_arc(agent.position, agent.radius + 8.0, 0.0, TAU, 16, _BLOCKED_COLOR, 1.5)
 	elif agent.state == ProtoUnitAgent.State.HOLDING:

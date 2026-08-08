@@ -49,6 +49,8 @@ const _JAM_AWAY := 1.5
 static func review(field: ProtoUnitField, frame: int) -> void:
 	if frame % _JAM_REVIEW != 0:
 		return
+	if field.tuning.get_value("repath") < 0.5:
+		return
 	var grid := field.grid
 	var count := grid.cols * grid.rows
 	var away := field.tuning.get_value("slow_radius") * _JAM_AWAY

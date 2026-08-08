@@ -240,6 +240,14 @@ var flow_build_peak: int = 0
 ## 막힘을 알고 흐름장을 다시 구운 횟수. **굽는 빈도가 곧 프레임 위험이다.**
 var rebake_count: int = 0
 
+## 전파를 돌린 횟수와 그것이 실제로 옮긴 유닛 수, 그리고 고리에 걸린 횟수.
+##
+## **돌린 횟수와 옮긴 수가 크게 벌어지면 전파가 헛돌고 있는 것이다** - 사슬을 따라가 봐야
+## 아무도 비킬 자리가 없다는 뜻이고, 그러면 필요한 것은 전파가 아니라 다른 길이다.
+var propagate_runs: int = 0
+var propagate_moves: int = 0
+var propagate_cycles: int = 0
+
 var _by_id: Dictionary = {}
 var _next_id := 1
 var _next_order_id := 1
@@ -394,12 +402,17 @@ func moving_count() -> int:
 func step(delta: float) -> void:
 	var started := Time.get_ticks_usec()
 	_frame += 1
-	_rebuild_buckets()
 	_cache_orders()
+	_rebuild_buckets()
 	for agent in agents:
 		agent.goal_distance = agent.position.distance_to(agent.goal)
+		agent.pushed_ago = mini(agent.pushed_ago + 1, 999)
 		# 벽이 내다보는 거리 밖에 있는가. 한 번 물어 두고 이 프레임 내내 쓴다.
-		agent.wall_far = grid.clearance_at(grid.world_to_cell(agent.position)) >= _WALL_CLEAR
+		var cell := grid.world_to_cell(agent.position)
+		agent.wall_far = grid.clearance_at(cell) >= _WALL_CLEAR
+		# 양보 우선순위. 흐름장이 이미 들고 있는 값이라 조회 한 번이다.
+		var order: MoveOrder = _order_cache.get(agent.order_id, null)
+		agent.rank = INF if order == null else order.flow.cost_at(cell)
 	_update_pace()
 	# **뜻과 결과를 두 벌로 나눈다.** 먼저 전원이 이웃을 보지 않고 가고 싶은 방향을 정하고,
 	# 그다음에 순서대로 실제로 걷는다. 걷는 쪽만 이웃을 보므로 "가고 싶었던 것"이 남의
@@ -818,7 +831,11 @@ func _review_moving(agent: ProtoUnitAgent, arrive: float, crawl: float) -> void:
 		if distance < agent.radius * _SETTLE_REACH:
 			agent.settle(ProtoUnitAgent.State.ARRIVED)
 		else:
+			# **여기가 전파의 유일한 입구다.** 매 프레임 돌리면 그 자체가 지터가 된다.
+			# 기다림이 확정되는 순간 한 번만, 앞의 사슬에 비키라고 말한다.
 			agent.hold()
+			propagate_moves += ProtoUnitPush.propagate(self, agent)
+			propagate_runs += 1
 		return
 	_watch_grinding(agent, distance)
 
