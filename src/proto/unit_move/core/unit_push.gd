@@ -51,126 +51,6 @@ const _MIN_NUDGE := 0.6
 ## 깊어지면 그만큼 여러 유닛이 한 프레임에 옮겨진다. 셋이면 몸 셋 너비다.
 const _RELAY_DEPTH := 3
 
-## 뒤로 물러나라를 물려줄 깊이 상한.
-##
-## 줄이 길수록 여유는 줄 끝에 있다. 여섯이면 몸 여섯 너비 남짓이라 좁은 문 앞 줄의
-## 상당 부분을 훑는다. 더 길게 잡으면 한 프레임에 옮겨지는 유닛이 그만큼 늘어난다.
-const _RECOIL_DEPTH := 6
-
-## 한 번에 뒤로 물러나는 최대 거리(몸 반지름의 배수).
-##
-## 옆걸음을 몸 반지름의 0.6 배로 키운 뒤에야 사람 눈에 보였다(0.6 px -> 4.6 px).
-## 물러나기도 같은 크기여야 보인다.
-const _RECOIL_STEP := 0.6
-
-## 물러난 자리가 이만큼은 트여 있어야 물러날 값이 있다(벽 거리, 칸).
-##
-## **조건이 정확히 반대로 걸려 있었다.** 처음에는 "옆이 막혔으니 뒤로"였는데,
-## **옆이 막힌 곳이야말로 뒤로 가도 길에서 못 빠지는 곳**이다. 한 칸 폭 복도에서 물러나면
-## 줄 전체가 문에서 멀어질 뿐 길은 그대로 막혀 있다. 한 칸 문에서 못 넘는 인원이
-## 14 명에서 28 명으로 두 배가 된 것이 그 대가였다.
-##
-## **방향이 아니라 결과로 판정한다** - "뒤로 가면 길에서 빠지는가". 벽 거리는 지형당 한 번
-## 구워 둔 값이라(`nav_grid.gd`) 조회가 배열 읽기 한 번이고, 두 칸이면 몸이 옆으로 빠질
-## 폭이 실제로 있다는 뜻이다.
-const _RECOIL_MIN_CLEAR := 2
-
-## 한 번의 전파가 건드릴 수 있는 유닛 수의 상한. **옆 사슬과 뒤 사슬을 합쳐서 센다.**
-##
-## 깊이 상한을 간선마다 따로 두었더니 곱해졌다 - 앞으로 8, 옆으로 3, 뒤로 6 이면 한 번에
-## 백 명 넘게 훑을 수 있다. 좁은 통로 100 에서 평균 깊이가 4.1 로 뛰고 최악 프레임이
-## 22 밀리초가 된 것이 그 결과다. **예산은 하나로 두고 둘이 나눠 쓴다.**
-const _CHAIN_BUDGET := 10
-
-## 마주 오는 상대로 볼 각도의 코사인. -0.5 는 대략 120 도보다 더 마주 본 것이다.
-##
-## **맞교차에서 물러나기가 한 번도 안 걸렸다.** 물러나기가 "옆으로 비켜서기가 실패했을 때"만
-## 불렸는데, 열린 곳에서는 옆이 늘 트여 비켜서기가 성공하고 그러면 물러나기까지 오지 않는다.
-## 그런데 **마주 오는 둘에게는 물러나기가 유일한 해법이다** - 하나가 넓은 곳까지 물러나
-## 길을 내주는 것 말고 방법이 없다. 그래서 마주 보고 있으면 옆과 함께 뒤도 본다.
-const _FACING_COS := -0.5
-
-
-## **뒤로 물러나라를 뒤에 선 유닛들에게 물려준다.**
-##
-## 의뢰인의 지적이 출발점이다 - "전파받으면 뒤로 물러나야 하는데 안 물러나잖아."
-##
-## 지금까지 전파는 **옆으로만** 비키게 했다. 그런데 **좁은 통로에서 옆은 벽이다.**
-## 비킬 자리가 구조적으로 없어서 시도의 28 퍼센트가 그대로 실패했고, 한 칸 문에서
-## 스무 명이 못 넘었다. 남은 실패가 전부 여기서 나왔다.
-##
-## **물러나는 것은 밀치기가 아니다.** 금지된 것은 남을 밀쳐서 **전진하는** 것이고,
-## 물러남은 전진의 반대다. 계약은 그대로 성립한다 - 미는 쪽은 뒤의 유닛이 물러나 준
-## 만큼만 앞이 트이므로 밀어서 나아가는 것이 아니고, 되밀지도 않는다.
-##
-## 간선은 `blocker_id` 의 **반대 방향**이다. "나를 막은 놈"이 아니라 **"내가 막고 있는 놈"**을
-## 찾는다. 이웃을 훑으며 `blocker_id` 가 나를 가리키는 유닛을 고르면 되므로 추가 훑기가 없다.
-##
-## 그림은 이렇다 - 앞이 못 간다 → 뒤에 붙은 유닛에게 물러나라가 간다 → 그 유닛도 뒤가
-## 막혔으면 다시 뒤로 → **줄 끝에서 누군가 물러날 자리가 있으면 그 여유가 앞으로 전달된다.**
-## 줄 전체가 한 걸음씩 뒤로 숨을 쉬고, 그 틈으로 앞이 움직인다.
-static func recoil(
-	field: ProtoUnitField,
-	agent: ProtoUnitAgent,
-	scratch: Array[ProtoUnitAgent],
-	chain: Array[int],
-	depth: int
-) -> float:
-	if depth >= _RECOIL_DEPTH or chain.size() >= _CHAIN_BUDGET:
-		return 0.0
-	var follower := _follower(field, agent, scratch, chain)
-	if follower == null:
-		return 0.0
-	chain.append(follower.id)
-	# 물러나는 방향은 **그 유닛이 가려던 쪽의 반대**다. 남이 정해 준 방향이 아니라
-	# 자기가 온 길로 되돌아가는 것이라, 몸이 이미 지나온 자리라서 대개 비어 있다.
-	var back := -follower.steer_dir
-	if back == Vector2.ZERO:
-		return 0.0
-	var want := follower.radius * _RECOIL_STEP
-	# **물러나서 길에서 빠질 수 있는 곳인가.** 아니면 물러나 봐야 줄만 뒤로 밀린다.
-	var landing := field.grid.world_to_cell(follower.position + back * want)
-	if field.grid.clearance_at(landing) < _RECOIL_MIN_CLEAR:
-		field.propagate_recoil_skips += 1
-		return 0.0
-	# **물러남도 상태로 건다.** 한 프레임짜리 변위로 두면 잼에서 절반이 지워진다는 것을
-	# 이미 쟀다. 지속이 먼저 들어가 있어야 물러나기가 제 효과를 낸다.
-	ProtoUnitYield.begin(field, follower, follower.position + back * want, agent.id)
-	var room := ProtoUnitYield.yield_room(field, follower, back, want, scratch)
-	if room < want:
-		# 나도 뒤가 막혔다. **더 뒤에 물러나라고 전한다.**
-		if recoil(field, follower, scratch, chain, depth + 1) > 0.0:
-			room = ProtoUnitYield.yield_room(field, follower, back, want, scratch)
-	if room <= 0.0:
-		return 0.0
-	follower.position += back * room
-	follower.yield_shift += back * room
-	follower.pushed_ago = 0
-	agent.chain_to = follower.id
-	agent.chain_ago = 0
-	agent.chain_kind = 2
-	field.settled_push_total += room
-	field.propagate_distance += room
-	field.propagate_recoils += 1
-	return room
-
-
-## 나를 막힌 것으로 지목한 뒤의 유닛. **`blocker_id` 의 반대 간선이다.**
-static func _follower(
-	field: ProtoUnitField, agent: ProtoUnitAgent, scratch: Array[ProtoUnitAgent], chain: Array[int]
-) -> ProtoUnitAgent:
-	field.collect_neighbors(agent, scratch)
-	var nearest: ProtoUnitAgent = null
-	var closest := INF
-	for other in scratch:
-		if other.blocker_id != agent.id or chain.has(other.id):
-			continue
-		var distance := other.position.distance_squared_to(agent.position)
-		if distance < closest:
-			closest = distance
-			nearest = other
-	return nearest
-
 
 ## 막힌 유닛에서 시작해 사슬을 따라가며 비키라고 말한다. 옮긴 유닛 수를 돌려준다.
 static func propagate(field: ProtoUnitField, agent: ProtoUnitAgent) -> int:
@@ -189,7 +69,7 @@ static func propagate(field: ProtoUnitField, agent: ProtoUnitAgent) -> int:
 	var current := agent
 	var moved := 0
 	var depth := 0
-	while depth < _MAX_DEPTH and chain.size() < _CHAIN_BUDGET:
+	while depth < _MAX_DEPTH:
 		var heading := current.steer_dir
 		if heading == Vector2.ZERO:
 			break
@@ -248,16 +128,8 @@ static func _step_aside(
 	ProtoUnitYield.begin(field, blocker, blocker.position + away * minf(want, _NUDGE), behind.id)
 	var moved := _shove(field, blocker, away, minf(want, _NUDGE), scratch, chain, 0)
 	if moved <= 0.0:
-		# **옆이 막혔다. 그러면 뒤로 물러나라고 전한다.**
-		#
-		# 좁은 통로에서 옆은 벽이라 여기까지 오는 경우가 시도의 28 퍼센트였다. 옆이
-		# 열려 있으면 옆이 낫다 - 진행 방향을 잃지 않기 때문이다. 그래서 **옆을 먼저 보고
-		# 막혔을 때만 뒤를 본다.**
 		field.propagate_blocked += 1
-		return recoil(field, blocker, scratch, chain, 0) > 0.0
-	if heading.dot(blocker.steer_dir) <= _FACING_COS:
-		# **마주 오는 상대는 옆으로 비켜도 다시 온다.** 옆과 함께 뒤도 본다.
-		recoil(field, blocker, scratch, chain, 0)
+		return false
 	behind.chain_to = blocker.id
 	behind.chain_ago = 0
 	behind.chain_kind = 0
@@ -283,7 +155,7 @@ static func _shove(
 	depth: int
 ) -> float:
 	var room := ProtoUnitYield.yield_room(field, agent, away, want, scratch)
-	if room < want and depth < _RELAY_DEPTH and chain.size() < _CHAIN_BUDGET:
+	if room < want and depth < _RELAY_DEPTH:
 		var crowder := _crowder(field, agent, away, want, scratch, chain)
 		if crowder != null:
 			chain.append(crowder.id)
