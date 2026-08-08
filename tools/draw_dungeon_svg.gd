@@ -39,20 +39,8 @@ const _MARGIN := 44.0
 
 const _SEEDS: Array[int] = [11, 23, 47, 91]
 
-## 던전 성격 후보. [이름, 방 개수, 흔드는 축]
-##
-## 「먼 출구」는 뺐다 — 탈출구 거리의 신호대잡음이 0.75 로 떨어져 성격이 되지 못한다
-## (§17.17.12). 거리가 아니라 개수를 흔들어야 하고 그 파라미터는 아직 없다.
-##
-## **한 던전에서 흔드는 축은 둘까지다.** 셋 이상 흔들면 어느 것이 그 던전의 성격인지
-## 읽히지 않는다 — 봉우리를 판에 하나만 두는 것과 같은 이유다
-## (docs/design/07-level-design.md §7.3, docs/design/17-dungeon-generation.md §17.16).
-const _CHARACTERS := [
-	["얕은 갱도", 14, {"extra_edge_ratio": 0.10, "elevation_gain": 1.0}],
-	["벌집", 34, {"extra_edge_ratio": 0.46}],
-	["수직 회랑", 24, {"elevation_gain": 4.0}],
-	["금고층", 28, {"treasure_ratio": 0.05, "hazard_ratio": 0.36}],
-]
+## 성격 그림에 쓸 방 개수. 다섯을 **같은 크기**로 그려야 성격만 비교된다.
+const _CHARACTER_ROOMS := 30
 
 ## 사용자 요구 방 개수. 지금 슬라이더 최대(32 안팎) 밖이다.
 const _ROOMS := 50
@@ -154,14 +142,13 @@ func _current_boards() -> Array[Dictionary]:
 ## **파라미터**라는 것을 한눈에 보이게 한다.
 func _character_boards() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	for entry in _CHARACTERS:
+	for index in DungeonCatalog.count():
 		var params := DungeonGenerator.Params.new()
-		params.room_count = int(entry[1])
-		for field in entry[2] as Dictionary:
-			params.set(String(field), float((entry[2] as Dictionary)[field]))
+		params.room_count = _CHARACTER_ROOMS
+		DungeonCatalog.apply(params, index)
 		var board := Metrics.from_blueprint(DungeonGenerator.new(_SEEDS[0], params).generate())
 		board["seed"] = _SEEDS[0]
-		board["label"] = String(entry[0])
+		board["label"] = DungeonCatalog.name_of(index)
 		_attach_routes(board)
 		result.append(board)
 	return result
@@ -331,6 +318,26 @@ func _caption(board: Dictionary, origin: Vector2) -> String:
 		if elevations[edge.x] == elevations[edge.y]:
 			flat += 1
 
+	# **성격이 쓰는 축은 전부 머리글에 있어야 한다.** 「먼 출구」와 「금고층」은 위상을
+	# 건드리지 않아서 간선·고리만 적으면 다른 판과 구별되지 않는다.
+	var kinds: Dictionary = board["kinds"]
+	var treasures := 0
+	var hazards := 0
+	var exit_room := -1
+	for index in points.size():
+		match kinds.get(index, Room.Kind.EMPTY):
+			Room.Kind.TREASURE:
+				treasures += 1
+			Room.Kind.HAZARD:
+				hazards += 1
+			Room.Kind.EXIT:
+				exit_room = index
+	var exit_hops := 0
+	if exit_room >= 0:
+		exit_hops = int(
+			Metrics.depths(points.size(), edges, int(board["entrance"])).get(exit_room, 0)
+		)
+
 	var fast: PackedInt32Array = board.get("fast", PackedInt32Array())
 	var slow: PackedInt32Array = board.get("slow", PackedInt32Array())
 	var fast_text := "없음"
@@ -365,7 +372,27 @@ func _caption(board: Dictionary, origin: Vector2) -> String:
 			+ '<tspan fill="#ff8a3d">빠른 길</tspan> %s   ' % fast_text.replace("**", "")
 			+ '<tspan fill="#2fbf8f">돌아가는 길</tspan> %s</text>' % slow_text.replace("**", "")
 		)
+		+ (
+			(
+				'<text x="%.0f" y="%.0f" fill="#8a8a98" font-size="14">'
+				% [origin.x + 18.0, origin.y + 70.0]
+			)
+			+ (
+				"탈출구까지 %d칸 · 막다른 방 %d · 귀중품 %d · 위험방 %d</text>"
+				% [exit_hops, _dead_ends(points.size(), edges), treasures, hazards]
+			)
+		)
 	)
+
+
+## 차수 1 인 방의 수. 정찰 지점이 몇 군데인가 (§17.2).
+func _dead_ends(count: int, edges: Array[Vector2i]) -> int:
+	var degrees := Metrics.degrees_of(count, edges)
+	var total := 0
+	for index in count:
+		if int(degrees[index]) <= 1:
+			total += 1
+	return total
 
 
 func _peak_climb(route: PackedInt32Array, elevations: PackedInt32Array) -> int:
