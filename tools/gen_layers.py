@@ -210,19 +210,25 @@ HUNTERS: list[tuple[str, str, tuple[int, int]]] = [
 #: 그리고 **부정문을 걷어냈다.** `NOT screaming, NOT roaring, NOT snarling, howl` 은
 #: 모델에게 그 네 낱말을 들려주는 문장이다. 있어야 할 것만 적는다 —
 #: 늘어진 눈꺼풀 · 한쪽만 올라간 다문 입 · 축 처진 몸 · 서두를 것 없는 자세.
+#: **6차에 이 문자열에서 부정문 넷을 걷어냈다.** 돌리기 전에 프롬프트를 명사만 남겨
+#: 읽어 보라는 §21.13.13 의 점검법을 실제로 돌렸더니 여기서 걸렸다 —
+#: `no second eye` · `no other eye` · `no empty socket` · `no teeth show` 가
+#: 모델에게 **eye 를 다섯 번, teeth 를 한 번** 들려주고 있었다.
+#: §21.13.8 에서 세운 규칙을 정작 이 문자열이 어기고 있었다.
+#: **자기가 쓴 규칙은 자기 코드부터 검사해야 걸린다.**
 DEMON_CORE = (
     "a grotesque floating demon with exactly ONE single eye — a cyclops, "
-    "one large eyeball taking up most of its face, "
-    "it has only ONE eye and there is no second eye anywhere on its head — "
-    "the rest of its face is bare skin with no other eye and no empty socket. "
+    "one huge eyeball centred in its face and taking up most of it, "
+    "the whole head built around that single eye; "
+    "the rest of the face is bare smooth skin — cheeks, brow and jaw alone. "
     "Its heavy upper eyelid droops halfway down across that eye in a lazy half-lidded "
     "gaze, the lid creased and relaxed, the pupil rolled downward to watch something far "
     "below it. "
     # 앞 판이 여기서 한 번 더 졌다 — "한쪽 입꼬리만 올라간다"고 했더니 모델이 입 전체를
     # **내려** 그려서 시무룩한 얼굴이 됐다. 올라간다는 것을 먼저, 세게 말한다.
     "Its mouth is a small closed line that tilts clearly UPWARD at one end into a "
-    "lopsided smirk — the corner is lifted, pleased and amused, and the lips stay shut "
-    "so no teeth show. "
+    "lopsided smirk — the corner is lifted, pleased and amused, and the lips stay "
+    "pressed shut in one unbroken line. "
     "Its body hangs loose and boneless in the air, utterly unhurried and at ease, "
     "lounging as it watches. "
     "The mood is calm, lazy, private amusement — a comfortable spectator who has seen "
@@ -269,15 +275,31 @@ DEMONS: list[tuple[str, str]] = [
         #      접힌 무릎 하나가 팔짱만큼 센 닫힘 신호다. 팔을 열어 놔도 다리가 닫는다.
         #      → **늘어뜨림은 팔다리 전부에 걸어야 한다. 접힌 관절이 하나도 없어야 한다.**
         #
-        # 아래는 그 둘을 고친 문장이다. **아직 안 돌려 봤다** — 다음 판에 낼 것.
-        # 소품이 될 만한 명사를 다 걷어내고, 사지를 전부 아래로 늘어뜨린다.
+        # **4차 판이 여기서 이겼다.** 사지를 전부 아래로 늘어뜨리니 심사자 둘 다
+        # 처음으로 **열렸다 · 즐긴다**를 골랐다(§21.11.7). 팔다리 문장은 그대로 둔다.
+        #
+        # 대신 **눈이 둘로 나왔다.** 4차에는 `belly turned up toward us` 를 범인으로
+        # 짚고 그것을 빼면서 머리 각도를 못 박았는데, **5차에도 그대로 눈이 둘이었다.**
+        # 한 변수만 바꾼 대조 실험이라 결론이 분명하다 — **그 진단이 틀렸다** (§21.11.9).
+        #
+        # 진짜 범인은 **좌우 대칭**이고, 그것을 만든 것은 내가 이겼다고 지킨 바로 그
+        # 문장이었다 — `**Both** arms hang straight down ... on **either side**` +
+        # `legs hang straight down **too**`. 사지 넷을 나란히 늘어뜨리면 몸이 완전히
+        # 좌우 대칭이 되고, **대칭인 몸은 대칭인 얼굴을 부르고, 대칭인 얼굴은 눈이 둘이다.**
+        # 살아남은 `demon_a`·`demon_c` 는 온몸이 비대칭이다 — 심사자들이 그 둘에서
+        # "귀가 한쪽에만" · "뿔 넷의 크기가 다 다르다"를 짚은 것이 그 증거다.
+        #
+        # **그래서 열림과 외눈이 싸운다.** 둘을 다 가지려면 열림의 근거를 대칭이 아니라
+        # **관절**에서 가져와야 한다 — 접힌 관절이 없고 몸통 앞을 가로지르는 것이 없으면
+        # 열린 것이다. 대칭일 필요가 없다. 그래서 **사지를 전부 펴 두되 각각 다른 각도로**
+        # 둔다. (`not symmetrical` 같은 부정문으로 쓰지 않는다 — §21.13.13.)
         "Long and thin, drifting at a lazy backward-leaning diagonal as though the air "
-        "were holding it up, shoulders rolled back and belly turned up toward us so the "
-        "whole front of its body stays open and unguarded. Both of its long arms hang "
-        "straight down from the shoulders, well clear of its body on either side, wrists "
-        "limp and both hands empty. Its long thin legs hang straight down too, slack and "
-        "heavy, the feet loose. Every limb drops under its own weight, unhurried and at "
-        "ease — it has settled in to watch for a long time. "
+        "were holding it up, its spine unfolded and its chest and belly open. Every part "
+        "of it sits at a different angle: its head lolls over onto one shoulder, one "
+        "long arm hangs straight down at its side while the other trails straight out "
+        "behind it, and one long leg hangs far lower than the other. Every limb stays "
+        "straight, slack and heavy, dropping under its own weight, and both hands are "
+        "empty. Unhurried and at ease, settled in to watch for a long time. "
         "The half-lidded eye is rolled down and slightly to the LEFT.",
     ),
     (
