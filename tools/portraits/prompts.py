@@ -286,17 +286,50 @@ _SUSPECTS: list[tuple[str, str]] = [
 ]
 
 
+def suspects_in(text: str) -> list[str]:
+    """한 문자열에서 용의자를 긁는다. **GPT 산출을 검사하는 자리가 여기다.**
+
+    파이프라인이 바뀌면서 이 함수의 무게가 달라졌다 (§27.9.1). 전에는 내가 쓴
+    문자열 25개를 검사했는데, 이제는 **GPT 가 인물마다 새로 쓴 문장**을 검사한다.
+
+    **GPT 는 부정문과 비유를 아주 잘 쓴다.** 사람이 읽기에 좋은 글의 습관이 여기서는
+    전부 함정이다 — `a face that is not cruel` 은 모델에 `cruel` 을 먹이고
+    `eyes like a hawk's` 는 매를 그린다.
+
+    **걸리면 Klein 에 넣지 마라.** 문장을 고칠 게 아니라 낱말을 지워야 한다
+    (`21-title.md` §21.13.13).
+    """
+    hits: list[str] = []
+    for label, pattern in _SUSPECTS:
+        for m in re.finditer(pattern, text, re.IGNORECASE):
+            hits.append(f"{label}: {m.group(0)!r}")
+    return hits
+
+
+def nouns_in(text: str) -> list[str]:
+    """문법을 지우고 남은 낱말. **§21.13.13 의 점검법을 그대로 돌린 것이다.**
+
+    *"프롬프트를 다 쓰고 나서 문법을 전부 지우고 명사만 남겨 읽어 봐라.
+    그 목록이 곧 화면에 나올 것들이다."*
+
+    **정규식이 못 잡는 것을 사람이 여기서 잡는다.** §27.15.1 의 `both shoulders` 가
+    그 예다 — `shoulders` 는 화면에 나와야 하는 명사라 목록에서 무해해 보이는데,
+    「어깨 둘」이 정면을 부르고 있었다. **셈이 방향을 뜻하는 자리는 목록으로 안 걸린다.**
+    """
+    return sorted({w.lower() for w in re.findall(r"[A-Za-z][A-Za-z-]{3,}", text)})
+
+
 def audit() -> int:
-    """모든 칸의 프롬프트를 긁어 용의자를 찍는다. 걸린 개수를 돌려준다."""
+    """모든 칸의 프롬프트를 긁어 용의자를 찍는다. 걸린 개수를 돌려준다.
+
+    **격자는 폐기됐지만(§27.2) 이 함수는 산다** — `DISCIPLINES` 와 `IMPRESSIONS` 는
+    이제 칸이 아니라 **GPT 에게 줄 조형 어휘**이고, 그 어휘 자체도 함정이 없어야 한다.
+    """
     bad = 0
     print("=== 프롬프트 자기 점검 (§21.13.13 의 점검법) ===\n")
     for di, (dname, dko, _) in enumerate(DISCIPLINES):
         for ii, (iname, iko, _, _n) in enumerate(IMPRESSIONS):
-            text = compose(di, ii)
-            hits = []
-            for label, pattern in _SUSPECTS:
-                for m in re.finditer(pattern, text, re.IGNORECASE):
-                    hits.append(f"{label}: {m.group(0)!r}")
+            hits = suspects_in(compose(di, ii))
             if hits:
                 bad += len(hits)
                 print(f"  [x] {dname}/{iname} ({dko}/{iko})")
@@ -308,13 +341,33 @@ def audit() -> int:
           f" → {'통과' if not bad else '**손봐야 한다**'}\n")
 
     # 명사만 남겨 읽은 목록도 같이 낸다 — 사람이 눈으로 보는 것이 최종 판정이다.
-    sample = compose(0, 0)
     print("  전투/무색 한 칸의 낱말 (중복 제외, 알파벳순):")
-    words = sorted({w.lower() for w in re.findall(r"[A-Za-z][A-Za-z-]{3,}", sample)})
+    _print_words(nouns_in(compose(0, 0)))
+    return bad
+
+
+def _print_words(words: list[str]) -> None:
     for i in range(0, len(words), 8):
         print("    " + " ".join(words[i:i + 8]))
     print()
-    return bad
+
+
+def audit_file(path: str) -> int:
+    """파일 하나에 든 프롬프트를 검사한다. **GPT 산출을 여기에 물린다** (§27.9.1).
+
+        python tools/portraits/prompts.py --check gpt_output.txt
+    """
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    hits = suspects_in(text)
+    print(f"=== {path} — 함정 검사 ===\n")
+    for h in hits:
+        print(f"  [x] {h}")
+    print(f"\n  용의자 {len(hits)}개 → "
+          f"{'통과' if not hits else '**Klein 에 넣지 마라. 낱말을 지워라**'}\n")
+    print("  명사만 남겨 읽은 목록 (**여기 있으면 안 될 것이 보이면 그 낱말을 지워라**):")
+    _print_words(nouns_in(text))
+    return len(hits)
 
 
 if __name__ == "__main__":
@@ -322,4 +375,6 @@ if __name__ == "__main__":
     import console
 
     console.utf8()
+    if len(sys.argv) > 2 and sys.argv[1] == "--check":
+        raise SystemExit(1 if audit_file(sys.argv[2]) else 0)
     raise SystemExit(1 if audit() else 0)
