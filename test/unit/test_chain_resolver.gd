@@ -27,6 +27,18 @@ class RefuseLoot:
 		return to.item.kind != BackpackItem.Kind.LOOT
 
 
+## **논의 중인 후보를 채택한 것이 아니다.** 자리가 실제로 열려 있는지만 증명한다.
+##
+## 「입력 셀」 후보 — 아이템에 닿아야 하는 칸이 있고 출력이 거기 닿아야 이어진다.
+## 들어온 칸은 `from.output_target()` 으로 이미 알 수 있으므로
+## **해석기를 고치지 않고** 여기서 판정할 수 있다.
+class RequireEntryOnFirstCell:
+	extends ChainLinkRule
+
+	func can_link(from: BackpackPlacement, to: BackpackPlacement) -> bool:
+		return from.output_target() == to.cells()[0]
+
+
 func _grid(width: int = 5, height: int = 5) -> BackpackGrid:
 	return GridScript.new(width, height, [Vector2i(0, 0)] as Array[Vector2i])
 
@@ -185,6 +197,40 @@ func test_a_rule_can_look_at_what_the_items_are() -> void:
 	assert_eq(Array(loose.item_names()), ["a", "b", "gem"])
 	assert_eq(Array(strict.item_names()), ["a", "b"], "전리품을 막는 조건이 실제로 먹는다")
 	assert_eq(strict.stop_reason, ChainResult.StopReason.LINK_REJECTED)
+
+
+## 가로 2칸짜리 전리품. **어느 칸으로 들어오는가**를 배치로 바꿀 수 있다.
+func _wide_loot() -> BackpackItem:
+	return ItemScript.new("wide", "넓은 것", BackpackItem.Kind.LOOT, [Vector2i(0, 0), Vector2i(1, 0)])
+
+
+func test_a_rule_can_see_which_cell_was_entered() -> void:
+	# 「입력 셀」 후보가 **해석기를 안 고치고** 들어올 수 있는지 본다.
+	# 후보를 채택하는 것이 아니라 **자리가 막혀 있지 않은지** 확인하는 것이다.
+	#
+	# 들어온 칸은 from.output_target() 으로 이미 알 수 있다.
+	var grid := GridScript.new(5, 5, [Vector2i(1, 0)] as Array[Vector2i])
+	grid.place(_pip("a", ChainDirection.Kind.DOWN), Vector2i(1, 0))
+
+	# 첫 칸으로 들어온다: (1,0) 에서 아래 -> (1,1) 이고 그것이 이 아이템의 첫 칸.
+	var on_first := grid.place(_wide_loot(), Vector2i(1, 1))
+	assert_eq(on_first.cells()[0], Vector2i(1, 1), "전제 확인")
+	assert_eq(
+		ResolverScript.resolve_from(grid, Vector2i(1, 0), RequireEntryOnFirstCell.new()).length(),
+		2,
+		"첫 칸으로 들어오면 조건이 통과시킨다"
+	)
+
+	# 한 칸 왼쪽으로 밀면 같은 (1,1) 이 이제 **둘째 칸**이 된다.
+	assert_true(grid.move(on_first, Vector2i(0, 1)))
+	assert_eq(on_first.cells()[0], Vector2i(0, 1), "첫 칸이 바뀌었다")
+
+	var strict := ResolverScript.resolve_from(grid, Vector2i(1, 0), RequireEntryOnFirstCell.new())
+	assert_eq(strict.length(), 1, "둘째 칸으로 들어오면 같은 조건이 막는다")
+	assert_eq(strict.stop_reason, ChainResult.StopReason.LINK_REJECTED)
+
+	# 기본 조건(항상 참)에서는 둘 다 이어진다 — 막은 것은 규칙이지 해석기가 아니다.
+	assert_eq(ResolverScript.resolve_from(grid, Vector2i(1, 0)).length(), 2)
 
 
 # ---------------------------------------------------------------- 시작 노드 여럿 (§28.20.7)
