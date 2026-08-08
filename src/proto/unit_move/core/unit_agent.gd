@@ -258,6 +258,13 @@ func resume() -> void:
 	best_distance = position.distance_to(goal)
 	grind_frames = 0
 	press_frames = 0
+	# **묵은 조향을 버린다.** 기다리는 동안 `steer_dir` 은 갱신되지 않으므로, 그대로 두면
+	# 깨어난 유닛이 **서기 직전에 향하던 쪽**으로 한 박자 걸어 나간다. 그 방향은 대개
+	# 막힌 곳을 돌아 나가려던 우회 방향이라 목적지에서 멀어지는 쪽이다.
+	# 전원이 멎은 뒤에도 유닛 하나가 9.3 픽셀을 움직이고 목적지에서 5 픽셀 멀어진 것이
+	# 이것이었다. 다시 갈 때는 자기 자리 쪽에서 시작한다 - `accept_order` 와 같다.
+	var to_goal := goal - position
+	steer_dir = to_goal.normalized() if to_goal.length_squared() > 0.0001 else steer_dir
 
 
 ## 목적지까지 남은 거리.
