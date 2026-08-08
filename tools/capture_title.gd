@@ -36,6 +36,10 @@ func _initialize() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_out).get_base_dir())
 	_screen = load(_TITLE).instantiate()
 	root.add_child(_screen)
+	# 무대의 토글 안내를 접는다. **판정용 화면에 우리 계기판이 찍혀 있으면
+	# 심사자가 그것부터 짚는다** — 실제로 "가장 눈에 걸리는 것"을 묻는 판정이다.
+	if _screen.has_method("show_toggle_hint"):
+		_screen.call("show_toggle_hint", false)
 	_plan()
 
 

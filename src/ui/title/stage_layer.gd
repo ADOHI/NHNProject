@@ -21,6 +21,16 @@ var texture: Texture2D = null
 ## 이 겹이 제자리에서 얼마나 밀려 있는가(px). 시차와 자기 움직임이 여기 더해진다.
 var offset := Vector2.ZERO
 
+## 색 처리를 걸까. 무대의 셰이더 토글이 이 값을 민다(`TitleToggles`).
+##
+## 껐을 때 **원본 그대로**가 나와야 판정이 된다 — 공기 원근이 실제로 무엇을
+## 하고 있었는지는 끈 화면과 켠 화면을 나란히 놓아야 보인다.
+var tinted := true:
+	set(value):
+		if tinted != value:
+			tinted = value
+			queue_redraw()
+
 ## 다가온 정도(0~1). 인간만 쓴다 — 금 쪽으로 이만큼 다가와 있다.
 ##
 ## `set` 을 붙인 이유는 트윈이 이 값을 직접 물기 때문이다. 값만 바뀌고
@@ -48,9 +58,9 @@ func _draw() -> void:
 		# 배경의 청록 쪽으로 밀리면서 뒤로 물러난다. 가장자리를 물리는 것과 짝이다
 		# (docs/design/21-title.md §21.13.10).
 		var tone := Color.WHITE
-		if spec.role == TitleLayers.Role.DEMON:
+		if tinted and spec.role == TitleLayers.Role.DEMON:
 			tone = TitleLayers.DEMON_HAZE
-		elif spec.role == TitleLayers.Role.FOREGROUND:
+		elif tinted and spec.role == TitleLayers.Role.FOREGROUND:
 			tone = TitleLayers.FOREGROUND_SHADE
 		draw_texture_rect(texture, box, false, tone)
 		return
