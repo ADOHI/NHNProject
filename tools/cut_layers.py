@@ -31,7 +31,13 @@ from room_studio import compose  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "scene")
-DST = os.path.join(HERE, "cutout")
+
+#: 컷아웃은 곧바로 기능 폴더 안으로 들어간다.
+#:
+#: 최상위 `assets/` 가 아닌 이유는 컨벤션이 기준을 명시하기 때문이다 —
+#: *사용처가 둘 이상이면 `assets/`, 하나면 기능 폴더 안* (docs/conventions.md §1).
+#: 이 열 장은 소비처가 타이틀 하나뿐이다.
+DST = os.path.join(HERE, os.pardir, "src", "ui", "title", "art")
 
 #: 물건 하나만 남길 겹. 모델이 크로마 위에 부스러기를 흩뿌리는 일이 있어서,
 #: 가장 큰 덩어리만 남긴다. 배경·전경은 원래 여러 덩어리라 제외한다.
@@ -49,11 +55,11 @@ def cut(name: str) -> str | None:
     if not os.path.exists(src):
         print("  (없음) " + src)
         return None
-    img = Image.open(src).convert("RGB")
     if name in OPAQUE:
-        out = img.convert("RGBA")
+        out = Image.open(src).convert("RGBA")
     else:
-        out = compose.chroma_key(img)
+        # chroma_key 는 이미지가 아니라 **경로**를 받는다. 안에서 직접 연다.
+        out = compose.chroma_key(src)
         if name in SINGLE:
             out = compose.keep_main_object(out)
         out = compose.trim_alpha(out)
