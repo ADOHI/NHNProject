@@ -240,6 +240,8 @@ func _measure(
 	field.press_agent_frames = 0
 	field.hold_confirms = 0
 	field.propagate_blocked = 0
+	field.propagate_recoils = 0
+	field.propagate_recoil_skips = 0
 	field.propagate_distance = 0.0
 	field.yield_push_sum = 0.0
 	field.yield_net_sum = 0.0
@@ -405,6 +407,8 @@ func _measure(
 		"pressed": field.press_agent_frames,
 		"holds": field.hold_confirms,
 		"pblock": field.propagate_blocked,
+		"recoil": field.propagate_recoils,
+		"rskip": field.propagate_recoil_skips,
 		"pdist": field.propagate_distance,
 		"ypush": field.yield_push_sum,
 		"ynet": field.yield_net_sum,
@@ -553,7 +557,7 @@ func _print_table(rows: Array[Dictionary]) -> void:
 	print(
 		(
 			"| 상황 | 전파 | 옮김 | 앞으로 | 뒤로 | 평균깊이 | 상한걸림 | 고리 | 길이2 "
-			+ "| 못비킴 | 옮긴거리 | 밀린합 | 0.3초뒤 순수변위 | 남은비율 | 눌린프레임 | 기다림확정 |"
+			+ "| 못비킴 | 물러남 | 물러날곳없음 | 옮긴거리 | 밀린합 | 0.3초뒤 순수변위 | 남은비율 | 눌린프레임 | 기다림확정 |"
 		)
 	)
 	print(
@@ -567,7 +571,7 @@ func _print_table(rows: Array[Dictionary]) -> void:
 			(
 				(
 					"| %s | %d | %d | %d | %d | %.1f | %d | %d | %d | %d | %.0f px "
-					+ "| %.0f px | %.0f px | %.0f %% | %d | %d |"
+					+ "| %d | %d | %.0f px | %.0f px | %.0f %% | %d | %d |"
 				)
 				% [
 					row["label"],
@@ -580,6 +584,8 @@ func _print_table(rows: Array[Dictionary]) -> void:
 					row["cyc"],
 					row["cyc2"],
 					row["pblock"],
+					row["recoil"],
+					row["rskip"],
 					row["pdist"],
 					row["ypush"],
 					row["ynet"],

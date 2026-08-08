@@ -63,6 +63,18 @@ const _RECOIL_DEPTH := 6
 ## 물러나기도 같은 크기여야 보인다.
 const _RECOIL_STEP := 0.6
 
+## 물러난 자리가 이만큼은 트여 있어야 물러날 값이 있다(벽 거리, 칸).
+##
+## **조건이 정확히 반대로 걸려 있었다.** 처음에는 "옆이 막혔으니 뒤로"였는데,
+## **옆이 막힌 곳이야말로 뒤로 가도 길에서 못 빠지는 곳**이다. 한 칸 폭 복도에서 물러나면
+## 줄 전체가 문에서 멀어질 뿐 길은 그대로 막혀 있다. 한 칸 문에서 못 넘는 인원이
+## 14 명에서 28 명으로 두 배가 된 것이 그 대가였다.
+##
+## **방향이 아니라 결과로 판정한다** - "뒤로 가면 길에서 빠지는가". 벽 거리는 지형당 한 번
+## 구워 둔 값이라(`nav_grid.gd`) 조회가 배열 읽기 한 번이고, 두 칸이면 몸이 옆으로 빠질
+## 폭이 실제로 있다는 뜻이다.
+const _RECOIL_MIN_CLEAR := 2
+
 
 ## **뒤로 물러나라를 뒤에 선 유닛들에게 물려준다.**
 ##
@@ -101,6 +113,11 @@ static func recoil(
 	if back == Vector2.ZERO:
 		return 0.0
 	var want := follower.radius * _RECOIL_STEP
+	# **물러나서 길에서 빠질 수 있는 곳인가.** 아니면 물러나 봐야 줄만 뒤로 밀린다.
+	var landing := field.grid.world_to_cell(follower.position + back * want)
+	if field.grid.clearance_at(landing) < _RECOIL_MIN_CLEAR:
+		field.propagate_recoil_skips += 1
+		return 0.0
 	# **물러남도 상태로 건다.** 한 프레임짜리 변위로 두면 잼에서 절반이 지워진다는 것을
 	# 이미 쟀다. 지속이 먼저 들어가 있어야 물러나기가 제 효과를 낸다.
 	ProtoUnitYield.begin(field, follower, follower.position + back * want, agent.id)

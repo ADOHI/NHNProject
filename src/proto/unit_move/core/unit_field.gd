@@ -274,6 +274,9 @@ var propagate_relays: int = 0
 ## 뒤로 물러난 횟수. **옆이 막혔을 때만 도는 길이라 이 수가 크면 통로가 좁다는 뜻이다.**
 var propagate_recoils: int = 0
 
+## 물러나 봐야 길에서 안 빠지는 자리라 건너뛴 횟수. **이 수가 크면 그 판은 물러날 곳이 없다.**
+var propagate_recoil_skips: int = 0
+
 ## 양보가 얼마나 살아남는가. **밀어 놓은 거리와 그 뒤의 순수 변위를 나란히 잰다.**
 ##
 ## 둘이 크게 벌어지면 "비켰다가 도로 돌아온다"는 뜻이고, 그러면 전파가 아무리 돌아도
@@ -760,10 +763,7 @@ func _room(agent: ProtoUnitAgent, direction: Vector2, note_block: bool) -> float
 	return minf(limit, _wall_room(agent, direction, limit))
 
 
-## 벽까지의 빈 거리. 몸이 들어가는지를 걸음마다 확인한다.
-##
-## 후보 고르기가 벽을 못 보면 유닛을 벽으로 몰아넣고, 그러면 `push_out` 이 몸을 통째로
-## 옮긴다. 그 옮김이 예전에 한 칸 복도에서 앞을 막은 아군 여섯을 통과시킨 경로다.
+## 벽까지의 빈 거리. 벽을 못 보면 유닛이 벽으로 몰리고 `push_out` 이 몸을 통째로 옮긴다.
 func _wall_room(agent: ProtoUnitAgent, direction: Vector2, limit: float) -> float:
 	if limit <= 0.0:
 		return 0.0
