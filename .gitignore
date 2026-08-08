@@ -34,3 +34,4 @@ __pycache__/
 
 # 레인이 만든 렌더 결과물 - 저장소에 넣지 않는다
 .renders-*/
+build/web/
