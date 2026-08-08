@@ -16,18 +16,21 @@ const _SEEDS: Array[int] = [11, 23, 47, 91, 137]
 ## project.godot 의 기준 해상도. 웹 빌드도 이 비율로 늘어난다.
 const _VIEW := Vector2(1280.0, 720.0)
 
-## dungeon_board.gd 의 상수들. 여기서 다시 적는 이유는 private 이라 읽을 수 없어서다.
-## **바뀌면 이 도구도 같이 고쳐야 한다.**
-const _SPACING := 280.0
-const _ZOOM_MIN := 0.4
-const _DETAIL_NAME_ZOOM := 0.62
-const _DETAIL_FULL_ZOOM := 0.92
+## **화면 쪽 상수는 베끼지 않고 읽어 온다.**
+##
+## 처음에는 간격 · 확대 하한 · 위젯 크기를 이 파일에 적어 뒀는데, 그러면 화면이 바뀔 때
+## 이 도구가 옛 수치로 조용히 거짓말을 한다. 실제로 간격을 240 으로 내리면서
+## 두 곳을 고쳐야 했다. GDScript 의 밑줄은 관례일 뿐이라 상수는 그대로 읽힌다.
+const _SPACING := DungeonBoard._SPACING
+const _ZOOM_MIN := DungeonBoard._ZOOM_MIN
+const _DETAIL_NAME_ZOOM := DungeonBoard._DETAIL_NAME_ZOOM
 
-## room_node.tscn 의 custom_minimum_size.
-const _NODE_SIZE := Vector2(146.0, 76.0)
+## room_node.tscn 의 위젯 크기. 씬을 한 번 세워 읽는다.
+static var _node_size := Vector2.ZERO
 
 
 func _initialize() -> void:
+	_node_size = _measure_node()
 	print("== 화면이 담는가 (판마다 시드 %d개) ==" % _SEEDS.size())
 	print(
 		(
@@ -36,8 +39,8 @@ func _initialize() -> void:
 				int(_VIEW.x),
 				int(_VIEW.y),
 				int(_SPACING),
-				int(_NODE_SIZE.x),
-				int(_NODE_SIZE.y),
+				int(_node_size.x),
+				int(_node_size.y),
 				_ZOOM_MIN
 			]
 		)
@@ -65,6 +68,14 @@ func _initialize() -> void:
 	print("minGap   : 배율 1 에서 가장 가까운 두 방의 위젯 사이 간격 (픽셀, 음수면 겹친다)")
 	print("name?    : 판 전체를 보는 배율에서 방 이름이 보이는가")
 	quit()
+
+
+## 방 위젯의 크기. 씬을 세워 읽고 바로 버린다.
+func _measure_node() -> Vector2:
+	var node: Control = load("res://src/ui/dungeon_board/room_node.tscn").instantiate()
+	var found := node.custom_minimum_size
+	node.free()
+	return found
 
 
 func _check(wanted: int) -> void:
@@ -152,7 +163,7 @@ func _span(positions: Dictionary) -> Vector2:
 		lowest = lowest.min(position as Vector2)
 		highest = highest.max(position as Vector2)
 	# 방 위젯은 좌표를 중심으로 그려지므로 양쪽으로 절반씩 더 뻗는다.
-	return highest - lowest + _NODE_SIZE
+	return highest - lowest + _node_size
 
 
 ## 가장 가까운 두 방의 **위젯 사이** 간격. 음수면 이름이 겹쳐 보인다.
@@ -166,6 +177,6 @@ func _closest_gap(positions: Dictionary) -> float:
 		for j in range(i + 1, values.size()):
 			var delta: Vector2 = (values[i] as Vector2) - (values[j] as Vector2)
 			closest = minf(
-				closest, maxf(absf(delta.x) - _NODE_SIZE.x, absf(delta.y) - _NODE_SIZE.y)
+				closest, maxf(absf(delta.x) - _node_size.x, absf(delta.y) - _node_size.y)
 			)
 	return closest
