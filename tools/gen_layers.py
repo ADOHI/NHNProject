@@ -127,12 +127,32 @@ FOREGROUND = _p(
 
 #: 인간 — **사방에서 오므로 시점이 제각각이어야 한다.**
 #: 전부 정측면이면 사방이 안 된다. 그리고 자세는 탐내는 것이지 겁먹은 것이 아니다.
-HUNTER_CORE = (
+#: **자세를 두고 지시가 갈린다. 기본값은 합성안이다.**
+#:
+#:   의뢰인      "사방에서 캐릭터들이 **달라들어**"
+#:   기획 §2.0.3 "**달려드는 것이 아니라 재고 있는** 정지된 긴장이어야 한다 — 턴제다"
+#:
+#: 둘 다 맞는 말이라 가운데를 잡았다 — **몸은 이미 가고 있는데 아직 안 잡았다.**
+#: 무게는 뒷발에 남아 있고 손만 먼저 나간다. 달려드는 것으로도 읽히고
+#: 재고 있는 것으로도 읽히는 유일한 순간이고, 무엇보다 **턴제의 자세**다.
+#: 순수한 돌격이 필요하면 `--lunge`.
+HUNTER_POISED = (
     "a human treasure hunter in mismatched worn adventuring gear and scavenged armour, "
-    "caught mid-lunge reaching greedily toward the treasure, "
-    "openly covetous and exhilarated, grinning with naked greed, "
+    "leaning in hard toward the treasure with one hand already reaching out for it, "
+    "but the weight still held back on the rear foot and the treasure not yet touched — "
+    "committed but not yet arrived, taut and coiled, sizing up the rivals, "
+    "openly covetous and greedy, eyes fixed and hungry, "
     "absolutely not afraid, not fleeing, not defensive"
 )
+
+HUNTER_LUNGE = (
+    "a human treasure hunter in mismatched worn adventuring gear and scavenged armour, "
+    "caught mid-lunge diving for the treasure, both arms thrown out, "
+    "racing the rivals, openly covetous and exhilarated, grinning with naked greed, "
+    "absolutely not afraid, not fleeing, not defensive"
+)
+
+HUNTER_CORE = HUNTER_POISED
 
 HUNTERS: list[tuple[str, str, tuple[int, int]]] = [
     (
@@ -208,15 +228,16 @@ DEMON_LIGHT = (
 )
 
 
-def layers() -> list[tuple[str, str, tuple[int, int]]]:
+def layers(lunge: bool = False) -> list[tuple[str, str, tuple[int, int]]]:
     """(이름, 프롬프트, 크기). 순서가 곧 생성 순서다."""
+    pose = HUNTER_LUNGE if lunge else HUNTER_POISED
     out: list[tuple[str, str, tuple[int, int]]] = [
         ("backdrop", BACKDROP, (1536, 864)),
         ("hoard", HOARD, (1024, 768)),
         ("foreground", FOREGROUND, (1536, 512)),
     ]
     for name, view, size in HUNTERS:
-        out.append((name, _p(STYLE, HUNTER_CORE + ".", view, SHADY, CHROMA, NO_TEXT), size))
+        out.append((name, _p(STYLE, pose + ".", view, SHADY, CHROMA, NO_TEXT), size))
     for name, pose in DEMONS:
         out.append(
             (name, _p(STYLE, DEMON_CORE + ".", pose, DEMON_LIGHT, SHADY, CHROMA, NO_TEXT), (896, 896))
@@ -229,14 +250,16 @@ def main() -> None:
     ap.add_argument("--ref", default=os.path.join(OUT, "full_2.png"),
                     help="화풍 레퍼런스로 물릴 풀샷")
     ap.add_argument("--seed", type=int, default=61204)
-    ap.add_argument("--only", default="", help="쉼표로 구른 겹 이름만 생성")
+    ap.add_argument("--only", default="", help="쉼표로 구분한 겹 이름만 생성")
+    ap.add_argument("--lunge", action="store_true",
+                    help="헌터를 재는 자세가 아니라 순수한 돌격으로 (HUNTER_CORE 주석 참고)")
     args = ap.parse_args()
 
     ref = upload(args.ref)
     print("style reference uploaded as", ref, flush=True)
     wanted = {n.strip() for n in args.only.split(",") if n.strip()}
 
-    for index, (name, prompt, size) in enumerate(layers()):
+    for index, (name, prompt, size) in enumerate(layers(args.lunge)):
         if wanted and name not in wanted:
             continue
         run(name, _p(prompt, STYLE_REF), size[0], size[1],
