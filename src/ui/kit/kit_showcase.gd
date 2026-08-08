@@ -14,9 +14,23 @@ const _SPOT_SIZES := Vector2(360.0, 150.0)
 const _SPOT_GAPS := Vector2(880.0, 330.0)
 const _SPOT_STATES := Vector2(600.0, 552.0)
 
+## 견줄 수 있는 조형 방향. 숫자 키 1 2 3 의 순서가 그대로 이 순서다.
+const _VARIANT_KEYS: Array[String] = ["terrain", "facet", "grain"]
+
+## 화면에 띄울 이름. terrain 은 코드의 말이지 보는 사람의 말이 아니다.
+const _VARIANT_NAMES := {
+	"terrain": "등고선",
+	"facet": "파편",
+	"grain": "알갱이",
+}
+
 var _state_row: Array[KitButton] = []
 var _all_buttons: Array[KitButton] = []
 var _popup: KitPopup
+var _variant_key := "terrain"
+var _scenario_key := "rest"
+var _status: Label
+var _help: Label
 
 @onready var _stage: Control = %Stage
 @onready var _field: KitField = %Field
@@ -27,7 +41,35 @@ func _ready() -> void:
 	_build_gap_group()
 	_build_state_group()
 	_build_popup()
+	_build_guide()
 	apply_scenario("rest")
+	apply_variant(_variant_key)
+
+
+## 키 하나로 방향을 갈아 끼운다. **이 화면은 견주라고 만든 것이므로 견줄 수단이
+## 화면 안에 있어야 한다.** 캡처 도구만 방향을 바꿀 수 있으면 씬을 직접 띄운 사람은
+## 언제나 첫 방향 하나만 보게 된다.
+##
+## Tab 은 포커스 이동(`ui_focus_next`)이라 방향 순환에 쓰지 않는다. 빼앗으면
+## 포커스 상태를 눈으로 확인할 방법이 사라진다.
+func _unhandled_key_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo:
+		return
+	match key.keycode:
+		KEY_1:
+			apply_variant(_VARIANT_KEYS[0])
+		KEY_2:
+			apply_variant(_VARIANT_KEYS[1])
+		KEY_3:
+			apply_variant(_VARIANT_KEYS[2])
+		KEY_P:
+			apply_scenario("rest" if _scenario_key == "popup" else "popup")
+		KEY_H:
+			_help.visible = not _help.visible
+		_:
+			return
+	get_viewport().set_input_as_handled()
 
 
 ## 조형 방향을 갈아 끼운다. **요소는 그대로 두고 그리는 법만 바꾼다.**
@@ -44,6 +86,8 @@ func apply_variant(name: String) -> void:
 		_:
 			_field.set_variant(KitField.Variant.TERRAIN)
 			_set_label_color(KitTokens.TEXT)
+	_variant_key = name if _VARIANT_KEYS.has(name) else _VARIANT_KEYS[0]
+	_refresh_status()
 
 
 func _set_label_color(color: Color) -> void:
@@ -65,6 +109,71 @@ func apply_scenario(name: String) -> void:
 			_popup.visible = false
 			if _state_row.size() > 3:
 				_state_row[3].grab_focus()
+	_scenario_key = "popup" if name == "popup" else "rest"
+	_refresh_status()
+
+
+## 캡처 도구용. 안내 글자는 조형이 아니므로 심사에 나가는 그림에는 없어야 한다.
+func set_guide_visible(value: bool) -> void:
+	if _status != null:
+		_status.visible = value
+	if _help != null:
+		_help.visible = value
+
+
+## 지금 보고 있는 것을 글자로 못 박는다. 세 방향의 차이는 미묘해서
+## 이름이 없으면 몇 번째를 보고 있는지 금방 잃어버린다.
+func _build_guide() -> void:
+	_status = _make_guide_label(KitTokens.FONT_MAIN, KitTokens.TEXT)
+	_status.position = Vector2(KitTokens.UNIT * 3.0, KitTokens.UNIT * 2.0)
+	add_child(_status)
+
+	_help = _make_guide_label(KitTokens.FONT_SUB, KitTokens.TEXT_DIM)
+	_help.anchor_top = 1.0
+	_help.anchor_bottom = 1.0
+	_help.offset_left = KitTokens.UNIT * 3.0
+	_help.offset_right = KitTokens.UNIT * 60.0
+	# 다섯 줄이 다 들어갈 높이. 모자라면 아래 줄이 화면 밖으로 잘려 나가고,
+	# 잘리는 줄은 하필 마지막 줄(안내를 숨기는 법)이다.
+	_help.offset_top = -KitTokens.UNIT * 26.0
+	_help.offset_bottom = -KitTokens.UNIT * 1.0
+	_help.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_help.text = _help_text()
+	add_child(_help)
+
+	_refresh_status()
+
+
+## 안내 글자는 지형에 등록하지 않는다. 장에 신고하는 순간 그것도 봉우리가 되어
+## 견주려는 조형을 밀어 올린다. 대신 어느 방향 위에서도 읽히도록 어두운 외곽선을 준다.
+func _make_guide_label(font_size: int, color: Color) -> Label:
+	var label := Label.new()
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_outline_color", KitTokens.GROUND)
+	label.add_theme_constant_override("outline_size", 5)
+	return label
+
+
+func _refresh_status() -> void:
+	if _status == null:
+		return
+	var order := _VARIANT_KEYS.find(_variant_key) + 1
+	var text := "조형 방향  %d / %d   %s" % [order, _VARIANT_KEYS.size(), _VARIANT_NAMES[_variant_key]]
+	if _scenario_key == "popup":
+		text += "      팝업 열림"
+	_status.text = text
+
+
+func _help_text() -> String:
+	# 공백으로 열을 맞추지 않는다. SongMyung 은 폭이 제각각이라 맞춘 척만 하고
+	# 실제로는 어긋난다. 키와 설명 사이는 두 칸으로 통일한다.
+	return """조작
+1 2 3  조형 방향 바꾸기  등고선 파편 알갱이
+P  팝업 열고 닫기
+Tab  포커스 옮기기
+H  이 안내 숨기기"""
 
 
 ## 고도 1·2·3 단. 크기가 임의로 정해진 세 개가 아니라 고도에서 유도된 세 개임을 보인다.

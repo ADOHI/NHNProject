@@ -4,7 +4,8 @@
 코드를 어떻게 써야 하는지는 [conventions.md](conventions.md),
 무엇을 만드는지는 [game-design.md](game-design.md) 참고.
 
-**판이 화면에 그려지고 클릭으로 이동한다.** 턴 페이즈와 NPC 는 아직 없다.
+**판이 화면에 그려지고 클릭으로 이동한다. 아지트에서 게이트를 골라 원정을 돌리고 정산까지 온다.**
+턴 페이즈 해결기와 NPC 는 아직 없다 — `TurnIntent`·`TurnPhase` 라는 어휘만 서 있다.
 
 ---
 
@@ -37,14 +38,38 @@ src/
 │   ├── turn/
 │   │   ├── turn_intent.gd      # 한 주체가 이번 턴에 하려는 일 (2단계 공유 어휘)
 │   │   └── turn_phase.gd       # 계획 / 행동 두 국면
-│   └── rekka/
-│       └── rekka_prompt.gd     # 사건 -> 언어 모델 입력 직렬화
+│   ├── rekka/                  # 렉카 게시글 - 사건을 언어 모델 입력으로
+│   │   ├── rekka_prompt.gd     # 직렬화. 등급 변환. 중의어 배제
+│   │   ├── rekka_context.gd    # **판 문맥 수집** - 방 상태 · 인접 · 이력 · 위상
+│   │   └── rekka_post.gd       # 후처리 (허용 문자 · 괄호 · 숫자 · 반복 제거)
+│   ├── gate/                   # 게이트 = 열린 문. 아웃게임 대상
+│   │   ├── gate.gd             # 게이트 하나. 씨앗을 물고 던전을 만든다
+│   │   ├── gate_rank.gd        # 등급 -> 크기 · 보상
+│   │   ├── gate_disclosure.gd  # 정보 공개 수준 (소문 / 정찰 / 해부)
+│   │   └── gate_board.gd       # 목록 생성. 원정 1회 = 목록 1회 갈림
+│   └── guild/                  # 길드 아지트. `gate/` 를 알지만 `gate/` 는 여기를 모른다
+│       ├── guild.gd            # 등급 · 자금 · 대원 · 아지트 진척
+│       ├── guild_member.gd     # 대원. **`Actor` 가 아니다**
+│       ├── squad.gd            # 대원 N -> `Actor` 하나 (14 §14.2)
+│       ├── facility.gd         # 시설 셋 (공방 · 정보실 · 접선처)
+│       ├── facility_assignment.gd  # 배치. **출전자는 안 센다**
+│       ├── expedition.gd       # 편성 -> 진입 -> 결과 -> 정산
+│       ├── guild_settlement.gd # 정산. 두 번 적용되지 않는다
+│       └── guild_balance.gd    # **수치와 계산식이 전부 여기** 한 파일
 ├── proto/
 │   └── unit_move/              # 이동 조작감 프로토타입 (본 게임과 독립 씬)
 │       ├── unit_move_proto.tscn / .gd   # 진입점 · 입력 해석
 │       ├── terrain_view.gd · field_view.gd · debug_draw.gd · tuning_panel.gd
 │       └── core/               # 흐름장 · 대형 · 선택 · 부대. 노드 비의존
 ├── ui/
+│   ├── kit/                    # **UI 원자 단위 실험.** 버튼과 팝업만. 방향 미정
+│   │   ├── kit_showcase.tscn   # 견본 화면. 1/2/3 으로 조형 방향 전환
+│   │   ├── kit_field.gd        # 세 방향을 갈아 끼우는 자리
+│   │   ├── kit_terrain/facet/grain.gdshader   # 등고선 / 파편 / 알갱이
+│   │   └── kit_button.gd · kit_popup.gd · kit_tokens.gd
+│   ├── base/                   # 길드 아지트 화면. **도형만.** 조형은 kit 이 정한다
+│   │   └── base_screen.tscn    # 기둥 셋 - 길드·시설 / 대원·편성 / 게이트·원정
+│   ├── style/                  # 「호외」 시각 언어. **보류** - 반려되어 kit 으로 넘어감
 │   ├── dungeon_board/
 │   │   ├── dungeon_board.tscn  # 판 화면 (방 배치 · 연결선 · HUD)
 │   │   ├── dungeon_board.gd
@@ -58,14 +83,21 @@ src/
     └── main.gd
 
 assets/fonts/song_myung/        # SongMyung Regular (SIL OFL) + OFL.txt
-test/unit/                      # GUT 단위 테스트 (현재 255개 통과)
+test/unit/                      # GUT 단위 테스트 72개 파일 (현재 409개 통과)
 test/support/segment_crossing.gd  # 선분 교차 판정. 생성기를 안 믿고 따로 검사한다
-tools/capture_scene.gd          # 화면 캡처 검증 도구 (빌드에 포함되지 않음)
-tools/capture_dungeon_maps.gd   # 여러 시드의 판을 한꺼번에 캡처
-tools/capture_unit_move.gd      # 이동 프로토 캡처 + 성능 측정
-tools/bench_dungeon_generation.gd  # 생성 소요 시간 실측
-tools/check_glyphs.gd           # src/ 문자열이 폰트에 있는지 검사
-tools/check_glyphs_text.gd      # 표본 .txt 도 같은 검사 (화면에 나갈 텍스트)
+tools/  (전부 빌드에 포함되지 않는다)
+  capture_scene.gd              # 본 화면 캡처. showcase · debug · zoomN · perf · film 인자
+  capture_dungeon_maps.gd       # 여러 시드의 판을 한꺼번에 캡처
+  capture_kit.gd                # UI 킷 세 방향 캡처
+  capture_base_screen.gd        # 아지트 화면 한 바퀴를 일곱 장으로
+  capture_unit_move.gd          # 이동 프로토 캡처
+  measure_unit_move.gd          # 이동 지표 실측 (꺾임 · 튕김 · 정지 · 막힘)
+  bench_dungeon_generation.gd   # 생성 소요 시간 실측
+  check_glyphs.gd               # src/ 문자열이 폰트에 있는지 검사
+  check_glyphs_text.gd          # 화면에 나갈 표본 .txt 도 같은 검사
+  dump_rekka_prompts.gd         # 렉카 입력 블록을 실제 판에서 뽑아 본다
+  clean_rekka_posts.gd          # 모델 산출물에 후처리를 걸어 본다
+  build_docs.py · verify_pdf.py # 제출용 PDF
 addons/gut/                     # GUT 9.7.1 (벤더링). 빌드에서 제외된다
 web/shell.html                  # 웹 빌드용 커스텀 HTML 셸
 ```
