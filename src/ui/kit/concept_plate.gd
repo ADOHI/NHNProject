@@ -10,7 +10,7 @@ extends BaseButton
 ## 요소가 영원히 도착하지 않아 타격감이 생기지 않는다 (앞 판이 그래서 죽었다).
 
 ## 어느 컨셉으로 움직일 것인가.
-enum Concept { SLAM, SHEAR, HOLD }
+enum Concept { SLAM, SHEAR, HOLD, SQUASH }
 
 const FONT := preload("res://assets/fonts/song_myung/SongMyung-Regular.ttf")
 
@@ -67,6 +67,10 @@ func _process(delta: float) -> void:
 
 func _evaluate() -> PlateState:
 	match concept:
+		Concept.SQUASH:
+			return SquashMotion.evaluate(
+				_time, _hover_time, _hovering, _press_time, _pressing, _seed
+			)
 		Concept.HOLD:
 			return HoldMotion.evaluate(_time, _hover_time, _hovering, _press_time, _pressing, _seed)
 		Concept.SHEAR:
@@ -88,7 +92,12 @@ func _draw() -> void:
 			_quad(ghost["offset"], ghost["scale"], ghost["skew"], 0.0), ghost["color"]
 		)
 
-	var quad := _quad(state.offset, state.scale, state.skew, state.rotation)
+	var quad := _quad(
+		state.offset + state.pivot * size * (Vector2.ONE - state.scale),
+		state.scale,
+		state.skew,
+		state.rotation
+	)
 	if state.cuts.is_empty():
 		draw_colored_polygon(quad, state.body)
 	else:
@@ -184,7 +193,22 @@ func _draw_label(state: PlateState) -> void:
 	variation.spacing_glyph = 3
 	var scaled := int(round(float(font_size) * state.ink_scale))
 	var measured := variation.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, scaled)
-	var at := (
-		size * 0.5 + state.offset + state.ink_offset - Vector2(measured.x * 0.5, -measured.y * 0.32)
+	var center := (
+		size * 0.5
+		+ state.offset
+		+ state.ink_offset
+		+ state.pivot * size * (Vector2.ONE - state.scale)
 	)
-	draw_string(variation, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, scaled, state.ink)
+	# 글자를 가로세로 따로 눌러야 하므로 그리기 변환을 걸어 둔다. 글꼴 크기만으로는
+	# 한 방향으로만 커지고, 그러면 판만 물렁하고 글자는 빳빳한 스티커가 된다.
+	draw_set_transform(center, 0.0, state.ink_squash)
+	draw_string(
+		variation,
+		Vector2(-measured.x * 0.5, measured.y * 0.32),
+		text,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		scaled,
+		state.ink
+	)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

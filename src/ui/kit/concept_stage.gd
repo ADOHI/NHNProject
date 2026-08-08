@@ -61,6 +61,8 @@ func set_concept(name: String) -> void:
 			_concept = ConceptPlate.Concept.SHEAR
 		"hold":
 			_concept = ConceptPlate.Concept.HOLD
+		"squash":
+			_concept = ConceptPlate.Concept.SQUASH
 		_:
 			_concept = ConceptPlate.Concept.SLAM
 	# 판이 아직 없을 수 있다 (위 설명 참고). 그때는 `_build_plates()` 가 집어 간다.
@@ -96,6 +98,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			set_concept("shear")
 		KEY_3:
 			set_concept("hold")
+		KEY_4:
+			set_concept("squash")
 		KEY_S:
 			_set_scripted(not _scripted)
 		KEY_H:
@@ -127,6 +131,9 @@ func _build_plates() -> void:
 		plate.text = LABELS[i]
 		plate.font_size = 22 if i == 0 else 18
 		plate.concept = _concept
+		# 대본을 받는 판이 맨 위에 그려져야 한다. SQUASH 에서 넓어진 판이 옆 판에
+		# 가려지면 「부피가 어디로도 사라지지 않는다」가 안 보인다.
+		plate.z_index = LABELS.size() - i
 		plate.position = at + Vector2(float(i) * 34.0, float(i) * 104.0)
 		plate.size = Vector2(300.0 if i == 0 else 236.0, 68.0 if i == 0 else 56.0)
 		add_child(plate)
@@ -151,7 +158,10 @@ func _build_guide() -> void:
 ## 몇 번째를 보고 있는지 금방 잃어버린다.
 func _guide_text() -> String:
 	var mode := "대본 켬" if _scripted else "대본 끔 (직접 조작)"
-	return "[%s]   1 SLAM  2 SHEAR  3 HOLD   S %s   H 안내 숨김   Esc 닫기" % [_concept_name(), mode]
+	return (
+		"[%s]   1 SLAM  2 SHEAR  3 HOLD  4 SQUASH   S %s   H 안내 숨김   Esc 닫기"
+		% [_concept_name(), mode]
+	)
 
 
 func _concept_name() -> String:
@@ -160,5 +170,7 @@ func _concept_name() -> String:
 			return "SHEAR 베여서 어긋난다"
 		ConceptPlate.Concept.HOLD:
 			return "HOLD 시간이 끊긴다"
+		ConceptPlate.Concept.SQUASH:
+			return "SQUASH 부피가 보존된다"
 		_:
 			return "SLAM 들이받는다"

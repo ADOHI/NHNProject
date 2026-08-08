@@ -51,6 +51,18 @@ var ink_offset: Vector2 = Vector2.ZERO
 
 var ink_scale: float = 1.0
 
+## 글자를 가로세로 따로 눌러 찌그러뜨린다.
+##
+## 판만 물렁하고 글자는 빳빳하면 젤리가 아니라 **고무판 위에 얹은 스티커**로 보인다.
+## 부피 보존을 쓰는 컨셉에서는 글자도 같이 찌그러져야 한다.
+var ink_squash: Vector2 = Vector2.ONE
+
+## 크기를 바꿀 때 **고정되는 자리.** 판 복판이 (0,0), 아래 모서리가 (0, 0.5) 다.
+##
+## 기본값(복판)으로 짓누르면 판이 위아래에서 동시에 줄어들어 **공중에 뜬 것**처럼 보인다.
+## 아래를 고정해야 「위에서 눌렸다」가 된다 — 스쿼시의 절반은 이 한 점이다.
+var pivot: Vector2 = Vector2.ZERO
+
 ## 뒤에 남는 잔상들. 각각 `{offset, color, scale, skew, rotation}`.
 var ghosts: Array[Dictionary] = []
 
