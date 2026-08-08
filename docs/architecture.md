@@ -4,7 +4,8 @@
 코드를 어떻게 써야 하는지는 [conventions.md](conventions.md),
 무엇을 만드는지는 [game-design.md](game-design.md) 참고.
 
-**판이 화면에 그려지고 클릭으로 이동한다.** 턴 페이즈와 NPC 는 아직 없다.
+**판이 화면에 그려지고 클릭으로 이동한다. 아지트에서 게이트를 골라 원정을 돌리고 정산까지 온다.**
+턴 페이즈 해결기와 NPC 는 아직 없다 — `TurnIntent`·`TurnPhase` 라는 어휘만 서 있다.
 
 ---
 
@@ -84,12 +85,19 @@ src/
 assets/fonts/song_myung/        # SongMyung Regular (SIL OFL) + OFL.txt
 test/unit/                      # GUT 단위 테스트 72개 파일 (현재 409개 통과)
 test/support/segment_crossing.gd  # 선분 교차 판정. 생성기를 안 믿고 따로 검사한다
-tools/capture_scene.gd          # 화면 캡처 검증 도구 (빌드에 포함되지 않음)
-tools/capture_dungeon_maps.gd   # 여러 시드의 판을 한꺼번에 캡처
-tools/capture_unit_move.gd      # 이동 프로토 캡처 + 성능 측정
-tools/bench_dungeon_generation.gd  # 생성 소요 시간 실측
-tools/check_glyphs.gd           # src/ 문자열이 폰트에 있는지 검사
-tools/check_glyphs_text.gd      # 표본 .txt 도 같은 검사 (화면에 나갈 텍스트)
+tools/  (전부 빌드에 포함되지 않는다)
+  capture_scene.gd              # 본 화면 캡처. showcase · debug · zoomN · perf · film 인자
+  capture_dungeon_maps.gd       # 여러 시드의 판을 한꺼번에 캡처
+  capture_kit.gd                # UI 킷 세 방향 캡처
+  capture_base_screen.gd        # 아지트 화면 한 바퀴를 일곱 장으로
+  capture_unit_move.gd          # 이동 프로토 캡처
+  measure_unit_move.gd          # 이동 지표 실측 (꺾임 · 튕김 · 정지 · 막힘)
+  bench_dungeon_generation.gd   # 생성 소요 시간 실측
+  check_glyphs.gd               # src/ 문자열이 폰트에 있는지 검사
+  check_glyphs_text.gd          # 화면에 나갈 표본 .txt 도 같은 검사
+  dump_rekka_prompts.gd         # 렉카 입력 블록을 실제 판에서 뽑아 본다
+  clean_rekka_posts.gd          # 모델 산출물에 후처리를 걸어 본다
+  build_docs.py · verify_pdf.py # 제출용 PDF
 addons/gut/                     # GUT 9.7.1 (벤더링). 빌드에서 제외된다
 web/shell.html                  # 웹 빌드용 커스텀 HTML 셸
 ```
