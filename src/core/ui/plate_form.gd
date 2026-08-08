@@ -53,6 +53,10 @@ enum Kind {
 	HOLE,
 	## 넓은 사선 띠가 판 위를 흐른다. 명도만 흔든다.
 	VEIL,
+	## 겹쳐 놓인 널 다섯. 평상에는 한 장으로 보이고 **사건에서 부챗살처럼 벌어진다.**
+	SHUTTER,
+	## 오른쪽 위가 접혀 있다. **커서에서 접힌 자리가 더 열린다.**
+	PEEL,
 }
 
 
@@ -77,6 +81,10 @@ static func height(kind: Kind) -> float:
 			return 44.0
 		Kind.HOLE:
 			return 60.0
+		Kind.SHUTTER:
+			return 58.0
+		Kind.PEEL:
+			return 58.0
 		_:
 			return 56.0
 
@@ -98,6 +106,10 @@ static func padding(kind: Kind) -> float:
 			return 108.0
 		Kind.HOLE:
 			return 116.0
+		Kind.SHUTTER:
+			return 92.0
+		Kind.PEEL:
+			return 96.0
 		_:
 			return 78.0
 
@@ -124,14 +136,17 @@ static func font_size(kind: Kind) -> int:
 
 
 ## 글자가 기운 각(라디안). 판이 기울면 글자도 같이 기울어야 한 몸으로 보인다.
-static func tilt(kind: Kind) -> float:
+static func tilt_at(kind: Kind, beat: Vector3) -> float:
 	match kind:
 		Kind.LEAN:
-			return -0.150
+			# 눌리면 각이 **더 눕는다.** 기울기 자체가 사건에 참여하는 자리다.
+			return -0.150 - 0.115 * beat.y
 		Kind.FANG:
 			return -0.095
 		Kind.SPLIT:
-			return -0.045
+			return -0.045 + 0.05 * beat.y
+		Kind.PEEL:
+			return -0.020
 		_:
 			return 0.0
 
@@ -171,6 +186,10 @@ static func outline(kind: Kind, size: Vector2) -> PackedVector2Array:
 			return _poly([0, 0, w, 0, w, h, 0, h, 0, h - 12, 34, h - 18, 34, 18, 0, 12])
 		Kind.VEIL:
 			return _poly([0, 10, 16, 0, w - 16, 0, w, 10, w, h - 10, w - 16, h, 16, h, 0, h - 10])
+		Kind.SHUTTER:
+			return _poly([0, 0, w, 0, w, h, 0, h])
+		Kind.PEEL:
+			return _poly([0, 0, w - 22, 0, w, 22, w, h, 0, h])
 		Kind.SPLIT:
 			# 글자 아래 조각은 **글자보다 짧다.** 글자 양끝이 바탕에 걸린다.
 			return _poly([w * 0.30, 22, w * 0.78, 18, w * 0.74, 48, w * 0.26, 52])
@@ -182,22 +201,82 @@ static func outline(kind: Kind, size: Vector2) -> PackedVector2Array:
 ##
 ## **판이 한 장이라는 전제를 깨는 것이 형태 축에서 가장 큰 변화다.** 색을 하나도
 ## 안 바꾸고도 화면이 달라진다.
-static func extras(kind: Kind, size: Vector2) -> Array[PackedVector2Array]:
+static func extras(kind: Kind, size: Vector2, beat: Vector3) -> Array[PackedVector2Array]:
 	var w := size.x
 	var h := size.y
 	var out: Array[PackedVector2Array] = []
 	match kind:
 		Kind.RIFT:
 			# 위 조각은 오른쪽으로, 아래 조각은 왼쪽으로 크게 밀렸다.
-			out.append(_poly([58, 0, w, 0, w - 8, 14, 50, 14]))
-			out.append(_poly([-14, 60, w - 96, 60, w - 106, h, -24, h]))
+			# 커서에서 더 벌어지고 눌리면 되돌아온다.
+			var slip := 10.0 * beat.x - 16.0 * beat.y
+			out.append(_shift(_poly([58, 0, w, 0, w - 8, 14, 50, 14]), Vector2(slip, 0.0)))
+			out.append(
+				_shift(_poly([-14, 60, w - 96, 60, w - 106, h, -24, h]), Vector2(-slip, 0.0))
+			)
 		Kind.FANG:
 			out.append(_poly([w - 78, -15, w - 6, -15, w - 2, -4, w - 74, -4]))
 		Kind.SPLIT:
-			out.append(_poly([w * 0.08, 4, w * 0.30, 2, w * 0.26, 18]))
-			out.append(_poly([w * 0.36, 6, w * 0.62, 2, w * 0.60, 14, w * 0.34, 17]))
-			out.append(_poly([w * 0.82, 26, w * 0.96, 22, w * 0.90, 44]))
-			out.append(_poly([w * 0.30, 56, w * 0.66, 52, w * 0.62, h, w * 0.26, h]))
+			# 평상에 흩어져 있고 **커서에서 더 흩어지고 눌리면 판으로 모인다.**
+			var blow := 1.0 + 0.55 * beat.x - 0.85 * beat.y
+			var middle := Vector2(w * 0.5, h * 0.5)
+			out.append(_burst(_poly([w * 0.08, 4, w * 0.30, 2, w * 0.26, 18]), middle, blow))
+			out.append(
+				_burst(_poly([w * 0.36, 6, w * 0.62, 2, w * 0.60, 14, w * 0.34, 17]), middle, blow)
+			)
+			out.append(_burst(_poly([w * 0.82, 26, w * 0.96, 22, w * 0.90, 44]), middle, blow))
+			out.append(
+				_burst(_poly([w * 0.30, 56, w * 0.66, 52, w * 0.62, h, w * 0.26, h]), middle, blow)
+			)
+		Kind.SHUTTER:
+			# 널 다섯. **평상에는 판 뒤에 완전히 숨어 한 장으로 보이고**, 사건에서
+			# 부챗살처럼 빠져나온다. 실루엣이 그대로인 채로 사건에서만 형태가 생긴다.
+			var fan := 11.0 * beat.x + 16.0 * beat.z - 6.0 * beat.y
+			if absf(fan) < 0.2:
+				return out
+			var slat := w / 5.0
+			for i in 5:
+				var lean := (float(i) - 2.0) * 0.5
+				var push := Vector2(lean * fan * 0.7, absf(lean) * fan * 0.55)
+				out.append(
+					_shift(
+						_poly(
+							[
+								slat * float(i),
+								0,
+								slat * float(i + 1),
+								0,
+								slat * float(i + 1),
+								h,
+								slat * float(i),
+								h
+							]
+						),
+						push
+					)
+				)
+		Kind.PEEL:
+			# 젖혀진 귀. 커서에서 커진다.
+			var lift := 22.0 + 14.0 * beat.x + 10.0 * beat.z
+			out.append(_poly([w - lift, 0, w, lift, w - lift * 0.45, lift * 0.35]))
+	return out
+
+
+## 점렬을 통째로 민다.
+static func _shift(points: PackedVector2Array, by: Vector2) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for point in points:
+		out.append(point + by)
+	return out
+
+
+## 점렬을 `middle` 에서 멀어지거나 가까워지게 한다. 조각이 흩어지고 모이는 것이다.
+static func _burst(
+	points: PackedVector2Array, middle: Vector2, factor: float
+) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for point in points:
+		out.append(middle + (point - middle) * factor)
 	return out
 
 
@@ -254,6 +333,10 @@ static func marker(kind: Kind, size: Vector2) -> PackedVector2Array:
 			return _poly([8, 22, 26, 26, 26, h - 26, 8, h - 22])
 		Kind.VEIL:
 			return _poly([16, h * 0.5 - 10, 21, h * 0.5 - 10, 21, h * 0.5 + 10, 16, h * 0.5 + 10])
+		Kind.SHUTTER:
+			return _poly([12, 13, 18, 13, 18, h - 13, 12, h - 13])
+		Kind.PEEL:
+			return _poly([13, 16, 19, 14, 19, h - 14, 13, h - 16])
 		_:
 			return _poly([14, h * 0.5 - 9, 17, h * 0.5 - 9, 17, h * 0.5 + 9, 14, h * 0.5 + 9])
 
@@ -284,6 +367,8 @@ static func text_at(kind: Kind, size: Vector2) -> Vector2:
 			return Vector2(size.x * 0.46, size.y * 0.5)
 		Kind.HOLE:
 			return Vector2(size.x * 0.58, size.y * 0.5)
+		Kind.PEEL:
+			return Vector2(size.x * 0.46, size.y * 0.54)
 		_:
 			return size * 0.5
 
@@ -317,6 +402,10 @@ static func gauge_at(kind: Kind, size: Vector2) -> Vector2:
 			return Vector2(size.x - 10.0, 9.0)
 		Kind.HOLE:
 			return Vector2(size.x - 12.0, 11.0)
+		Kind.SHUTTER:
+			return Vector2(size.x - 12.0, 10.0)
+		Kind.PEEL:
+			return Vector2(size.x - 30.0, 11.0)
 		_:
 			return Vector2(size.x - 12.0, 10.0)
 
@@ -348,6 +437,10 @@ static func ticks(kind: Kind, size: Vector2) -> Vector3:
 			return Vector3(16.0, size.x - 54.0, 5.0)
 		Kind.HOLE:
 			return Vector3(44.0, size.x - 60.0, 7.0)
+		Kind.SHUTTER:
+			return Vector3(24.0, size.x - 58.0, 6.0)
+		Kind.PEEL:
+			return Vector3(22.0, size.x - 74.0, 6.0)
 		_:
 			return Vector3(24.0, size.x - 58.0, 6.0)
 
@@ -386,7 +479,7 @@ static func bounds(points: PackedVector2Array) -> Rect2:
 ## 본판만 보면 흩어진 조각이 표 밖으로 삐져나온다.
 static func hull(kind: Kind, size: Vector2) -> Rect2:
 	var box := bounds(outline(kind, size))
-	for piece in extras(kind, size):
+	for piece in extras(kind, size, Vector3.ZERO):
 		box = box.merge(bounds(piece))
 	for line in strokes(kind, size):
 		box = box.merge(bounds(line))
@@ -434,21 +527,54 @@ static func turn(points: PackedVector2Array, angle: float, pivot: Vector2) -> Pa
 ## 마땅치 않다. **꼭짓점을 직접 흔드는 쪽이 정확하고, 어느 형태에나 붙는다.**
 ##
 ## `randf()` 를 쓰지 않는다 — 캡처마다 화면이 달라지면 비교가 안 된다.
-static func animate(kind: Kind, points: PackedVector2Array, clock: float) -> PackedVector2Array:
+static func animate(
+	kind: Kind, points: PackedVector2Array, clock: float, beat: Vector3
+) -> PackedVector2Array:
 	match kind:
 		Kind.BOIL:
-			return _boil(points, clock)
+			return _boil(points, clock, beat)
 		Kind.RIP:
-			return _rip(points, clock)
+			return _rip(points, clock, beat)
+		Kind.HOLE:
+			return _open(points, beat)
+		Kind.PEEL:
+			return _peel(points, beat)
 		_:
 			return points
+
+
+## 옆구리에 물어낸 자리를 **커서에서 더 벌린다.** 구멍이 열리는 것이 반응이다.
+##
+## 꼭짓점 넷만 건드린다 — 물어낸 자리의 안쪽 두 점을 오른쪽으로 밀고 위아래로 벌린다.
+static func _open(points: PackedVector2Array, beat: Vector3) -> PackedVector2Array:
+	if points.size() < 8:
+		return points
+	var out := points.duplicate()
+	var wide := 22.0 * beat.x + 14.0 * beat.z
+	var tall := 5.0 * beat.x
+	out[4] += Vector2(0.0, tall)
+	out[5] += Vector2(wide, tall)
+	out[6] += Vector2(wide, -tall)
+	out[7] += Vector2(0.0, -tall)
+	return out
+
+
+## 접힌 모서리를 **커서에서 더 젖힌다.**
+static func _peel(points: PackedVector2Array, beat: Vector3) -> PackedVector2Array:
+	if points.size() < 5:
+		return points
+	var out := points.duplicate()
+	var open_by := 14.0 * beat.x + 10.0 * beat.z
+	out[1] += Vector2(-open_by, 0.0)
+	out[2] += Vector2(0.0, open_by)
+	return out
 
 
 ## 테두리를 잘게 나눈 뒤 바깥 방향으로 물결치게 민다.
 ##
 ## 파장 둘을 섞는다. 하나만 쓰면 **주기가 눈에 보여서** 끓는 것이 아니라
 ## 톱니바퀴가 도는 것으로 읽힌다.
-static func _boil(points: PackedVector2Array, clock: float) -> PackedVector2Array:
+static func _boil(points: PackedVector2Array, clock: float, beat: Vector3) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	var count := points.size()
 	var walked := 0.0
@@ -464,14 +590,16 @@ static func _boil(points: PackedVector2Array, clock: float) -> PackedVector2Arra
 		for step in steps:
 			var along := float(step) / float(steps)
 			var s := walked + along * length
+			var boil := 1.0 + 2.4 * beat.z + 0.8 * beat.x
 			var push := 1.5 * sin(s * 0.28 + clock * 5.1) + 0.9 * sin(s * 0.63 - clock * 3.3)
+			push *= boil
 			out.append(from + way * (along * length) + normal * push)
 		walked += length
 	return out
 
 
 ## 아래 변을 톱니로 찢는다. 이가 고르면 톱이고 **들쭉날쭉해야 찢어진 것**이다.
-static func _rip(points: PackedVector2Array, clock: float) -> PackedVector2Array:
+static func _rip(points: PackedVector2Array, clock: float, beat: Vector3) -> PackedVector2Array:
 	if points.size() < 4:
 		return points
 	var out := PackedVector2Array([points[0], points[1], points[2]])
@@ -482,7 +610,9 @@ static func _rip(points: PackedVector2Array, clock: float) -> PackedVector2Array
 	for i in range(teeth + 1):
 		var t := float(i) / float(teeth)
 		var x := from.x - span * t
-		var deep := 3.0 + 9.0 * KitEase.hash01(i * 2654435761 + 11)
+		# 눌리면 **더 찢어진다.** 이 하나로 형태가 사건에 참여한다.
+		var tear := 1.0 + 1.7 * maxf(beat.y, beat.z)
+		var deep := (3.0 + 9.0 * KitEase.hash01(i * 2654435761 + 11)) * tear
 		if i % 2 == 1:
 			deep += 1.2 * sin(clock * 2.0 + float(i))
 		else:

@@ -187,6 +187,15 @@ func _sync() -> void:
 
 ## 크기는 글자에서 나온다. 형태마다 글자 크기와 여백이 달라 **같은 낱말이라도
 ## 형태를 바꾸면 버튼이 커지거나 작아진다** — 위계가 색이 아니라 형태에서 나온다.
+## 지금 사건이 얼마나 진행됐나 — `(커서, 눌림, 섬광)`.
+##
+## **형태가 이걸 읽는다.** 「겹인쇄」에서 어긋난 양이 사건에 벌어지는 것이 값싸고
+## 셌기 때문에, 그 방식을 형태 전부에 열었다. 지금까지 형태는 정지해 있고 사건은
+## 색과 표식만 건드렸다.
+func _beat() -> Vector3:
+	return Vector3(_motion.warmth(), clampf(_motion.squeeze(), 0.0, 1.0), _motion.flare())
+
+
 ## 커서 정도를 밖에서도 읽는다. 셰이더 균일값에 넣어야 해서 `_draw` 앞에서 필요하다.
 func warmth_now() -> float:
 	return _motion.warmth()
@@ -229,8 +238,9 @@ func _draw() -> void:
 	_static_drawn = dead
 
 	var body := Vector2(size.x, PlateForm.height(form))
+	var beat := _beat()
 	var raw := PlateForm.outline(form, body)
-	var shape := PlateForm.animate(form, raw, _motion.ambient)
+	var shape := PlateForm.animate(form, raw, _motion.ambient, beat)
 	var box := PlateForm.hull(form, body)
 	_feed_shader(body, warmth_now())
 	var lift := _motion.lift()
@@ -270,7 +280,7 @@ func _draw_shadow(shape: PackedVector2Array, lift: float) -> void:
 		moved[i] += drop
 	if PlateForm.filled(form):
 		draw_colored_polygon(moved, SHADOW)
-	for piece in PlateForm.extras(form, Vector2(size.x, PlateForm.height(form))):
+	for piece in PlateForm.extras(form, Vector2(size.x, PlateForm.height(form)), _beat()):
 		for i in piece.size():
 			piece[i] += drop
 		draw_colored_polygon(piece, SHADOW)
@@ -284,7 +294,7 @@ func _draw_plate(shape: PackedVector2Array, body: Vector2, warmth: float, dead: 
 		tone = DEAD_TOP
 	else:
 		tone = tone.lerp(PRESS_PLATE, _motion.inversion())
-	for piece in PlateForm.extras(form, body):
+	for piece in PlateForm.extras(form, body, _beat()):
 		# 어긋난 조각은 본판보다 한 단 어둡다. 같은 색이면 한 장으로 붙어 보인다.
 		draw_colored_polygon(piece, tone.lerp(RULE, 0.35))
 		draw_polyline(_closed(piece), RULE if not dead else DEAD_RULE, 1.0, true)
@@ -329,12 +339,11 @@ func _draw_ticks(body: Vector2, dead: bool) -> void:
 ## 괘선 두 줄. 바깥은 실선, 안쪽은 한 겹 여린 선.
 ## 비활성은 바깥 줄이 **점선**이 된다 — 색을 흐리는 것보다 훨씬 확실하게 갈린다.
 func _draw_rules(shape: PackedVector2Array, warmth: float, dead: bool) -> void:
+	var body := Vector2(size.x, PlateForm.height(form))
 	var inner := PlateForm.animate(
-		form,
-		PlateForm.shrink(PlateForm.outline(form, Vector2(size.x, PlateForm.height(form))), INSET),
-		_motion.ambient
+		form, PlateForm.shrink(PlateForm.outline(form, body), INSET), _motion.ambient, _beat()
 	)
-	var open_lines := PlateForm.strokes(form, Vector2(size.x, PlateForm.height(form)))
+	var open_lines := PlateForm.strokes(form, body)
 	var line := RULE.lerp(INK, 0.35 * warmth)
 	var soft := RULE_SOFT.lerp(RULE, warmth)
 	if dead:
@@ -499,7 +508,7 @@ func _draw_text(body: Vector2, dead: bool) -> void:
 	width += spread * maxf(0.0, float(text.length() - 1))
 
 	var at := PlateForm.text_at(form, body)
-	var tilt := PlateForm.tilt(form)
+	var tilt := PlateForm.tilt_at(form, _beat())
 	if not is_zero_approx(tilt):
 		# `draw_set_transform` 은 덮어쓰기라 판 변형이 사라진다. 곱해서 얹는다.
 		draw_set_transform_matrix(_plate_xform * Transform2D(tilt, at))

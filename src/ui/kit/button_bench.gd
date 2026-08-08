@@ -48,6 +48,8 @@ const FORMS: Array[PlateForm.Kind] = [
 	PlateForm.Kind.GHOST,
 	PlateForm.Kind.HOLE,
 	PlateForm.Kind.VEIL,
+	PlateForm.Kind.SHUTTER,
+	PlateForm.Kind.PEEL,
 ]
 const FORM_NAMES: Array[String] = [
 	"쐐기",
@@ -63,13 +65,15 @@ const FORM_NAMES: Array[String] = [
 	"겹인쇄",
 	"구멍 뚫린 판",
 	"흐르는 띠 (셰이더)",
+	"벌어지는 널",
+	"젖혀진 귀",
 ]
 
 ## 한 줄에 넣을 수 있는 폭. 넘으면 다음 줄로 접는다.
 const ROW_WIDTH: float = 1180.0
 
 ## 상태 넷을 펼쳐 볼 형태. 파격이 상태 구분을 깨지 않는지 보는 자리다.
-const STATE_FORM: PlateForm.Kind = PlateForm.Kind.FANG
+const STATE_FORM: PlateForm.Kind = PlateForm.Kind.SHUTTER
 
 ## 캡처 대본. 커서가 붙고 · 눌리고 · 떨어지는 시각이다.
 const HOVER_AT: float = 0.90
