@@ -210,19 +210,25 @@ HUNTERS: list[tuple[str, str, tuple[int, int]]] = [
 #: 그리고 **부정문을 걷어냈다.** `NOT screaming, NOT roaring, NOT snarling, howl` 은
 #: 모델에게 그 네 낱말을 들려주는 문장이다. 있어야 할 것만 적는다 —
 #: 늘어진 눈꺼풀 · 한쪽만 올라간 다문 입 · 축 처진 몸 · 서두를 것 없는 자세.
+#: **6차에 이 문자열에서 부정문 넷을 걷어냈다.** 돌리기 전에 프롬프트를 명사만 남겨
+#: 읽어 보라는 §21.13.13 의 점검법을 실제로 돌렸더니 여기서 걸렸다 —
+#: `no second eye` · `no other eye` · `no empty socket` · `no teeth show` 가
+#: 모델에게 **eye 를 다섯 번, teeth 를 한 번** 들려주고 있었다.
+#: §21.13.8 에서 세운 규칙을 정작 이 문자열이 어기고 있었다.
+#: **자기가 쓴 규칙은 자기 코드부터 검사해야 걸린다.**
 DEMON_CORE = (
     "a grotesque floating demon with exactly ONE single eye — a cyclops, "
-    "one large eyeball taking up most of its face, "
-    "it has only ONE eye and there is no second eye anywhere on its head — "
-    "the rest of its face is bare skin with no other eye and no empty socket. "
+    "one huge eyeball centred in its face and taking up most of it, "
+    "the whole head built around that single eye; "
+    "the rest of the face is bare smooth skin — cheeks, brow and jaw alone. "
     "Its heavy upper eyelid droops halfway down across that eye in a lazy half-lidded "
     "gaze, the lid creased and relaxed, the pupil rolled downward to watch something far "
     "below it. "
     # 앞 판이 여기서 한 번 더 졌다 — "한쪽 입꼬리만 올라간다"고 했더니 모델이 입 전체를
     # **내려** 그려서 시무룩한 얼굴이 됐다. 올라간다는 것을 먼저, 세게 말한다.
     "Its mouth is a small closed line that tilts clearly UPWARD at one end into a "
-    "lopsided smirk — the corner is lifted, pleased and amused, and the lips stay shut "
-    "so no teeth show. "
+    "lopsided smirk — the corner is lifted, pleased and amused, and the lips stay "
+    "pressed shut in one unbroken line. "
     "Its body hangs loose and boneless in the air, utterly unhurried and at ease, "
     "lounging as it watches. "
     "The mood is calm, lazy, private amusement — a comfortable spectator who has seen "
@@ -293,9 +299,8 @@ DEMONS: list[tuple[str, str]] = [
         "long arm hangs straight down at its side while the other trails straight out "
         "behind it, and one long leg hangs far lower than the other. Every limb stays "
         "straight, slack and heavy, dropping under its own weight, and both hands are "
-        "empty. Unhurried and at ease, settled in to watch for a long time. Its single "
-        "eye sits on the near side of that tilted face, half-lidded, rolled down and "
-        "slightly to the LEFT.",
+        "empty. Unhurried and at ease, settled in to watch for a long time. "
+        "The half-lidded eye is rolled down and slightly to the LEFT.",
     ),
     (
         # 가장 위, 가장 작고 가장 멀다. 바로 아래 정면의 사람을 본다.
