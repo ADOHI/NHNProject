@@ -67,5 +67,26 @@ static func opposite(kind: Kind) -> Kind:
 			return kind
 
 
+## 성별을 아는 라벨. `부모` 가 아니라 `아버지`, `형제` 가 아니라 `남매` 가 된다.
+##
+## **유형을 늘리지 않고 라벨만 갈라 낸다.** 아버지/어머니를 enum 으로 나누면
+## 태생 유형이 배로 늘고 is_inborn · opposite 가 전부 길어진다 —
+## 성별은 이미 레코드에 있으므로 **읽을 때 합치는 것이 맞다** (설계 24.23).
+static func label_for(
+	kind: Kind, self_gender: PersonGender.Kind, other_gender: PersonGender.Kind
+) -> String:
+	match kind:
+		Kind.PARENT:
+			return "아버지" if other_gender == PersonGender.Kind.MALE else "어머니"
+		Kind.CHILD:
+			return "아들" if other_gender == PersonGender.Kind.MALE else "딸"
+		Kind.SIBLING:
+			if self_gender != other_gender:
+				return "남매"
+			return "형제" if other_gender == PersonGender.Kind.MALE else "자매"
+		_:
+			return label(kind)
+
+
 static func count() -> int:
 	return _LABELS.size()

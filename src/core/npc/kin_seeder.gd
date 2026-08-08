@@ -128,7 +128,9 @@ func _seed_one(person: int) -> void:
 func _try_parent(person: int) -> void:
 	var age := _registry.age_of(person)
 	var pool: Array[int] = _by_surname.get(_registry.surname_of(person), [] as Array[int])
-	var other := _find(pool, person, age + PARENT_GAP_MIN, age + PARENT_GAP_MAX)
+	# **성을 물려주는 쪽만 부모로 잡는다.** 성이 부계라(설계 24.22.7) 어머니는
+	# 성이 다르고, 성이 다른 부모를 여기서 만들면 혈연이 성으로 안 묶인다.
+	var other := _find(pool, person, age + PARENT_GAP_MIN, age + PARENT_GAP_MAX, true)
 	if other < 0:
 		return
 	_bind(person, other, RelationKind.Kind.PARENT, PARENT_BOND, PARENT_AFFINITY)
@@ -158,12 +160,14 @@ func _try_master(person: int) -> void:
 ##
 ## 통 전체를 훑지 않고 몇 번만 찔러 본다 — 흔한 성은 통이 수백 명이라
 ## 매번 훑으면 인구가 늘 때 제곱으로 비싸진다.
-func _find(pool: Array[int], person: int, low: int, high: int) -> int:
+func _find(pool: Array[int], person: int, low: int, high: int, male_only: bool = false) -> int:
 	if pool.size() < 2:
 		return -1
 	for _try in _TRIES:
 		var other := pool[_rng.randi() % pool.size()]
 		if other == person or _graph.knows(person, other):
+			continue
+		if male_only and _registry.gender_of(other) != PersonGender.Kind.MALE:
 			continue
 		var age := _registry.age_of(other)
 		if age >= low and age <= high:

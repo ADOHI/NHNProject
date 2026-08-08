@@ -18,6 +18,7 @@ func _initialize() -> void:
 	var graph := _report_kin(registry)
 	_report_surnames(registry, graph)
 	_report_ages(registry, graph)
+	_report_genders(registry, graph)
 	_report_dossier(registry, graph)
 	quit()
 
@@ -243,6 +244,44 @@ func _report_ages(registry: PersonRegistry, graph: RelationGraph) -> void:
 					% [RelationKind.label(kind), count, low, high, rules[index]]
 				)
 			)
+
+
+## 성별이 계열마다 쏠렸는가. **초상 레인이 겪은 쏠림이 우리 쪽에도 있으면 안 된다.**
+func _report_genders(registry: PersonRegistry, graph: RelationGraph) -> void:
+	print("")
+	print("== 성별 ==")
+	print("%-10s %8s %8s %8s" % ["계열", "남", "여", "여 비율"])
+	for kind in MemberDiscipline.count():
+		var male := 0
+		var female := 0
+		for person in registry.size():
+			if int(registry.discipline_of(person)) != kind:
+				continue
+			if registry.gender_of(person) == PersonGender.Kind.FEMALE:
+				female += 1
+			else:
+				male += 1
+		var total := maxf(float(male + female), 1.0)
+		var row := (
+			"%-10s %8d %8d %7.1f%%"
+			% [
+				MemberDiscipline.label(kind as MemberDiscipline.Kind),
+				male,
+				female,
+				100.0 * float(female) / total,
+			]
+		)
+		print(row)
+	# 성이 부계라 부모는 아버지여야 한다 (설계 24.23).
+	var mothers := 0
+	var parents := 0
+	for slot in graph.size():
+		if graph.slot_kind(slot) != RelationKind.Kind.PARENT:
+			continue
+		parents += 1
+		if registry.gender_of(graph.slot_to(slot)) != PersonGender.Kind.MALE:
+			mothers += 1
+	print("%-26s %d / %d" % ["부모인데 남자가 아님", mothers, parents])
 
 
 ## LLM 에 넣을 한 덩어리. **초상 레인이 받을 모양이 이것이다** (§24.22.6).

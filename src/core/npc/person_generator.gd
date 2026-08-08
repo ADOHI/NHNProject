@@ -48,6 +48,12 @@ const FAME_EXPONENT := 8.0
 ## 유명세 상한. 0 ~ 이 값 사이의 정수다.
 const FAME_MAX := 100
 
+## 여성일 확률. **계열과 독립이고 반반이다** (설계 24.23).
+##
+## 계열이 성별을 예측하면 초상 풀을 계열x성별로 쪼갤 때 한쪽이 비고,
+## §14.4.2 가 경계한 "계열이 무언가를 확정하는" 자리가 하나 더 생긴다.
+const FEMALE_CHANCE := 0.5
+
 ## 나이의 아래끝. 던전에 들어가는 직업이라 그 아래는 탐험가가 아니라 아이다 (설계 24.22.2).
 const AGE_MIN := 16
 
@@ -143,15 +149,21 @@ func _append_one(registry: PersonRegistry) -> void:
 	var agility := _stat(MemberDiscipline.base_agility(discipline))
 	var faction := _pick_faction()
 	var age := _pick_age()
+	var gender := _pick_gender()
 	var fame := _pick_fame(age)
 	var traits := TraitDistribution.sample_person(_rng)
-	registry.add(person_name, discipline, threat, agility, faction, fame, age, traits)
+	registry.add(person_name, discipline, threat, agility, faction, fame, age, gender, traits)
 
 
 ## 계열 기본값 주변의 값. 1 미만으로는 내리지 않는다 —
 ## 전투력 0 인 대원은 스쿼드 합(§14.3)에 아무것도 더하지 않아 존재 이유가 없다.
 func _stat(base: int) -> int:
 	return maxi(1, base + _rng.randi_range(-STAT_SPREAD, STAT_SPREAD))
+
+
+## 성별. **계열도 나이도 안 본다** — 보면 그 쏠림이 우리 선택이 된다.
+func _pick_gender() -> PersonGender.Kind:
+	return PersonGender.Kind.FEMALE if _rng.randf() < FEMALE_CHANCE else PersonGender.Kind.MALE
 
 
 func _pick_age() -> int:

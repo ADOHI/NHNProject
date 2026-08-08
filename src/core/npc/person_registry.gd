@@ -33,6 +33,7 @@ var _agilities := PackedInt32Array()
 var _factions := PackedInt32Array()
 var _fames := PackedInt32Array()
 var _ages := PackedInt32Array()
+var _genders := PackedInt32Array()
 
 ## 성향 전체. 인물 i 의 축 a 는 _traits[i * NpcAxis.count() + a] 다.
 var _traits := PackedInt32Array()
@@ -54,6 +55,7 @@ func add(
 	faction: int,
 	fame: int,
 	age: int,
+	gender: PersonGender.Kind,
 	traits: PackedInt32Array
 ) -> int:
 	if traits.size() != NpcAxis.count():
@@ -68,6 +70,7 @@ func add(
 	_factions.append(faction)
 	_fames.append(fame)
 	_ages.append(age)
+	_genders.append(int(gender))
 	_traits.append_array(traits)
 	return index
 
@@ -109,6 +112,11 @@ func age_of(person: int) -> int:
 	return _ages[person]
 
 
+## 성별. **레코드가 정한다** — 초상 생성 모델이 정하게 두면 계열마다 쏠린다 (설계 24.23).
+func gender_of(person: int) -> PersonGender.Kind:
+	return _genders[person] as PersonGender.Kind
+
+
 ## 성. **따로 저장하지 않고 이름에서 읽는다** — 열을 두면 두 진실이 생긴다 (설계 24.22.7).
 func surname_of(person: int) -> String:
 	return MemberNames.surname_of(_names[person])
@@ -142,10 +150,11 @@ func summary_of(person: int) -> String:
 			poles.append(NpcAxis.pole_label(axis as NpcAxis.Kind, value))
 	var mark := "-".join(poles) if poles.size() > 0 else "무색"
 	return (
-		"%s (%s) %d세 전투 %d 민첩 %d 소속 %s 유명 %d [%s]"
+		"%s (%s) %s %d세 전투 %d 민첩 %d 소속 %s 유명 %d [%s]"
 		% [
 			name_of(person),
 			MemberDiscipline.label(discipline_of(person)),
+			PersonGender.label(gender_of(person)),
 			age_of(person),
 			threat_of(person),
 			agility_of(person),
