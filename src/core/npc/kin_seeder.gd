@@ -61,6 +61,7 @@ const MASTER_AFFINITY := Vector2i(5, 70)
 const _TRIES := 12
 
 var _rng := RandomNumberGenerator.new()
+var _seed: int
 var _registry: PersonRegistry
 var _graph: RelationGraph
 var _seeded := 0
@@ -76,6 +77,7 @@ var _by_discipline: Dictionary = {}
 
 
 func _init(seed_value: int, registry: PersonRegistry, graph: RelationGraph) -> void:
+	_seed = seed_value
 	_rng.seed = seed_value
 	_registry = registry
 	_graph = graph
@@ -92,6 +94,8 @@ func seed_all() -> void:
 func seed_chunk(chunk: int) -> bool:
 	var target := mini(_seeded + maxi(chunk, 1), _registry.size())
 	while _seeded < target:
+		# 인물마다 자기 흐름이라 필드를 더해도 가족이 안 바뀐다 (§24.24).
+		PersonSeed.apply(_rng, _seed, PersonSeed.Field.KIN, _seeded)
 		_seed_one(_seeded)
 		_seeded += 1
 	return _seeded >= _registry.size()
