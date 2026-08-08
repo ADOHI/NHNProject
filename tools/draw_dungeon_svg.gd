@@ -87,6 +87,23 @@ func _initialize() -> void:
 		"성격 묶음"
 	)
 
+	var dials := _sheet(
+		"수치 격자 — 같은 시드 %d · 같은 방 개수 %d · 복잡 x 험난" % [_SEEDS[0], _CHARACTER_ROOMS], _dial_boards()
+	)
+	_write("%s/dungeon_dials.svg" % target, dials, "수치 격자")
+	_write(
+		"%s/dungeon_dials.html" % target,
+		(
+			(
+				'<!doctype html><meta charset="utf-8"><title>던전 수치 격자</title>'
+				+ '<body style="margin:0;background:#0e0e12;color:#e8e8ee;font-family:sans-serif">'
+				+ "%s</body>"
+			)
+			% dials
+		),
+		"수치 묶음"
+	)
+
 	var now := _sheet("지금 생성기 — 구역·관문까지 적용 (덩어리 2/5)", _current_boards())
 	var proto := _sheet("설계안 프로토타입 — 고도·경로 시공까지 (덩어리 3~4 가 남았다)", _proto_boards())
 	_write("%s/dungeon_now.svg" % target, now, "현재")
@@ -140,6 +157,25 @@ func _current_boards() -> Array[Dictionary]:
 ##
 ## 시드를 같이 두는 것이 요점이다. 판이 달라 보이는 이유가 운이 아니라
 ## **파라미터**라는 것을 한눈에 보이게 한다.
+## 복잡 x 험난 격자. **수치가 눈으로 갈리는지가 판정이다** (§17.20).
+##
+## 규모를 고정하고 둘만 흔든다. 셋을 한 번에 흔들면 무엇 때문에 달라 보이는지 알 수 없다.
+func _dial_boards() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for extra in [0.06, 0.24, 0.60]:
+		for gain in [0.5, 5.0]:
+			var params := DungeonGenerator.Params.new()
+			params.room_count = _CHARACTER_ROOMS
+			params.extra_edge_ratio = extra
+			params.elevation_gain = gain
+			var board := Metrics.from_blueprint(DungeonGenerator.new(_SEEDS[0], params).generate())
+			board["seed"] = _SEEDS[0]
+			board["label"] = "복잡 입력 %.2f · 험난 입력 %.1f" % [extra, gain]
+			_attach_routes(board)
+			result.append(board)
+	return result
+
+
 func _character_boards() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for index in DungeonCatalog.count():
@@ -378,11 +414,36 @@ func _caption(board: Dictionary, origin: Vector2) -> String:
 				% [origin.x + 18.0, origin.y + 70.0]
 			)
 			+ (
-				"탈출구까지 %d칸 · 막다른 방 %d · 귀중품 %d · 위험방 %d</text>"
-				% [exit_hops, _dead_ends(points.size(), edges), treasures, hazards]
+				"갈림길 %d%% · 평균 상승폭 %.2f · 탈출구까지 %d칸 · 막다른 방 %d · 귀중품 %d · 위험방 %d</text>"
+				% [
+					_junction_percent(points.size(), edges),
+					_climb_mean(elevations, edges),
+					exit_hops,
+					_dead_ends(points.size(), edges),
+					treasures,
+					hazards,
+				]
 			)
 		)
 	)
+
+
+## 갈림길(차수 3 이상) 비율. **복잡 등급이 말하는 것**이다 (§17.20).
+func _junction_percent(count: int, edges: Array[Vector2i]) -> int:
+	var degrees := Metrics.degrees_of(count, edges)
+	var junctions := 0.0
+	for index in count:
+		if int(degrees[index]) >= 3:
+			junctions += 1.0
+	return int(round(100.0 * junctions / maxf(float(count), 1.0)))
+
+
+## 간선 하나당 평균 상승폭. **험난 등급이 말하는 것**이다 (§17.20).
+func _climb_mean(elevations: PackedInt32Array, edges: Array[Vector2i]) -> float:
+	var total := 0.0
+	for edge in edges:
+		total += float(absi(elevations[edge.x] - elevations[edge.y]))
+	return total / maxf(float(edges.size()), 1.0)
 
 
 ## 차수 1 인 방의 수. 정찰 지점이 몇 군데인가 (§17.2).
