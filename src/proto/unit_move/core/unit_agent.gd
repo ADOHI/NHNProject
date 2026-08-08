@@ -52,7 +52,7 @@ var pace: float = 1.0
 ## 튀는데, 그 튐을 그대로 쫓으면 좌우로 왕복한다. 막힌 쪽을 판단할 때도 이 방향을 쓴다.
 var steer_dir: Vector2 = Vector2.ZERO
 
-## 이번 프레임 시작 시점의 목표까지 거리. 양보 규칙이 이웃마다 다시 재지 않도록 한 번만 구한다.
+## 이번 프레임 시작 시점의 목표까지 거리. 이웃마다 다시 재지 않도록 한 번만 구한다.
 var goal_distance: float = 0.0
 
 ## 목적지까지 이 유닛이 지금껏 도달한 최단 거리. 벽에 비비는 것을 알아채는 마지막 그물이다.
@@ -75,23 +75,133 @@ var press_frames: int = 0
 ## 뒤따르는 유닛이 **앞선 유닛의 실제 속도**에 맞춰 줄을 서려면 뜻이 아니라 결과를 봐야 한다.
 var advance: Vector2 = Vector2.ZERO
 
-## 앞을 막은 가장 가까운 이웃 쪽 단위 벡터. 없으면 영벡터다.
+## 지금 내고 있는 속력(초당 픽셀). 방향과 갈라 둔다.
 ##
-## 이 방향으로는 앞선 유닛보다 빨리 갈 수 없다(`contact_speed`). 위치를 잘라 막는 것과 달리
-## **속도 단계에서 미리 막으므로** 몸이 부딪히는 순간의 뜀이 없다.
-var contact_normal: Vector2 = Vector2.ZERO
+## 예전에는 속도 벡터 하나로 방향과 속력을 함께 들었고, 이웃이 미는 힘이 그 벡터에 더해졌다.
+## 힘이 없어진 지금 방향은 **고른 것**이고 속력은 **가속과 앞의 빈 거리가 정하는 것**이라
+## 서로 다른 규칙을 따른다. 한 벡터에 묶어 두면 둘이 섞여 원인을 갈라 볼 수 없다.
+var speed: float = 0.0
 
-## 그 이웃이 `contact_normal` 방향으로 실제로 나아가는 속도(초당 픽셀).
-var contact_speed: float = 0.0
-
-## 그 이웃에 얼마나 다가섰는가. 따라가기 간격 끝에서 0, 몸이 닿으면 1.
+## 이번에 고른 우회 각도(라디안). 앞이 막히지 않았으면 0 이다.
 ##
-## 제약을 거리로 켜고 끄면 그 켜짐이 곧 뜀이 된다. 세기로 서서히 들어야 조용하다.
-var contact_near: float = 0.0
+## **직전에 고른 것에 가산점을 주려고 들고 있다.** 매 프레임 새로 고르면 좌우로 갈팡질팡하고,
+## 그 갈팡질팡이 힘으로 만들던 지터와 똑같이 보인다. 고르는 방식이라 값이 이산적이라는 것이
+## 도리어 유리하다 — 같은 것을 계속 고르면 방향이 아예 안 바뀐다.
+var detour: float = 0.0
+
+## **비켜서기로 정한 자리**와 누구를 위해 비키는지. 0 이면 비켜서는 중이 아니다.
+##
+## 양보가 **명령이 아니라 상태**여야 하는 이유는 쟀기 때문이다 - 한 프레임짜리 변위로
+## 두었더니 잼에서 절반 이상이 다음 프레임에 지워졌다(맞교차 18 %, 한 칸 문 47 %,
+## 좁은 통로 100 은 58 %). 밀어 놓아도 조향이 곧바로 목적지를 다시 가리키고, 잼에서는
+## 목적지 방향이 곧 되돌아오는 방향이라 밀어 준 것이 그대로 사라진다.
+##
+## 상태로 두면 **비켜설 자리에 닿을 때까지** 그쪽으로 간다. 푸는 조건은 시간이 아니라
+## 확인이다 - 자리에 닿았거나, **부탁한 쪽이 더 이상 나에게 막혀 있지 않거나**.
+## 시간으로 풀면 앞이 아직 안 트였는데 도로 당겨지고, 그것이 돌아가기에서 겪은 실패다.
+var yield_goal: Vector2 = Vector2.ZERO
+var yield_for: int = 0
+
+## 비켜서기를 시작할 때 기다리는 중이었는가. 끝나면 그 상태로 돌려놓는다.
+var yield_was_holding: bool = false
+
+## 양보를 받은 순간의 자리와 그때 밀린 거리.
+##
+## **"비키라고 해 놓고 다음 프레임에 도로 돌아오는가"를 재려고 있는 값이다.**
+##
+## 밀어 놓은 그 프레임의 이동량만 보면 "옮겼다"고 나온다. 그런데 그다음 프레임에 조향이
+## 다시 목적지를 가리키면 유닛은 왔던 자리로 되돌아간다. 그러면 **순수 변위는 0 에 가깝고
+## 아무 일도 안 일어난 것과 같다.** 밀린 거리와 얼마 뒤의 순수 변위를 나란히 놓아야 갈린다.
+var yield_mark_pos: Vector2 = Vector2.ZERO
+var yield_mark_frame: int = -1
+var yield_mark_push: float = 0.0
+
+## 그때 밀린 **방향**(단위 벡터).
+##
+## 순수 변위를 그냥 재면 유닛이 제 발로 걸은 거리가 섞여 답을 못 준다. **밀린 방향으로만
+## 투영해야** "밀어 준 그 방향으로 실제로 남아 있는가"가 갈린다.
+var yield_mark_dir: Vector2 = Vector2.ZERO
+
+## 내가 "비켜라"를 건넨 상대의 번호와, 그것이 몇 프레임 전인지, 어느 간선이었는지.
+##
+## **화면에 사슬을 그리려고 있는 값이다.** 주황 고리만으로는 의뢰인이 못 봤다 —
+## 누가 누구에게 말을 걸었는지가 안 보이면 "나 때문에 저 유닛이 비켰다"가 읽히지 않는다.
+## 선으로 이으면 사슬이 앞으로 뻗는지 뒤로 뻗는지도 그 그림에서 바로 보인다.
+var chain_to: int = 0
+var chain_ago: int = 999
+
+## 0 이면 진로를 막은 상대, 1 이면 **내가 비켜설 자리**를 막은 상대.
+##
+## 둘을 색으로 갈라 그린다. 진단에서 밝힌 대로 이 둘은 다른 유닛이고, 그 구분이
+## 이번 고침의 핵심이라 화면에서도 갈려 보여야 한다.
+var chain_kind: int = 0
+
+## 전파가 나를 옆으로 밀어낸 뒤 지난 프레임 수. **화면에 보이라고 있는 값이다.**
+##
+## 의뢰인이 "전파가 안 되고 있다"고 했는데, 실제로 되는지 안 되는지를 **볼 방법이 없었다.**
+## 숫자로만 좋아졌다고 하는 것과 화면에서 그 순간을 보는 것은 다르다.
+var pushed_ago: int = 999
+
+## 목적지까지 남은 흐름장 비용. **양보 우선순위다.** 낮을수록 앞선 유닛이다.
+##
+## **이 값은 공짜다.** 흐름장이 이미 칸마다 목적지까지의 비용을 들고 있으므로 배열 조회
+## 한 번이면 된다. 거리로 매기면 벽 너머의 유닛이 가깝게 보이지만, 흐름장 비용은
+## **실제로 가야 하는 길이**라 문 앞에서 누가 먼저인지가 그대로 나온다.
+##
+## 전순서라 **순환 교착이 구조적으로 불가능하다** - A 가 B 에게 양보하면 B 는 A 에게
+## 양보할 수 없다. 예전에는 "둘 다 가는 중이면 서로 안 민다"로 대칭을 피했는데,
+## 그러면 둘 다 가는 중일 때 아무도 안 비켜서 문 앞에서 굳었다.
+var rank: float = 0.0
+
+## 이번 프레임에 **나를 가장 늦춘 이웃의 번호.** 없으면 0.
+##
+## `blocked_by_settled` 가 참·거짓만 들고 있어서 **누가 막았는지를 버리고 있었다.**
+## 빈 거리를 재는 훑기가 이미 "가장 늦추는 이웃"을 고르고 있으므로, 그 번호를 적어 두는 데
+## 드는 값이 없다. 이 한 줄로 **막힘 그래프**가 생긴다.
+##
+## 유닛마다 나가는 간선이 **최대 하나**라 이 그래프는 기능 그래프다. 순환을 찾는 데
+## 유닛 수만큼만 든다 - 번호를 따라가다 이번 순회에서 이미 본 놈을 다시 만나면 그것이 순환이다.
+var blocker_id: int = 0
+
+## 이 프레임에 둘레에 벽이 없는가. **성능을 위해 프레임마다 한 번만 묻는다.**
+##
+## 걸음 고르기는 후보마다 벽까지의 빈 거리를 표본으로 재는데, 열린 방에서는 그 표본이
+## 전부 헛일이다. 벽 거리는 지형이 만들어질 때 구워 둔 값이라 조회가 배열 읽기 한 번이고,
+## 이 한 줄이 열린 방에서 유닛당 수십 번의 원-벽 판정을 걷어낸다.
+var wall_far: bool = false
+
+## 이번 프레임에 **비켜주기가 옮긴 거리**(벡터). 자기 걸음이 아니다.
+##
+## **지표를 가르려고 들고 있다.** 위치가 옮겨 간 것만 보면 비켜서느라 낸 옆걸음과 목표
+## 방향이 떨리는 것이 한 숫자에 섞인다. 앞엣것은 의도한 것이고 뒤엣것이 지터인데, 섞여
+## 있으면 무엇을 고쳐도 효과를 읽을 수 없다. 재는 쪽이 이 값을 빼고 자기 걸음만 본다.
+var yield_shift: Vector2 = Vector2.ZERO
+
+## 한 걸음도 못 간 채 흘려보낸 프레임 수.
+##
+## **구석에 몸이 끼면 앞으로도 옆으로도 갈 수 없다.** 벽면에 몸을 붙인 채 문 옆에 선 유닛이
+## 그렇다 - 어느 쪽으로 가도 몸이 벽에 걸린다. 그 유닛에게는 **물러나는 것이 유일한 길**이고,
+## 물러나기는 힘이 아니라 선택이다. 다만 늘 열어 두면 조금만 막혀도 뒷걸음질하므로
+## 정말 오래 굳었을 때만 연다.
+var stall_frames: int = 0
+
+## 지형에 낀 것으로 보고 기다림으로 떨어진 횟수.
+##
+## **되돌아올 수 있는 정지에는 반드시 예산이 있어야 한다.** 무한히 다시 시도하게 두었더니
+## 잼 한가운데의 유닛이 4 초마다 기다림과 이동을 오가며 영원히 멎지 않았고, "전원이 유한
+## 시간에 멎는다"는 성질이 무너졌다. 몇 번 다시 해 보고 그래도 안 되면 정말 그만둔다.
+var hold_retries: int = 0
+
+## 이번 프레임에 **아군의 몸**이 가려던 방향을 막고 있는가. 서 있든 가고 있든 상관없다.
+##
+## 지형에 낀 것을 알아채는 안전망(`_watch_grinding`)이 이 값을 본다. 줄을 서서 못 가는 것과
+## 지형에 몸이 낀 것은 완전히 다른 일인데, 둘 다 "안 나아간다"로만 보면 **줄 선 유닛을 4 초
+## 만에 포기시킨다.** 실제로 좁은 문에서 백 명 중 일흔이 그렇게 포기했다.
+var pressed: bool = false
 
 ## 이번 프레임에 **이미 자리를 잡은 아군**이 진행 방향을 막고 있는가.
 ##
-## 분리력을 구하며 이웃을 훑는 김에 함께 채운다. 이 판정 하나를 위해 이웃을 또 훑으면
+## 앞의 빈 거리를 재는 김에 함께 채운다. 이 판정 하나를 위해 이웃을 또 훑으면
 ## 유닛이 늘 때 비용이 배로 든다.
 var blocked_by_settled: bool = false
 
@@ -99,9 +209,11 @@ var blocked_by_settled: bool = false
 var has_sight: bool = false
 var sight_timer: float = 0.0
 
-## 개발 표시용. 이번 프레임에 어떤 힘이 걸렸는지 그대로 그린다.
+## 개발 표시용. 이번 프레임에 **가고 싶었던** 방향과 속력.
+##
+## `velocity` 는 실제로 간 것이고 이것은 가려고 한 것이다. 둘의 차이가 곧 막힌 몫이다.
+## 예전에는 여기에 힘 벡터가 둘(조향 · 분리) 있었는데, 분리력이 없어져 하나만 남았다.
 var debug_seek: Vector2 = Vector2.ZERO
-var debug_separation: Vector2 = Vector2.ZERO
 
 
 func _init(agent_id: int, agent_kind: int, spawn: Vector2) -> void:
@@ -113,6 +225,22 @@ func _init(agent_id: int, agent_kind: int, spawn: Vector2) -> void:
 	facing = 0.0
 	radius = KIND_SHAPES[kind].x
 	speed_scale = KIND_SHAPES[kind].y
+
+
+## 지금 비켜서는 중인가.
+func is_yielding() -> bool:
+	return yield_for != 0
+
+
+## 비켜서기를 끝낸다. 기다리던 중이었으면 그 자리로 돌려놓는다.
+func end_yield() -> void:
+	yield_for = 0
+	yield_goal = Vector2.ZERO
+	if yield_was_holding and state == State.MOVING:
+		state = State.HOLDING
+		velocity = Vector2.ZERO
+		speed = 0.0
+	yield_was_holding = false
 
 
 func kind_name() -> String:
@@ -135,9 +263,13 @@ func accept_order(new_order_id: int, slot: Vector2, sight_interval: float) -> vo
 	best_distance = goal_distance
 	grind_frames = 0
 	press_frames = 0
+	hold_retries = 0
+	yield_for = 0
+	yield_goal = Vector2.ZERO
+	yield_was_holding = false
 	pace = 1.0
-	contact_normal = Vector2.ZERO
-	contact_speed = 0.0
+	speed = velocity.length()
+	detour = 0.0
 	# 조향을 자기 자리 쪽으로 미리 맞춰 둔다. 평활을 영벡터에서 시작하면 명령 직후 한 박자 뜬다.
 	var to_slot := slot - position
 	steer_dir = to_slot.normalized() if to_slot.length_squared() > 0.0001 else Vector2.ZERO
@@ -151,11 +283,10 @@ func settle(final_state: State) -> void:
 	order_id = 0
 	velocity = Vector2.ZERO
 	advance = Vector2.ZERO
-	contact_normal = Vector2.ZERO
-	contact_speed = 0.0
+	speed = 0.0
+	detour = 0.0
 	pace = 1.0
 	debug_seek = Vector2.ZERO
-	debug_separation = Vector2.ZERO
 
 
 ## 앞을 막은 아군이 비킬 때까지 기다린다. **명령과 자기 자리를 놓지 않는다.**
@@ -167,11 +298,10 @@ func hold() -> void:
 	state = State.HOLDING
 	velocity = Vector2.ZERO
 	advance = Vector2.ZERO
-	contact_normal = Vector2.ZERO
-	contact_speed = 0.0
+	speed = 0.0
+	detour = 0.0
 	pace = 1.0
 	debug_seek = Vector2.ZERO
-	debug_separation = Vector2.ZERO
 
 
 ## 기다림을 풀고 다시 간다. 막고 있던 유닛이 비켰을 때 불린다.
@@ -180,6 +310,13 @@ func resume() -> void:
 	best_distance = position.distance_to(goal)
 	grind_frames = 0
 	press_frames = 0
+	# **묵은 조향을 버린다.** 기다리는 동안 `steer_dir` 은 갱신되지 않으므로, 그대로 두면
+	# 깨어난 유닛이 **서기 직전에 향하던 쪽**으로 한 박자 걸어 나간다. 그 방향은 대개
+	# 막힌 곳을 돌아 나가려던 우회 방향이라 목적지에서 멀어지는 쪽이다.
+	# 전원이 멎은 뒤에도 유닛 하나가 9.3 픽셀을 움직이고 목적지에서 5 픽셀 멀어진 것이
+	# 이것이었다. 다시 갈 때는 자기 자리 쪽에서 시작한다 - `accept_order` 와 같다.
+	var to_goal := goal - position
+	steer_dir = to_goal.normalized() if to_goal.length_squared() > 0.0001 else steer_dir
 
 
 ## 목적지까지 남은 거리.
