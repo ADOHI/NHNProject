@@ -83,7 +83,11 @@ static func _relation_lines(
 			"- %s (%s, %d세): 호감 %d 유대 %d"
 			% [
 				registry.name_of(other),
-				RelationKind.label(graph.kind_of(person, other)),
+				RelationKind.label_for(
+					graph.kind_of(person, other),
+					registry.gender_of(person),
+					registry.gender_of(other)
+				),
 				registry.age_of(other),
 				graph.affinity(person, other),
 				graph.bond(person, other),

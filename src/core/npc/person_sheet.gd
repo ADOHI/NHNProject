@@ -84,11 +84,13 @@ static func _portrait() -> SheetSection:
 
 
 static func _head(registry: PersonRegistry, person: int) -> SheetSection:
-	var section := SheetSection.new("인물", SheetSection.Shape.LINES, 5)
+	var section := SheetSection.new("인물", SheetSection.Shape.LINES, 6)
 	section.add(SheetField.filled("이름", registry.name_of(person)))
 	# 나이가 가족 관계를 정한다 (설계 24.22). 머리에 두는 이유는 관계를 읽을 때
 	# 나이차가 바로 보여야 부모인지 형제인지가 납득되기 때문이다.
 	section.add(SheetField.filled("나이", "%d세" % registry.age_of(person)))
+	# 초상과 어긋나는지 사람이 확인할 수 있어야 한다 (설계 24.23).
+	section.add(SheetField.filled("성별", PersonGender.label(registry.gender_of(person))))
 	section.add(SheetField.filled("계열", MemberDiscipline.label(registry.discipline_of(person))))
 	section.add(
 		SheetField.filled(
@@ -168,26 +170,20 @@ static func _relations(registry: PersonRegistry, person: int, graph: RelationGra
 		if not RelationKind.is_inborn(kind):
 			continue
 		inborn += 1
-		(
-			section
-			. add(
-				(
-					SheetField
-					. filled(
-						RelationKind.label(kind),
-						(
-							"%s %d세  호감 %+d 유대 %d"
-							% [
-								registry.name_of(other),
-								registry.age_of(other),
-								graph.affinity(person, other),
-								graph.bond(person, other),
-							]
-						)
-					)
-				)
-			)
+		var label := RelationKind.label_for(
+			kind, registry.gender_of(person), registry.gender_of(other)
 		)
+		var line := (
+			"%s %d세 %s  호감 %+d 유대 %d"
+			% [
+				registry.name_of(other),
+				registry.age_of(other),
+				PersonGender.label(registry.gender_of(other)),
+				graph.affinity(person, other),
+				graph.bond(person, other),
+			]
+		)
+		section.add(SheetField.filled(label, line))
 	if inborn == 0:
 		section.add(SheetField.missing("태생", "가족도 스승도 없다 — 혼자다"))
 	section.add(SheetField.missing("얻은 것", "우호/원수 없음 — 사건 미구현 (설계 24.21)"))
