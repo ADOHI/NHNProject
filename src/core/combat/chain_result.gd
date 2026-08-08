@@ -30,6 +30,20 @@ const _REASON_LABELS := {
 	StopReason.MAX_LENGTH: "길이 상한에 닿았다",
 }
 
+## 격자 위에 바로 붙일 짧은 말. 옆 글자판을 읽지 않고도 **왜 끊겼는지** 보여야 한다.
+##
+## 긴 설명(`_REASON_LABELS`)과 **같은 표에서 나온다** — 두 곳에 적으면
+## 화면의 말과 글자판의 말이 서로 달라진다.
+const _SHORT_LABELS := {
+	StopReason.NO_START_ITEM: "시작 비었음",
+	StopReason.NO_OUTPUT: "끝",
+	StopReason.OUT_OF_BOUNDS: "격자 밖",
+	StopReason.EMPTY_CELL: "빈 칸",
+	StopReason.ALREADY_CHAINED: "이미 지남",
+	StopReason.LINK_REJECTED: "조건이 막음",
+	StopReason.MAX_LENGTH: "상한",
+}
+
 var start_node: Vector2i
 
 ## 발동 순서. 0 번이 시작 아이템이다.
@@ -73,3 +87,11 @@ func stop_label() -> String:
 
 static func reason_label(reason: StopReason) -> String:
 	return _REASON_LABELS[reason]
+
+
+func short_stop_label() -> String:
+	return _SHORT_LABELS[stop_reason]
+
+
+static func short_reason_label(reason: StopReason) -> String:
+	return _SHORT_LABELS[reason]

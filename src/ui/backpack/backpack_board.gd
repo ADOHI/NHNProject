@@ -40,6 +40,12 @@ const _CELL_LINE := Color(0.28, 0.30, 0.36)
 const _START_LINE := Color(1.0, 0.84, 0.35)
 const _CHAIN_LINE := Color(0.45, 0.92, 1.0)
 const _BREAK_LINE := Color(1.0, 0.38, 0.38)
+
+## 끊긴 것이 아니라 **끝난** 것. 붉은색을 쓰면 정상 종료가 사고처럼 보인다.
+const _DONE_LINE := Color(0.52, 0.86, 0.56)
+
+## 말표가 올라가면 안 되는 위쪽 여백. 머리글 Label 이 이 위에 그려진다.
+const _TAG_TOP_MARGIN := 96.0
 const _LOOT_FILL := Color(0.33, 0.33, 0.31)
 const _TEXT := Color(0.93, 0.95, 0.98)
 const _DIM_TEXT := Color(0.62, 0.66, 0.72)
@@ -409,8 +415,7 @@ func _draw_chain(chain: ChainResult) -> void:
 				_cell_center(placement.output_cell()), _cell_center(to_cell), _CHAIN_LINE, 4.0
 			)
 		_draw_order_badge(placement.cells()[0], index + 1)
-	if chain.has_break_cell and not chain.is_complete():
-		_draw_break_mark(chain.break_cell)
+	_draw_stop_mark(chain)
 
 
 ## 발동 순서를 동그라미와 **아라비아 숫자**로. 원문자(U+2460 등)는 폰트에 없다.
@@ -433,15 +438,67 @@ func _draw_order_badge(cell: Vector2i, order: int) -> void:
 	)
 
 
-## 체인이 끊긴 자리에 가위표. 격자 밖을 가리켰으면 격자 밖에 그려진다 — 그것이 정보다.
-func _draw_break_mark(cell: Vector2i) -> void:
-	var rect := _cell_rect(cell).grow(-18.0)
-	draw_line(rect.position, rect.position + rect.size, _BREAK_LINE, 4.0)
+## 체인이 어디서 **왜** 멈췄는지를 격자 위에 바로 그린다.
+##
+## 멈춘 이유 7종을 만들어 뒀으니(§28.20.5) 화면이 그것을 써야 한다 —
+## 「격자 밖」과 「빈 칸」과 「이미 지남」은 전부 "체인이 짧다" 로 보이지만
+## **고치는 방법이 다르다.**
+func _draw_stop_mark(chain: ChainResult) -> void:
+	var reason := chain.stop_reason
+	var color := _DONE_LINE if chain.is_complete() else _BREAK_LINE
+
+	if reason == ChainResult.StopReason.NO_START_ITEM:
+		_draw_tag_near(chain.start_node, chain.short_stop_label(), color)
+		return
+
+	if reason == ChainResult.StopReason.NO_OUTPUT:
+		# 정상 종료. 마지막 아이템에 조용한 마감 표시만 둔다.
+		if not chain.steps.is_empty():
+			var last: BackpackPlacement = chain.steps[chain.steps.size() - 1]
+			_draw_tag_near(last.cells()[0], chain.short_stop_label(), color)
+		return
+
+	if not chain.has_break_cell:
+		return
+
+	if reason == ChainResult.StopReason.ALREADY_CHAINED:
+		# 돌아간 자리를 동그라미로 감는다. 가위표는 "없다" 로 읽혀서 안 맞는다.
+		var center := _cell_center(chain.break_cell)
+		draw_arc(center, CELL * 0.32, 0.0, TAU, 32, color, 4.0)
+	else:
+		_draw_cross(chain.break_cell, color)
+	_draw_tag_near(chain.break_cell, chain.short_stop_label(), color)
+
+
+func _draw_cross(cell: Vector2i, color: Color) -> void:
+	var rect := _cell_rect(cell).grow(-20.0)
+	draw_line(rect.position, rect.position + rect.size, color, 4.0)
 	draw_line(
 		rect.position + Vector2(rect.size.x, 0.0),
 		rect.position + Vector2(0.0, rect.size.y),
-		_BREAK_LINE,
+		color,
 		4.0
+	)
+
+
+## 칸 옆에 짧은 말표를 붙인다. 화면 밖으로 나가지 않게 가둔다 —
+## 격자 밖을 가리킨 경우 칸 자체가 판 바깥이라 그냥 그리면 잘린다.
+func _draw_tag_near(cell: Vector2i, text: String, color: Color) -> void:
+	var font := get_theme_default_font()
+	var extent := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13)
+	var box := Vector2(extent.x + 12.0, extent.y + 8.0)
+	var cell_rect := _cell_rect(cell)
+	# 칸 **옆에** 붙인다. 위에 붙이면 격자 밖(위쪽)을 가리켰을 때 머리글과 겹친다.
+	var at := Vector2(cell_rect.end.x + 6.0, cell_rect.get_center().y - box.y * 0.5)
+	if at.x + box.x > size.x - 2.0:
+		at.x = cell_rect.position.x - box.x - 6.0
+	at.x = clampf(at.x, 2.0, maxf(2.0, size.x - box.x - 2.0))
+	at.y = clampf(at.y, _TAG_TOP_MARGIN, maxf(_TAG_TOP_MARGIN, size.y - box.y - 2.0))
+	var rect := Rect2(at, box)
+	draw_rect(rect, _BADGE_FILL)
+	draw_rect(rect, color, false, 1.5)
+	draw_string(
+		font, at + Vector2(6.0, extent.y + 1.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13, color
 	)
 
 

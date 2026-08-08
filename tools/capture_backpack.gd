@@ -63,7 +63,32 @@ func _build_shots() -> Array:
 		["04_gem_removed", _right_click_cell(Vector2i(5, 1)), false],
 		["05_mace_moved", _drag_cell_to(Vector2i(1, 2), Vector2i(3, 4)), false],
 		["06_start_empty", _right_click_cell(Vector2i(0, 0)), false],
+		["07_out_of_bounds", _stage_out_of_bounds, false],
+		["08_loop", _stage_loop, false],
 	]
+
+
+## 시작 아이템이 격자 밖을 가리키는 상황. 「빈 칸」과 다르게 보여야 한다.
+func _stage_out_of_bounds() -> void:
+	var grid: BackpackGrid = _screen._grid
+	grid.clear()
+	grid.place(_weapon("칼", ChainDirection.Kind.UP), Vector2i(0, 0))
+	_screen._refresh()
+
+
+## 두 아이템이 서로를 가리키는 고리. 가위표가 아니라 동그라미로 보여야 한다.
+func _stage_loop() -> void:
+	var grid: BackpackGrid = _screen._grid
+	grid.clear()
+	grid.place(_weapon("칼", ChainDirection.Kind.RIGHT), Vector2i(0, 0))
+	grid.place(_weapon("도끼", ChainDirection.Kind.LEFT), Vector2i(1, 0))
+	_screen._refresh()
+
+
+func _weapon(name: String, direction: ChainDirection.Kind) -> BackpackItem:
+	return BackpackItem.new(
+		name, name, BackpackItem.Kind.WEAPON, [Vector2i(0, 0)], Vector2i(0, 0), direction
+	)
 
 
 func _cell_point(cell: Vector2i) -> Vector2:

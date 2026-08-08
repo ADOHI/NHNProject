@@ -166,6 +166,24 @@ func test_every_stop_reason_has_a_readable_label() -> void:
 		assert_false(ChainResult.reason_label(reason).is_empty(), "멈춘 이유 %d 에 이름이 없다" % reason)
 
 
+func test_every_stop_reason_has_a_short_label_for_the_board() -> void:
+	# 격자 위에 바로 붙일 짧은 말. 하나라도 비면 화면이 이유 없이 끊긴 것처럼 보인다.
+	for reason in ChainResult.StopReason.values():
+		assert_false(
+			ChainResult.short_reason_label(reason).is_empty(), "멈춘 이유 %d 에 짧은 말이 없다" % reason
+		)
+
+
+func test_short_and_long_labels_come_from_the_same_reason() -> void:
+	# 두 표가 갈리면 격자 위의 말과 옆 글자판의 말이 서로 달라진다.
+	var grid := _grid()
+	grid.place(_pip("a", ChainDirection.Kind.UP), Vector2i(0, 0))
+	var chain := ResolverScript.resolve_from(grid, Vector2i(0, 0))
+	assert_eq(chain.stop_reason, ChainResult.StopReason.OUT_OF_BOUNDS, "전제 확인")
+	assert_eq(chain.short_stop_label(), ChainResult.short_reason_label(chain.stop_reason))
+	assert_eq(chain.stop_label(), ChainResult.reason_label(chain.stop_reason))
+
+
 # ---------------------------------------------------------------- 갈아 끼울 조건 (§28.2.2)
 
 
