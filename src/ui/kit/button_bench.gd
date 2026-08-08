@@ -44,6 +44,10 @@ const FORMS: Array[PlateForm.Kind] = [
 	PlateForm.Kind.BOIL,
 	PlateForm.Kind.RIP,
 	PlateForm.Kind.MESH,
+	PlateForm.Kind.TALLY,
+	PlateForm.Kind.GHOST,
+	PlateForm.Kind.HOLE,
+	PlateForm.Kind.VEIL,
 ]
 const FORM_NAMES: Array[String] = [
 	"쐐기",
@@ -55,6 +59,10 @@ const FORM_NAMES: Array[String] = [
 	"끓는 윤곽",
 	"찢어진 아래",
 	"점망 (셰이더)",
+	"눈금자",
+	"겹인쇄",
+	"구멍 뚫린 판",
+	"흐르는 띠 (셰이더)",
 ]
 
 ## 한 줄에 넣을 수 있는 폭. 넘으면 다음 줄로 접는다.

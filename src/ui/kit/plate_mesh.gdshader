@@ -27,5 +27,5 @@ void fragment() {
 	float radius = ramp * (0.16 + 0.20 * energy);
 	float ink = smoothstep(radius, radius - 0.10, far);
 
-	COLOR.rgb *= 1.0 - ink * (0.12 + 0.10 * energy);
+	COLOR.rgb *= 1.0 - ink * (0.16 + 0.12 * energy);
 }

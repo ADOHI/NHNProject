@@ -35,6 +35,7 @@ const MOTION_STATE := ActionButtonMotion.State
 
 const FONT := preload("res://assets/fonts/song_myung/SongMyung-Regular.ttf")
 const MESH_SHADER := preload("res://src/ui/kit/plate_mesh.gdshader")
+const VEIL_SHADER := preload("res://src/ui/kit/plate_veil.gdshader")
 
 ## 글자 자간. 자간이 0 이면 두 글자 낱말이 뭉쳐 보인다.
 const TRACKING: float = 3.0
@@ -194,13 +195,20 @@ func warmth_now() -> float:
 ## 셰이더가 붙는 형태에만 재료를 달고 균일값을 채운다. 나머지 형태는 재료가 없다 —
 ## 안 쓰는 셰이더를 전부에 달면 그리기 묶음이 형태마다 쪼개진다.
 func _feed_shader(body: Vector2, energy: float) -> void:
-	if not PlateForm.shaded(form):
+	var wanted: Shader = null
+	match PlateForm.shader_name(form):
+		"mesh":
+			wanted = MESH_SHADER
+		"veil":
+			wanted = VEIL_SHADER
+	if wanted == null:
 		if material != null:
 			material = null
 		return
-	if material == null:
+	var held := material as ShaderMaterial
+	if held == null or held.shader != wanted:
 		var made := ShaderMaterial.new()
-		made.shader = MESH_SHADER
+		made.shader = wanted
 		material = made
 	var stuff := material as ShaderMaterial
 	stuff.set_shader_parameter("clock", _motion.ambient)
@@ -350,6 +358,24 @@ func _draw_rules(shape: PackedVector2Array, warmth: float, dead: bool) -> void:
 	draw_polyline(
 		_closed(inner), Color(soft.lerp(ACCENT_SOFT, flare), 0.75 + 0.25 * flare), 1.0, true
 	)
+	_draw_misprint(shape, warmth)
+
+
+## 같은 윤곽을 강세색으로 한 번 더 어긋나게 찍는다. 인쇄 미스레지스터다.
+##
+## **판을 한 장 더 만들지 않는다.** 같은 판을 두 번 찍는 것이라 어느 형태에 붙여도
+## 성립하고, 어긋난 양이 커서에서 벌어지므로 사건에도 참여한다.
+func _draw_misprint(shape: PackedVector2Array, warmth: float) -> void:
+	var slip := PlateForm.misprint(form)
+	if slip == Vector3.ZERO:
+		return
+	var box := PlateForm.bounds(shape)
+	var spread := 1.0 + 0.9 * warmth + 1.8 * _motion.flare()
+	var turned := PlateForm.turn(shape, slip.z * spread, box.get_center())
+	var moved := PackedVector2Array()
+	for point in turned:
+		moved.append(point + Vector2(slip.x, slip.y) * spread)
+	draw_polyline(_closed(moved), Color(ACCENT, 0.85), 1.5, true)
 
 
 ## 표지와 게이지. 자리는 형태가 정하고 이 함수는 색과 개수만 안다.

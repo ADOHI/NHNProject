@@ -43,8 +43,16 @@ enum Kind {
 	BOIL,
 	## 아래 변이 **찢어져** 톱니가 났다. 잘린 종이의 결이다.
 	RIP,
-	## 판 위에 **점망**이 한쪽으로 몰려 깔린다. 셰이더가 만드는 유일한 형태다.
+	## 판 위에 **점망**이 한쪽으로 몰려 깔린다.
 	MESH,
+	## 눈금자 한 줄. 낮고 길며 글자가 눈금 위에 앉는다.
+	TALLY,
+	## **겹인쇄.** 같은 윤곽이 강세색으로 살짝 어긋나 한 번 더 찍혀 있다.
+	GHOST,
+	## 판에 **구멍이 뚫려** 있다. 왼쪽 옆구리를 크게 물어냈다.
+	HOLE,
+	## 넓은 사선 띠가 판 위를 흐른다. 명도만 흔든다.
+	VEIL,
 }
 
 
@@ -65,6 +73,10 @@ static func height(kind: Kind) -> float:
 			return 60.0
 		Kind.RIP:
 			return 62.0
+		Kind.TALLY:
+			return 44.0
+		Kind.HOLE:
+			return 60.0
 		_:
 			return 56.0
 
@@ -82,6 +94,10 @@ static func padding(kind: Kind) -> float:
 			return 104.0
 		Kind.MESH:
 			return 96.0
+		Kind.TALLY:
+			return 108.0
+		Kind.HOLE:
+			return 116.0
 		_:
 			return 78.0
 
@@ -99,6 +115,10 @@ static func font_size(kind: Kind) -> int:
 			return 24
 		Kind.MESH:
 			return 23
+		Kind.TALLY:
+			return 18
+		Kind.GHOST:
+			return 25
 		_:
 			return 22
 
@@ -142,6 +162,15 @@ static func outline(kind: Kind, size: Vector2) -> PackedVector2Array:
 			return _poly([0, 0, w, 0, w, h - 14, 0, h - 14])
 		Kind.MESH:
 			return _poly([18, 0, w, 0, w, h - 16, w - 18, h, 0, h, 0, 16])
+		Kind.TALLY:
+			return _poly([0, 6, w, 0, w, h - 6, 0, h])
+		Kind.GHOST:
+			return _poly([12, 0, w - 12, 0, w, 12, w, h - 12, w - 12, h, 12, h, 0, h - 12, 0, 12])
+		Kind.HOLE:
+			# 왼쪽 옆구리를 크게 물어낸다. 변까지 뚫려 있어야 **구멍**으로 읽힌다.
+			return _poly([0, 0, w, 0, w, h, 0, h, 0, h - 12, 34, h - 18, 34, 18, 0, 12])
+		Kind.VEIL:
+			return _poly([0, 10, 16, 0, w - 16, 0, w, 10, w, h - 10, w - 16, h, 16, h, 0, h - 10])
 		Kind.SPLIT:
 			# 글자 아래 조각은 **글자보다 짧다.** 글자 양끝이 바탕에 걸린다.
 			return _poly([w * 0.30, 22, w * 0.78, 18, w * 0.74, 48, w * 0.26, 52])
@@ -219,6 +248,12 @@ static func marker(kind: Kind, size: Vector2) -> PackedVector2Array:
 			return _poly([12, 12, 16, 12, 16, h - 26, 12, h - 26])
 		Kind.MESH:
 			return _poly([14, 14, 20, 12, 20, h - 12, 14, h - 14])
+		Kind.TALLY:
+			return _poly([10, 12, 16, 11, 16, h - 11, 10, h - 12])
+		Kind.HOLE:
+			return _poly([8, 22, 26, 26, 26, h - 26, 8, h - 22])
+		Kind.VEIL:
+			return _poly([16, h * 0.5 - 10, 21, h * 0.5 - 10, 21, h * 0.5 + 10, 16, h * 0.5 + 10])
 		_:
 			return _poly([14, h * 0.5 - 9, 17, h * 0.5 - 9, 17, h * 0.5 + 9, 14, h * 0.5 + 9])
 
@@ -245,6 +280,10 @@ static func text_at(kind: Kind, size: Vector2) -> Vector2:
 			return Vector2(size.x * 0.5, (size.y - 14.0) * 0.55)
 		Kind.MESH:
 			return Vector2(size.x * 0.44, size.y * 0.5)
+		Kind.TALLY:
+			return Vector2(size.x * 0.46, size.y * 0.5)
+		Kind.HOLE:
+			return Vector2(size.x * 0.58, size.y * 0.5)
 		_:
 			return size * 0.5
 
@@ -274,6 +313,10 @@ static func gauge_at(kind: Kind, size: Vector2) -> Vector2:
 			return Vector2(size.x - 12.0, 9.0)
 		Kind.MESH:
 			return Vector2(size.x - 10.0, 10.0)
+		Kind.TALLY:
+			return Vector2(size.x - 10.0, 9.0)
+		Kind.HOLE:
+			return Vector2(size.x - 12.0, 11.0)
 		_:
 			return Vector2(size.x - 12.0, 10.0)
 
@@ -301,6 +344,10 @@ static func ticks(kind: Kind, size: Vector2) -> Vector3:
 			return Vector3(20.0, size.x - 58.0, 5.0)
 		Kind.MESH:
 			return Vector3(28.0, size.x - 56.0, 6.0)
+		Kind.TALLY:
+			return Vector3(16.0, size.x - 54.0, 5.0)
+		Kind.HOLE:
+			return Vector3(44.0, size.x - 60.0, 7.0)
 		_:
 			return Vector3(24.0, size.x - 58.0, 6.0)
 
@@ -346,9 +393,38 @@ static func hull(kind: Kind, size: Vector2) -> Rect2:
 	return box
 
 
-## 셰이더가 붙는 형태인가. `MESH` 만 붙는다.
-static func shaded(kind: Kind) -> bool:
-	return kind == Kind.MESH
+## 붙는 셰이더의 이름. 빈 문자열이면 재료를 달지 않는다.
+##
+## 이름만 내고 실제 셰이더는 그리는 쪽이 고른다. 순수 계산 클래스가 `res://` 자원을
+## 들고 있으면 씬 없이 검증할 수 없게 된다.
+static func shader_name(kind: Kind) -> String:
+	match kind:
+		Kind.MESH:
+			return "mesh"
+		Kind.VEIL:
+			return "veil"
+		_:
+			return ""
+
+
+## 같은 윤곽을 강세색으로 **한 번 더 어긋나게** 찍는가. `(x 밀림, y 밀림, 돌린 각)`.
+##
+## 인쇄 미스레지스터다. 판 한 장을 더 만들지 않고 **같은 판을 두 번 찍는 것**이라
+## 형태가 저절로 따라온다 — 어느 형태에 붙여도 성립한다.
+static func misprint(kind: Kind) -> Vector3:
+	match kind:
+		Kind.GHOST:
+			return Vector3(4.0, -3.5, 0.028)
+		_:
+			return Vector3.ZERO
+
+
+## 점렬을 `pivot` 둘레로 돌린다.
+static func turn(points: PackedVector2Array, angle: float, pivot: Vector2) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for point in points:
+		out.append(pivot + (point - pivot).rotated(angle))
+	return out
 
 
 ## 윤곽을 **시각에 따라 흔든다.** 정지 화면에는 없는 형태가 여기서 나온다.
