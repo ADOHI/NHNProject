@@ -66,6 +66,43 @@ static func build(source: Image, strength: float = 4.0) -> Image:
 	return out
 
 
+## **기울어진 평면의 법선 하나로 채운다. 추정이 아니라 계산이다.**
+##
+## 방 시각화의 바닥은 **정사영 바닥밭을 워프한 것**이라 바닥의 법선이 기하에서
+## 곧바로 나온다 — 평면이니까 어디서나 같은 벡터다. 여기에 AI 추정을 돌리는 것은
+## **아는 답을 모르는 척하고 알아맞히는 것**이고, 맞히지도 못한다(그림에는 얼룩과
+## 줄눈이 있고 추정기는 그것을 요철로 읽는다).
+##
+## `pitch_degrees` 는 바닥면이 화면에서 얼마나 누워 보이는가다.
+## 0 이면 화면을 정면으로 마주 본 벽(=평평한 노멀), 90 이면 완전히 누운 바닥이다.
+static func build_plane(width: int, height: int, pitch_degrees: float) -> Image:
+	var pitch := deg_to_rad(clampf(pitch_degrees, 0.0, 89.0))
+	# 화면 위쪽(−y)으로 기울어 눕는 면. z 는 화면 밖을 본다.
+	var n := Vector3(0.0, -sin(pitch), cos(pitch)).normalized()
+	var image := Image.create_empty(width, height, false, Image.FORMAT_RGB8)
+	image.fill(Color(n.x * 0.5 + 0.5, -n.y * 0.5 + 0.5, n.z * 0.5 + 0.5))
+	return image
+
+
+## 평면 법선 위에 휘도 결을 얹는다. 바닥이 「누워 있으면서 줄눈도 있는」 경우다.
+static func build_plane_with_detail(
+	source: Image, pitch_degrees: float, strength: float = 1.5
+) -> Image:
+	var detail := build(source, strength)
+	var pitch := deg_to_rad(clampf(pitch_degrees, 0.0, 89.0))
+	var base := Vector3(0.0, -sin(pitch), cos(pitch)).normalized()
+	var out := Image.create_empty(source.get_width(), source.get_height(), false, Image.FORMAT_RGB8)
+	for y in source.get_height():
+		for x in source.get_width():
+			var c := detail.get_pixel(x, y)
+			# 결의 기울기만 뽑아 평면 법선에 더한다. 두 법선을 섞는 것이 아니라
+			# **평면을 기준면으로 삼고 그 위의 요철**로 다룬다.
+			var tilt := Vector3(c.r * 2.0 - 1.0, -(c.g * 2.0 - 1.0), 0.0)
+			var n := (base + tilt).normalized()
+			out.set_pixel(x, y, Color(n.x * 0.5 + 0.5, -n.y * 0.5 + 0.5, n.z * 0.5 + 0.5))
+	return out
+
+
 ## 노멀맵이 실제로 방향을 담고 있는지 재는 자. **아무것도 확인하지 않는 검사가
 ## 통과하는 것**을 막기 위한 것이다 (`CLAUDE.md` 의 일곱 유형 중 여섯째).
 ##

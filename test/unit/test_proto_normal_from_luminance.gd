@@ -68,3 +68,48 @@ func test_strength_increases_tilt() -> void:
 	)
 	assert_gt(strong, weak, "세기를 올리면 기울기가 커져야 한다")
 	assert_gt(weak, 0.0, "약해도 0 은 아니다")
+
+
+## **바닥은 추정할 것이 없다.** 평면의 법선은 기하에서 나오므로 어디서나 같은 값이어야
+## 한다. 값이 자리마다 다르면 그건 이미 추정이 섞인 것이다.
+func test_plane_normal_is_constant_everywhere() -> void:
+	var out := ProtoNormalFromLuminance.build_plane(8, 8, 60.0)
+	var first := out.get_pixel(0, 0)
+	for y in 8:
+		for x in 8:
+			assert_eq(out.get_pixel(x, y), first, "평면 법선은 자리에 따라 달라지지 않는다")
+
+
+## 0 도는 화면을 정면으로 마주 본 면이다. 평평한 노멀과 같아야 한다.
+func test_plane_zero_pitch_is_flat() -> void:
+	var c := ProtoNormalFromLuminance.build_plane(4, 4, 0.0).get_pixel(1, 1)
+	assert_almost_eq(c.r, 0.5, 0.01)
+	assert_almost_eq(c.g, 0.5, 0.01)
+	assert_gt(c.b, 0.99)
+
+
+## 눕힐수록 기울어야 한다. **손잡이가 아무 일도 안 하는 것**을 막는다.
+func test_plane_pitch_tilts_up_screen() -> void:
+	var shallow := ProtoNormalFromLuminance.build_plane(4, 4, 20.0).get_pixel(1, 1)
+	var steep := ProtoNormalFromLuminance.build_plane(4, 4, 70.0).get_pixel(1, 1)
+	assert_gt(shallow.g, 0.5, "화면 위쪽으로 기운다 (g 가 0.5 위)")
+	assert_gt(steep.g, shallow.g, "많이 눕힐수록 많이 기운다")
+	assert_almost_eq(shallow.r, 0.5, 0.01, "좌우로는 안 기운다")
+
+
+## 평면 위에 결을 얹으면 평면보다 자리마다 달라야 하고, 평평한 그림이면 평면 그대로여야 한다.
+func test_plane_with_detail_falls_back_to_plane_on_flat_input() -> void:
+	var plane := ProtoNormalFromLuminance.build_plane(6, 6, 45.0).get_pixel(3, 3)
+	var blended := ProtoNormalFromLuminance.build_plane_with_detail(_flat(6), 45.0, 2.0).get_pixel(
+		3, 3
+	)
+	assert_almost_eq(blended.r, plane.r, 0.01)
+	assert_almost_eq(blended.g, plane.g, 0.01)
+
+
+func test_plane_with_detail_adds_tilt_on_ramp() -> void:
+	var plane_rms := ProtoNormalFromLuminance.tilt_rms(
+		ProtoNormalFromLuminance.build_plane(8, 8, 45.0)
+	)
+	var blended := ProtoNormalFromLuminance.build_plane_with_detail(_ramp_right(8), 45.0, 4.0)
+	assert_gt(ProtoNormalFromLuminance.tilt_rms(blended), plane_rms, "결이 얹히면 기울기가 커진다")
