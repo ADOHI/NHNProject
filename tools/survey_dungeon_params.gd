@@ -22,7 +22,7 @@ const _ROOMS := 50
 const _AXES := [
 	["곁가지 비율", "extra_edge_ratio", 0.08, 0.24, 0.48],
 	["막다른 방 하한", "dead_end_ratio_min", 0.06, 0.14, 0.30],
-	["구역 단차", "elevation_gain", 1.0, 2.0, 4.0],
+	["구역 단차", "elevation_gain", 1.0, 2.0, 5.0],
 	["층 안 기복", "elevation_amplitude", 0.4, 1.0, 2.4],
 	["기복의 잔 정도", "elevation_frequency", 0.10, 0.22, 0.44],
 	["탈출구 최소 거리", "exit_distance_ratio", 0.30, 0.65, 0.95],
