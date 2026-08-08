@@ -163,6 +163,12 @@ const _WALL_STEP := 3.0
 ## 세 칸이면 96 픽셀이라 몸 반지름 12 에 내다보는 거리 32 를 더해도 벽에 닿을 수 없다.
 const _WALL_CLEAR := 3
 
+## 양보가 살아남았는지 이만큼 뒤에 견준다(프레임).
+##
+## 3 분의 1 초다. 한 프레임 이동량이 아니라 **얼마 뒤에 실제로 옮겨져 있는가**를 봐야
+## 되돌아오는 것이 잡힌다.
+const _YIELD_WATCH := 20
+
 ## 벽까지의 빈 거리를 이 거리까지만 촘촘히 훑는다(픽셀). 그 너머는 몸이 정하는 값을 쓴다.
 const _WALL_NEAR := 15.0
 
@@ -248,17 +254,9 @@ var propagate_runs: int = 0
 var propagate_moves: int = 0
 var propagate_cycles: int = 0
 
-## 전파를 진단하는 계기들. **어디서 헛도는지 가르려고 단 것이다.**
-##
-## 계기가 "534 회 돌았다"고 말하는데 사람 눈에는 아무 일도 안 일어난다면, 도는 것과
-## 듣는 것 사이 어딘가가 끊겨 있다. 그 자리를 짐작으로 고치면 또 틀린다.
-##
-## | 계기 | 무엇을 가르는가 |
-## | --- | --- |
-## | 앞으로 · 뒤로 | 사슬이 문 쪽으로 뻗는가 뒤로 뻗는가 |
-## | 사슬 깊이 · 상한 걸림 | 깊이 8 이 얕은가 |
-## | 고리 길이 | 길이 2 면 양보 우선순위가 이미 깰 수 있는 것이다 |
-## | 눌린 프레임 · 기다림 확정 | 방아쇠가 늦은가 |
+## 전파를 진단하는 계기들. **어디서 헛도는지 가르려고 단 것이다.** 사슬 방향 · 깊이 ·
+## 고리 길이 · 방아쇠 빈도를 각각 센다. 계기 숫자를 그대로 결론으로 읽으면 안 되고,
+## 무엇이 늘었는지를 갈라 봐야 한다는 것을 이 판에서 두 번 배웠다.
 var propagate_forward: int = 0
 var propagate_backward: int = 0
 var propagate_depth_total: int = 0
@@ -272,6 +270,14 @@ var propagate_distance: float = 0.0
 
 ## 자리를 막은 상대로 사슬을 이어 간 횟수. **진단에서 가장 컸던 구멍을 메운 자리다.**
 var propagate_relays: int = 0
+
+## 양보가 얼마나 살아남는가. **밀어 놓은 거리와 그 뒤의 순수 변위를 나란히 잰다.**
+##
+## 둘이 크게 벌어지면 "비켰다가 도로 돌아온다"는 뜻이고, 그러면 전파가 아무리 돌아도
+## 판은 그대로다. 지금까지 못 보던 각도라 따로 낸다.
+var yield_push_sum: float = 0.0
+var yield_net_sum: float = 0.0
+var yield_watch_count: int = 0
 
 var _by_id: Dictionary = {}
 var _next_id := 1
@@ -449,6 +455,7 @@ func step(delta: float) -> void:
 	_walk(delta)
 	_clamp_positions()
 	_update_states(delta)
+	ProtoUnitYield.watch(self, _frame)
 	ProtoUnitJam.review(self, _frame)
 	for order in orders:
 		order.age += delta

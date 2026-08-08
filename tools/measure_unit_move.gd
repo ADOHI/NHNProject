@@ -241,6 +241,9 @@ func _measure(
 	field.hold_confirms = 0
 	field.propagate_blocked = 0
 	field.propagate_distance = 0.0
+	field.yield_push_sum = 0.0
+	field.yield_net_sum = 0.0
+	field.yield_watch_count = 0
 	if other_target == Vector2.INF:
 		field.issue_move(field.all_ids(), target)
 	else:
@@ -403,6 +406,9 @@ func _measure(
 		"holds": field.hold_confirms,
 		"pblock": field.propagate_blocked,
 		"pdist": field.propagate_distance,
+		"ypush": field.yield_push_sum,
+		"ynet": field.yield_net_sum,
+		"ykeep": 100.0 * field.yield_net_sum / maxf(field.yield_push_sum, 0.001),
 		"flow": 100.0 * float(flow_frames) / maxf(float(force_frames), 1.0),
 		"wiggle": wiggle / float(count),
 		"push": field.overlap_push_total,
@@ -544,12 +550,25 @@ func _print_table(rows: Array[Dictionary]) -> void:
 			)
 		)
 	print("")
-	print("| 상황 | 전파 | 옮김 | 앞으로 | 뒤로 | 평균깊이 | 상한걸림 | 고리 | 길이2 " + "| 못비킴 | 옮긴거리 | 눌린프레임 | 기다림확정 |")
-	print("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+	print(
+		(
+			"| 상황 | 전파 | 옮김 | 앞으로 | 뒤로 | 평균깊이 | 상한걸림 | 고리 | 길이2 "
+			+ "| 못비킴 | 옮긴거리 | 밀린합 | 0.3초뒤 순수변위 | 남은비율 | 눌린프레임 | 기다림확정 |"
+		)
+	)
+	print(
+		(
+			"| --- | --- | --- | --- | --- | --- | --- | --- "
+			+ "| --- | --- | --- | --- | --- | --- | --- | --- |"
+		)
+	)
 	for row in rows:
 		print(
 			(
-				"| %s | %d | %d | %d | %d | %.1f | %d | %d | %d | %d | %.0f px | %d | %d |"
+				(
+					"| %s | %d | %d | %d | %d | %.1f | %d | %d | %d | %d | %.0f px "
+					+ "| %.0f px | %.0f px | %.0f %% | %d | %d |"
+				)
 				% [
 					row["label"],
 					row["runs"],
@@ -562,6 +581,9 @@ func _print_table(rows: Array[Dictionary]) -> void:
 					row["cyc2"],
 					row["pblock"],
 					row["pdist"],
+					row["ypush"],
+					row["ynet"],
+					row["ykeep"],
 					row["pressed"],
 					row["holds"],
 				]

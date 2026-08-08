@@ -38,6 +38,9 @@ const _YIELD_RATE := 140.0
 ## 비켜주기 - 진로 밖으로 이만큼 더 밀어낸다(픽셀). 딱 맞게 비켜서면 곧바로 다시 걸린다.
 const _YIELD_MARGIN := 1.5
 
+## 양보가 살아남았는지 이만큼 뒤에 견준다(프레임). 3 분의 1 초다.
+const _YIELD_WATCH := 20
+
 
 ## **비켜주기.** 전진 중인 유닛의 진로에서 남을 옆으로 비켜서게 한다.
 ##
@@ -170,3 +173,27 @@ static func yield_room(
 	if not field.grid.is_circle_free(agent.position + direction * limit, agent.radius):
 		return 0.0
 	return limit
+
+
+## **양보가 살아남는지 지켜본다.** 밀린 그 순간의 자리를 적어 두고, 얼마 뒤에 견준다.
+##
+## 의뢰인의 물음이 출발점이다 - "비키라고 명령 가도 잠깐 비키려고 하다가 다음 스케줄에서
+## 다시 목적지로 가려고 해서 병목 생길 수 있음."
+##
+## 맞다면 지금까지의 증상이 한 번에 설명된다. 밀어 놓아도 순수 변위가 0 에 가까우면
+## 아무 일도 안 일어난 것과 같고, 계기만 "옮겼다"고 말한다.
+static func watch(field: ProtoUnitField, frame: int) -> void:
+	for agent in field.agents:
+		if agent.yield_mark_frame >= 0 and frame - agent.yield_mark_frame >= _YIELD_WATCH:
+			field.yield_push_sum += agent.yield_mark_push
+			var shift := agent.position - agent.yield_mark_pos
+			field.yield_net_sum += shift.dot(agent.yield_mark_dir)
+			field.yield_watch_count += 1
+			agent.yield_mark_frame = -1
+			continue
+		# 아직 지켜보는 중이 아니고 이번에 밀렸다면 그 자리를 적어 둔다.
+		if agent.yield_mark_frame < 0 and agent.yield_shift.length_squared() > 0.01:
+			agent.yield_mark_pos = agent.position - agent.yield_shift
+			agent.yield_mark_push = agent.yield_shift.length()
+			agent.yield_mark_dir = agent.yield_shift.normalized()
+			agent.yield_mark_frame = frame
