@@ -72,18 +72,6 @@ const _TRAITS_HEAD := "[성향]"
 ## 관계 칸의 머리. 없으면 **가족이 없는 사람이라** 없다고 적어 넣는다.
 const _RELATIONS_HEAD := "[관계]"
 
-## 성별을 뽑는 소금. **레코드에 성별이 없다** (§27.19.1).
-##
-## 시안에서 **계열마다 성별이 쏠렸다** — 전투 7장 전부 남자, 감식 3장 전부 여자.
-## 프롬프트에 성별을 한 번도 안 썼는데 그랬다. **모델이 마음대로 정하고 있었다.**
-##
-## 인물 레인에 넣어 달라고 넘겼다. 그때까지 **시드에서 결정적으로 뽑는다** —
-## `randi()` 를 쓰면 같은 인물의 성별이 부를 때마다 바뀌고, 그러면 시트와 그림이 어긋난다.
-const _GENDER_SALT := 8_675_309
-
-## 성별 이름. 레코드가 성별을 갖게 되면 이 배열이 아니라 레코드가 이름을 든다.
-const _GENDERS := ["남자", "여자"]
-
 
 func _initialize() -> void:
 	var args := _args()
@@ -188,7 +176,7 @@ func brief_of(registry: PersonRegistry, graph: RelationGraph, index: int) -> Str
 	text = _wrap_name(text, registry.name_of(index))
 	if text.is_empty():
 		return ""
-	text = _add_gender(text, registry, index)
+	text = _widen_gender(text, registry.gender_of(index))
 	if text.is_empty():
 		return ""
 	text = _gloss_discipline(text, registry.discipline_of(index))
@@ -200,17 +188,18 @@ func brief_of(registry: PersonRegistry, graph: RelationGraph, index: int) -> Str
 	return _note_kin(text, graph, index)
 
 
-## 성별을 나이 줄 아래에 끼운다. **레코드에 없는 유일한 칸이다** (§27.19.1).
+## 성별을 **프롬프트가 쓸 말**로 넓힌다 (§27.19.1).
 ##
-## 시안이 성별 쏠림을 냈다 — 전투 7장 전부 남자, 감식 3장 전부 여자.
-## 프롬프트에 성별이 한 낱말도 없었으므로 **모델이 계열 낱말에서 성별을 유추했다.**
-## 안 주면 모델이 정한다. 그러니 준다.
-func _add_gender(text: String, registry: PersonRegistry, person: int) -> String:
-	var line := "- 나이: %d세" % registry.age_of(person)
+## `PersonSheet` 는 `남` · `여` 한 글자를 낸다. **화면에서는 그것이 맞다** — 칸이 좁다.
+## 그런데 글로 나가면 한 글자는 문장에 못 들어간다. `PersonGender.portrait_word()` 가
+## `남성` · `여성` 을 이미 들고 있고, 머리말이 *"초상 프롬프트에 그대로 들어갈 말"*
+## 이라고 적어 뒀다. **그것을 쓴다** — §27.18 의 자리다.
+func _widen_gender(text: String, gender: PersonGender.Kind) -> String:
+	var line := "- 성별: %s" % PersonGender.label(gender)
 	if not text.contains(line):
-		printerr("나이 줄을 못 찾았다: %s — PersonDossier 형식이 바뀌었다" % line)
+		printerr("성별 줄을 못 찾았다: %s — PersonDossier 형식이 바뀌었다" % line)
 		return ""
-	return text.replace(line, "%s\n- 성별: %s" % [line, gender_of(registry, person)])
+	return text.replace(line, "- 성별: %s" % PersonGender.portrait_word(gender))
 
 
 ## 계열 이름에 **그 계열이 무슨 일을 하는지**를 붙인다.
@@ -228,21 +217,6 @@ func _gloss_discipline(text: String, discipline: MemberDiscipline.Kind) -> Strin
 		printerr("계열 줄을 못 찾았다: %s — PersonDossier 형식이 바뀌었다" % line)
 		return ""
 	return text.replace(line, "%s — %s" % [line, MemberDiscipline.eye_note(discipline)])
-
-
-## 인물의 성별. **여기 한 곳만 고치면 레코드로 갈아 끼워진다.**
-##
-##     return registry.gender_label_of(person)   # 레코드에 성별이 생기면 이 한 줄이다
-##
-## 지금은 시드에서 뽑는다. **`randi()` 를 쓰지 않는다** — 같은 인물이 부를 때마다
-## 성별이 바뀌면 시트와 그림이 어긋나고, 그것을 나중에 눈으로 찾을 수 없다.
-## 시드와 인덱스만으로 값이 정해지므로 같은 명령이 같은 성별을 낸다 (§24.16.7 의 규율).
-## `_registry` 는 지금 안 쓰지만 **자리를 비워 두는 것이 목적이다** — 레코드가
-## 성별을 갖게 되면 밑줄만 떼고 `_registry.gender_label_of(person)` 을 돌려주면 된다.
-func gender_of(_registry: PersonRegistry, person: int) -> String:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash(_SEED) ^ (person * _GENDER_SALT)
-	return _GENDERS[rng.randi() % _GENDERS.size()]
 
 
 ## 이름을 홑화살괄호로 감싼다 (§19.A.5).
