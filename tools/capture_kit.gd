@@ -52,6 +52,8 @@ func _initialize() -> void:
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	_showcase = load("res://src/ui/kit/kit_showcase.tscn").instantiate()
 	root.add_child(_showcase)
+	# 씬을 직접 띄웠을 때 뜨는 조작 안내는 조형이 아니다. 심사에 나가는 그림에서는 뺀다.
+	_showcase.call("set_guide_visible", false)
 
 
 func _process(delta: float) -> bool:
