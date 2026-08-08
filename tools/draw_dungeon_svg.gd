@@ -97,8 +97,8 @@ func _initialize() -> void:
 		"성격 묶음"
 	)
 
-	var now := _sheet("지금 생성기", _current_boards())
-	var proto := _sheet("설계안 프로토타입", _proto_boards())
+	var now := _sheet("지금 생성기 — 구역·관문까지 적용 (덩어리 2/5)", _current_boards())
+	var proto := _sheet("설계안 프로토타입 — 고도·경로 시공까지 (덩어리 3~4 가 남았다)", _proto_boards())
 	_write("%s/dungeon_now.svg" % target, now, "현재")
 	_write("%s/dungeon_proto.svg" % target, proto, "설계안")
 	_write(

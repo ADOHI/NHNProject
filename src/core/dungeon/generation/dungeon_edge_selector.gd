@@ -10,17 +10,39 @@ extends RefCounted
 ##
 ## | 단계 | 무엇을 | 왜 |
 ## | --- | --- | --- |
-## | 뼈대 | RNG + MST | 연결성 보장. 유기적인 모양 (ProximityGraphs 참고) |
-## | 곁가지 | 가브리엘 간선 일부 | 순환을 만들어 막다른 길만 남지 않게 |
+## | 뼈대 | **구역 안** RNG + MST | 연결성 보장. 유기적인 모양 (ProximityGraphs 참고) |
+## | 관문 | 구역 **사이** 가장 짧은 간선 하나씩 | 거시 구조를 성기게 (DungeonZones 참고) |
+## | 곁가지 | 허브에 닿는 가브리엘 간선 | 순환을 만들되 차수를 몰아 갈림길을 만든다 |
 ## | 보정 | 입구 차수 · 막다른 방 비율 | 규칙을 검증이 아니라 수선으로 맞춘다 |
 ##
-## 곁가지를 고르는 기준이 이 게임의 레벨 디자인이다 (§17.3 4단계).
-## 고도차가 큰 통로는 드물게, 입구에서 먼 곳은 성기게 잇는다.
-## 그러면 **귀중품이 놓일 깊은 곳에 우회로가 적어져** 값을 치러야 닿는 자리가 되고,
-## 입구 근처는 촘촘해져 첫 턴에 고를 것이 생긴다.
+## ## 축척을 둘로 나눈다 (§17.12.4-A)
+##
+## 예전에는 판 전체에 하나의 규칙을 걸었다. 그 결과가 **균질한 그물망**이다 —
+## 순환 계수가 방 개수의 0.47 배인데 지름은 8.9 밖에 안 되고, 어느 방에 서도
+## 서너 갈래고 어느 갈래로 가도 비슷한 곳이 나왔다 (§17.11.7).
+##
+## 지금은 구역 **안**은 촘촘하게, 구역 **사이**는 관문 하나씩만 잇는다.
+## 성김과 촘촘함이 다른 축척에 있으므로 **갈림길을 유지하면서 거시 구조를 성기게** 만든다.
+##
+## **앞 레인의 판단은 그대로 쓴다** — 구역 안에서는 여전히 RNG∪MST 에 가브리엘 곁가지다
+## (§17.3.4). 바뀐 것은 그 규칙을 판 전체가 아니라 구역마다 거는 것과, 구역 사이를
+## 관문으로만 잇는 것뿐이다.
+##
+## ## 깊이 페널티를 뺐다
+##
+## 예전 점수에는 「얕음」 항이 있어 입구에서 먼 곳을 성기게 이었다. 의도는 좋았지만
+## 실측에서 **얕은 쪽 평균 차수 3.4 대 깊은 쪽 2.05** 가 되어 **깊은 절반이 사실상 나무**가
+## 됐고, 하필 그 깊은 곳에 보상이 놓였다. 귀중 방의 31% 만 대안 경로가 있었던 직접 원인이다
+## (§17.11.7-2). 깊이를 성기게 만드는 일은 이제 **구역과 관문**이 대신한다.
 
 ## 막다른 방을 만들려고 간선을 끊어 보는 횟수. 무한 루프를 막는 상한이다.
 const _CARVE_PASSES := 6
+
+## 구역마다 간선을 몰아 줄 방의 수. **갈림길의 밀도를 정하는 손잡이다.**
+##
+## 하나만 두면 구역 안이 그 방을 지나는 별 모양이 되어 차수 3 이상이 45% 까지 떨어졌다.
+## 둘이면 갈림길이 두 군데 생긴다 (프로토타입 실측, §17.14.3).
+const _HUBS_PER_ZONE := 2
 
 ## 곁가지로 추가할 간선 수 (방 개수 대비).
 ##
@@ -39,25 +61,31 @@ var extra_ratio := 0.24
 var dead_end_ratio_min := 0.14
 var dead_end_ratio_max := 0.30
 
-## 깊이가 점수를 얼마나 깎는지. 크면 입구 근처만 촘촘해진다.
-var depth_penalty := 0.30
-
 var _points: PackedVector2Array
 var _delaunay: Array[Vector2i]
 var _elevations: PackedInt32Array
 var _entrance: int
+var _zones: PackedInt32Array
+var _zone_links: Array[Vector2i]
+var _boundaries: Dictionary
 
 
 func _init(
 	points: PackedVector2Array,
 	delaunay: Array[Vector2i],
 	elevations: PackedInt32Array,
-	entrance: int
+	entrance: int,
+	zones: PackedInt32Array,
+	zone_links: Array[Vector2i]
 ) -> void:
 	_points = points
 	_delaunay = delaunay
 	_elevations = elevations
 	_entrance = entrance
+	_zones = zones
+	_zone_links = zone_links
+	# 그릴 수 있는 경계만. 생성기가 고리를 만들 때 쓴 것과 같은 집합이어야 한다.
+	_boundaries = DungeonZones.readable_boundaries(points, delaunay, zones)
 
 
 ## 최종 간선 목록.
@@ -115,11 +143,119 @@ func _dead_ends_in(degrees: Dictionary) -> int:
 	return count
 
 
-## 뼈대. RNG 에 MST 를 합쳐 연결성을 확정한다.
+## 뼈대. **구역 안**은 RNG, 구역 **사이**는 관문 하나씩. 연결은 `_repair` 가 마감한다.
+##
+## RNG 판정은 구역 안 간선만 후보로 받지만 **판의 모든 방을 상대로** 검사한다.
+## 구역 안 방들만 보면 다른 구역의 방을 건너뛰는 통로가 생겨 선이 엉뚱한 방을 관통한다.
+##
+## **MST 를 여기서 뺐다.** 예전에는 판 전체 들로네를 후보로 MST 를 돌렸으므로 짧은 간선만
+## 골랐다. 후보를 구역 안으로 줄이면 사정이 달라진다 — 구역이 기하적으로 두 조각이면
+## Kruskal 이 그 둘을 잇는 **긴** 간선을 받아들이고, 그 선이 제3의 방을 스친다.
+## 실측에서 통로가 방 17 px 앞까지 다가왔다(기준 84 px).
+## 연결성은 `_repair` 가 **가브리엘 간선 중 가장 짧은 것**으로 마감하므로 더 안전하다.
 func _skeleton() -> Array[Vector2i]:
-	var relative := ProximityGraphs.relative_neighborhood(_points, _delaunay)
-	var spanning := ProximityGraphs.minimum_spanning_tree(_points, _delaunay)
-	return ProximityGraphs.merge(relative, spanning)
+	var inside := _inside_edges()
+	var relative := ProximityGraphs.relative_neighborhood(_points, inside)
+	return _repair(_add_gates(relative))
+
+
+## 같은 구역에 양쪽 끝이 있는 들로네 간선들.
+func _inside_edges() -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	for edge in _delaunay:
+		if _zones[edge.x] == _zones[edge.y]:
+			result.append(edge)
+	return result
+
+
+## 구역 연결마다 관문 간선 하나를 놓는다.
+func _add_gates(chosen: Array[Vector2i]) -> Array[Vector2i]:
+	var result := chosen.duplicate()
+	var taken := {}
+	for edge in result:
+		taken[DelaunayTriangulation.edge_key(edge.x, edge.y)] = true
+	for link in _zone_links:
+		var gate := DungeonZones.gate(_points, _boundaries, link)
+		if gate == Vector2i(-1, -1):
+			continue
+		var key := DelaunayTriangulation.edge_key(gate.x, gate.y)
+		if taken.has(key):
+			continue
+		taken[key] = true
+		result.append(key)
+	return result
+
+
+## V1 — 떨어져 나온 방이 있으면 **가장 짧은** 들로네 간선으로 도로 붙인다.
+##
+## 구역 안 RNG 가 구역을 하나로 잇지 못하는 경우가 있다. 구역 안 후보 간선 집합이
+## 그 구역 안에서 이어져 있다는 보장이 없기 때문이다(들로네가 구역 경계를 가로지르며
+## 구역을 두 조각으로 나눌 수 있다). MST 도 후보 안에서만 도니 같은 한계를 갖는다.
+##
+## **여유(DungeonZones.CLEARANCE_MIN)를 지키는 것 중 가장 짧은 것을 고른다.**
+## 아무 것이나 잇으면 판을 가로지르는 통로가 생기고, 짧기만 한 간선은 제3의 방을 스친다 (§17.6).
+func _repair(chosen: Array[Vector2i]) -> Array[Vector2i]:
+	var result := chosen.duplicate()
+	for attempt in _points.size():
+		var reached := _depths(result)
+		if reached.size() == _points.size():
+			return result
+		var best := Vector2i(-1, -1)
+		var best_length := INF
+		var clean := Vector2i(-1, -1)
+		var clean_length := INF
+		for edge in _delaunay:
+			if reached.has(edge.x) == reached.has(edge.y):
+				continue
+			var length := _points[edge.x].distance_squared_to(_points[edge.y])
+			if length < best_length:
+				best_length = length
+				best = edge
+			if DungeonZones.clearance(_points, edge) >= DungeonZones.CLEARANCE_MIN:
+				if length < clean_length:
+					clean_length = length
+					clean = edge
+		if clean != Vector2i(-1, -1):
+			best = clean
+		if best == Vector2i(-1, -1):
+			push_error("떨어져 나온 방을 붙일 간선이 없습니다")
+			return result
+		result.append(DelaunayTriangulation.edge_key(best.x, best.y))
+	return result
+
+
+## 구역마다 들로네 이웃이 가장 많은 방 몇 개. 여기에 곁가지를 몰아 준다.
+##
+## 고르게 뿌리면 전부 차수 2~3 이 되어 어느 방이나 똑같아 보인다. 몰아 주면 같은 간선
+## 수로도 **차수 4 짜리 갈림길과 차수 1 짜리 막다른 방이 함께** 생긴다.
+func _hubs(inside: Array[Vector2i]) -> Dictionary:
+	var degrees := {}
+	for edge in inside:
+		degrees[edge.x] = int(degrees.get(edge.x, 0)) + 1
+		degrees[edge.y] = int(degrees.get(edge.y, 0)) + 1
+
+	var members := {}
+	for index in _points.size():
+		var zone := _zones[index]
+		if not members.has(zone):
+			members[zone] = [] as Array[int]
+		(members[zone] as Array[int]).append(index)
+
+	var result := {}
+	for zone in members:
+		var entries: Array = []
+		for index in members[zone] as Array[int]:
+			# 같은 이웃 수일 때 순서가 흔들리지 않도록 인덱스를 아래 자리에 넣는다 (§17.7).
+			entries.append(
+				{
+					"edge": Vector2i(index, index),
+					"key": float(int(degrees.get(index, 0))) - 0.000001 * float(index)
+				}
+			)
+		var ranked := _by_key(entries)
+		for slot in mini(_HUBS_PER_ZONE, ranked.size()):
+			result[ranked[slot].x] = true
+	return result
 
 
 ## 막다른 방이 모자라면 몇 군데를 일부러 끊는다.
@@ -191,38 +327,76 @@ func _edge_depth(depths: Dictionary, edge: Vector2i) -> int:
 	return mini(int(depths.get(edge.x, 0)), int(depths.get(edge.y, 0)))
 
 
-## 곁가지 후보를 점수 순으로 세운다.
+## 곁가지 후보를 점수 순으로 세운다. **세 겹이다.**
 ##
-## 가브리엘 간선을 먼저 놓고 나머지 들로네 간선을 뒤에 붙인다.
-## 가브리엘 간선은 두 방 사이에 낀 방이 없다는 뜻이라, 그 선을 그어도
-## 엉뚱한 제3의 방을 스치지 않는다. 나머지는 정말 모자랄 때만 쓴다.
+## | 겹 | 무엇 | 왜 |
+## | --- | --- | --- |
+## | 1 | 구역 안 가브리엘 간선 중 **허브에 닿는 것** | 차수를 몰아 갈림길을 만든다 |
+## | 2 | 구역 안 나머지 가브리엘 간선 | 막다른 방 비율을 맞출 때 쓴다 (V5) |
+## | 3 | 구역을 넘는 가브리엘 간선 | 관문이 늘어 거시 구조가 흐려지므로 뒤에 둔다 |
+## | 4 | 나머지 들로네 간선 중 **읽히는 것** | 정말 모자랄 때만 |
+##
+## **3·4 겹은 여유(`_readable`)를 통과한 것만 받는다.** 처음에는 3겹을 「나머지 들로네」로
+## 두었는데, 1·2 겹이 작아 3겹까지 내려가는 판이 흔했고 그때 들어온 간선이 방을 24 px
+## 앞까지 스쳤다 (§17.17.6).
+##
+## 가브리엘 간선은 두 방 사이에 낀 방이 없다는 뜻이라, 그 선을 그어도 엉뚱한 제3의 방을
+## 스치지 않는다. 겹의 순서가 곧 우선순위이고, `_add_extras` 가 앞에서부터 쓴다.
 func _ranked_pool(chosen: Array[Vector2i], rng: RandomNumberGenerator) -> Array[Vector2i]:
 	var taken := {}
 	for edge in chosen:
 		taken[edge] = true
-	var depths := _depths(chosen)
 
-	var near: Array[Vector2i] = []
-	var far: Array[Vector2i] = []
+	var inside := _inside_edges()
+	var hubs := _hubs(inside)
+	var hub_edges: Array[Vector2i] = []
+	var inner: Array[Vector2i] = []
+	for edge in ProximityGraphs.gabriel(_points, inside):
+		if taken.has(edge):
+			continue
+		taken[edge] = true
+		if hubs.has(edge.x) or hubs.has(edge.y):
+			hub_edges.append(edge)
+		else:
+			inner.append(edge)
+
+	# 구역을 넘는 후보는 가브리엘만 받는다. 관문이 하나라는 성질을 흐리는 대신 V5 를 맞출 때
+	# 쓰이므로 아주 버릴 수는 없지만, 아무 간선이나 받으면 통로가 방을 스친다.
+	var crossing: Array[Vector2i] = []
 	for edge in ProximityGraphs.gabriel(_points, _delaunay):
-		if not taken.has(edge):
-			near.append(edge)
+		if not taken.has(edge) and _readable(edge):
 			taken[edge] = true
-	for edge in _delaunay:
-		if not taken.has(edge):
-			far.append(edge)
+			crossing.append(edge)
 
-	return _by_score(near, depths, rng) + _by_score(far, depths, rng)
+	# 마지막 겹. 여기까지 왔으면 정말 모자란 것이므로 **읽히는 것만** 받는다.
+	var rest: Array[Vector2i] = []
+	for edge in _delaunay:
+		if not taken.has(edge) and _readable(edge):
+			rest.append(edge)
+
+	return (
+		_by_score(hub_edges, rng)
+		+ _by_score(inner, rng)
+		+ _by_score(crossing, rng)
+		+ _by_score(rest, rng)
+	)
+
+
+## 그 간선을 그어도 상관없는 방을 스치지 않는가.
+##
+## **모든 단계가 이걸 지켜야 한다.** 뼈대는 RNG 라 저절로 지켜지지만, 관문 · 수선 · 곁가지는
+## 후보가 줄어든 상태에서 고르므로 직접 확인해야 한다. 한 군데라도 빠지면
+## 「통로가 방을 관통하지 않는다」가 깨진다 (§17.6, `test_dungeon_layout.gd`).
+func _readable(edge: Vector2i) -> bool:
+	return DungeonZones.clearance(_points, edge) >= DungeonZones.CLEARANCE_MIN
 
 
 ## 점수 내림차순. 점수를 미리 계산해 두는 이유는, 비교 함수 안에서 난수를 뽑으면
 ## 호출 순서에 따라 결과가 달라져 **같은 시드가 같은 판을 만들지 못하기 때문이다** (§17.7).
-func _by_score(
-	edges: Array[Vector2i], depths: Dictionary, rng: RandomNumberGenerator
-) -> Array[Vector2i]:
+func _by_score(edges: Array[Vector2i], rng: RandomNumberGenerator) -> Array[Vector2i]:
 	var scored: Array = []
 	for edge in edges:
-		scored.append({"edge": edge, "key": _score(edge, depths, rng)})
+		scored.append({"edge": edge, "key": _score(edge, rng)})
 	return _by_key(scored)
 
 
@@ -242,15 +416,14 @@ static func _by_key(entries: Array) -> Array[Vector2i]:
 
 
 ## 간선 하나의 점수. 클수록 먼저 채택된다.
-func _score(edge: Vector2i, depths: Dictionary, rng: RandomNumberGenerator) -> float:
+##
+## **깊이 항이 없다.** 깊은 곳을 성기게 만드는 일은 구역과 관문이 대신한다 (위 주석 참고).
+func _score(edge: Vector2i, rng: RandomNumberGenerator) -> float:
 	var climb := absi(_elevations[edge.x] - _elevations[edge.y])
-	var depth: int = mini(int(depths.get(edge.x, 0)), int(depths.get(edge.y, 0)))
 	# 가파른 통로가 흔해지면 필요 민첩이라는 등급 자체가 의미를 잃는다 (§17.4).
 	var gentle := 1.0 / (1.0 + float(climb))
-	# 깊은 곳은 성기게. 우회로가 적어야 고가치 방이 값을 치르고 닿는 곳이 된다 (V3).
-	var shallow := 1.0 / (1.0 + depth_penalty * float(depth))
 	# 흔들어 주지 않으면 같은 지형에서 늘 같은 곁가지가 나온다.
-	return gentle * shallow * rng.randf_range(0.55, 1.45)
+	return gentle * rng.randf_range(0.55, 1.45)
 
 
 ## 입구에서의 간선 수(hop) 거리.
@@ -275,14 +448,21 @@ func _depths(edges: Array[Vector2i]) -> Dictionary:
 func _ensure_entrance_choice(chosen: Array[Vector2i]) -> Array[Vector2i]:
 	var result := chosen.duplicate()
 	var entries: Array = []
+	var fallback: Array = []
 	for edge in _delaunay:
 		if (edge.x == _entrance or edge.y == _entrance) and not result.has(edge):
 			# 가까운 방부터 붙인다. 판 반대편까지 뻗는 긴 통로가 입구에 생기면
 			# 첫 선택지가 판을 가로지르는 이상한 그림이 된다.
-			entries.append(
-				{"edge": edge, "key": -_points[edge.x].distance_squared_to(_points[edge.y])}
-			)
-	var candidates := _by_key(entries)
+			var entry := {
+				"edge": edge, "key": -_points[edge.x].distance_squared_to(_points[edge.y])
+			}
+			if _readable(edge):
+				entries.append(entry)
+			else:
+				fallback.append(entry)
+	# 읽히는 후보를 먼저 쓰고, 없으면 스치는 것이라도 쓴다 —
+	# **선택지가 하나뿐인 시작을 막는 것이 읽힘보다 앞선다** (V7 은 공정성 규칙이다).
+	var candidates := _by_key(entries) + _by_key(fallback)
 	var index := 0
 	while _degree_of(result, _entrance) < 2 and index < candidates.size():
 		result.append(candidates[index])

@@ -41,6 +41,15 @@ const ROOMS_PER_ZONE := 6.0
 const ZONE_MIN := 3
 const ZONE_MAX := 8
 
+## 통로가 상관없는 방에서 떨어져 있어야 하는 최소 거리 (방 사이 최소 간격 1 기준).
+##
+## **관문 때문에 이 값이 필요해졌다.** 관문은 구역 경계를 넘는 간선 하나인데, 후보 중
+## 가장 짧은 것을 골랐더니 그 선이 제3의 방을 24 px 앞까지 스쳤다(기준 84 px).
+## 짧은 것이 곧 깨끗한 것은 아니다 — 짧아도 옆에 방이 붙어 있으면 선이 그 방을 지난다.
+##
+## 0.3 이 테스트의 기준이고(`test_dungeon_layout.gd`), 여유를 두어 0.35 로 잡는다.
+const CLEARANCE_MIN := 0.35
+
 
 ## 방 개수에 맞는 구역 수.
 static func count_for(rooms: int) -> int:
@@ -112,6 +121,34 @@ static func boundaries(delaunay: Array[Vector2i], zones: PackedInt32Array) -> Di
 		if not result.has(key):
 			result[key] = [] as Array[Vector2i]
 		(result[key] as Array[Vector2i]).append(edge)
+	return result
+
+
+## 그릴 수 있는 경계만 남긴 것. **고리와 관문은 이걸 써야 한다.**
+##
+## 관문을 「후보 중 여유가 가장 큰 것」으로 물러나게 했더니 여전히 방을 스쳤다.
+## 이유는 그 구역 쌍의 **모든** 경계 간선이 방을 스치기 때문이었다(최대 여유 0.11, 기준 0.35).
+## 고를 수 있는 것 중 최선을 골라도 최선이 나쁘면 결과가 나쁘다.
+##
+## 그래서 **고를 때 물러나는 대신 애초에 후보에서 뺀다.** 그리기 어려운 경계를 가진 구역 쌍은
+## 이어질 수 없는 쌍이 되고, 고리는 그 쌍을 우회해 다른 쪽으로 돈다.
+##
+## 이렇게 해서 구역 그래프가 갈라지면 어떻게 되는가 — **방 단위 연결은 그대로 보장된다.**
+## `DungeonEdgeSelector` 의 수선이 방 단위로 도달성을 마감하기 때문이다 (V1).
+## 잃는 것은 「입구가 순환 위에 있다」가 약해지는 것뿐이고, 그건 덩어리 4 의 경로 시공이
+## 구역 안에서 메운다.
+static func readable_boundaries(
+	points: PackedVector2Array, delaunay: Array[Vector2i], zones: PackedInt32Array
+) -> Dictionary:
+	var result := {}
+	var raw := boundaries(delaunay, zones)
+	for key in raw:
+		var kept: Array[Vector2i] = []
+		for edge in raw[key] as Array[Vector2i]:
+			if clearance(points, edge) >= CLEARANCE_MIN:
+				kept.append(edge)
+		if not kept.is_empty():
+			result[key] = kept
 	return result
 
 
@@ -312,10 +349,24 @@ static func ranks(links: Array[Vector2i], start: int, count: int) -> PackedInt32
 	return result
 
 
-## 두 구역을 잇는 **관문 간선 하나.** 가장 짧은 들로네 간선을 쓴다.
+## 두 구역을 잇는 **관문 간선 하나.**
 ##
-## 가장 짧은 것을 고르는 이유는 관문이 판을 가로지르지 않아야 하기 때문이다.
-## 긴 간선을 관문으로 쓰면 통로가 다른 구역을 스치고 지나가 판이 읽히지 않는다 (§17.6).
+## 짧은 것을 고르는 이유는 관문이 판을 가로지르지 않아야 하기 때문이다.
+## 긴 간선을 관문으로 쓰면 통로가 판을 건너질러 다른 구역을 스치고 지나간다 (§17.6).
+##
+## **다만 짧은 것만으로는 모자랐다.** 최단 간선을 관문으로 잡았더니
+## 「통로가 방을 관통하지 않는다」 테스트가 깨졌다 — 통로가 방 20 px 앞까지 다가왔다(기준 84).
+## 짧아도 옆에 방이 붙어 있으면 선이 그 방을 지난다.
+##
+## 그래서 두 기준을 순서대로 쓴다.
+##
+## | 순서 | 기준 |
+## | --- | --- |
+## | 1 | 여유(`CLEARANCE_MIN`)를 지키는 후보 중 **가장 짧은 것** |
+## | 2 | 하나도 못 지키면 **여유가 가장 큰 것** |
+##
+## 여유를 1순위로 두지 않는 이유는, 긴 간선이 여유는 크지만 판을 가로지르기 때문이다.
+## **여유는 통과 조건이고 길이가 고르는 기준이다.**
 ##
 ## 후보가 없으면 Vector2i(-1, -1) 을 돌려준다. 부르는 쪽이 그 경우를 처리해야 한다.
 static func gate(
@@ -324,13 +375,37 @@ static func gate(
 	if not zone_boundaries.has(link):
 		return Vector2i(-1, -1)
 	var best := Vector2i(-1, -1)
-	var best_distance := INF
+	var best_length := INF
+	var roomy := Vector2i(-1, -1)
+	var roomy_clearance := -1.0
 	for edge in zone_boundaries[link] as Array[Vector2i]:
-		var distance := points[edge.x].distance_squared_to(points[edge.y])
-		if distance < best_distance:
-			best_distance = distance
+		var gap := clearance(points, edge)
+		if gap > roomy_clearance:
+			roomy_clearance = gap
+			roomy = edge
+		if gap < CLEARANCE_MIN:
+			continue
+		var length := points[edge.x].distance_squared_to(points[edge.y])
+		if length < best_length:
+			best_length = length
 			best = edge
-	return best
+	return best if best != Vector2i(-1, -1) else roomy
+
+
+## 그 간선이 **상관없는 방들에서 얼마나 떨어져 있는가.** 작을수록 선이 방을 스친다.
+##
+## 통로가 방을 스치면 이름도 숫자도 못 읽는다 (§17.6). 가브리엘 조건이 이 성질의
+## 대리값이지만, 관문은 가브리엘이 아닌 후보만 남는 경우가 있어 직접 잰다.
+static func clearance(points: PackedVector2Array, edge: Vector2i) -> float:
+	var closest := INF
+	for index in points.size():
+		if index == edge.x or index == edge.y:
+			continue
+		var found := Geometry2D.get_closest_point_to_segment(
+			points[index], points[edge.x], points[edge.y]
+		)
+		closest = minf(closest, found.distance_to(points[index]))
+	return closest
 
 
 ## 구역 중심을 무게중심 기준 각도 순으로 세운다.

@@ -4,7 +4,7 @@ extends RefCounted
 ##
 ## **순서가 이 생성기의 전부다.**
 ##
-##     자리(블루 노이즈) -> 삼각분할 -> 간선 선택 -> 고도 -> 방 종류
+##     자리(블루 노이즈) -> 삼각분할 -> **구역** -> 간선 선택 -> 고도 -> 방 종류
 ##
 ## 예전에는 반대였다. 층을 나눠 그래프를 먼저 만들고 나중에 힘 기반 완화로 펼쳤다.
 ## 그 순서에서는 평면에 그릴 수 없는 그래프가 나올 수 있고, 그러면 레이아웃이
@@ -23,7 +23,8 @@ extends RefCounted
 ## | --- | --- |
 ## | 간선이 교차하지 않는다 | 후보가 들로네 부분집합이다 (DelaunayTriangulation) |
 ## | 밀도가 고르다 | 푸아송 디스크 샘플링 (PoissonDiskSampler) |
-## | 모든 방에 도달 가능 | 뼈대에 MST 가 들어 있다 (ProximityGraphs) |
+## | 축척이 둘이다 | 구역 안은 촘촘, 구역 사이는 관문 하나 (DungeonZones) |
+## | 모든 방에 도달 가능 | 뼈대가 갈라지면 가장 짧고 읽히는 들로네 간선으로 붙인다 (DungeonEdgeSelector) |
 ## | 민첩 0 탈출구가 있다 | 입구에서 탈출구까지 지형을 깎는다 (DungeonTerrain) |
 ## | 입구에 갈림길이 있다 | 차수가 모자라면 들로네 간선을 붙인다 (DungeonEdgeSelector) |
 ##
@@ -88,6 +89,19 @@ func generate() -> DungeonBlueprint:
 
 	var delaunay := DelaunayTriangulation.edges(points)
 	var entrance := _pick_entrance(points, region)
+
+	# 구역을 먼저 나눈다. 간선 선택이 이 위에 서고, 고도와 경로 시공도 그럴 것이다
+	# (docs/design/17-dungeon-generation.md §17.17).
+	var zone_count := DungeonZones.count_for(points.size())
+	var zones := DungeonZones.assign(points, entrance, zone_count)
+	var zone_links := DungeonZones.ring(
+		points,
+		zones,
+		DungeonZones.readable_boundaries(points, delaunay, zones),
+		zone_count,
+		zones[entrance]
+	)
+
 	var elevations := DungeonTerrain.assign(
 		points,
 		entrance,
@@ -97,7 +111,9 @@ func generate() -> DungeonBlueprint:
 		_params.elevation_frequency
 	)
 
-	var selector := DungeonEdgeSelector.new(points, delaunay, elevations, entrance)
+	var selector := DungeonEdgeSelector.new(
+		points, delaunay, elevations, entrance, zones, zone_links
+	)
 	selector.extra_ratio = _params.extra_edge_ratio
 	selector.dead_end_ratio_min = _params.dead_end_ratio_min
 	selector.dead_end_ratio_max = _params.dead_end_ratio_max

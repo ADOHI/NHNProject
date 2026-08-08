@@ -143,7 +143,33 @@ func test_every_gate_is_a_delaunay_edge() -> void:
 			assert_true(_holds(delaunay, found), "관문이 들로네 간선이 아닙니다: %s" % found)
 
 
-func test_the_gate_is_the_shortest_crossing() -> void:
+func test_the_gate_keeps_its_distance_from_other_rooms() -> void:
+	# 최단 간선을 관문으로 잡았더니 통로가 방을 20 px 앞까지 스쳤다 (§17.17.6).
+	# 여유가 되는 후보가 하나라도 있으면 관문은 반드시 그중에서 골라야 한다.
+	for seed_value in _SEEDS:
+		var points := _points(seed_value)
+		var wanted := ZonesScript.count_for(points.size())
+		var zones := ZonesScript.assign(points, 0, wanted)
+		var delaunay := DelaunayScript.edges(points)
+		var boundaries := ZonesScript.boundaries(delaunay, zones)
+
+		for key in boundaries:
+			var roomy := false
+			for edge in boundaries[key] as Array[Vector2i]:
+				if ZonesScript.clearance(points, edge) >= ZonesScript.CLEARANCE_MIN:
+					roomy = true
+					break
+			if not roomy:
+				continue
+			var found := ZonesScript.gate(points, boundaries, key)
+			assert_gte(
+				ZonesScript.clearance(points, found),
+				ZonesScript.CLEARANCE_MIN,
+				"여유가 되는 후보가 있는데 관문이 방을 스친다"
+			)
+
+
+func test_the_gate_is_the_shortest_crossing_that_has_room() -> void:
 	for seed_value in _SEEDS:
 		var points := _points(seed_value)
 		var wanted := ZonesScript.count_for(points.size())
@@ -153,12 +179,16 @@ func test_the_gate_is_the_shortest_crossing() -> void:
 
 		for key in boundaries:
 			var found := ZonesScript.gate(points, boundaries, key)
+			if ZonesScript.clearance(points, found) < ZonesScript.CLEARANCE_MIN:
+				continue
 			var span := points[found.x].distance_squared_to(points[found.y])
 			for edge in boundaries[key] as Array[Vector2i]:
+				if ZonesScript.clearance(points, edge) < ZonesScript.CLEARANCE_MIN:
+					continue
 				assert_lte(
 					span,
 					points[edge.x].distance_squared_to(points[edge.y]) + 1e-9,
-					"관문보다 짧은 경계 간선이 있습니다"
+					"여유가 되는 더 짧은 경계 간선이 있습니다"
 				)
 
 
