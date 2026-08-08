@@ -75,6 +75,21 @@ const _RECOIL_STEP := 0.6
 ## 폭이 실제로 있다는 뜻이다.
 const _RECOIL_MIN_CLEAR := 2
 
+## 한 번의 전파가 건드릴 수 있는 유닛 수의 상한. **옆 사슬과 뒤 사슬을 합쳐서 센다.**
+##
+## 깊이 상한을 간선마다 따로 두었더니 곱해졌다 - 앞으로 8, 옆으로 3, 뒤로 6 이면 한 번에
+## 백 명 넘게 훑을 수 있다. 좁은 통로 100 에서 평균 깊이가 4.1 로 뛰고 최악 프레임이
+## 22 밀리초가 된 것이 그 결과다. **예산은 하나로 두고 둘이 나눠 쓴다.**
+const _CHAIN_BUDGET := 10
+
+## 마주 오는 상대로 볼 각도의 코사인. -0.5 는 대략 120 도보다 더 마주 본 것이다.
+##
+## **맞교차에서 물러나기가 한 번도 안 걸렸다.** 물러나기가 "옆으로 비켜서기가 실패했을 때"만
+## 불렸는데, 열린 곳에서는 옆이 늘 트여 비켜서기가 성공하고 그러면 물러나기까지 오지 않는다.
+## 그런데 **마주 오는 둘에게는 물러나기가 유일한 해법이다** - 하나가 넓은 곳까지 물러나
+## 길을 내주는 것 말고 방법이 없다. 그래서 마주 보고 있으면 옆과 함께 뒤도 본다.
+const _FACING_COS := -0.5
+
 
 ## **뒤로 물러나라를 뒤에 선 유닛들에게 물려준다.**
 ##
@@ -101,7 +116,7 @@ static func recoil(
 	chain: Array[int],
 	depth: int
 ) -> float:
-	if depth >= _RECOIL_DEPTH:
+	if depth >= _RECOIL_DEPTH or chain.size() >= _CHAIN_BUDGET:
 		return 0.0
 	var follower := _follower(field, agent, scratch, chain)
 	if follower == null:
@@ -174,7 +189,7 @@ static func propagate(field: ProtoUnitField, agent: ProtoUnitAgent) -> int:
 	var current := agent
 	var moved := 0
 	var depth := 0
-	while depth < _MAX_DEPTH:
+	while depth < _MAX_DEPTH and chain.size() < _CHAIN_BUDGET:
 		var heading := current.steer_dir
 		if heading == Vector2.ZERO:
 			break
@@ -240,6 +255,9 @@ static func _step_aside(
 		# 막혔을 때만 뒤를 본다.**
 		field.propagate_blocked += 1
 		return recoil(field, blocker, scratch, chain, 0) > 0.0
+	if heading.dot(blocker.steer_dir) <= _FACING_COS:
+		# **마주 오는 상대는 옆으로 비켜도 다시 온다.** 옆과 함께 뒤도 본다.
+		recoil(field, blocker, scratch, chain, 0)
 	behind.chain_to = blocker.id
 	behind.chain_ago = 0
 	behind.chain_kind = 0
@@ -265,7 +283,7 @@ static func _shove(
 	depth: int
 ) -> float:
 	var room := ProtoUnitYield.yield_room(field, agent, away, want, scratch)
-	if room < want and depth < _RELAY_DEPTH:
+	if room < want and depth < _RELAY_DEPTH and chain.size() < _CHAIN_BUDGET:
 		var crowder := _crowder(field, agent, away, want, scratch, chain)
 		if crowder != null:
 			chain.append(crowder.id)
