@@ -52,6 +52,13 @@ func _initialize() -> void:
 	for wanted in _COUNTS:
 		_check(wanted)
 	print("")
+	print("== 방 50개에서 간격을 줄이면 ==")
+	print(
+		"%-8s %11s %11s %8s %8s %8s" % ["spacing", "map_w", "map_h", "fitZoom", "seen%", "minGap"]
+	)
+	for spacing in [280.0, 240.0, 220.0, 200.0, 180.0]:
+		_check_spacing(spacing)
+	print("")
 	print("map_w/h  : 지도 전체 크기 (배율 1 의 픽셀)")
 	print("fitZoom  : 판 전체가 화면에 들어오려면 필요한 배율")
 	print("seen%%    : 확대 하한에서 보이는 판의 넓이 비율 (100 이면 다 보인다)")
@@ -79,7 +86,8 @@ func _check(wanted: int) -> void:
 	var runs := float(_SEEDS.size())
 	map /= runs
 	fit /= runs
-	var shown := clampf(_ZOOM_MIN / fit, 0.0, 1.0)
+	# 확대 하한에서 화면에 들어오는 비율. fit 이 하한보다 크면 더 줄일 필요가 없어 전부 보인다.
+	var shown := clampf(fit / _ZOOM_MIN, 0.0, 1.0)
 	print(
 		(
 			"%-6d %6.1f %11.0f %11.0f %8.3f %8.1f %8.0f %7s"
@@ -93,6 +101,38 @@ func _check(wanted: int) -> void:
 				gap,
 				"보인다" if maxf(fit, _ZOOM_MIN) >= _DETAIL_NAME_ZOOM else "안 보인다",
 			]
+		)
+	)
+
+
+## 간격을 바꿨을 때 방 50개 판이 어떻게 되는가.
+##
+## 간격을 줄이면 판이 화면에 들어오지만 방 위젯끼리 가까워진다.
+## minGap 이 0 에 가까워지면 이름이 겹친다 — 그 경계를 찾는 것이 목적이다.
+func _check_spacing(spacing: float) -> void:
+	var map := Vector2.ZERO
+	var gap := INF
+	var fit := 0.0
+	for seed_value in _SEEDS:
+		var params := DungeonGenerator.Params.new()
+		params.room_count = 50
+		var blueprint := DungeonGenerator.new(seed_value, params).generate()
+		var positions := blueprint.layout(seed_value, spacing)
+		if positions.is_empty():
+			continue
+		var span := _span(positions)
+		map += span
+		gap = minf(gap, _closest_gap(positions))
+		fit += minf(_VIEW.x / maxf(span.x, 1.0), _VIEW.y / maxf(span.y, 1.0))
+
+	var runs := float(_SEEDS.size())
+	map /= runs
+	fit /= runs
+	var shown := clampf(fit / _ZOOM_MIN, 0.0, 1.0)
+	print(
+		(
+			"%-8.0f %11.0f %11.0f %8.3f %8.1f %8.0f"
+			% [spacing, map.x, map.y, fit, 100.0 * shown * shown, gap]
 		)
 	)
 
