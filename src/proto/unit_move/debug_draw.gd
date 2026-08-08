@@ -95,10 +95,13 @@ func _draw_agent(agent: ProtoUnitAgent) -> void:
 	if agent.is_moving() or agent.state == ProtoUnitAgent.State.HOLDING:
 		draw_line(agent.position, agent.goal, _GOAL_COLOR, 1.0)
 	if show_forces and agent.is_moving():
-		var seek_end := agent.position + agent.debug_seek * _FORCE_SCALE
-		_draw_arrow(agent.position, seek_end, _SEEK_COLOR, 1.5)
-		var separation_end := agent.position + agent.debug_separation * _FORCE_SCALE
-		_draw_arrow(agent.position, separation_end, _SEPARATION_COLOR, 1.5)
+		# 노랑은 **가려던 것**, 파랑은 **실제로 간 것**이다. 둘의 차이가 앞이 막힌 몫이고,
+		# 이웃이 미는 힘이 없어진 지금 화살표 둘을 나란히 놓아야 볼 것이 남는다.
+		_draw_arrow(
+			agent.position, agent.position + agent.debug_seek * _FORCE_SCALE, _SEEK_COLOR, 1.5
+		)
+		var moved_end := agent.position + agent.velocity * _FORCE_SCALE
+		_draw_arrow(agent.position, moved_end, _SEPARATION_COLOR, 1.5)
 	if selection != null and selection.size() <= _TEXT_LIMIT and selection.has(agent.id):
 		_draw_agent_text(agent)
 

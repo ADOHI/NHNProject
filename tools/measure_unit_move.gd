@@ -15,10 +15,10 @@ extends SceneTree
 ## | 꺾임 | 유닛당 초당 진행 방향이 꺾인 각도. **지터의 크기다** |
 ## | 역주행 | 제 목표에서 멀어지는 쪽으로 움직인 프레임의 비율. **튕김의 크기다** |
 ## | 굽이 | 실제 이동 거리 / 직선 거리. 1.0 이 완전한 직선이다 |
-## | 밀린거리 | 겹침 해소가 위치를 강제로 옮긴 총 거리 |
-## | 정지밀림 | **움직이는 유닛이 서 있는 유닛을 밀어낸 총 거리. 0 이어야 한다** |
+## | 벽보정 | 지형 보정이 위치를 강제로 옮긴 총 거리. 평상시에는 0 이다 |
+## | 정지밀림 | **서 있는 유닛이 제 뜻과 무관하게 옮겨진 총 거리. 0 이어야 한다** |
 ## | 최대겹침 | 몸이 서로 파고든 최대 깊이. 통과하려면 몸 지름까지 자라야 한다 |
-## | 막힌이동 | 이웃의 몸에 막혀 깎여 나간 이동 거리. 밀치기를 걷어낸 값이다 |
+## | 막힌이동 | 가려 했으나 앞이 막혀 못 간 거리. 밀치기를 걷어낸 값이다 |
 ## | 정지 | 명령부터 전원이 멎기까지의 시간 |
 ## | 90% | 열에 아홉이 멎기까지의 시간. 정지와의 차이가 뒤끝이다 |
 ## | 통과 | 전원이 벽 너머로 넘어가기까지의 시간(괄호는 못 넘은 인원) |
@@ -98,18 +98,19 @@ func _facing_field(count: int, gate_cells: int = 0) -> ProtoUnitField:
 
 ## 새로 넣은 장치를 하나씩 꺼 본다. **켜 두는 값은 꺼 봤을 때 나빠져야 자격이 있다.**
 ##
-## 처음에는 원래 있던 항(비껴가기 · 겹침 해소 · 분리 · 대형 유지)을 하나씩 꺼 봤는데
-## 어느 하나도 지터를 혼자 만들지 않았다 — 전부 15 퍼센트 안팎이었다. 원인은 힘의 세기가
-## 아니라 **조향이 가리키는 방향 자체가 튀는 것**이었고, 그것은 흐름장을 읽는 방식에 있었다.
+## 예전에는 힘 항(비껴가기 · 겹침 해소 · 분리 · 양보)을 하나씩 꺼 봤고, 어느 하나도 지터를
+## 혼자 만들지 않았다. 그 항들이 통째로 없어졌으므로 이제 끌 수 있는 것은 **자기 몸의 성질**
+## 뿐이다 — 조향 평활 · 회전 제한 · 대형 유지. 꺼도 나빠지지 않는 값은 있을 이유가 없다.
 func _run_probe() -> void:
 	var target := Vector2(1500, 545)
 	var gate := 30 * _CELL
 	var rows: Array[Dictionary] = []
 	rows.append(_measure("전부 켬", _choke_field(40, 2), target, gate))
 	rows.append(_measure("조향 평활 끔", _tuned(_choke_field(40, 2), "steer_smooth", 0.0), target, gate))
-	rows.append(_measure("양보 끔", _tuned(_choke_field(40, 2), "yield_strength", 0.0), target, gate))
-	rows.append(_measure("겹침 상한 풀기", _tuned(_choke_field(40, 2), "push_cap", 1.0), target, gate))
-	rows.append(_measure("비껴가기 끔", _tuned(_choke_field(40, 2), "side_bias", 0.0), target, gate))
+	rows.append(
+		_measure("회전 제한 풀기", _tuned(_choke_field(40, 2), "turn_rate", 2000.0), target, gate)
+	)
+	rows.append(_measure("대형 유지 끔", _tuned(_choke_field(40, 2), "group_sync", 0.0), target, gate))
 	rows.append(_measure("한 칸 문", _choke_field(40, 1), target, gate))
 	rows.append(_measure("전부 켬 100", _choke_field(100, 2), target, gate))
 	rows.append(
@@ -118,20 +119,8 @@ func _run_probe() -> void:
 	var back := Vector2(200, 545)
 	rows.append(_measure("문 맞교차 전부 켬", _facing_field(40, 2), target, -1.0, back))
 	rows.append(
-		_measure("문 맞교차 비껴가기 끔", _tuned(_facing_field(40, 2), "side_bias", 0.0), target, -1.0, back)
-	)
-	rows.append(
 		_measure(
-			"문 맞교차 양보 끔", _tuned(_facing_field(40, 2), "yield_strength", 0.0), target, -1.0, back
-		)
-	)
-	rows.append(
-		_measure(
-			"문 맞교차 둘 다 끔",
-			_tuned(_tuned(_facing_field(40, 2), "yield_strength", 0.0), "side_bias", 0.0),
-			target,
-			-1.0,
-			back
+			"문 맞교차 평활 끔", _tuned(_facing_field(40, 2), "steer_smooth", 0.0), target, -1.0, back
 		)
 	)
 	_print_table(rows)
@@ -260,11 +249,12 @@ func _measure(
 			previous[index] = agent.position
 			var speed := moved.length() / _STEP
 			travelled[index] += moved.length()
-			# 이웃을 밀어내는 힘이 제 갈 길을 가리키는 힘보다 커진 프레임. 이때 유닛의 진행
-			# 방향은 목적지가 아니라 **주변 인원 배치**가 정한다. 그 배치는 매 프레임 바뀐다.
+			# 가려 했는데 앞이 막혀 절반도 못 간 프레임. **힘이 없어진 판에서 얼마나 눌려
+			# 있는지를 재는 자리다.** 예전에는 분리력이 조향을 압도한 비율을 셌는데,
+			# 분리력이 없어졌으므로 뜻과 결과의 차이로 갈아탔다.
 			if agent.is_moving() and agent.debug_seek.length_squared() > 0.01:
 				force_frames += 1
-				if agent.debug_separation.length() > agent.debug_seek.length():
+				if agent.velocity.length() < agent.debug_seek.length() * 0.5:
 					overrun_frames += 1
 				if not agent.has_sight:
 					flow_frames += 1
@@ -373,7 +363,7 @@ func _all_past(field: ProtoUnitField, cross_x: float) -> bool:
 func _print_table(rows: Array[Dictionary]) -> void:
 	print(
 		(
-			"| 상황 | 꺾임 도/초 | 조향꺾임 도/초 | 흐름장 % | 역주행 % | 굽이 | 튕김 최대 "
+			"| 상황 | 꺾임 도/초 | 조향꺾임 도/초 | 눌림 % | 역주행 % | 굽이 | 튕김 최대 "
 			+ "| 정지 | 90% | 통과 | 뒤진동 | 막힘 | 양보 | step 평균 | step 최악 |"
 		)
 	)
@@ -394,7 +384,7 @@ func _print_table(rows: Array[Dictionary]) -> void:
 					row["label"],
 					row["churn"],
 					row["seek_churn"],
-					row["flow"],
+					row["overrun"],
 					row["back"],
 					row["wiggle"],
 					row["peak"],
@@ -410,7 +400,7 @@ func _print_table(rows: Array[Dictionary]) -> void:
 			)
 		)
 	print("")
-	print("| 상황 | 정지밀림 | 최대겹침 | 몸 지름 | 막힌이동 | 밀린거리 |")
+	print("| 상황 | 정지밀림 | 최대겹침 | 몸 지름 | 막힌이동 | 벽보정 |")
 	print("| --- | --- | --- | --- | --- | --- |")
 	for row in rows:
 		print(
