@@ -270,7 +270,7 @@ func _ensure_clearance() -> void:
 ##
 ## 다익스트라를 완전한 우선순위 큐로 짜지 않고 큐 기반 완화(SPFA)로 둔 이유는
 ## 칸이 이천 개 수준이라 상수 차이가 의미 없고, 힙보다 코드가 짧아 틀릴 여지가 적어서다.
-## `jam` 은 칸마다 "여기 막혀 있다"를 담은 표다(칸 수와 같은 길이, 1 이면 막힘).
+## `jam` 은 칸마다 "여기 막혀 있다"를 담은 표다(칸 수와 같은 길이, **0 보다 크면 막힘**).
 ## 비어 있으면 지형만 보고 만든다.
 func build_flow_field(target: Vector2, jam: PackedByteArray = PackedByteArray()) -> ProtoFlowField:
 	_jam = jam
@@ -351,7 +351,12 @@ func _cell_step(index: int, step: float) -> float:
 	#
 	# 아예 못 가게 막으면 길이 하나뿐일 때 갈 곳이 없어진다. 값을 물리면 돌아갈 길이 있을
 	# 때만 돌아가고, 없으면 비싸도 그리로 간다 - 판단이 저절로 난다.
-	if index < _jam.size() and _jam[index] == 1:
+	# **0 보다 크면 막힘이다. `== 1` 이 아니다.**
+	#
+	# 이 표를 쓰는 쪽(`unit_jam.gd`)은 막힌 칸에 `_JAM_FORGET`(3)을 적고 비면 하나씩 깎는다.
+	# 그런데 여기서 `== 1` 로 물어서, **지금 막힌 칸(3)은 값을 안 물고 두 번 확인 동안 비어
+	# 있던 칸(1)만 값을 물었다.** 기억이 정확히 뒤집혀 있었다. README §25.
+	if index < _jam.size() and _jam[index] > 0:
 		step *= 1.0 + _JAM_PENALTY
 	var clear := _clearance[index]
 	if clear >= _WALL_COST_SPAN:

@@ -203,6 +203,24 @@ var stall_frames: int = 0
 ## 시간에 멎는다"는 성질이 무너졌다. 몇 번 다시 해 보고 그래도 안 되면 정말 그만둔다.
 var hold_retries: int = 0
 
+## **정체를 재는 시계.** 목적지가 가까워지지 않은 채 흘려보낸 프레임 수와, 그때까지의 최단 거리.
+##
+## 사용자가 직접 짚은 요구가 출발점이다 - **"막히면 막혔다는 걸 직접 안 가보고도 알 수 있는
+## 거 아니야?"** 막힘 기억(`unit_jam.gd`)이 **멎은 유닛 칸만** 비싸게 매기고 있었다.
+## 느리게라도 가는 중인 유닛은 안 세는데, 실제로 가장 오래 걸리는 칸은 거기다.
+##
+## **`grind_frames` 로는 못 센다.** 그쪽은 아군에 눌리면 0 으로 되돌아간다 - 줄을 서서
+## 못 가는 것과 지형에 낀 것을 가르려고 일부러 그렇게 두었고, 그 판단은 지금도 옳다.
+## 여기서는 눌렸든 아니든 **목적지가 가까워졌는가만** 본다.
+##
+## **줄이 나아가는 동안에는 이 값이 안 오른다.** 앞이 한 몸씩 빠지면 뒤도 그만큼 가까워지고,
+## 그때마다 0 으로 되돌아간다. 제자리에서 맴돌 때만 오른다 - 그것이 정체와 줄서기의 차이다.
+##
+## `best_distance` 를 안 쓰고 따로 든 이유는, 그쪽이 지형 낌을 잡는 안전망(`_watch_grinding`)의
+## 값이라 건드리면 그 안전망의 판정까지 같이 움직이기 때문이다. **한 번에 하나씩 바꾼다.**
+var creep_best: float = INF
+var creep_frames: int = 0
+
 ## 이번 프레임에 **아군의 몸**이 가려던 방향을 막고 있는가. 서 있든 가고 있든 상관없다.
 ##
 ## 지형에 낀 것을 알아채는 안전망(`_watch_grinding`)이 이 값을 본다. 줄을 서서 못 가는 것과
@@ -273,6 +291,8 @@ func accept_order(new_order_id: int, slot: Vector2, sight_interval: float) -> vo
 	state = State.MOVING
 	goal_distance = position.distance_to(slot)
 	best_distance = goal_distance
+	creep_best = goal_distance
+	creep_frames = 0
 	grind_frames = 0
 	press_frames = 0
 	hold_retries = 0
@@ -321,6 +341,8 @@ func hold() -> void:
 func resume() -> void:
 	state = State.MOVING
 	best_distance = position.distance_to(goal)
+	creep_best = best_distance
+	creep_frames = 0
 	grind_frames = 0
 	press_frames = 0
 	# **묵은 조향을 버린다.** 기다리는 동안 `steer_dir` 은 갱신되지 않으므로, 그대로 두면

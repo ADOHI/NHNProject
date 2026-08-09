@@ -25,8 +25,8 @@ extends RefCounted
 ## | 차례 | 하는 일 | 어디 |
 ## | --- | --- | --- |
 ## | 1 | 가고 싶은 방향을 정한다 (자리가 보이면 직선, 아니면 흐름장) | `_plan` `_seek` |
-## | 2 | 그 방향의 **빈 거리**를 잰다 (이웃의 몸과 벽까지) | `_room` |
-## | 3 | 앞이 막혔으면 좌우로 벌린 후보를 같이 재고 하나 **고른다** | `_choose_step` |
+## | 2 | 그 방향의 **빈 거리**를 잰다 (이웃의 몸과 벽까지) | `ProtoUnitStep.room` |
+## | 3 | 앞이 막혔으면 좌우로 벌린 후보를 같이 재고 하나 **고른다** | `ProtoUnitStep.choose` |
 ## | 4 | 빈 거리 안에 멈출 수 있는 속력으로 줄인다 (내 브레이크다) | `_walk` |
 ## | 5 | 고른 방향으로도 못 가면 **그 자리에 선다** | `_walk` · `_update_states` |
 ##
@@ -73,15 +73,6 @@ const _SIGHT_INTERVAL := 0.2
 ## 0 으로 두면 선두가 완전히 멈춰 서서 대열이 굳는다.
 const _MIN_PACE := 0.3
 
-## "내 앞"으로 치는 각도의 코사인. 0.55 는 대략 좌우 57 도다.
-const _AHEAD_CONE := 0.55
-
-## 기다림에서 풀려나려면 막은 아군이 이만큼은 떨어져 있어야 한다(픽셀).
-##
-## 들어갈 때보다 나올 때의 문턱을 넓게 둔다. **시간이 아니라 거리로 준 여유다.**
-## 같은 문턱을 쓰면 경계에 걸친 유닛이 섰다 갔다를 반복한다.
-const _HOLD_RELEASE := 10.0
-
 ## 앞이 막힌 채 이만큼 이어져야 기다림으로 넘긴다(프레임).
 ##
 ## **포기 시간이 아니다.** 4 분의 1 초짜리 떨림 제거이고, 넘어간 상태는 막은 쪽이 비키는
@@ -94,83 +85,6 @@ const _HOLD_CONFIRM_FRAMES := 15
 ## 기다림은 오래 갈 수 있어 매 프레임 훑으면 그대로 비용이 된다. 여섯 프레임이면
 ## 늦어야 0.1 초 안에 풀리므로 눈에 보이지 않는다.
 const _HOLD_REVIEW_FRAMES := 6
-
-## 앞의 빈 거리를 이만큼까지만 잰다(픽셀).
-##
-## 여기까지 트여 있으면 후보를 재지 않고 그냥 간다. **잼에 낀 유닛만 후보 값을 치른다.**
-## 최대 속도 230 에서 제동 거리가 10 픽셀 남짓이므로 32 는 브레이크를 밟기에 넉넉하고,
-## 이웃 조회 칸 크기를 여기에 맞추므로 크게 잡으면 그대로 유닛당 이웃 수가 된다.
-const _LOOKAHEAD := 32.0
-
-## 앞이 막혔을 때 재어 보는 좌우 후보의 각도(도). 0 은 늘 함께 잰다.
-##
-## **90 도가 반드시 있어야 한다.** 처음에 55 도까지만 두었더니 좁은 문 앞에서 마흔 명이
-## 전원 속력 0 으로 얼어붙었다. 벽에 몸을 붙인 유닛은 벽면을 따라 **정확히 옆으로** 미끄러지는
-## 것 말고 나갈 길이 없는데, 조금이라도 벽 쪽 성분이 남으면 몸이 벽에 걸려 빈 거리가 0 이 된다.
-##
-## 90 도를 넘기지는 않는다. 뒤로 물러나는 후보를 주면 잼에서 유닛이 뒷걸음질하고, 그러면
-## 뒤에 선 유닛이 또 밀려 나는 연쇄가 생긴다 — 밀치기를 힘 없이 되살리는 셈이다.
-## 전부 막히면 **선다.**
-const _DETOUR_ANGLES: Array[float] = [35.0, -35.0, 65.0, -65.0, 90.0, -90.0]
-
-## 옆걸음에 주는 최소 점수 비율.
-##
-## 점수를 코사인만으로 매기면 90 도는 0 이라 아무리 트여 있어도 뽑히지 않는다. 그런데
-## **벽을 따라 문으로 미끄러지는 걸음이 정확히 90 도다.** 작은 값을 얹어 두면, 앞이 완전히
-## 막혔을 때만 옆걸음이 이기고 정면이 조금이라도 트이면 언제나 정면이 이긴다.
-const _SIDE_CREDIT := 0.15
-
-## 앞으로도 옆으로도 못 갈 때 마지막으로 재어 보는 **물러나는** 후보의 각도(도).
-##
-## 벽면에 몸을 붙인 채 문 옆에 선 유닛은 어느 쪽으로 가도 몸이 벽에 걸린다. 실제로 열두 명
-## 판에서 유닛 하나가 문 5 픽셀 옆에 그렇게 끼었고, **그 하나가 문을 막아 뒤의 넷을 통째로
-## 세웠다.** 물러나기는 힘이 아니라 선택이고, 물러나야 다른 길이 생긴다.
-const _BACKOFF_ANGLES: Array[float] = [120.0, -120.0, 155.0, -155.0, 180.0]
-
-## 한 걸음도 못 간 채 이만큼 지나야 물러나는 후보를 연다(프레임).
-##
-## 늘 열어 두면 조금만 막혀도 뒷걸음질하고, 그 뒷걸음질이 뒤에 선 유닛에게는 밀치기와
-## 똑같이 보인다. 3 분의 1 초는 사람이 "얘가 끼었네" 하고 알아볼 만한 시간이기도 하다.
-const _BACKOFF_FRAMES := 20
-
-## 이보다 좁으면 "이번 걸음을 못 걷는다"로 보고 우회 후보를 잰다(픽셀).
-##
-## 최대 속도 230 이면 한 프레임에 3.8 픽셀 간다. 그보다 조금 넉넉한 값이라, **정말 걸을 수
-## 없을 때만** 우회가 켜진다.
-const _DETOUR_ENTER := 10.0
-
-## 우회를 풀려면 정면이 이만큼은 트여야 한다(픽셀).
-##
-## 드는 문턱과 같게 두면 경계에서 켜졌다 꺼졌다 하고, 그 깜빡임이 그대로 방향의 왕복이 된다.
-const _DETOUR_RELEASE := 24.0
-
-## 벽까지의 빈 거리를 잴 때 훑는 걸음(픽셀)과 그 걸음으로 훑을 최대 거리(픽셀).
-##
-## 벽을 안 보면 후보 고르기가 유닛을 벽으로 몰아넣고, 그러면 `push_out` 이 몸을 통째로
-## 옮긴다. 그 옮김이 예전에 앞을 막은 아군 여섯을 통과시킨 바로 그 경로다.
-##
-## **걸음이 굵으면 문 앞에서 통째로 굳는다.** 처음에 몸 반지름만큼(11 픽셀) 훑었더니
-## 문에 몸을 맞추려고 비스듬히 가려는 유닛이 첫 표본에서 벽에 걸려 빈 거리 0 을 받았다.
-## 실제로는 5 픽셀쯤 갈 수 있었는데 못 간 것이고, 그 5 픽셀이 문에 몸을 맞추는 거리였다.
-## 마흔 명이 문 앞에서 전원 속력 0 으로 얼어붙은 것이 이 한 줄 때문이었다.
-##
-## 벽은 움직이지 않으므로 멀리까지 볼 필요가 없다. 가까운 곳만 촘촘히 보고, 그 너머는
-## 몸이 정하는 빈 거리를 그대로 쓴다 - 표본 수를 다섯으로 묶는 방법이기도 하다.
-const _WALL_STEP := 3.0
-
-## 벽 거리가 이 칸 이상이면 벽이 없는 것으로 본다.
-##
-## 세 칸이면 96 픽셀이라 몸 반지름 12 에 내다보는 거리 32 를 더해도 벽에 닿을 수 없다.
-const _WALL_CLEAR := 3
-
-## 양보가 살아남았는지 이만큼 뒤에 견준다(프레임).
-##
-## 3 분의 1 초다. 한 프레임 이동량이 아니라 **얼마 뒤에 실제로 옮겨져 있는가**를 봐야
-## 되돌아오는 것이 잡힌다.
-const _YIELD_WATCH := 20
-
-## 벽까지의 빈 거리를 이 거리까지만 촘촘히 훑는다(픽셀). 그 너머는 몸이 정하는 값을 쓴다.
-const _WALL_NEAR := 15.0
 
 ## 최단 거리가 줄지 않은 채 이만큼 지나면 지형에 낀 것으로 본다(프레임).
 ##
@@ -448,7 +362,7 @@ func step(delta: float) -> void:
 		agent.chain_ago = mini(agent.chain_ago + 1, 999)
 		# 벽이 내다보는 거리 밖에 있는가. 한 번 물어 두고 이 프레임 내내 쓴다.
 		var cell := grid.world_to_cell(agent.position)
-		agent.wall_far = grid.clearance_at(cell) >= _WALL_CLEAR
+		agent.wall_far = grid.clearance_at(cell) >= ProtoUnitStep.WALL_CLEAR
 		# 양보 우선순위. 흐름장이 이미 들고 있는 값이라 조회 한 번이다.
 		var order: MoveOrder = _order_cache.get(agent.order_id, null)
 		agent.rank = INF if order == null else order.flow.cost_at(cell)
@@ -492,7 +406,7 @@ func _rebuild_buckets() -> void:
 	for agent in agents:
 		body = maxf(body, agent.radius)
 	var contact := body * 2.0 + tuning.get_value("max_speed") / 60.0 + 1.0
-	_bucket_size = maxf(_LOOKAHEAD, contact)
+	_bucket_size = maxf(ProtoUnitStep.LOOKAHEAD, contact)
 	_buckets.clear()
 	for agent in agents:
 		var key := Vector2i(
@@ -636,10 +550,10 @@ func _walk(delta: float) -> void:
 			continue
 
 		var want_dir := agent.debug_seek / target_speed
-		var room := _choose_step(agent, want_dir)
-		var heading := _turn_toward(agent, want_dir.rotated(agent.detour), delta)
+		var room := ProtoUnitStep.choose(self, agent, want_dir, _scratch)
+		var heading := ProtoUnitStep.turn_toward(self, agent, want_dir.rotated(agent.detour), delta)
 		# 고른 방향과 회전 제한을 거친 방향이 다르므로 빈 거리를 실제로 갈 방향으로 다시 잰다.
-		room = minf(room, _room(agent, heading, false))
+		room = minf(room, ProtoUnitStep.room(self, agent, heading, false, _scratch))
 
 		# **부딪히기 전에 선다.** 빈 거리 안에서 멈출 수 있는 속력이 상한이다. 이웃이 나에게
 		# 주는 힘이 아니라 내가 내 브레이크를 밟는 것이고, 앞선 유닛이 천천히 가면 나도
@@ -656,141 +570,6 @@ func _walk(delta: float) -> void:
 		# 몸이 튀어 나가고, 그 튐이 곧 통과의 씨앗이다.
 		agent.speed = minf(agent.speed, travel / delta)
 		agent.stall_frames = 0 if travel > 0.01 else agent.stall_frames + 1
-
-
-## 갈 방향을 **고른다.** 앞이 트여 있으면 고를 것이 없다.
-##
-## 힘이 아니다 - 힘은 이웃이 있기만 하면 늘 걸리지만 여기서는 **앞이 막혔을 때만** 후보를
-## 재고 하나를 고른다. 점수는 "가고 싶던 방향으로 얼마나 나아가는가"라, 정면이 트이는 순간
-## 반드시 정면이 이긴다. 전부 막히면 **그 자리에 선다** - 서는 것은 올바른 결과다.
-##
-## **드는 문턱과 푸는 문턱을 따로 둔다.** 하나로 두었더니 열린 방 꺾임이 33 에서 217 로
-## 뛰었다. 문턱 하나면 매 프레임 우회가 켜졌다 꺼졌다 하고 **그 켜짐 자체가 지터였다** -
-## 힘으로 만들던 왕복을 고르기로 되풀이한 셈이다.
-func _choose_step(agent: ProtoUnitAgent, want_dir: Vector2) -> float:
-	var straight := _room(agent, want_dir, true)
-	if agent.detour != 0.0:
-		if straight >= _DETOUR_RELEASE:
-			agent.detour = 0.0
-			return straight
-		var keep := _room(agent, want_dir.rotated(agent.detour), false)
-		if keep >= _DETOUR_ENTER:
-			return keep
-	elif straight >= _DETOUR_ENTER:
-		return straight
-
-	var best_score := straight * (1.0 + _SIDE_CREDIT)
-	var best_angle := 0.0
-	var best_room := straight
-	for degrees in _DETOUR_ANGLES:
-		var angle := deg_to_rad(degrees)
-		var room := _room(agent, want_dir.rotated(angle), false)
-		var score := room * (cos(angle) + _SIDE_CREDIT)
-		if score > best_score:
-			best_score = score
-			best_angle = angle
-			best_room = room
-	# 굳었는지를 **두 가지로 묻는다.** 한 걸음도 못 걸었거나 `stall_frames`, 걷기는 걷는데
-	# 목적지가 가까워지지 않거나 `grind_frames`. 앞엣것만 보았더니 벽에 몸을 비비며
-	# 프레임당 0.5 픽셀씩 흔들리는 유닛이 영원히 굳은 것으로 세이지 않았다.
-	if (
-		best_room < _DETOUR_ENTER
-		and maxi(agent.stall_frames, agent.grind_frames) >= _BACKOFF_FRAMES
-	):
-		# 앞도 옆도 전부 막힌 채 오래 굳었다. **물러나는 것도 길이다.**
-		for degrees in _BACKOFF_ANGLES:
-			var angle := deg_to_rad(degrees)
-			var room := _room(agent, want_dir.rotated(angle), false)
-			if room > best_room:
-				best_room = room
-				best_angle = angle
-	agent.detour = best_angle
-	return best_room
-
-
-## 회전 속도 제한. **자기 몸의 한계이지 이웃이 주는 힘이 아니다.**
-func _turn_toward(agent: ProtoUnitAgent, wanted: Vector2, delta: float) -> Vector2:
-	var max_turn := deg_to_rad(tuning.get_value("turn_rate")) * delta
-	var difference := wrapf(wanted.angle() - agent.facing, -PI, PI)
-	agent.facing += clampf(difference, -max_turn, max_turn)
-	return Vector2.from_angle(agent.facing)
-
-
-## 이 방향으로 **얼마나 갈 수 있는가**(픽셀). 이웃의 몸과 벽까지의 빈 거리다.
-##
-## 이 한 함수가 예전의 분리력 · 접촉 제약 · 위치 자르기 · 겹침 해소를 통째로 대신한다.
-## 넷 다 "얼마나 세게 밀까"를 물었고, 이것은 "갈 수 있는가"를 묻는다. 이미 겹쳐 있으면
-## 다가가는 방향만 0 이라 **더 겹치는 걸음만 금지**되고 빠져나오는 걸음은 열려 있다.
-## `note_block` 이 참이면 나를 세운 것이 누구인지도 함께 적는다(훑기 한 벌을 아낀다).
-func _room(agent: ProtoUnitAgent, direction: Vector2, note_block: bool) -> float:
-	var limit := _LOOKAHEAD
-	# 직전에 지목한 놈을 기억해 둔다. 그놈만은 더 벌어질 때까지 계속 지목한다.
-	var held := agent.blocker_id if note_block else 0
-	if note_block:
-		agent.blocked_by_settled = false
-		agent.pressed = false
-		agent.blocker_id = 0
-	for other in _scratch:
-		var offset := other.position - agent.position
-		var distance := offset.length()
-		var minimum := agent.radius + other.radius
-		var along := offset.dot(direction)
-		if distance < minimum:
-			max_penetration = maxf(max_penetration, minimum - distance)
-			if along <= 0.0:
-				continue
-			limit = 0.0
-			if note_block:
-				agent.pressed = true
-				agent.blocker_id = other.id
-				if not other.is_moving():
-					agent.blocked_by_settled = true
-			continue
-		if along <= 0.0 or along - minimum > limit:
-			continue
-		var perpendicular := distance * distance - along * along
-		if perpendicular >= minimum * minimum:
-			continue
-		var reach := maxf(along - sqrt(minimum * minimum - perpendicular), 0.0)
-		if reach >= limit:
-			continue
-		limit = reach
-		var head_on := along / maxf(distance, 0.001) >= _AHEAD_CONE
-		if not note_block or not head_on:
-			continue
-		var enter := _DETOUR_ENTER + ProtoUnitPush.BLOCK_KEEP if other.id == held else _DETOUR_ENTER
-		if reach < enter:
-			agent.pressed = true
-			agent.blocker_id = other.id
-		if not other.is_moving() and distance <= minimum + _HOLD_RELEASE:
-			agent.blocked_by_settled = true
-	return minf(limit, _wall_room(agent, direction, limit))
-
-
-## 벽까지의 빈 거리. 몸이 들어가는지를 걸음마다 확인한다.
-##
-## 후보 고르기가 벽을 못 보면 유닛을 벽으로 몰아넣고, 그러면 `push_out` 이 몸을 통째로
-## 옮긴다. 그 옮김이 예전에 한 칸 복도에서 앞을 막은 아군 여섯을 통과시킨 경로다.
-func _wall_room(agent: ProtoUnitAgent, direction: Vector2, limit: float) -> float:
-	if limit <= 0.0:
-		return 0.0
-	# **둘레에 벽이 아예 없으면 표본을 하나도 안 뜬다.** 걸음 고르기는 잼에 낀 유닛마다
-	# 후보를 열둘까지 재고 후보마다 벽 표본이 다섯이라, 열린 방에서는 이 검사 하나가
-	# 유닛당 예순 번의 `is_circle_free` 를 통째로 걷어낸다. 벽 거리는 지형이 만들어질 때
-	# 한 번 구워 둔 값이라 조회가 배열 읽기 한 번이다.
-	if agent.wall_far:
-		return limit
-	var near := minf(limit, _WALL_NEAR)
-	var travelled := _WALL_STEP
-	var free := 0.0
-	while travelled <= near:
-		if not grid.is_circle_free(agent.position + direction * travelled, agent.radius):
-			return free
-		free = travelled
-		travelled += _WALL_STEP
-	if not grid.is_circle_free(agent.position + direction * near, agent.radius):
-		return free
-	return limit
 
 
 ## 몸이 벽 안에 들어갔으면 빼낸다. **이것은 유닛 사이의 힘이 아니라 지형 보정이다.**
@@ -853,7 +632,18 @@ func _review_moving(agent: ProtoUnitAgent, arrive: float, crawl: float) -> void:
 	if agent.is_yielding():
 		agent.press_frames = 0
 		agent.grind_frames = 0
+		agent.creep_frames = 0
 		return
+	# **정체 시계를 돌린다.** 눌렸든 아니든 목적지가 가까워졌는가만 본다.
+	#
+	# 줄이 나아가는 동안에는 앞이 한 몸씩 빠질 때마다 뒤도 그만큼 가까워져 0 으로 되돌아가고,
+	# 제자리에서 맴돌 때만 오른다. **막힘 기억이 이 값으로 「멎지는 않았는데 못 가는」
+	# 유닛까지 센다** - 사용자가 세 번 짚은 요구가 이것이다.
+	if distance < agent.creep_best - 0.5:
+		agent.creep_best = distance
+		agent.creep_frames = 0
+	else:
+		agent.creep_frames += 1
 	var progress := agent.goal_distance - distance
 	if agent.pressed:
 		press_agent_frames += 1
@@ -913,9 +703,9 @@ func _settled_ahead(agent: ProtoUnitAgent) -> bool:
 			continue
 		var offset := other.position - agent.position
 		var gap := offset.length()
-		if gap > agent.radius + other.radius + _HOLD_RELEASE:
+		if gap > agent.radius + other.radius + ProtoUnitStep.HOLD_RELEASE:
 			continue
-		if gap > 0.001 and offset.dot(agent.steer_dir) / gap >= _AHEAD_CONE:
+		if gap > 0.001 and offset.dot(agent.steer_dir) / gap >= ProtoUnitStep.AHEAD_CONE:
 			return true
 	return false
 
