@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import pathlib
+import shutil
 import sys
 
 import numpy as np
@@ -231,6 +232,12 @@ def main() -> int:
     if not sources:
         print("원본을 못 찾았다: %s" % args.src)
         return 1
+
+    # **먼저 비운다.** 안 그러면 큐레이션에서 뺀 파일이 남아 팩에 딸려 들어간다 —
+    # 실제로 `tone_up/medium_03.wav` 가 그렇게 남았다. 쓰지도 않는데 배포되고,
+    # CREDITS.md 에도 없어서 출처가 없는 파일이 제출물에 들어갈 뻔했다.
+    if not args.analyze and args.out.exists():
+        shutil.rmtree(args.out)
 
     rows: list[dict] = []
     missing: list[str] = []
