@@ -43,16 +43,38 @@ const BAR_HEIGHT := 8.0
 ## 여러 줄 값이 줄 상자에 더 먹는 높이. `_draw_field` 가 쓰던 여백 그대로다.
 const WRAP_PAD := 6.0
 
+## 탭 띠. **화면 맨 위에 선다** — 탭이 아래에 있으면 「지금 어느 탭인가」를
+## 내용을 다 읽은 뒤에 알게 된다.
+const TAB_HEIGHT := 28.0
+const TAB_WIDTH := 92.0
+const TAB_GAP := 6.0
+
+## 육각형 칸이 차지하는 높이. **정사각에 가깝게 잡는다** — 육각형을 납작하게 누르면
+## 「얼마나 뚜렷한가」가 면적이 아니라 폭으로 읽힌다 (§20.25.3 규칙 3).
+## **아래 여백 검사가 이 값의 상한을 정한다** — 306 으로 잡았더니 오른쪽 열이
+## 666px 로 끝나 화면과 4px 만 남겼다 (§20.23.6 과 같은 자리).
+const WHEEL_HEIGHT := 282.0
+
+## 육각형 바깥에 이름이 앉을 자리. 여기를 아끼면 「무모」가 잘린다.
+const WHEEL_LABEL_ROOM := 34.0
+
 ## 칸이 놓인 자리. `panel_of[i]` 가 `sections` 안의 인덱스다.
 var panels: Array[Rect2] = []
 var panel_of: PackedInt32Array = PackedInt32Array()
 
 ## 줄이 놓인 자리. `row_section[i]` · `row_field[i]` 가 그 줄의 출처다.
 ##
-## 액자 칸(`FRAME`)은 줄을 안 낸다 — 눌러야 할 낱줄이 없고 칸 하나가 통째로 그림이다.
+## 액자 칸(`FRAME`)과 육각형 칸은 줄을 안 낸다 — 눌러야 할 낱줄이 없고
+## 칸 하나가 통째로 그림이다.
 var rows: Array[Rect2] = []
 var row_section: PackedInt32Array = PackedInt32Array()
 var row_field: PackedInt32Array = PackedInt32Array()
+
+## 탭 띠의 탭 하나하나. 없으면 탭 없는 화면이다.
+var tabs: Array[Rect2] = []
+
+## 육각형으로 그릴 칸들. `sections` 안의 인덱스다.
+var wheels: PackedInt32Array = PackedInt32Array()
 
 
 ## 한 화면분의 자리를 전부 잡는다.
@@ -60,15 +82,47 @@ var row_field: PackedInt32Array = PackedInt32Array()
 ## `left` · `right` 는 열마다 위에서 아래로 놓을 칸 제목이다 (`PersonSheet.LEFT_TITLES`).
 ## **뷰가 제목 순서를 정하지 않는다** — 무엇이 어느 열에 오는가는 §24.17.3 의 선언이다.
 static func build(
-	sections: Array[SheetSection], view: Vector2, font: Font, left: Array, right: Array
+	sections: Array[SheetSection],
+	view: Vector2,
+	font: Font,
+	left: Array,
+	right: Array,
+	wheel_titles: Array = [],
+	tab_count: int = 0
 ) -> SheetLayout:
 	var out := SheetLayout.new()
 	if font == null:
 		return out
+	for title in wheel_titles:
+		var index := out._index_of(sections, str(title))
+		if index >= 0:
+			out.wheels.append(index)
+
+	var top := MARGIN
+	for tab in tab_count:
+		out.tabs.append(
+			Rect2(MARGIN + float(tab) * (TAB_WIDTH + TAB_GAP), MARGIN, TAB_WIDTH, TAB_HEIGHT)
+		)
+	if tab_count > 0:
+		top += TAB_HEIGHT + SECTION_GAP
+
 	var right_x := MARGIN + LEFT_WIDTH + COLUMN_GAP
-	out._column(sections, left, MARGIN, LEFT_WIDTH, font)
-	out._column(sections, right, right_x, view.x - right_x - MARGIN, font)
+	out._column(sections, left, MARGIN, LEFT_WIDTH, top, font)
+	out._column(sections, right, right_x, view.x - right_x - MARGIN, top, font)
 	return out
+
+
+## 점이 든 탭. 없으면 -1.
+func tab_at(point: Vector2) -> int:
+	for i in tabs.size():
+		if tabs[i].has_point(point):
+			return i
+	return -1
+
+
+## 이 칸을 육각형으로 그리나.
+func is_wheel(section: int) -> bool:
+	return wheels.has(section)
 
 
 ## 막대 폭. 좁은 열에서 막대가 값을 밀어내면 소속 인원이 잘린다.
@@ -119,9 +173,9 @@ func panel_rect(section: int) -> Rect2:
 
 
 func _column(
-	sections: Array[SheetSection], titles: Array, x: float, width: float, font: Font
+	sections: Array[SheetSection], titles: Array, x: float, width: float, top: float, font: Font
 ) -> void:
-	var y := MARGIN
+	var y := top
 	for title in titles:
 		var index := _index_of(sections, str(title))
 		if index < 0:
@@ -134,10 +188,10 @@ func _place(
 	sections: Array[SheetSection], index: int, x: float, y: float, width: float, font: Font
 ) -> float:
 	var section := sections[index]
-	var height := TITLE_HEIGHT + _body_height(section, width, font) + PAD
+	var height := TITLE_HEIGHT + _body_height(section, index, width, font) + PAD
 	panels.append(Rect2(x, y, width, height))
 	panel_of.append(index)
-	if section.shape == SheetSection.Shape.FRAME:
+	if section.shape == SheetSection.Shape.FRAME or is_wheel(index):
 		return height
 
 	var value_width := width - PAD * 2.0 - label_width(width)
@@ -155,9 +209,12 @@ func _place(
 ##
 ## `expected_lines` 가 그 근거다 (`SheetSection`). **비어 있을 때 예뻐 보이는 높이로 잡으면
 ## 자료가 들어올 때 배치가 터진다** (설계 24.17.3).
-func _body_height(section: SheetSection, width: float, font: Font) -> float:
+func _body_height(section: SheetSection, index: int, width: float, font: Font) -> float:
 	if section.shape == SheetSection.Shape.FRAME:
 		return width - PAD * 2.0
+	# 육각형은 글 높이와 무관하다 — **도형이 자리를 정하지 자료가 정하지 않는다.**
+	if is_wheel(index):
+		return WHEEL_HEIGHT
 	var value_width := width - PAD * 2.0 - label_width(width)
 	var measured := 0.0
 	for field in section.fields:

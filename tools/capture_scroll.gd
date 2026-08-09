@@ -30,7 +30,12 @@ const SHEET := Vector2i(1280, 1600)
 ## 그 멈춤이 흔들림을 읽는 자리다.
 ##
 ## 이 대본이 글 끝까지 닿는지는 `test_scroll_bench_hand.gd` 가 **창 없이** 잰다.
-const SCRIPT_AT := [0.70, 0.95, 1.20, 1.75, 2.00, 2.25, 2.80, 3.05, 3.30]
+## 칸 수는 **글 분량이 정한다.** 인물 상세를 다시 짤 때마다 바뀌었다 —
+## 아홉 → 여덟 → 열. 눈으로 맞추지 않고 `test_scroll_bench_hand.gd` 가
+## **창 없이** 「끝까지 닿나 · 남는 칸이 없나」를 재서 잡아 준다.
+##
+## 띄엄띄엄인 이유는 §20.24.3 이다 — 사람은 굴리고 멈춰서 읽는다.
+const SCRIPT_AT := [0.60, 0.85, 1.10, 1.60, 1.85, 2.10, 2.55, 2.80, 3.05, 3.45]
 
 ## 절반쯤 흘러간 순간.
 const STILL_AT: float = 2.20
@@ -66,7 +71,13 @@ func _initialize() -> void:
 func _process(_delta: float) -> bool:
 	_waited += 1
 	if _waited <= SETTLE:
-		_bench.set_clock(0.0)
+		# **정지는 자리를 잡아 둔 채로 가라앉혀야 한다.** 여기서 시계를 0 으로 두면
+		# 마지막으로 그려진 프레임이 **창이 닫힌 상태**가 되고, 그대로 찍혀 빈 판이 나온다.
+		# 실제로 그 그림을 한 장 뽑았다 — 카드 여섯이 전부 비어 있었다.
+		if _film:
+			_bench.set_clock(0.0)
+		else:
+			_pose(STILL_AT)
 		return false
 	if not _film:
 		_pose(STILL_AT)

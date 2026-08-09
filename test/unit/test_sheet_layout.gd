@@ -24,6 +24,9 @@ const _VIEW := Vector2(1280.0, 670.0)
 
 const _FONT := preload("res://assets/fonts/song_myung/SongMyung-Regular.ttf")
 
+## 검사가 서는 탭. 조우 탭이 3초 안에 읽히는 자리라 여기가 제일 빡빡하다 (§20.25.2).
+const _TAB := SheetTab.Kind.ENCOUNTER
+
 
 func _sections(person: int = 0) -> Array[SheetSection]:
 	var registry := PersonGenerator.new(_SEED, _POPULATION).generate()
@@ -36,7 +39,13 @@ func _sections(person: int = 0) -> Array[SheetSection]:
 
 func _layout(person: int = 0) -> SheetLayout:
 	return SheetLayout.build(
-		_sections(person), _VIEW, _FONT, PersonSheet.LEFT_TITLES, PersonSheet.RIGHT_TITLES
+		_sections(person),
+		_VIEW,
+		_FONT,
+		PersonSheet.left_titles(_TAB),
+		PersonSheet.right_titles(_TAB),
+		PersonSheet.wheel_titles(_TAB),
+		SheetTab.count()
 	)
 
 
@@ -46,15 +55,28 @@ func _layout(person: int = 0) -> SheetLayout:
 func test_every_section_gets_a_panel() -> void:
 	var sections := _sections()
 	var placed := SheetLayout.build(
-		sections, _VIEW, _FONT, PersonSheet.LEFT_TITLES, PersonSheet.RIGHT_TITLES
+		sections,
+		_VIEW,
+		_FONT,
+		PersonSheet.left_titles(_TAB),
+		PersonSheet.right_titles(_TAB),
+		PersonSheet.wheel_titles(_TAB),
+		SheetTab.count()
 	)
-	assert_eq(placed.panels.size(), sections.size(), "자리를 못 받은 칸은 화면에서 사라진다")
+	var wanted: int = PersonSheet.left_titles(_TAB).size() + PersonSheet.right_titles(_TAB).size()
+	assert_eq(placed.panels.size(), wanted, "이 탭이 세우기로 한 칸이 다 안 섰다")
 
 
 func test_no_font_yields_no_places() -> void:
 	# 폰트가 없으면 글 높이를 못 재므로 자리를 지어내지 않는다.
 	var placed := SheetLayout.build(
-		_sections(), _VIEW, null, PersonSheet.LEFT_TITLES, PersonSheet.RIGHT_TITLES
+		_sections(),
+		_VIEW,
+		null,
+		PersonSheet.left_titles(_TAB),
+		PersonSheet.right_titles(_TAB),
+		PersonSheet.wheel_titles(_TAB),
+		SheetTab.count()
 	)
 	assert_eq(placed.panels.size(), 0)
 	assert_eq(placed.rows.size(), 0)
@@ -64,7 +86,13 @@ func test_frame_section_has_no_rows() -> void:
 	# 액자는 통째로 그림이다. 눌러야 할 낱줄이 없다.
 	var sections := _sections()
 	var placed := SheetLayout.build(
-		sections, _VIEW, _FONT, PersonSheet.LEFT_TITLES, PersonSheet.RIGHT_TITLES
+		sections,
+		_VIEW,
+		_FONT,
+		PersonSheet.left_titles(_TAB),
+		PersonSheet.right_titles(_TAB),
+		PersonSheet.wheel_titles(_TAB),
+		SheetTab.count()
 	)
 	for i in placed.rows.size():
 		assert_ne(sections[placed.row_section[i]].shape, SheetSection.Shape.FRAME, "액자 칸이 줄을 냈다")
@@ -127,36 +155,50 @@ func test_the_gap_between_columns_belongs_to_nobody() -> void:
 func test_left_titles_are_left_of_right_titles() -> void:
 	var sections := _sections()
 	var placed := SheetLayout.build(
-		sections, _VIEW, _FONT, PersonSheet.LEFT_TITLES, PersonSheet.RIGHT_TITLES
+		sections,
+		_VIEW,
+		_FONT,
+		PersonSheet.left_titles(_TAB),
+		PersonSheet.right_titles(_TAB),
+		PersonSheet.wheel_titles(_TAB),
+		SheetTab.count()
 	)
 	var left_edge := 0.0
 	var right_edge := _VIEW.x
 	for i in placed.panels.size():
 		var title := sections[placed.panel_of[i]].title
-		if PersonSheet.LEFT_TITLES.has(title):
+		if PersonSheet.left_titles(_TAB).has(title):
 			left_edge = maxf(left_edge, placed.panels[i].end.x)
 		else:
 			right_edge = minf(right_edge, placed.panels[i].position.x)
 	assert_true(left_edge <= right_edge, "왼쪽 열이 오른쪽 열을 침범했다")
 
 
-func test_relations_sit_below_the_guild() -> void:
+func test_relations_sit_below_identity_in_the_history_tab() -> void:
 	# §24.17.3 — 자라는 칸을 아래에 둔다. 위로 올라가면 채워질 때 위를 밀어낸다.
+	# 관계는 이제 「내력」 탭이다 (§20.25.4) — 조우 중에 읽을 것이 아니다.
+	var history := SheetTab.Kind.HISTORY
 	var sections := _sections()
 	var placed := SheetLayout.build(
-		sections, _VIEW, _FONT, PersonSheet.LEFT_TITLES, PersonSheet.RIGHT_TITLES
+		sections,
+		_VIEW,
+		_FONT,
+		PersonSheet.left_titles(history),
+		PersonSheet.right_titles(history),
+		PersonSheet.wheel_titles(history),
+		SheetTab.count()
 	)
-	var guild := -1
+	var identity := -1
 	var relations := -1
 	for i in sections.size():
-		if sections[i].title == "길드":
-			guild = i
+		if sections[i].title == "신원":
+			identity = i
 		elif sections[i].title == "관계":
 			relations = i
-	assert_true(guild >= 0 and relations >= 0, "칸 이름이 바뀌었다")
+	assert_true(identity >= 0 and relations >= 0, "칸 이름이 바뀌었다")
 	assert_true(
-		placed.panel_rect(relations).position.y > placed.panel_rect(guild).position.y,
-		"관계가 길드 위로 올라갔다"
+		placed.panel_rect(relations).position.y > placed.panel_rect(identity).position.y,
+		"관계가 신원 위로 올라갔다"
 	)
 
 
@@ -193,7 +235,13 @@ func test_no_one_in_the_population_overflows() -> void:
 	for person in registry.size():
 		var sheet := PersonSheet.build(registry, person, factions, SheetDisclosure.Level.DEV, graph)
 		var one := SheetLayout.build(
-			sheet, _VIEW, _FONT, PersonSheet.LEFT_TITLES, PersonSheet.RIGHT_TITLES
+			sheet,
+			_VIEW,
+			_FONT,
+			PersonSheet.left_titles(_TAB),
+			PersonSheet.right_titles(_TAB),
+			PersonSheet.wheel_titles(_TAB),
+			SheetTab.count()
 		)
 		for panel in one.panels:
 			if panel.end.y > worst:

@@ -13,9 +13,10 @@ extends SceneTree
 ## | 벌 | 무엇을 보이나 |
 ## | --- | --- |
 ## | 기본 | **인물 넷** — 성향이 뚜렷한 사람과 무색한 사람, 유명한 사람, 무소속 |
-## | `hand` | **손 다섯** — 커서 · 눌러서 가족으로 이동 · 정보 확인 · 휠 (설계 20.23) |
+## | `hand` | **손 여섯** — 조우 탭 · 정보 확인 · 탭 이동 · 커서 · 눌러서 가족으로 · 수치 탭 |
 ##
-## `hand` 벌이 §4.1 「클릭만으로 전부 조작 가능」이 실제로 도는지 보이는 판정 매체다.
+## `hand` 벌이 §4.1 「클릭만으로 전부 조작 가능」과 §20.25 의 탭 셋이 실제로 도는지
+## 보이는 판정 매체다. **조우 → 내력 → 수치 한 바퀴를 클릭으로만 돈다.**
 ##
 ## ## 자리를 좌표로 안 박는다
 ##
@@ -51,11 +52,12 @@ const LINKED := -1
 ## 줄이 `LINKED` 면 **갈 곳이 있는 첫 줄**이다 — 가족이 몇 명인지는 사람마다 다르므로
 ## 몇 번째 줄인지를 박을 수 없다.
 const _HAND := [
-	["hand_1_plain", "", "", 0],
-	["hand_2_hover", "hover", "관계", LINKED],
-	["hand_3_tapped", "tap", "관계", LINKED],
-	["hand_4_inspect", "inspect", "성향", 1],
-	["hand_5_wheel", "wheel", "", 0],
+	["hand_1_encounter", "", "", 0],
+	["hand_2_inspect", "inspect", "위협", 0],
+	["hand_3_history", "tab", "내력", int(SheetTab.Kind.HISTORY)],
+	["hand_4_hover", "hover", "관계", LINKED],
+	["hand_5_tapped", "tap", "관계", LINKED],
+	["hand_6_numbers", "tab", "수치", int(SheetTab.Kind.NUMBERS)],
 ]
 
 ## 가족이 있는 사람을 찾을 때 훑는 최대 인원. 55%가 가족을 가지므로(§24.22.5)
@@ -117,10 +119,16 @@ func _process(_delta: float) -> bool:
 func _do_hand(step: int) -> void:
 	if step == 0:
 		_seek_kin()
+		_screen.show_tab(SheetTab.Kind.ENCOUNTER)
 		return
 	var what := str(_HAND[step][1])
 	if what == "wheel":
 		_screen.wheel(-1)
+		return
+	if what == "tab":
+		# **탭 띠를 눌러서** 넘어간다. `show_tab()` 을 직접 부르면 탭이 안 눌려도
+		# 그림이 나온다 — 설계 20.24.1 의 그 병이다.
+		_screen.tap(_tab_point(int(_HAND[step][3])))
 		return
 	var where := _aim(str(_HAND[step][2]), int(_HAND[step][3]))
 	if where == NpcSheetScreen.NOWHERE:
@@ -135,6 +143,16 @@ func _do_hand(step: int) -> void:
 			_screen.inspect(where)
 
 
+## 탭 하나의 한복판.
+func _tab_point(tab: int) -> Vector2:
+	var view: PersonSheetView = _screen.get_node("%SheetView")
+	var strip := view.layout().tabs
+	if tab < 0 or tab >= strip.size():
+		push_error("탭 %d 이 없다" % tab)
+		return NpcSheetScreen.NOWHERE
+	return strip[tab].get_center() + view.position
+
+
 ## 대본이 겨누는 자리. **그때 그려진 배치에서 낸다.**
 func _aim(section_title: String, field: int) -> Vector2:
 	if field == LINKED:
@@ -144,6 +162,9 @@ func _aim(section_title: String, field: int) -> Vector2:
 
 ## 가족이 있는 첫 사람 앞에 선다.
 func _seek_kin() -> void:
+	# 관계는 「내력」 탭에 있으므로 거기서 찾는다. 찾고 나서 조우 탭으로 돌아간다 —
+	# 첫 장은 **화면이 열렸을 때 보이는 것**이어야 한다.
+	_screen.show_tab(SheetTab.Kind.HISTORY)
 	for person in _SEEK:
 		_screen.show_person(person)
 		if _screen.linked_point() != NpcSheetScreen.NOWHERE:

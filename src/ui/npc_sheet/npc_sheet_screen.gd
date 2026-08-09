@@ -87,10 +87,15 @@ var _generator: PersonGenerator
 var _graph: RelationGraph
 var _kin: KinSeeder
 var _person := 0
+
+## 직전에 보던 인물. **개발 화면의 「보는 쪽」이다** — 조우 화면이 서면 그 자리에
+## 스쿼드 여섯이 들어간다(§20.25.7). 지금은 이것으로 면식 칸이 실제로 도는지를 본다.
+var _viewer := PersonRegistry.NO_PERSON
 var _pick := RandomNumberGenerator.new()
 var _build_msec := 0.0
 var _shows_metrics := true
 
+var _norms: PersonNorms
 var _view: PersonSheetView
 var _status: Label
 var _toolbar: HBoxContainer
@@ -137,6 +142,9 @@ func _process(delta: float) -> void:
 
 	_kin = null
 	_factions = FactionIndex.new(_registry)
+	# 눈금의 근거다. 인구가 바뀌면 같이 바뀌어야 한다 — 안 그러면 막대 눈금이
+	# 옛 인구를 가리킨다 (PersonNorms 머리말).
+	_norms = PersonNorms.new(_registry)
 	_pick.seed = _seed
 	show_person(0)
 
@@ -174,12 +182,27 @@ func wheel(dir: int) -> void:
 	show_person(_person - dir)
 
 
-## 누른다. 갈 곳이 있는 줄이면 그 사람으로 간다.
+## 누른다. **탭 띠가 먼저다** — 그다음이 갈 곳이 있는 줄이다.
 func tap(where: Vector2) -> void:
 	_view.show_note(Vector2.ZERO, "")
+	var tab := _view.layout().tab_at(where - _view.position)
+	if tab >= 0:
+		show_tab(tab as SheetTab.Kind)
+		return
 	var field := _field_at(where)
 	if field != null and field.has_link():
 		show_person(field.link)
+
+
+## 탭을 고른다. **버튼도 클릭도 캡처도 이 하나를 부른다.**
+func show_tab(tab: SheetTab.Kind) -> void:
+	_view.show_tab(tab)
+	_status.text = _status_text()
+
+
+## 지금 고른 탭.
+func tab() -> SheetTab.Kind:
+	return _view.tab()
 
 
 ## 정보 확인 (§4.2). **우클릭도 길게 누르기도 이 하나로 들어온다** (§20.23.5).
@@ -199,9 +222,12 @@ func show_person(person: int) -> void:
 	# 입력은 이미 막혀 있지만 도구가 직접 부를 수 있으므로 여기서도 막는다.
 	if _registry == null or _registry.size() == 0 or _factions == null:
 		return
+	var was := _person
 	_person = wrapi(person, 0, _registry.size())
+	if _person != was:
+		_viewer = was
 	_view.show_sections(
-		PersonSheet.build(_registry, _person, _factions, SheetDisclosure.Level.DEV, _graph)
+		PersonSheet.build(_registry, _person, _factions, SheetDisclosure.Level.DEV, _graph, _norms)
 	)
 	_status.text = _status_text()
 
@@ -327,6 +353,8 @@ func _restart() -> void:
 	_graph = null
 	_kin = null
 	_factions = null
+	_norms = null
+	_viewer = PersonRegistry.NO_PERSON
 	_build_msec = 0.0
 	_view.show_sections([] as Array[SheetSection])
 	_status.text = "인구 생성 중 0 / %d" % POPULATION
@@ -372,7 +400,7 @@ func _note_for(where: Vector2) -> String:
 
 
 func _status_text() -> String:
-	var hands := "휠 인물 넘김  관계 줄 클릭  우클릭/길게 누르기 정보"
+	var hands := "탭 클릭  휠 인물 넘김  관계 줄 클릭  우클릭/길게 누르기 정보"
 	if not _shows_metrics:
 		return hands
 	return (

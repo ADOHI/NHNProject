@@ -64,6 +64,12 @@ var has_meter := false
 ## 뷰가 칸 종류로 짐작하게 두지 않는다. 짐작하면 칸을 하나 더할 때 조용히 틀린다.
 var is_signed_bar := false
 
+## 막대 위에 눈금이 설 자리 0..1. `NO_BAR` 면 눈금이 없다.
+##
+## **인구의 가운데 값이다**(`PersonNorms`). 눈금이 없는 막대는 「크다」를 못 말하고
+## **「길다」만 말한다** (§20.25.3). 60 이 높은 값인지는 인구 안의 자리로만 읽힌다.
+var mark := NO_BAR
+
 ## 이 줄이 가리키는 인물. `NO_LINK` 면 아무도 안 가리킨다.
 ##
 ## **누르면 그 사람으로 간다** — 관계 줄이 쓴다 (§20.23.4). 화면에 나가는 값이 아니라
@@ -129,6 +135,20 @@ func display_text() -> String:
 			return reason
 		_:
 			return value
+
+
+## 인구 눈금이 붙은 막대. 「크다」를 말하려면 가운데가 어딘지 같이 나가야 한다.
+static func gauged(
+	field_label: String, field_value: String, ratio: float, middle: float
+) -> SheetField:
+	var field := SheetField.meter(field_label, field_value, ratio)
+	field.mark = middle
+	return field
+
+
+## 눈금이 있는가.
+func has_mark() -> bool:
+	return has_meter and mark >= 0.0
 
 
 ## 누르면 갈 곳이 있는가.

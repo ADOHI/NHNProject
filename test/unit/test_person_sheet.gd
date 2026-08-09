@@ -38,11 +38,6 @@ func test_columns_do_not_overlap() -> void:
 		assert_false(PersonSheet.RIGHT_TITLES.has(title), str(title))
 
 
-func test_section_count_matches_the_declared_columns() -> void:
-	var declared: int = PersonSheet.LEFT_TITLES.size() + PersonSheet.RIGHT_TITLES.size()
-	assert_eq(_sheet().size(), declared, "선언한 열에 없는 칸은 화면에 안 나온다")
-
-
 func test_unknown_person_gives_nothing() -> void:
 	assert_eq(_sheet(_POPULATION + 1).size(), 0)
 
