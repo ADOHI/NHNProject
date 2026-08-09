@@ -21,6 +21,7 @@ func _initialize() -> void:
 	_report_guild(world, guild)
 	_report_encounters(world, guild)
 	_report_sample(world, guild)
+	_report_nameable(world, guild)
 	quit()
 
 
@@ -144,3 +145,53 @@ func _tie(world: NpcWorld, ours: PackedInt32Array, other: int) -> String:
 				]
 			)
 	return ""
+
+
+## **얼굴이 없어도 「아는 사람」이 느껴지나** (설계 24.32).
+##
+## 3000명 전원의 초상은 못 만든다 — 캐릭터 파이프라인이 한 명당 여러 단계를 거친다.
+## 그러면 조우 화면의 여섯이 이름 여섯 개가 된다. **재인(再認)이 무엇에 걸리는지 센다.**
+##
+## 부를 이름이 있는가로 셋으로 가른다 —
+##
+## | 무엇 | 화면에 쓸 수 있는 말 |
+## | --- | --- |
+## | **태생 유형** | *"당신 대원의 아들"* — 가장 강하다. 얼굴이 없어도 그 자리에서 읽힌다 |
+## | **얻은 유형 + 근거 사건** | *"3년 전 그 판에서 배신한 자"* — 설계 24.2 가 노린 것 |
+## | **수치뿐** | 부를 말이 없다. **이 몫이 크면 얼굴이 필요하다** |
+func _report_nameable(world: NpcWorld, guild: Guild) -> void:
+	var ours := PackedInt32Array()
+	for member in guild.members:
+		ours.append(member.person)
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _SEED
+	var inborn := 0
+	var storied := 0
+	var bare := 0
+	for trial in _TRIALS:
+		var squad := RivalSquad.draw(world, rng, ours)
+		for face in squad.familiar_to(ours):
+			var kind := RelationKind.Kind.NONE
+			var cause := RelationLedger.NO_CAUSE
+			for viewer in ours:
+				if world.graph.knows(viewer, face):
+					kind = world.graph.kind_of(viewer, face)
+					cause = world.graph.cause_of(viewer, face)
+					break
+				if world.graph.knows(face, viewer):
+					kind = world.graph.kind_of(face, viewer)
+					cause = world.graph.cause_of(face, viewer)
+					break
+			if RelationKind.is_inborn(kind):
+				inborn += 1
+			elif world.ledger.has(cause):
+				storied += 1
+			else:
+				bare += 1
+
+	var total := maxi(inborn + storied + bare, 1)
+	print("\n== 얼굴이 없어도 부를 말이 있나 (아는 얼굴 %d건) ==" % total)
+	print("%-26s %.0f%%" % ["태생 유형 (아들 · 스승 …)", 100.0 * float(inborn) / float(total)])
+	print("%-26s %.0f%%" % ["유형 + 근거 사건", 100.0 * float(storied) / float(total)])
+	print("%-26s %.0f%%" % ["수치뿐 — 부를 말이 없다", 100.0 * float(bare) / float(total)])
