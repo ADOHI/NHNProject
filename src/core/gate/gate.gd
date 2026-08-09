@@ -27,6 +27,18 @@ var rank: GateRank.Kind
 ## 안쪽 던전의 씨앗. 이 값이 고정이라 같은 게이트가 같은 판을 낸다.
 var dungeon_seed: int
 
+## 같은 등급 안에서의 크기 흔들림 (-1 / 0 / +1).
+##
+## **등급만으로는 목록이 갈리지 않는다.** 길드 등급 1 에서는 E급 게이트만 열 수 있으므로
+## (`GateRank.is_open_to`) 네 게이트가 전부 같은 등급이 된다. 그러면 「어느 걸 갈까」가
+## 성립하지 않는다 — 첫 판에서 보는 화면이 그렇다.
+##
+## 등급 상한을 올릴 수는 없다. 못 들어가는 게이트를 목록에 올리면
+## "고르는 재미" 가 "안 되는 것 구경" 이 된다 (GateRank 주석).
+## 그래서 **같은 등급 안에서 크기를 흔든다** — 넓은 판은 방이 많아 귀중품도 많고
+## 그만큼 오래 머문다. 위험과 보상이 같이 움직이므로 저울이 돈다.
+var size_offset := 0
+
 ## 안쪽 던전의 **성격** (DungeonCatalog 의 색인).
 ##
 ## 등급이 크기를 정하는 것과 **다른 축**이다. 같은 등급의 「벌집」과 「수직 회랑」이
@@ -47,7 +59,9 @@ func _init(gate_id: String, name: String, gate_rank: GateRank.Kind, seed_value: 
 
 ## 안쪽 던전의 크기 단계. SampleDungeons 의 크기 축과 같다.
 func dungeon_size() -> int:
-	return GateRank.dungeon_size(rank)
+	return clampi(
+		GateRank.dungeon_size(rank) + size_offset, SampleDungeons.SIZE_MIN, SampleDungeons.SIZE_MAX
+	)
 
 
 ## 안쪽 던전을 실제로 세운다.
@@ -92,7 +106,7 @@ func preview_lines(level: GateDisclosure.Level) -> Array[String]:
 			lines
 			. append(
 				(
-					"규모 %d/%d · 복잡 %d/%d · 험난 %d/%d"
+					"규모 %d/%d • 복잡 %d/%d • 험난 %d/%d"
 					% [
 						grade["scale"],
 						DungeonGrade.SCALE_MAX,
@@ -107,7 +121,7 @@ func preview_lines(level: GateDisclosure.Level) -> Array[String]:
 		# 등급만 보여 주면 왜 그 등급인지 알 수 없다. 근거를 한 줄 붙인다.
 		lines.append(
 			(
-				"갈림길 %d%% · 한 걸음 평균 상승 %.1f"
+				"갈림길 %d%% • 한 걸음 평균 상승 %.1f"
 				% [int(round(float(grade["junction_pct"]))), float(grade["average_climb"])]
 			)
 		)

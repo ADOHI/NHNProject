@@ -129,3 +129,24 @@ func test_board_slots_get_distinct_seeds() -> void:
 	for gate in BoardScript.create(_SEED, 5, 8):
 		assert_false(seeds.has(gate.dungeon_seed), "자리마다 다른 씨앗이어야 한다")
 		seeds[gate.dungeon_seed] = true
+
+
+func test_the_board_is_not_four_of_the_same_gate() -> void:
+	# 길드 등급 1 에서는 E급만 열 수 있어 등급으로는 목록이 갈리지 않는다.
+	# 그때 넷이 전부 같은 판이면 "어느 걸 갈까" 가 성립하지 않는다 - 첫 판에서 보는 화면이다.
+	for board_seed in [1, 2, 3, 7, 11]:
+		var gates := GateBoard.create(board_seed, 1, 4)
+		var flavours := {}
+		for gate in gates:
+			flavours["%d/%d" % [gate.dungeon_character, gate.size_offset]] = true
+		assert_gte(flavours.size(), 3, "목록 시드 %d 에서 게이트가 다 비슷하다" % board_seed)
+
+
+func test_gates_on_one_board_differ_in_what_the_player_reads() -> void:
+	# 성격이 달라도 화면에 나오는 등급이 같으면 플레이어에게는 같은 게이트다.
+	for board_seed in [1, 2, 3]:
+		var seen := {}
+		for gate in GateBoard.create(board_seed, 1, 4):
+			var grade := DungeonGrade.of(gate.blueprint())
+			seen["%d/%d/%d" % [grade["scale"], grade["complexity"], grade["hardship"]]] = true
+		assert_gte(seen.size(), 3, "목록 시드 %d 의 게이트 등급이 겹친다" % board_seed)

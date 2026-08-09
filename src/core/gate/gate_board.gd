@@ -61,16 +61,40 @@ static func create(board_seed: int, guild_rank: int, count: int) -> Array[Gate]:
 	var highest := clampi(guild_rank - 1, 0, GateRank.count() - 1)
 	var lowest := maxi(0, highest - 2)
 
+	# **넷이 서로 달라야 고르는 것이 된다.** 등급만으로는 갈리지 않는다 — 길드 등급 1 에서는
+	# E급만 열 수 있어 네 게이트가 전부 같은 등급이 된다. 그래서 성격과 크기 흔들림을
+	# 겹치지 않게 나눠 준다 (Gate.size_offset 주석).
+	var flavours := _flavours(rng)
+
 	var gates: Array[Gate] = []
 	var used_names := {}
 	for index in maxi(0, count):
 		var rank: GateRank.Kind = rng.randi_range(lowest, highest) as GateRank.Kind
-		gates.append(
-			Gate.new(
-				"gate_%d" % index, _pick_name(used_names, rng), rank, _seed_for(board_seed, index)
-			)
+		var gate := Gate.new(
+			"gate_%d" % index, _pick_name(used_names, rng), rank, _seed_for(board_seed, index)
 		)
+		var flavour: Vector2i = flavours[index % flavours.size()]
+		gate.dungeon_character = flavour.x
+		gate.size_offset = flavour.y
+		gates.append(gate)
 	return gates
+
+
+## 게이트마다 나눠 줄 (성격, 크기 흔들림) 짝. **겹치지 않게 섞는다.**
+##
+## 목록을 그대로 쓰면 자리 순서가 늘 같은 성격이 되어 "1번은 늘 얕은 갱도" 가 된다.
+## 섞되 시드에서 나오므로 같은 목록은 언제나 같은 짝을 낸다.
+static func _flavours(rng: RandomNumberGenerator) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	for character in DungeonCatalog.count():
+		result.append(Vector2i(character, (character % 3) - 1))
+	# 피셔-예이츠. 비교 함수 안에서 난수를 뽑지 않는다 (§17.7).
+	for index in range(result.size() - 1, 0, -1):
+		var other := rng.randi_range(0, index)
+		var kept := result[index]
+		result[index] = result[other]
+		result[other] = kept
+	return result
 
 
 ## 자리 번호에서 던전 씨앗을 결정론적으로 뽑는다.
