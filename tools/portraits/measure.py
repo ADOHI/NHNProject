@@ -224,3 +224,42 @@ def spread(paths: list[str]) -> float:
     ds = [image_distance(paths[i], paths[j])
           for i in range(len(paths)) for j in range(i + 1, len(paths))]
     return sum(ds) / len(ds)
+
+
+# ── 발밑에 그림자가 지나 ─────────────────────────────────────────────────────
+#
+# **배경이 열리면 「어둡다」로는 못 잰다.** 흰 배경일 때는 어두운 화소를 세면 됐는데
+# 종이색·회색 캔버스·검정 배경에서는 배경 자체가 어둡다.
+#
+# 그래서 **같은 높이의 배경과 견준다.** 접지 그림자는 발밑 **가운데**에만 생기는
+# 국소적인 얼룩이고, 배경은 좌우로 이어진다. 가운데가 옆구리보다 어두우면 그림자다.
+
+#: 발밑으로 보는 띠 (아래에서부터). 접지 그림자가 앉는 자리다.
+FOOT_BAND = (0.88, 1.00)
+#: 같은 높이에서 이만큼 어두우면 그림자로 센다 (L* 차이).
+FOOT_DARK = 8.0
+FOOT_BREAK = 6.0   # 이 비율(%)을 넘으면 **그림자가 있다**
+
+
+def foot_shadow(path: str) -> float:
+    """발밑 띠에서 **옆구리 배경보다 어두운** 화소의 비율 %. 못 재면 `-1`.
+
+    배경 색이 무엇이든 상관없다 — **가로로 견주기 때문이다.**
+    """
+    try:
+        import numpy as np
+        from PIL import Image
+    except ImportError:
+        return -1.0
+    im = Image.open(path).convert("L")
+    w, h = im.size
+    a = np.asarray(im, dtype=np.float64)[int(h * FOOT_BAND[0]):int(h * FOOT_BAND[1]), :]
+    if a.size == 0:
+        return -1.0
+    side = np.concatenate([a[:, :int(w * 0.12)], a[:, int(w * 0.88):]], axis=1)
+    ref = np.median(side, axis=1, keepdims=True)      # 줄마다 배경 밝기
+    # **발 자체를 세면 안 된다.** 신발은 배경보다 늘 어둡다 — 첫 판이 23~50% 를 냈고
+    # 그게 전부 신발이었다. 그림자만 **옆으로 번지므로** 발 옆을 본다.
+    near = np.concatenate([a[:, int(w * 0.18):int(w * 0.38)],
+                           a[:, int(w * 0.62):int(w * 0.82)]], axis=1)
+    return float((near < ref - FOOT_DARK).mean() * 100.0)

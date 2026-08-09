@@ -70,6 +70,22 @@ KLEIN_EDIT_STEPS = 4
 #: (`PROMPTS.md` §7).
 SD_SIZE = 512
 
+#: SD 변환 지시. **`d60ee36` 에서 되살렸다** — `51e86f4` 의 리팩터가 이 상수를 떨어뜨려
+#: `gen_batch.py --stage sd` 가 조용히 깨져 있었다 (`illust.SD_CONVERT` 를 부르는데 없었다).
+#:
+#: **모듈 두 개가 서로를 부르는데 한쪽만 고친 사고다.** 상수를 옮길 때 부르는 쪽을
+#: 안 따라간 것이고, `--stage illust` 만 돌려 봐서 여태 안 터졌다.
+#:
+#: `keeping the same ... drawing style` 이 여기서 무겁다 — **화풍을 전신에서 SD 로
+#: 넘기는 것이 이 한 구절이다.** 배경을 연 뒤에도 이게 서는지가 §27.31 의 물음이다.
+SD_CONVERT = (
+    "Redraw this same character as one small chibi game sprite, keeping the same face, "
+    "the same hair, the same clothes, the same colours and the same drawing style. "
+    "The head is as large as the whole rest of the body. The whole figure stands inside "
+    "the frame with empty margin around it. Seen from a three-quarter right view. "
+    "The background is plain flat white all the way to every edge."
+)
+
 # ── 코드가 고정하는 문장 ─────────────────────────────────────────────────────
 
 # ---------------------------------------------------------------------------
@@ -322,8 +338,50 @@ ANCHORS: dict[str, str] = {
 # `FRAME_OPEN` 은 그 가설을 재려고만 만든 것이다. 구도는 그대로 두고
 # **배경 지시만 뺀다.** 여기서 벌어짐이 뛰면 진단이 맞은 것이다.
 # **`ILLUST_FRAME` 은 안 건드린다** — §27.24 대로 원본 고정 문자열이다.
-FRAME_OPEN = ("Full body from head to toe, standing straight in a neutral idle pose, "
-              "arms slightly away from the body, character centered.")
+#
+# # ④ 를 조각으로 갈라 잰다 — **배경과 발밑 그림자는 다른 문제다**
+#
+# 통합자: *"전부 빼는 게 답인지 일부만 빼는 게 답인지는 네가 재라.
+# 배경이 종이색인 것과 발밑에 그림자가 지는 것은 다른 문제다."*
+#
+# 원본 ④ 는 문장 넷이다. **셋은 배경 담당이고 하나는 구도 담당이다:**
+#
+#     ㉮ Full body from head to toe ... character centered.   구도. **무조건 유지**
+#     ㉯ Isolated on a pure flat white background.             배경을 희게
+#     ㉰ No ground, no floor, no cast shadow and no contact shadow under the feet.
+#     ㉱ Nothing else in the image.                            배경에 물건을 안 놓게
+#
+# ㉰ 는 **셋을 한꺼번에 막는다** — 바닥, 드리운 그림자, 접지 그림자.
+# 그쪽 주석이 근거를 적어 뒀다: *"`no shadow on the ground` 만으로는 바닥에
+# 해칭 그림자와 접지 그림자가 계속 그려졌다."* **배경을 열어도 이건 남길 수 있다.**
+FRAME_PARTS = {
+    "pose": ("Full body from head to toe, standing straight in a neutral idle pose, "
+             "arms slightly away from the body, character centered."),
+    "white": "Isolated on a pure flat white background.",
+    "noshadow": ("No ground, no floor, no cast shadow and no contact shadow "
+                 "under the feet."),
+    "nothing": "Nothing else in the image.",
+}
+
+#: 규격 갈래. **`closed` 가 원본 그대로다** (§27.24 의 212건 검증 문자열).
+FRAMES: dict[str, tuple[str, list[str]]] = {
+    "closed": ("원본 그대로 — 흰 배경 강제", ["pose", "white", "noshadow", "nothing"]),
+    "open": ("구도만 — 배경 지시를 통째로 뺐다", ["pose"]),
+    "shadow": ("배경은 열고 **발밑 그림자만 막는다**", ["pose", "noshadow"]),
+    "nothing": ("배경은 열고 그림자·잡동사니를 막는다", ["pose", "noshadow", "nothing"]),
+}
+
+
+def frame_of(name: str) -> str:
+    """갈래 이름으로 ④ 문자열을 짓는다. `closed` 는 **원본을 그대로 돌려준다.**"""
+    if name not in FRAMES:
+        raise ValueError(f"모르는 규격: {name!r} (있는 것: {list(FRAMES)})")
+    if name == "closed":
+        return ILLUST_FRAME  # 베낀 것이 아니라 그 파일에서 읽어 온 것이다
+    return " ".join(FRAME_PARTS[k] for k in FRAMES[name][1])
+
+
+FRAME_OPEN = frame_of("open")
 
 
 def compose_illust(character: str, style: str = "", anchor: str = "anime",

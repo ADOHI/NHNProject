@@ -133,9 +133,9 @@ def main() -> int:
     ap.add_argument("--anchor", default="anime", choices=list(illust.ANCHORS),
                     help="맨 앞 조립. **셋 다 원본에 실물이 있다** — `anime`(기록 19건), "
                          "`drawn`(기록 189건, 다수), `none`(noanchor 실험)")
-    ap.add_argument("--open-frame", action="store_true",
-                    help="**탐침.** 배경 지시를 뺀 규격으로 뽑는다 (§27.28). "
-                         "화풍이 배경에서 드러나는지 재는 자리다 — 파이프라인은 안 바꾼다")
+    ap.add_argument("--frame", default="closed", choices=list(illust.FRAMES),
+                    help="④ 규격 갈래 (§27.29). `closed` 가 원본이고, 나머지는 "
+                         "배경 지시를 조각으로 뺀 것이다 — **구도는 어느 갈래에도 남는다**")
     ap.add_argument("--jitter", type=int, default=0,
                     help="**잡음 바닥을 재는 자리.** 화풍은 그대로 두고 시드만 N 번 흔든다. "
                          "화풍을 바꾼 벌어짐이 이걸 못 넘으면 화풍이 안 갈린 것이다")
@@ -162,9 +162,9 @@ def main() -> int:
 
     log = os.path.join(args.folder, "style_sweep.jsonl")
     suffix = "" if args.anchor == "anime" else f"_{args.anchor}"
-    if args.open_frame:
-        suffix += "_open"
-    frame = illust.FRAME_OPEN if args.open_frame else ""
+    if args.frame != "closed":
+        suffix += f"_{args.frame}"
+    frame = illust.frame_of(args.frame)
     todo = [(t, s) for t in tags for s in args.people]
     print(f"=== 화풍 비교 — 후보 {len(tags)}, 인물 {len(args.people)}, "
           f"판 {len(todo)}장, zitani {args.steps}스텝 {illust.ILLUST_W}x{illust.ILLUST_H} ===")
