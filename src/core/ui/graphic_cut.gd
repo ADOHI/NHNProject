@@ -1,0 +1,217 @@
+class_name GraphicCut
+extends RefCounted
+## **판이 직사각형이 아니다.** 자르고 · 기울이고 · 뜯는 순수 계산이다.
+##
+## docs/design/20-ui-kit.md §20.28.
+##
+## ## 왜 이것이 핵심인가
+##
+## 앞의 판들(§20.26 · §20.27)은 전부 **「이 UI 는 무슨 물질인가」**를 물었다 —
+## 돌 · 금박 · 신문지 · 쇳물. 그게 기각당한 이유다.
+##
+## > **페르소나 5 계열은 물질을 흉내 내지 않는다. 그래픽 디자인으로 승부한다.**
+##
+## 그 문법의 첫 항목이 **직사각형이 아닌 판**이다. 사각형에 재료를 아무리 발라도
+## 그 문법에 못 들어간다 — **형태가 먼저다.**
+##
+## ## 무늬도 재질이 아니라 그래픽이다
+##
+## 줄무늬와 망점을 **평평하게** 깐다. 판 안에만 들어가야 하므로 `Geometry2D` 로
+## 잘라 낸다 — 흐릿하게 덧칠하는 게 아니라 **정확히 잘린 도형**이다.
+
+## 기울기. 평행사변형이 이만큼 눕는다(가로 픽셀 / 세로 픽셀).
+const LEAN := 0.28
+
+
+## 평행사변형. **위가 오른쪽으로 밀린다.**
+static func lean(box: Rect2, slant: float = LEAN) -> PackedVector2Array:
+	var push := box.size.y * slant
+	return PackedVector2Array(
+		[
+			Vector2(box.position.x + push, box.position.y),
+			Vector2(box.end.x + push, box.position.y),
+			Vector2(box.end.x, box.end.y),
+			Vector2(box.position.x, box.end.y),
+		]
+	)
+
+
+## 한쪽 모서리만 비스듬히 잘린 판. `which` 는 자를 모서리 넷의 비트다
+## (1 왼위 · 2 오른위 · 4 오른아래 · 8 왼아래).
+##
+## **넷을 다 자르면 팔각형이 되어 얌전해진다.** 하나나 둘만 자른다.
+static func clipped(box: Rect2, cut: float, which: int) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var reach := minf(cut, minf(box.size.x, box.size.y) * 0.5)
+	if which & 1:
+		out.append(Vector2(box.position.x + reach, box.position.y))
+	else:
+		out.append(box.position)
+	if which & 2:
+		out.append(Vector2(box.end.x - reach, box.position.y))
+		out.append(Vector2(box.end.x, box.position.y + reach))
+	else:
+		out.append(Vector2(box.end.x, box.position.y))
+	if which & 4:
+		out.append(Vector2(box.end.x, box.end.y - reach))
+		out.append(Vector2(box.end.x - reach, box.end.y))
+	else:
+		out.append(box.end)
+	if which & 8:
+		out.append(Vector2(box.position.x + reach, box.end.y))
+		out.append(Vector2(box.position.x, box.end.y - reach))
+	else:
+		out.append(Vector2(box.position.x, box.end.y))
+	if which & 1:
+		out.append(Vector2(box.position.x, box.position.y + reach))
+	return out
+
+
+## 한쪽이 뾰족한 판. 오른쪽 변이 창끝처럼 나간다.
+static func fang(box: Rect2, tip: float) -> PackedVector2Array:
+	return PackedVector2Array(
+		[
+			box.position,
+			Vector2(box.end.x, box.position.y),
+			Vector2(box.end.x + tip, box.get_center().y),
+			Vector2(box.end.x, box.end.y),
+			Vector2(box.position.x, box.end.y),
+		]
+	)
+
+
+## 가장자리가 뜯긴 판. 변마다 톱니가 몇 개 난다.
+##
+## **난수를 씨앗으로 고정한다** — 프레임마다 다르게 뜯기면 그건 뜯긴 게 아니라 떠는 것이다.
+static func torn(box: Rect2, bite: float, seed_value: int) -> PackedVector2Array:
+	var dice := RandomNumberGenerator.new()
+	dice.seed = seed_value
+	var out := PackedVector2Array()
+	var corners := [
+		box.position,
+		Vector2(box.end.x, box.position.y),
+		box.end,
+		Vector2(box.position.x, box.end.y),
+	]
+	for i in 4:
+		var from: Vector2 = corners[i]
+		var to: Vector2 = corners[(i + 1) % 4]
+		var steps := 5
+		for step in steps:
+			var t := float(step) / float(steps)
+			var along := from.lerp(to, t)
+			var normal := (to - from).orthogonal().normalized()
+			out.append(along + normal * dice.randf_range(-bite, bite))
+	return out
+
+
+## 판을 그만큼 부풀린 외곽. 뒤판이 삐져나오게 할 때 쓴다.
+##
+## **뒤판은 「그림자」가 아니라 한 겹 더 있는 판이다.** 그래서 어긋나게 놓는다.
+static func swelled(points: PackedVector2Array, by: float, at: Vector2) -> PackedVector2Array:
+	var middle := Vector2.ZERO
+	for point in points:
+		middle += point
+	middle /= maxf(float(points.size()), 1.0)
+	var out := PackedVector2Array()
+	for point in points:
+		out.append(middle + (point - middle) * (1.0 + by) + at)
+	return out
+
+
+## 판 안을 채우는 **사선 줄무늬.** 판 밖으로 안 나가게 잘라 낸다.
+##
+## `phase` 를 흘리면 줄무늬가 판 위를 지나간다 — **재질이 아니라 그래픽이 움직이는 것**이다.
+static func stripes(
+	shape: PackedVector2Array, angle: float, gap: float, thick: float, phase: float
+) -> Array[PackedVector2Array]:
+	var out: Array[PackedVector2Array] = []
+	if shape.is_empty() or gap <= 0.0:
+		return out
+	var span := _bounds(shape)
+	var reach := span.size.length() + gap * 2.0
+	var middle := span.get_center()
+	var dir := Vector2.from_angle(angle)
+	var side := dir.orthogonal()
+	var count := int(reach / gap) + 2
+	for i in range(-count, count):
+		var offset := float(i) * gap + fposmod(phase, gap)
+		var seat := middle + side * offset
+		var bar := PackedVector2Array(
+			[
+				seat - dir * reach,
+				seat - dir * reach + side * thick,
+				seat + dir * reach + side * thick,
+				seat + dir * reach,
+			]
+		)
+		for piece in Geometry2D.intersect_polygons(shape, bar):
+			out.append(piece)
+	return out
+
+
+## 판 안을 채우는 **망점.** 점의 중심이 판 안에 있는 것만 남긴다.
+##
+## 잘라 내지 않고 중심으로 거르는 이유는 **점이 가장자리에서 반쯤 잘리면 그게 더 인쇄물답기**
+## 때문이다 — 다만 완전히 밖에 있는 점은 지운다.
+static func halftone(shape: PackedVector2Array, step: float, phase: Vector2) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	if shape.is_empty() or step <= 0.0:
+		return out
+	var span := _bounds(shape).grow(step)
+	var rows := int(span.size.y / step) + 2
+	var cols := int(span.size.x / step) + 2
+	for row in rows:
+		for col in cols:
+			var at := (
+				span.position
+				+ Vector2(float(col) * step, float(row) * step)
+				+ Vector2(fposmod(phase.x, step), fposmod(phase.y, step))
+			)
+			if Geometry2D.is_point_in_polygon(at, shape):
+				out.append(at)
+	return out
+
+
+## 판을 사선으로 **찢어 여는** 두 조각. `open` 0 이면 닫혀 있고 1 이면 다 열렸다.
+##
+## 열림이 「커지는 것」이 아니라 **갈라지는 것**이라 P5 문법에 맞는다.
+static func torn_open(
+	shape: PackedVector2Array, angle: float, open: float, apart: float
+) -> Array[PackedVector2Array]:
+	var out: Array[PackedVector2Array] = []
+	if shape.is_empty():
+		return out
+	if open >= 0.999:
+		out.append(shape)
+		return out
+	var span := _bounds(shape)
+	var middle := span.get_center()
+	var dir := Vector2.from_angle(angle)
+	var side := dir.orthogonal()
+	var reach := span.size.length()
+	# 갈라진 틈. 덜 열렸을수록 틈이 넓고 조각이 멀리 물러나 있다.
+	var gap := (1.0 - open) * apart
+	for sign in [1.0, -1.0]:
+		var edge := middle + side * gap * sign
+		var half := PackedVector2Array(
+			[
+				edge - dir * reach,
+				edge + dir * reach,
+				edge + dir * reach + side * reach * sign,
+				edge - dir * reach + side * reach * sign,
+			]
+		)
+		for piece in Geometry2D.intersect_polygons(shape, half):
+			var moved := PackedVector2Array()
+			for point in piece:
+				moved.append(point + side * gap * sign * 1.6)
+			out.append(moved)
+	return out
+
+
+static func _bounds(shape: PackedVector2Array) -> Rect2:
+	var span := Rect2(shape[0], Vector2.ZERO)
+	for point in shape:
+		span = span.expand(point)
+	return span
