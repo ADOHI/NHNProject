@@ -150,3 +150,19 @@ func test_gates_on_one_board_differ_in_what_the_player_reads() -> void:
 			var grade := DungeonGrade.of(gate.blueprint())
 			seen["%d/%d/%d" % [grade["scale"], grade["complexity"], grade["hardship"]]] = true
 		assert_gte(seen.size(), 3, "목록 시드 %d 의 게이트 등급이 겹친다" % board_seed)
+
+
+func test_the_rank_size_axis_matches_the_dungeon_size_axis() -> void:
+	# GateRank._SIZES 주석이 "SampleDungeons.SIZE_MIN ~ SIZE_MAX 와 같은 축" 이라 적어 놓고
+	# 상호 참조가 없다. 축이 넓어지면 게이트만 옛 범위에 남고 아무도 안 알려 준다 —
+	# `params_for_size` 가 범위 밖을 말없이 접기 때문이다.
+	var sizes: Array[int] = []
+	for kind in GateRank.count():
+		sizes.append(GateRank.dungeon_size(kind as GateRank.Kind))
+	assert_eq(sizes.min(), SampleDungeons.SIZE_MIN, "게이트 최소 크기가 던전 축과 다르다")
+	assert_eq(sizes.max(), SampleDungeons.SIZE_MAX, "게이트 최대 크기가 던전 축과 다르다")
+	assert_eq(
+		GateRank.count(),
+		SampleDungeons.SIZE_MAX - SampleDungeons.SIZE_MIN + 1,
+		"등급 수와 크기 단계 수가 다르다"
+	)

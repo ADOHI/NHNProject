@@ -134,5 +134,26 @@ static func summary_of(index: int) -> String:
 ## 반대로 하면 성격이 방 개수를 덮어써 게이트 등급이 뜻을 잃는다.
 static func apply(params: DungeonGenerator.Params, index: int) -> DungeonGenerator.Params:
 	for field in character_at(index).axes:
-		params.set(String(field), float(character_at(index).axes[field]))
+		var name := String(field)
+		# **`set()` 은 없는 이름을 말없이 삼킨다.** 오타가 나면 그 축이 죽는데 로그 한 줄
+		# 없고, 그래프만 보는 테스트로는 방 종류 축(귀중품·위험방·탈출구 거리)의 죽음이
+		# 원리적으로 안 잡힌다. 그래서 여기서 확인한다.
+		if params.get(name) == null:
+			push_error("던전 성격이 없는 축을 흔들려 합니다: %s" % name)
+			continue
+		params.set(name, float(character_at(index).axes[field]))
 	return params
+
+
+## 성격이 흔드는 축 이름이 전부 실재하는가. 테스트와 개발 도구가 쓴다.
+static func unknown_axes() -> Array[String]:
+	var known := {}
+	for entry in DungeonGenerator.Params.new().get_property_list():
+		known[String(entry["name"])] = true
+
+	var result: Array[String] = []
+	for character in all():
+		for field in character.axes:
+			if not known.has(String(field)):
+				result.append("%s/%s" % [character.id, field])
+	return result
