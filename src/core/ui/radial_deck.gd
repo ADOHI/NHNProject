@@ -229,6 +229,24 @@ static func open_amount(slot: Slot, u: float, closing: bool) -> float:
 	return clampf(KitEase.out_back(t, 2.0), 0.0, 1.4)
 
 
+## 한 칸 안의 자리에서 **창이 펴진 정도**를 바로 낸다. 화면은 이것만 부르면 된다.
+##
+## > **`settled()` 와 `open_amount()` 를 잇는 자리는 하나여야 한다.**
+##
+## 둘을 화면에서 이어 붙였더니 **접힘이 한 번도 일어나지 않았다**(§20.20.8).
+## `open_amount(..., closing)` 의 `u` 는 「접힌 정도」인데 화면이 `settled`(= 멈춘 정도)를
+## 그대로 넘겼다. 두 값은 방향이 반대라 창이 **멈췄을 때 접히고 도는 중에 펴졌다.**
+## 게다가 도는 내내 `closing` 이라 **펴짐 곡선은 불린 적이 없다.**
+##
+## 곡선 둘은 각각 시험을 통과하고 있었다 — **아무도 둘을 이어서 재지 않았다.**
+static func unfolded(slot: Slot, picked: float) -> float:
+	var within := within_step(picked)
+	# 앞 반 칸은 떠나는 중이라 접히고, 뒤 반 칸은 다가오는 중이라 펴진다.
+	var closing := within < 0.5
+	var rest := settled(picked)
+	return clampf(open_amount(slot, (1.0 - rest) if closing else rest, closing), 0.0, 1.0)
+
+
 ## 접힌 창이 **어떤 표식으로** 접히나. 접힌 모양이 그 창의 종류를 말한다.
 ##
 ## 성향은 막대 하나, 관계는 점 여럿, 열전은 얇고 긴 선. **접혀 있어도 무엇인지 안다.**

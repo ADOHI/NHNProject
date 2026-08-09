@@ -201,6 +201,41 @@ func test_windows_are_folded_exactly_when_the_centre_changes() -> void:
 	assert_eq(RadialDeck.front_index(6, 2.6), 3)
 
 
+## **여기가 §20.20.8 이 잡은 자리다.** 위의 검사는 `settled` 만 봤고 아래가 없어서
+## 「멈추면 펴지고 돌면 접힌다」가 **한 번도 성립한 적이 없는데도** 다 통과했다.
+##
+## > **곡선 둘이 각각 옳아도 이어 붙인 값은 따로 재야 한다.**
+func test_the_composed_fold_is_open_at_rest_and_shut_at_the_handover() -> void:
+	for slot in RadialDeck.count():
+		var here := slot as RadialDeck.Slot
+		assert_almost_eq(RadialDeck.unfolded(here, 2.0), 1.0, 0.01, "멈춰 있는데 안 펴졌다")
+		assert_almost_eq(RadialDeck.unfolded(here, 3.0), 1.0, 0.01, "다음 칸에서도 다 펴진다")
+		assert_almost_eq(RadialDeck.unfolded(here, 2.5), 0.0, 0.01, "주인이 바뀌는데 안 접혔다")
+		# 주인이 바뀌는 자리 양옆에서 덜 펴져 있어야 「도는 중」이 형태로 읽힌다.
+		# **뒤 반 칸은 되튐이 있어 일찍 다 펴진다** — 그래서 경계에 가까운 데서 잰다.
+		assert_lt(RadialDeck.unfolded(here, 2.35), 0.95, "떠나는 중인데 창이 그대로 펴져 있다")
+		assert_lt(RadialDeck.unfolded(here, 2.55), 0.95, "막 넘어왔는데 창이 벌써 다 펴져 있다")
+
+
+## **접힘과 펴짐이 실제로 둘 다 불린다.** 한쪽만 불리면 곡선을 둘 만든 뜻이 없다.
+##
+## 떠나는 쪽은 되튐이 없고 다가오는 쪽은 지나쳤다 되돌아온다 — 이어 붙인 값에서도
+## 그래야 한다. 앞 판은 도는 내내 접힘 곡선만 불렀고 **펴짐 곡선은 죽은 코드였다.**
+func test_both_halves_of_the_step_use_their_own_curve() -> void:
+	var slot := RadialDeck.Slot.IDENTITY
+	var leaving := 0.0
+	var arriving := 0.0
+	for step in 25:
+		var within := float(step) / 24.0
+		var value := RadialDeck.open_amount(slot, 1.0 - RadialDeck.settled(2.0 + within), true)
+		if within < 0.5:
+			leaving = maxf(leaving, absf(RadialDeck.unfolded(slot, 2.0 + within) - value))
+		else:
+			arriving = maxf(arriving, absf(RadialDeck.unfolded(slot, 2.0 + within) - value))
+	assert_almost_eq(leaving, 0.0, 0.001, "앞 반 칸은 접힘 곡선이다")
+	assert_gt(arriving, 0.05, "뒤 반 칸이 접힘 곡선과 같으면 펴짐 곡선이 죽어 있는 것이다")
+
+
 func test_slot_names_are_printable() -> void:
 	for slot in RadialDeck.count():
 		var text := RadialDeck.label(slot as RadialDeck.Slot)
