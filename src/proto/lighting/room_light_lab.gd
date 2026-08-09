@@ -46,8 +46,6 @@ extends Node2D
 ## 방 시각화 레인의 산출물. 저장소 밖이고, 그것이 의도다.
 const _ROOM_ROOT := "C:/Users/adohi/2dAnim/room-studio/out/the_sunken_keep"
 const _ROOMS: Array[String] = ["gallery_of_the_warden", "cistern_of_the_tithe"]
-## `tools/pull_room_lights.py` 가 적어 둔 사이드카. 매니페스트가 광원을 실으면 없어진다.
-const _LIGHTS_DIR := "res://.renders-lighting/room"
 const _SHOT_DIR := "res://.renders-lighting/room_lab"
 
 ## 이 방들은 1920×1080 으로 그려졌고 게임 뷰포트는 1280×720 이다.
@@ -97,7 +95,6 @@ var _label: Label
 var _note := ""
 
 var _manifest := {}
-var _lights := {}
 var _cutouts: Dictionary = {}
 var _polygons: Dictionary = {}
 var _point_total := 0
@@ -181,17 +178,17 @@ func _load_room(room_id: String) -> void:
 	var dir := "%s/%s" % [_ROOM_ROOT, room_id]
 	_note = ""
 	_manifest = _read_json("%s/%s.manifest.json" % [dir, room_id])
-	_lights = _read_json("%s/%s.lights.json" % [_LIGHTS_DIR, room_id])
 	if _manifest.is_empty():
 		_note = "매니페스트를 못 읽었다: %s" % dir
 		return
-	if _lights.is_empty():
+	# **광원은 매니페스트에서 읽는다.** 한동안 `tools/pull_room_lights.py` 가 적은
+	# 사이드카를 읽었는데, 그건 매니페스트가 `emitters`·`sun.strength`·`depth_scale`
+	# 셋을 안 실을 때의 임시였다 (§26.8). `schema: room-studio/3` 이 셋을 전부
+	# 실으면서 그 임시가 끝났다 — **사이드카를 계속 읽으면 그게 두 번째 진실이 된다.**
+	if not _manifest.has("emitters"):
 		_note = (
-			"광원 사이드카가 없다. 먼저:\n"
-			+ (
-				"  python tools/pull_room_lights.py <room-studio> %s %s/%s.lights.json"
-				% [dir, _LIGHTS_DIR, room_id]
-			)
+			"매니페스트에 emitters 가 없다 (schema=%s). room-studio/3 이상이 필요하다."
+			% str(_manifest.get("schema", "?"))
 		)
 
 	var plate := Image.load_from_file("%s/%s.panorama.jpg" % [dir, room_id])
@@ -227,7 +224,10 @@ func _rebuild_occluders() -> void:
 	_polygons.clear()
 	_point_total = 0
 	var actor_h := float(_manifest.get("actor_h", 330))
-	var depth_scale := float(_lights.get("depth_scale", 0.0))
+	# **`depth_scale` 이 없으면 조용히 틀린다.** 기본값 0 으로 계산이 그냥 되고 소품이
+	# 최대 24% 어긋난 크기로 놓인다 — 오류는 안 나고 그림자만 틀린다 (§26.8).
+	var geometry: Dictionary = _manifest.get("geometry", {})
+	var depth_scale := float(geometry.get("depth_scale", 0.0))
 	var emitting := _emitting_props()
 	for entry in _manifest.get("props", []):
 		var asset: String = entry.get("asset", "")
@@ -274,10 +274,16 @@ func _prop_box(entry: Dictionary, image: Image, actor_h: float, depth_scale: flo
 	return Rect2(Vector2(float(foot[0]) - w * 0.5, float(foot[1]) - h), Vector2(w, h))
 
 
-## 켜져 있는(불을 가진) 소품의 이름. 광원 사이드카에서 나온다.
+## 이 방에서 **켜져 있는 불.** 자리는 사람이 적은 값이 아니라 컷아웃에서 찾은
+## 불꽃이고, 매니페스트가 `screen_at_camera_0` 으로 싣는다.
+func _emitters() -> Array:
+	return _manifest.get("emitters", [])
+
+
+## 켜져 있는(불을 가진) 소품의 이름.
 func _emitting_props() -> Dictionary:
 	var out := {}
-	for emitter in _lights.get("emitters", []):
+	for emitter in _emitters():
 		out[(emitter as Dictionary).get("prop", "")] = true
 	return out
 
@@ -338,17 +344,21 @@ func _apply_dark() -> void:
 
 
 func _place_lamp() -> void:
-	var emitters: Array = _lights.get("emitters", [])
+	var emitters := _emitters()
 	if emitters.is_empty():
 		_lamp.visible = false
 		return
 	var first: Dictionary = emitters[0]
-	var at: Array = first.get("screen", [0, 0])
+	var at: Array = first.get("screen_at_camera_0", [0, 0])
 	_lamp.position = Vector2(float(at[0]), float(at[1]))
 	var rgb: Array = first.get("color", [255, 172, 84])
 	_lamp.color = Color8(int(rgb[0]), int(rgb[1]), int(rgb[2]))
 	_lamp.energy = float(first.get("strength", 1.0)) * 0.5
-	_lamp.texture_scale = float(first.get("reach_px", 320.0)) * 2.4 / 256.0
+	# 매니페스트의 `reach` 는 **화면 폭에 대한 비율**이다 (0.26 -> 499.2px @1920).
+	# 픽셀로 적힌 값이 아니므로 여기서 환산한다 — 두 벌로 적지 않는다.
+	var authored: Array = _manifest.get("screen", [_AUTHORED_WIDTH, 1080])
+	var reach_px := float(first.get("reach", 0.17)) * float(authored[0])
+	_lamp.texture_scale = reach_px * 2.4 / 256.0
 	# 대원 빛과 같은 이유로 띄운다 (`_build_nodes` 의 주석). 이 빛은 §26.2.1 이 금지한
 	# 선택을 **보여 주기 위해** 있는 것이라, 노멀이 안 먹으면 보여 주는 것도 틀린다.
 	_lamp.height = 0.30
@@ -434,7 +444,7 @@ func _draw_outlines() -> void:
 		_outline_node.draw_polyline(screen, Color(0.35, 1.0, 0.55, 0.9), 1.5)
 	# 램프 자리를 십자로 찍는다. **이 자리가 사람이 적은 값이 아님을 화면에서 보이는 것**이
 	# 이 표시의 목적이다 — 소품 그림에서 나온 값이다.
-	if not _lights.get("emitters", []).is_empty():
+	if not _emitters().is_empty():
 		var at := offset + _lamp.position * scale
 		_outline_node.draw_line(at - Vector2(10, 0), at + Vector2(10, 0), Color(1, 0.6, 0.2), 2.0)
 		_outline_node.draw_line(at - Vector2(0, 10), at + Vector2(0, 10), Color(1, 0.6, 0.2), 2.0)
