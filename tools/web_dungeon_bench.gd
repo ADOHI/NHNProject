@@ -68,8 +68,9 @@ func _process(_delta: float) -> void:
 	_last_frame_start = now
 
 	var entry: Array = _CASES[_case]
-	var params := DungeonGenerator.Params.new()
-	params.room_count = 7 + int(entry[1]) * 5
+	# **사다리를 따라간다.** 예전에는 `7 + 크기 x 5` 를 여기 적어 뒀는데, 사다리가 바뀌자
+	# 벤치만 옛 크기(32방)를 재고 있었다 - 웹 실측이 실제보다 가벼운 판의 값이 됐다.
+	var params := SampleDungeons.params_for_size(int(entry[1]))
 	params.extra_edge_ratio = float(entry[2])
 	params.elevation_gain = float(entry[3])
 

@@ -16,6 +16,9 @@ var _seed := FIRST_SEED
 ## 아웃게임에 성격을 고르는 화면이 아직 없다. 그래서 개발 화면에서는 **새 판을 찍을 때마다
 ## 차례로 돈다** — 다섯을 다 보려면 생성 버튼을 다섯 번 누르면 된다.
 var _character := 0
+
+## 지금 판의 설계도. 등급을 띄우려고 들고 있는다.
+var _plan: DungeonBlueprint = null
 var _debug_visible := false
 var _sheet: ShaderMaterial
 
@@ -108,8 +111,9 @@ func _generate_new() -> void:
 	_seed = randi() % 1000000
 	# 성격도 함께 돈다. 다섯을 다 보려면 다섯 번 누른다 (_character 주석 참고).
 	_character = DungeonCatalog.wrapped(_character + 1)
-	_update_size_label()
 	_build_run()
+	# 등급은 판을 만든 뒤에야 잴 수 있다. 순서를 바꾸면 직전 판의 등급이 뜬다.
+	_update_size_label()
 	# 판을 통째로 새로 짠 것이므로 종이를 찢고 다시 찍는다.
 	_print_edition(true)
 
@@ -117,6 +121,7 @@ func _generate_new() -> void:
 func _build_run() -> void:
 	# 판은 여기서 만들어 화면 둘에 나눠 준다. 화면끼리 서로의 내부를 들여다보지 않는다.
 	var run := SampleDungeons.create_run(_seed, int(_size_slider.value), _character)
+	_plan = run.blueprint
 	_board.setup(run, _seed)
 	_overlay.bind(run, _seed)
 	if not _board.player_acted.is_connected(_overlay.refresh):
@@ -130,9 +135,38 @@ func _build_run() -> void:
 
 func _update_size_label() -> void:
 	var size := int(_size_slider.value)
+	# 판을 걸어 보면서 등급이 맞는지 눈으로 확인할 수 있어야 한다 (§17.20).
 	_size_label.text = (
-		"%s   크기 %d (칸 %d개 안팎)"
-		% [DungeonCatalog.name_of(_character), size, SampleDungeons.room_estimate(size)]
+		"%s   크기 %d (칸 %d개 안팎)%s"
+		% [
+			DungeonCatalog.name_of(_character),
+			size,
+			SampleDungeons.room_estimate(size),
+			_grade_text(),
+		]
+	)
+
+
+## 지금 판의 등급. 걸어 보면서 「복잡 3」이 정말 복잡한지 확인하라고 띄운다.
+##
+## 설계도를 여기서 들고 있는 이유는 화면의 내부를 들여다보지 않기 위해서다 —
+## 판은 main 이 만들어 화면들에 나눠 주는 것이므로 여기가 원본이다.
+func _grade_text() -> String:
+	if _plan == null:
+		return ""
+	var grade := DungeonGrade.of(_plan)
+	return (
+		# 슬라이더는 **다음** 판의 크기를 정하고 등급은 **지금** 판의 것이다.
+		# 둘이 섞이지 않게 「지금 판」이라고 못 박는다.
+		"      지금 판 — 규모 %d/%d • 복잡 %d/%d • 험난 %d/%d"
+		% [
+			grade["scale"],
+			DungeonGrade.SCALE_MAX,
+			grade["complexity"],
+			DungeonGrade.COMPLEXITY_MAX,
+			grade["hardship"],
+			DungeonGrade.HARDSHIP_MAX,
+		]
 	)
 
 
