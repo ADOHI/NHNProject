@@ -724,6 +724,8 @@ func _turn_toward(agent: ProtoUnitAgent, wanted: Vector2, delta: float) -> Vecto
 ## `note_block` 이 참이면 나를 세운 것이 누구인지도 함께 적는다(훑기 한 벌을 아낀다).
 func _room(agent: ProtoUnitAgent, direction: Vector2, note_block: bool) -> float:
 	var limit := _LOOKAHEAD
+	# 직전에 지목한 놈을 기억해 둔다. 그놈만은 더 벌어질 때까지 계속 지목한다.
+	var held := agent.blocker_id if note_block else 0
 	if note_block:
 		agent.blocked_by_settled = false
 		agent.pressed = false
@@ -756,7 +758,8 @@ func _room(agent: ProtoUnitAgent, direction: Vector2, note_block: bool) -> float
 		var head_on := along / maxf(distance, 0.001) >= _AHEAD_CONE
 		if not note_block or not head_on:
 			continue
-		if reach < _DETOUR_ENTER:
+		var enter := _DETOUR_ENTER + ProtoUnitPush.BLOCK_KEEP if other.id == held else _DETOUR_ENTER
+		if reach < enter:
 			agent.pressed = true
 			agent.blocker_id = other.id
 		if not other.is_moving() and distance <= minimum + _HOLD_RELEASE:

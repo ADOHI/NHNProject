@@ -76,22 +76,22 @@ func _run(count: int, round_index: int) -> void:
 		for agent in field.agents:
 			if agent.is_moving():
 				moving.append(agent)
-		for _i in 6:
+		for _i in 12:
 			var row := "    "
 			for agent in moving:
 				row += (
-					"[%d 막은놈%d 조향%.0f도 속력%.0f 비켜%s] "
+					"[%d 막은놈%d 조향%.0f도 우회%.0f도 속력%.0f 비켜%s] "
 					% [
 						agent.id,
 						agent.blocker_id,
 						rad_to_deg(agent.steer_dir.angle()),
+						rad_to_deg(agent.detour),
 						agent.speed,
 						"O" if agent.is_yielding() else "-",
 					]
 				)
 			print(row)
-			for _f in 10:
-				field.step(_STEP)
+			field.step(_STEP)
 
 	var busy := field.moving_count()
 	var waiting := 0

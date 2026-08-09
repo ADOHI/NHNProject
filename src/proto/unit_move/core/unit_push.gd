@@ -45,6 +45,16 @@ const _NUDGE := 14.0
 ## 옆걸음이 커져 걸음꺾임이 오른다(§15 에서 D 를 잘못 걸었을 때 겪은 것과 같은 저울이다).
 const _MIN_NUDGE := 0.6
 
+## **이미 지목한 놈은 이만큼 더 벌어져야 놓는다**(픽셀).
+##
+## 드는 문턱만 있고 푸는 문턱이 없으면 고리가 돈다 - 우회해서 벌어지면 지목이 풀리고, 풀리면
+## 곧장 되돌아가 다시 막히고, 그것이 대여섯 프레임마다 되풀이된다. 몸은 시속대로 움직이는데
+## 자리는 안 옮겨진다. §11 에서 우회 자체에 든 처방을 **지목에도** 넣는다. README §21.
+const BLOCK_KEEP := 8.0
+
+## 몸이 이 거리(몸 반지름 배수)보다 치우쳐 있으면 치우친 쪽으로 비킨다.
+const _SIDE_PICK := 0.5
+
 ## 옆자리를 막은 상대로 사슬을 이어 갈 때의 깊이 상한.
 ##
 ## 진로 사슬(`_MAX_DEPTH`)과 따로 둔다. 이쪽은 **한 자리를 비우려고 옆으로 줄줄이 미는 것**이라
@@ -266,7 +276,7 @@ static func _step_aside(
 	var touch := behind.radius + blocker.radius
 	if lateral >= touch:
 		return false
-	var away := side / lateral if lateral > 0.001 else Vector2(-heading.y, heading.x)
+	var away := _clear_side(field, blocker, side, lateral, heading)
 	# **몸이 실제로 빠져나갈 만큼 민다.** 중심선을 스치는 것으로는 눈에 안 보인다.
 	var want := maxf(touch - lateral + _MARGIN, blocker.radius * _MIN_NUDGE)
 	# **자리를 상태로 건다.** 한 프레임 밀어 놓는 것만으로는 다음 프레임에 지워진다.
@@ -287,6 +297,31 @@ static func _step_aside(
 	behind.chain_ago = 0
 	behind.chain_kind = 0
 	return true
+
+
+## 비켜설 쪽을 고른다. **입구에서 먼 쪽을 우선한다.**
+##
+## 비킨 유닛이 문 앞에 서 있으면 뒤가 다 막힌다. 그래서 어느 쪽으로 비킬지 고를 때
+## **흐름장 비용이 높은 쪽**(목적지에서 먼 쪽)을 고른다. 비용은 칸마다 이미 구워져 있어
+## 조회 두 번이면 된다.
+##
+## 몸이 이미 한쪽으로 치우쳐 있으면 그쪽이 가깝고 싸다. **거의 정면으로 막고 선 경우에만**
+## 비용으로 고른다 - 치우친 몸을 반대로 돌려세우면 그 거리가 그대로 지터가 된다.
+static func _clear_side(
+	field: ProtoUnitField, blocker: ProtoUnitAgent, side: Vector2, lateral: float, heading: Vector2
+) -> Vector2:
+	var hand := Vector2(-heading.y, heading.x)
+	var leaning := side / lateral if lateral > 0.001 else hand
+	if lateral > blocker.radius * _SIDE_PICK:
+		return leaning
+	var order: Object = field.order_by_id(blocker.order_id)
+	if order == null:
+		return leaning
+	var reach := blocker.radius * 2.0
+	var one: float = order.flow.cost_at(field.grid.world_to_cell(blocker.position + hand * reach))
+	var two: float = order.flow.cost_at(field.grid.world_to_cell(blocker.position - hand * reach))
+	# 비용이 높은 쪽이 목적지에서 먼 쪽이고, 그쪽이 입구를 안 막는다.
+	return hand if one >= two else -hand
 
 
 ## 이 유닛을 그 방향으로 민다. **자리가 없으면 그 자리를 막은 놈을 먼저 민다.**
