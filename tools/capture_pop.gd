@@ -43,6 +43,11 @@ var _still_done := false
 ## 정지 컷만 뽑고 끝낼 것인가.
 var _stills_only := false
 
+## 단 수를 1..5 로 훑어 한 장씩 뽑을 것인가. **몇 단이 한계인지는 나란히 놓아야 안다**
+## (§20.43.2). 팔레트는 `PICK` 하나로 고정한다 — 재는 것이 색이 아니라 깊이다.
+var _tier_sweep := false
+var _tier := 1
+
 ## 안마다 크기와 한 바퀴가 다르다. **여기서 하나로 정하면 안이 늘 때 조용히 잘린다.**
 var _card := Vector2(660.0, 700.0)
 var _loop := 4.0
@@ -59,6 +64,7 @@ func _initialize() -> void:
 		_which = args[1]
 	if args.size() > 2:
 		_stills_only = args[2] == "stills"
+		_tier_sweep = args[2] == "tiers"
 	_sheet = _pick()
 	if _sheet == null:
 		push_error("모르는 안: %s" % _which)
@@ -122,6 +128,17 @@ func _process(_delta: float) -> bool:
 	if _waited <= SETTLE:
 		_sheet.call("set_clock", 0.0)
 		return false
+	if _tier_sweep:
+		_sheet.set("palette", PICK)
+		_sheet.call("set_clock", STILL_AT)
+		_sheet.set("tiers", _tier)
+		if _posed != 100 + _tier:
+			_posed = 100 + _tier
+			return false
+		_stage.get_texture().get_image().save_png("%s_t%d.png" % [_prefix, _tier])
+		print("%d 단: %s_t%d.png" % [_tier, _prefix, _tier])
+		_tier += 1
+		return _tier > 5
 	if not _still_done:
 		_still_done = _stills()
 		return false

@@ -25,6 +25,7 @@ extends Control
 const FONT := preload("res://assets/fonts/song_myung/SongMyung-Regular.ttf")
 const DARK := preload("res://src/ui/kit/cel/phosphor_dark.gdshader")
 const LIT := preload("res://src/ui/kit/cel/phosphor_lit.gdshader")
+const MOIRE := preload("res://src/ui/kit/cel/depth_moire.gdshader")
 
 const CARD := Vector2(660.0, 760.0)
 const LOOP := 6.4
@@ -48,6 +49,25 @@ const MOVE_AT := 2.50
 const HOVER_OVER := 3.30
 const HOVER_DOWN := 4.40
 const MOVE_BACK := 5.30
+
+## 몇 단인가. **1 이면 지금까지의 화면**이고, 늘리면 앞뒤가 생긴다 (§20.43.2).
+const TIER_MAX := 5
+
+## 단 사이 시차의 크기(px). 손이 움직일 때만 벌어지고 가만히 있으면 0 이다 —
+## **idle 에서는 단이 안 움직인다** (§20.39.2 의 규칙은 단이 늘어도 그대로다).
+const PARALLAX := 3.2
+
+## 깊은 단을 흐리게 보이게 하는 어긋난 복제의 폭(px). 화면 텍스처를 못 읽으므로
+## **흐림은 겹쳐서 만든다** — 세 벌을 조금씩 어긋내 3분의 1 씩 칠하면 상자 흐림이다.
+const HAZE := 1.7
+
+## 파면. 사건이 난 자리에서 퍼져 나간다 (§20.43.3).
+##
+## **단마다 늦게 도착한다**(`SHOCK_LAG`). 그래서 파면이 화면을 가로지르는 것이 아니라
+## **화면을 뚫고 지나간다** — 앞 단이 먼저 밝아지고 뒤 단이 뒤따른다.
+const SHOCK_SPEED := 980.0
+const SHOCK_LAG := 0.052
+const SHOCK_BAND := 34.0
 
 ## 처음 고른 줄과 옮겨 간 줄, 그리고 손만 따로 옮겨 가는 줄.
 const ROW_FIRST := 1
@@ -96,10 +116,8 @@ var palette := 0:
 
 ## **벤 자국을 화면에 낼 것인가.** 기본은 아니다 (§20.38).
 ##
-## 자국 하나가 걸린 판을 전부 어긋내는데, 그 대가가 **화면의 모든 줄맞춤**이다.
-## 정렬은 UI 가 공짜로 주는 가장 센 신호고, 전부 어긋나면 어긋남이 배경이 된다.
-## 코드는 남긴다 — **한 부품에서 한 번 쓰는 연출**로는 값이 있고, 켜는 것이 한 줄이라야
-## 다시 견줘 볼 수 있다.
+## 자국 하나가 걸린 판을 전부 어긋내는 대가가 **화면의 모든 줄맞춤**이다 (§20.38).
+## 코드는 남긴다 — 켜는 것이 한 줄이라야 다시 견줘 볼 수 있다.
 var rip_shown := false:
 	set(value):
 		rip_shown = value
@@ -114,13 +132,39 @@ var way := 1:
 		way = wrapi(value, 0, WAYS.size())
 		queue_redraw()
 
+## 몇 단으로 그릴 것인가. 1..`TIER_MAX`.
+var tiers := 4:
+	set(value):
+		tiers = clampi(value, 1, TIER_MAX)
+		if _face != null:
+			_face.queue_redraw()
+
 var _clock := 0.0
 var _driven := false
+var _deep: ColorRect
+var _face: Control
 var _dark: ColorRect
 var _lit: ColorRect
 
+## 지금 그리고 있는 단. 0 이 맨 앞이다.
+var _depth := 0
 
+
+## 층을 **뒤에서 앞으로** 만든다. 자식은 `_draw()` 뒤에 그려지므로, 무언가를 판 뒤에
+## 두려면 판을 그리는 것도 자식이어야 한다 — 그래서 그리는 층(`_face`)이 따로 있다.
+##
+## | 층 | 무엇 |
+## | --- | --- |
+## | `_deep` | 무아레 — **가장 깊은 단.** 바탕색도 여기서 나온다 |
+## | `_face` | 부품 전부. 안에서 다시 `tiers` 단으로 갈린다 |
+## | `_dark` · `_lit` | 브라운관 덮개 둘 (§20.29.2) |
 func _ready() -> void:
+	_deep = _screen_layer(MOIRE)
+	_face = Control.new()
+	_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_face)
+	_face.size = CARD
+	_face.draw.connect(_paint_sheet)
 	# 브라운관 덮개 둘. **곱하기 층과 더하기 층이라 어둡게도 밝게도 한다** (§20.29.2).
 	_dark = _screen_layer(DARK)
 	_lit = _screen_layer(LIT)
@@ -134,6 +178,10 @@ func _tint_screen() -> void:
 	if _lit == null:
 		return
 	(_lit.material as ShaderMaterial).set_shader_parameter("glow", HoloPalette.glow(palette))
+	if _deep != null:
+		var stuff := _deep.material as ShaderMaterial
+		stuff.set_shader_parameter("deep", _void())
+		stuff.set_shader_parameter("ink", _paper())
 
 
 func _void() -> Color:
@@ -193,9 +241,18 @@ func _process(delta: float) -> void:
 
 func set_clock(t: float) -> void:
 	_clock = t
-	for layer in [_dark, _lit]:
+	for layer in [_dark, _lit, _deep]:
 		if layer != null:
 			(layer.material as ShaderMaterial).set_shader_parameter("clock", t)
+	if _deep != null:
+		var stuff := _deep.material as ShaderMaterial
+		stuff.set_shader_parameter("hit", _shock_from())
+		# 바탕은 **가장 깊은 단**이라 파면이 제일 늦게 닿는다.
+		stuff.set_shader_parameter("front", _shock_front(tiers - 1))
+		# 사건이 날 때마다 바탕의 상태가 뒤집힌다. 한 바퀴에 사건이 둘이라 제자리로 온다.
+		stuff.set_shader_parameter("ahead", 1.0 if _clock >= MOVE_BACK else 0.0)
+	if _face != null:
+		_face.queue_redraw()
 	queue_redraw()
 
 
@@ -237,10 +294,26 @@ func _rip_through() -> Vector2:
 ## **넓이 0 짜리 조각**이 나온다 — 팝업이 열리기 시작하는 한두 편이 그렇다.
 ## 그것을 그대로 넘기면 `canvas_item_add_polygon` 이 *"triangulation failed"* 로 운다.
 ## 이 저장소는 경고를 오류로 치므로 **거르는 자리가 하나 있어야 한다.**
+## 다각형 하나를 칠한다. **단에 따른 어둡기 · 흐림 · 파면이 전부 여기 한 곳**에 있다.
+##
+## 자리마다 손으로 넣으면 스물다섯 군데 중 하나는 반드시 빠지고, 빠진 판만 다른 단에
+## 있는 것처럼 보인다 — 단은 **한 판이라도 어긋나면 거짓말이 된다.**
 func _paint(shape: PackedVector2Array, tint: Color) -> void:
 	if shape.size() < 3 or GraphicCut.area_of(shape) < 0.05:
 		return
-	draw_colored_polygon(shape, tint)
+	var sunk := DepthStack.sunk(tint, _depth, _void(), 0.14)
+	var lit := _shock_lit(GraphicCut.span_of(shape).get_center())
+	if lit > 0.0:
+		sunk = Color(sunk.lerp(_paper(), 0.55 * lit), sunk.a)
+	if _depth >= 2:
+		# **흐림은 겹쳐서 만든다.** 화면 텍스처를 못 읽으므로 아래 층을 흐릴 수 없고,
+		# 대신 자기를 세 벌 어긋내 칠하면 상자 흐림과 같아진다.
+		var haze := HAZE * float(_depth - 1)
+		for way in [Vector2(-haze, 0.0), Vector2(haze, haze * 0.6)]:
+			_face.draw_colored_polygon(
+				GraphicCut.swelled(shape, 0.0, way), Color(sunk, sunk.a * 0.34)
+			)
+	_face.draw_colored_polygon(shape, sunk)
 
 
 func _plate(shape: PackedVector2Array, tint: Color, least: float = RIP_LEAST) -> void:
@@ -296,18 +369,15 @@ func _glyphs(text: String, seat: Vector2, lean: float, tall: int) -> Dictionary:
 	return out
 
 
-## 글자 획 하나를 **판 안팎으로 갈라** 칠한다. 안은 `within`, 밖은 `beyond`.
+## 글자 획 하나를 **판 안팎으로 갈라** 칠한다. 안은 `within`(구멍), 밖은 `beyond`(판).
 ##
-## 판 위에서 `within` 이 바탕색이면 **구멍**이 되고, 뚫린 자리에 바탕과 똑같은 줄무늬를
-## 깔아 뒤가 이어져 보이게 한다. 판 밖에서는 `beyond` 가 미색이라 글자가 **판**이 된다.
+## 구멍에 바탕 줄무늬를 깔던 것은 뺐다 — 바탕이 셰이더의 무아레가 되면서
+## **화면 쪽에서 같은 무늬를 다시 만들 수 없게** 됐고, 어긋난 무늬는 구멍이 아니라 얼룩이다.
 func _pierce(
 	slab: PackedVector2Array, ring: PackedVector2Array, within: Color, beyond: Color
 ) -> void:
 	for inside in Geometry2D.intersect_polygons(ring, slab):
 		_follow(slab, inside, within)
-		if within == _void():
-			for bar in GraphicCut.stripes(inside, -PI * 0.28, 46.0, 15.0, _clock * 34.0):
-				_follow(slab, bar, Color(_paper(), 0.045))
 	for outside in Geometry2D.clip_polygons(ring, slab):
 		_follow(slab, outside, beyond)
 
@@ -337,18 +407,18 @@ func _rig(box: Rect2, slot: int) -> void:
 	]
 	for corner in corners:
 		var at: Vector2 = corner[0]
-		draw_line(at, at + (corner[1] as Vector2) * reach, trim, 2.0)
-		draw_line(at, at + (corner[2] as Vector2) * reach, trim, 2.0)
+		_face.draw_line(at, at + (corner[1] as Vector2) * reach, trim, 2.0)
+		_face.draw_line(at, at + (corner[2] as Vector2) * reach, trim, 2.0)
 	for i in 9:
 		var x := lerpf(box.position.x + 16.0, box.end.x - 16.0, float(i) / 8.0)
 		var wobble := CelReadout.tick_jitter(slot + i, _clock, 0.6)
-		draw_line(
+		_face.draw_line(
 			Vector2(x, box.end.y + 4.0),
 			Vector2(x, box.end.y + 8.0 + wobble),
 			Color(_paper(), 0.3),
 			1.0
 		)
-	draw_string(
+	_face.draw_string(
 		FONT,
 		Vector2(box.position.x + 2.0, box.position.y - 5.0),
 		"%s %s" % [CelReadout.noise_hex(slot, _clock), CelReadout.noise_digits(slot, _clock, 3)],
@@ -410,13 +480,58 @@ func _mark_force() -> float:
 	return _snap(MOVE_BACK, 0.16)
 
 
-func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), _void(), true)
+## 이 단을 그리기 시작한다. **시차를 변환으로 한 번에 건다** — 자리마다 더하면
+## 반드시 한 군데를 빠뜨리고, 빠뜨린 것 하나가 단을 통째로 무너뜨린다.
+func _use_depth(depth: int) -> void:
+	_depth = clampi(depth, 0, tiers - 1)
+	_face.draw_set_transform(_shift_of(_depth), 0.0, Vector2.ONE)
+
+
+func _shift_of(depth: int) -> Vector2:
+	return DepthStack.shift(_look(), depth, tiers, PARALLAX)
+
+
+## 지금 시선이 어디로 기울어 있나. **손이 올라가 있을 때만 기운다** —
+## 가만히 있으면 0 이고, 그래야 idle 에서 단이 안 움직인다.
+func _look() -> Vector2:
+	var over := _hovered_row()
+	if over < 0:
+		return Vector2.ZERO
+	return Vector2(0.62, (float(over) - 3.0) * 0.36) * _hover_force()
+
+
+## 사건이 난 자리와 그로부터 지난 시간. **선택이 옮겨간 줄의 한가운데**에서 퍼진다.
+func _shock_from() -> Vector2:
+	var row := ROW_NEXT if _clock < MOVE_BACK else ROW_FIRST
+	return Vector2(PAD + 150.0, BOARD_TOP + 27.0 + float(row) * ROW_PITCH)
+
+
+func _shock_since() -> float:
+	if _clock >= MOVE_BACK:
+		return _clock - MOVE_BACK
+	if _clock >= MOVE_AT:
+		return _clock - MOVE_AT
+	return -1.0
+
+
+func _shock_front(depth: int) -> float:
+	return DepthStack.front(_shock_since(), depth, SHOCK_SPEED, SHOCK_LAG)
+
+
+func _shock_lit(spot: Vector2) -> float:
+	return DepthStack.lit(spot, _shock_from(), _shock_front(_depth), SHOCK_BAND)
+
+
+func _paint_sheet() -> void:
+	_use_depth(3)
 	_backdrop()
+	_use_depth(2)
 	_title()
-	_buttons()
 	_window()
+	_use_depth(1)
+	_buttons()
 	_boards()
+	_use_depth(0)
 	_here()
 	_weak()
 
@@ -432,14 +547,8 @@ func _draw() -> void:
 ## 판 뒤라서 실루엣을 하나도 안 바꾼다. 실루엣이 안 바뀌면 주변시가 「변화 없음」으로
 ## 처리한다 — **느리게 하는 것이 아니라 무엇을 안 바꾸느냐가 기준이다.**
 func _backdrop() -> void:
-	var whole := PackedVector2Array(
-		[Vector2.ZERO, Vector2(size.x, 0.0), size, Vector2(0.0, size.y)]
-	)
-	# 바탕 줄무늬도 `_paint` 를 지나간다. 한 바퀴가 길어지자 위상이 어느 값일 때
-	# **가장자리에서 넓이 0 짜리 조각**이 나왔고 그대로 `triangulation failed` 가 났다 —
-	# 정지 컷에서는 한 번도 안 나고 편을 다 뽑아야 난다 (§20.36.1 과 같은 함정).
-	for bar in GraphicCut.stripes(whole, -PI * 0.28, 46.0, 15.0, _clock * 34.0):
-		_paint(bar, Color(_paper(), 0.045))
+	# **사선 줄무늬는 이제 셰이더가 계산한다**(`depth_moire`). 여기서 그리던 것은
+	# 종이 위에서도 되는 무늬였고, 무아레는 아니다 — 그 차이가 §20.43 의 전부다.
 	# 굵은 사선 한 줄이 화면을 가로지른다. 이 안의 서명이다.
 	var sweep := fposmod(_clock * 0.14, 1.0)
 	var band := GraphicCut.lean(
@@ -460,9 +569,6 @@ func _backdrop() -> void:
 ## | 판 **위** | **구멍이다.** 판이 없어서 뒤의 줄무늬가 그대로 이어져 보인다 |
 ## | 판 **밖** | **판이다.** 미색으로 차서 바탕 위에 뜬다 |
 ##
-## 뚫린 자리에 까는 줄무늬는 바탕과 **각도 · 간격 · 위상이 같아야** 한다.
-## 하나라도 다르면 구멍이 아니라 **무늬를 칠한 글자**가 된다.
-##
 ## ## 뒤집힘은 내렸다 (§20.38.2)
 ##
 ## §20.37.2 는 뒤집힘을 보려고 판을 글자보다 **짧게** 잡았다. 그러면 「격」이 반쪽씩
@@ -478,7 +584,7 @@ func _title() -> void:
 		_pierce(slab, ring, _void(), _paper())
 	for ring: PackedVector2Array in mark["hole"]:
 		_pierce(slab, ring, _paper(), _void())
-	draw_string(
+	_face.draw_string(
 		FONT,
 		Vector2(PAD, 108.0),
 		"베고 지나간 자리. 멈추지 않는다",
@@ -533,13 +639,13 @@ func _window() -> void:
 
 	var bar := GraphicCut.lean(Rect2(box.position.x, box.position.y, box.size.x - 26.0, 34.0), 0.0)
 	_plate(bar, _void())
-	draw_string(
+	_face.draw_string(
 		FONT, box.position + Vector2(14.0, 24.0), "창", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, _paper()
 	)
 	# 닫기는 **험**이다. 창에서 되돌릴 수 없는 것은 이것 하나뿐이라 여기만 그 색이다.
 	var shut := Vector2(box.end.x - 46.0, box.position.y + 17.0)
-	draw_line(shut + Vector2(-6, -6), shut + Vector2(6, 6), _peril(), 2.8)
-	draw_line(shut + Vector2(-6, 6), shut + Vector2(6, -6), _peril(), 2.8)
+	_face.draw_line(shut + Vector2(-6, -6), shut + Vector2(6, 6), _peril(), 2.8)
+	_face.draw_line(shut + Vector2(-6, 6), shut + Vector2(6, -6), _peril(), 2.8)
 	for row in 3:
 		_plate(
 			GraphicCut.lean(
@@ -565,7 +671,7 @@ func _window() -> void:
 func _boards() -> void:
 	var box := Rect2(PAD, BOARD_TOP, 300.0, BOARD_TALL)
 	_plate(GraphicCut.clipped(box, 20.0, 4), Color(_paper(), 0.10))
-	draw_string(
+	_face.draw_string(
 		FONT,
 		Vector2(box.position.x + 2.0, box.position.y - 8.0),
 		WAYS[way],
@@ -594,7 +700,7 @@ func _row_box(box: Rect2, i: int, lift: float) -> Rect2:
 
 
 func _row_text(row: Rect2, i: int, tint: Color, indent: float = 18.0) -> void:
-	draw_string(
+	_face.draw_string(
 		FONT, row.position + Vector2(indent, 19.0), ROWS[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, tint
 	)
 
@@ -694,13 +800,13 @@ func _place_idle(shape: PackedVector2Array, row: Rect2) -> void:
 	for k in 3:
 		var y := row.position.y + 6.0 + float(k) * 7.0
 		var wobble := CelReadout.tick_jitter(k, _clock, 1.4)
-		draw_line(
+		_face.draw_line(
 			Vector2(row.end.x + 6.0, y),
 			Vector2(row.end.x + 12.0 + wobble, y),
 			Color(_paper(), 0.34),
 			1.0
 		)
-	draw_string(
+	_face.draw_string(
 		FONT,
 		Vector2(row.position.x + 2.0, row.position.y - 3.0),
 		CelReadout.noise_hex(4, _clock, 3),
@@ -745,7 +851,7 @@ func _rows_air(box: Rect2) -> void:
 ## 팔레트 여섯 벌을 나란히 놓아도 **두 색은 실 한 오라기로만 보인다.**
 func _inputs(box: Rect2) -> void:
 	_plate(GraphicCut.clipped(box, 22.0, 1), Color(_paper(), 0.10))
-	draw_string(
+	_face.draw_string(
 		FONT,
 		box.position + Vector2(20.0, 34.0),
 		"소리",
@@ -772,7 +878,7 @@ func _inputs(box: Rect2) -> void:
 	var shape_tick := GraphicCut.lean(tick, 0.22)
 	_backplate(shape_tick, 0.04, Vector2(5.0, 5.0), _void())
 	_plate(shape_tick, _pick())
-	draw_polyline(
+	_face.draw_polyline(
 		PackedVector2Array(
 			[
 				tick.position + Vector2(9.0, 13.0),
@@ -783,7 +889,7 @@ func _inputs(box: Rect2) -> void:
 		_ink(_pick()),
 		3.2
 	)
-	draw_string(
+	_face.draw_string(
 		FONT,
 		Vector2(tick.end.x + 16.0, tick.position.y + 19.0),
 		"전체 화면",
@@ -817,22 +923,25 @@ func _here() -> void:
 	_plate(shape, face)
 	_scanlines(shape, face, 0.18)
 	_rig(Rect2(box.position, box.size - Vector2(26.0, 0.0)), 8)
-	draw_string(
-		FONT,
-		# 634 인 이유 — `_rig` 가 판 위 5px 에 숫자열을 찍는다. 같은 x 에서 시작하므로
-		# 둘의 y 가 가까우면 글자가 겹쳐 둘 다 못 읽는다.
-		Vector2(PAD, 634.0),
-		"강조 — 지금 여기",
-		HORIZONTAL_ALIGNMENT_LEFT,
-		-1,
-		13,
-		Color(_paper(), 0.5)
+	(
+		_face
+		. draw_string(
+			FONT,
+			# 634 인 이유 — `_rig` 가 판 위 5px 에 숫자열을 찍는다. 같은 x 에서 시작하므로
+			# 둘의 y 가 가까우면 글자가 겹쳐 둘 다 못 읽는다.
+			Vector2(PAD, 634.0),
+			"강조 — 지금 여기",
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1,
+			13,
+			Color(_paper(), 0.5)
+		)
 	)
 	_shape_text("3층 봉인된 문", box, 24, face)
 
 
 func _weak() -> void:
-	draw_string(
+	_face.draw_string(
 		FONT,
 		Vector2(PAD, size.y - 20.0),
 		"약한 곳 — 훑는 띠가 판 위를 지날 때 그 줄이 다 밝아진다. 어느 팔레트에서 제일 거슬리나 보는 중",
@@ -858,8 +967,8 @@ func _shape_text(text: String, box: Rect2, tall: int, surface: Color, fade: floa
 	var lean := -0.045
 	var seat := Vector2(box.position.x, box.get_center().y + float(tall) * 0.36)
 	if jolt > 0.0:
-		draw_set_transform(seat + Vector2(-3.0 * jolt, 0.0), lean, Vector2.ONE)
-		draw_string(
+		_face.draw_set_transform(seat + Vector2(-3.0 * jolt, 0.0), lean, Vector2.ONE)
+		_face.draw_string(
 			FONT,
 			Vector2.ZERO,
 			text,
@@ -868,8 +977,8 @@ func _shape_text(text: String, box: Rect2, tall: int, surface: Color, fade: floa
 			tall,
 			Color(HoloPalette.glow(palette), 0.85 * jolt)
 		)
-	draw_set_transform(seat + Vector2(2.0, 2.0), lean, Vector2.ONE)
-	draw_string(
+	_face.draw_set_transform(seat + Vector2(2.0, 2.0), lean, Vector2.ONE)
+	_face.draw_string(
 		FONT,
 		Vector2.ZERO,
 		text,
@@ -878,8 +987,8 @@ func _shape_text(text: String, box: Rect2, tall: int, surface: Color, fade: floa
 		tall,
 		Color(HoloPalette.ink_prop(palette, surface), 0.34 * fade)
 	)
-	draw_set_transform(seat, lean, Vector2.ONE)
-	draw_string(
+	_face.draw_set_transform(seat, lean, Vector2.ONE)
+	_face.draw_string(
 		FONT,
 		Vector2.ZERO,
 		text,
@@ -888,4 +997,4 @@ func _shape_text(text: String, box: Rect2, tall: int, surface: Color, fade: floa
 		tall,
 		Color(_ink(surface), fade)
 	)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_use_depth(_depth)

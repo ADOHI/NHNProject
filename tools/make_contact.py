@@ -27,13 +27,16 @@ BACKING = (16, 16, 18)
 
 def main() -> int:
     if len(sys.argv) < 3:
-        print("usage: make_contact.py <프레임 앞머리> <내보낼 png> [가로 칸 수]")
+        print("usage: make_contact.py <앞머리> <내보낼 png> [칸 수] [꼬리표,쉼표]")
         return 2
     prefix, out = sys.argv[1], sys.argv[2]
     cols = int(sys.argv[3]) if len(sys.argv) > 3 else 3
+    # 네 번째 인자로 꼬리표를 직접 줄 수 있다 — 팔레트가 아니라 **단 수**를 견주는
+    # 판에서는 붙일 것이 `_t1.._t5` 라서 슬러그 목록이 안 맞는다.
+    tags = sys.argv[4].split(",") if len(sys.argv) > 4 else SLUGS
 
     tiles = []
-    for slug in SLUGS:
+    for slug in tags:
         name = f"{prefix}_{slug}.png"
         if not os.path.exists(name):
             print(f"없다: {name}")
