@@ -222,6 +222,17 @@ static func finished(field: ProtoUnitField, agent: ProtoUnitAgent) -> bool:
 		agent.waiting_for_path = false
 		return true
 	if agent.waiting_for_path:
+		# **순위가 앞서면 남이 안 풀려도 스스로 푼다. 누군가는 먼저 가야 한다.**
+		#
+		# 열린 곳 100 명이 안 멎었다. A 가 B 를 기다리고 B 가 A 를 기다리면 둘 다 안 푼다 -
+		# "누가 먼저 가나"는 정해져 있었는데(`_outranks`) **"누가 먼저 푸나"가 없었다.**
+		#
+		# 순위는 흐름장 비용이라 전순서다. 낮을수록 목적지에 가깝다. 부탁한 쪽보다 내가
+		# 앞서 있으면 내가 먼저 갈 차례이므로 기다림을 푼다. 값이 같으면 번호로 가른다 -
+		# **난수를 쓰지 않는다.** 같은 판을 다시 굴리면 같은 결과가 나와야 재서 고칠 수 있다.
+		if agent.rank < asker.rank or (agent.rank == asker.rank and agent.id < asker.id):
+			agent.waiting_for_path = false
+			return true
 		# **물러난 뒤 대기 중이다. 부탁한 쪽이 풀려야 나도 푼다.**
 		#
 		# 대기가 종점이 아니다. 여전히 막혀 있으면 전파가 다시 나고 또 물러난다
