@@ -21,7 +21,8 @@ extends SceneTree
 ## 무엇보다 **다른 판을 견주게 될 위험**이 있다.
 
 const _CHAIN_HITS := 80
-const _MAX_SECONDS := 60.0
+const SurveyClock := preload("res://tools/survey_clock.gd")
+const _MAX_SECONDS := SurveyClock.SECONDS
 const _STEP := 1.0 / 60.0
 const _NEAR := 60.0
 const _SPACING := 4.0

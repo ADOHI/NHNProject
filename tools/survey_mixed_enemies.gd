@@ -23,7 +23,8 @@ extends SceneTree
 ## `LEADER_FIRST` 만 노리는 대상이 달라지므로 따로 돈다.
 
 const _CHAIN_HITS := 80
-const _MAX_SECONDS := 60.0
+const SurveyClock := preload("res://tools/survey_clock.gd")
+const _MAX_SECONDS := SurveyClock.SECONDS
 const _STEP := 1.0 / 60.0
 const _NEAR := 60.0
 const _SPACING := 4.0

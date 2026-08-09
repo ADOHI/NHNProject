@@ -25,7 +25,8 @@ extends SceneTree
 ## 뚫고 들어가는 것이 있어야 하고, 그것이 §28.20.30 의 **전진**이다.
 
 const _CHAIN_HITS := 80
-const _MAX_SECONDS := 60.0
+const SurveyClock := preload("res://tools/survey_clock.gd")
+const _MAX_SECONDS := SurveyClock.SECONDS
 const _STEP := 1.0 / 60.0
 const _CELLS := 4
 const _NEAR := 60.0

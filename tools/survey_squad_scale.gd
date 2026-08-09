@@ -31,7 +31,8 @@ extends SceneTree
 const _CHAIN_HITS := 80
 
 ## 여기까지 굴려도 안 끝나면 "안 난다" 로 적는다.
-const _MAX_SECONDS := 60.0
+const SurveyClock := preload("res://tools/survey_clock.gd")
+const _MAX_SECONDS := SurveyClock.SECONDS
 
 const _STEP := 1.0 / 120.0
 

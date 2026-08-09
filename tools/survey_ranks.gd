@@ -26,7 +26,8 @@ extends SceneTree
 ## 안 뒤집히면 §28.20.37 의 답은 **「같은 자리」라는 가정 위에서만 참이었던 것이다.**
 
 const _CHAIN_HITS := 80
-const _MAX_SECONDS := 60.0
+const SurveyClock := preload("res://tools/survey_clock.gd")
+const _MAX_SECONDS := SurveyClock.SECONDS
 const _STEP := 1.0 / 60.0
 
 ## 앞 켜가 서는 거리. 1칸 리치(104)보다 안쪽이라 누구든 앞 켜는 친다.

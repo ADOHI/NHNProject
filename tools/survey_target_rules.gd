@@ -28,7 +28,8 @@ extends SceneTree
 ## 그런데도 지금 규칙에서는 4대4 가 진다. **표를 실제보다 낙관적으로 읽지 마라.**
 
 const _CHAIN_HITS := 80
-const _MAX_SECONDS := 60.0
+const SurveyClock := preload("res://tools/survey_clock.gd")
+const _MAX_SECONDS := SurveyClock.SECONDS
 
 ## 판이 사건 시각에 정확히 맞춰 도므로 **걸음이 굵어도 결과가 안 바뀐다.**
 ## 바뀌는 것은 「언제 갈렸나」를 알아채는 해상도뿐이다.

@@ -25,9 +25,9 @@ extends SceneTree
 ## 다른 도구는 60초 · 180초에서 끊는다. **여기서는 그 제한이 재는 대상이라** 600초까지 둔다.
 ## 끊긴 것과 끝난 것을 표에서 갈라 적는다 — 둘을 섞으면 §28.20.53 의 실수를 또 한다.
 
-const _CHAIN_HITS := 2000
+const SurveyClock := preload("res://tools/survey_clock.gd")
 const _SHORT_SECONDS := 180.0
-const _LONG_SECONDS := 600.0
+const _LONG_SECONDS := SurveyClock.SECONDS
 const _STEP := 1.0 / 60.0
 const _CELLS := 4
 const _PER_RANK := 3
@@ -49,6 +49,9 @@ const _BIG := 1.14
 
 ## **게임에 안 나오는 판.** 여덟 살 몸집이다 — 표를 지우지 않고 표시만 해 둔다 (§28.20.56).
 const _OUT_OF_GAME := 0.70
+
+## 칸 수별로 한 번만 짓는 체인.
+var _chains: Dictionary = {}
 
 
 func _initialize() -> void:
@@ -298,7 +301,7 @@ func _fight(
 	# 섞어 적으면 「상한 56」을 구조로 읽었던 §28.20.53 의 실수를 또 한다.
 	if bout.is_running():
 		return [downed, "시간 초과 (%.0f초)" % clock, 0.0]
-	# 체인이 `_CHAIN_HITS` 타라 이 시간 안에 떨어질 수 없다. **멈췄다면 칠 것이 없어서다** —
+	# 체인이 창을 다 쓸 만큼 길어서 이 시간 안에 떨어질 수 없다. **멈췄다면 칠 것이 없어서다** —
 	# 리치 밖이거나(작은 몸) 닿는 켜가 다 비었거나(뒤가 안 온다).
 	return [downed, "닿지 못함 (%.0f초)" % clock, 0.0]
 
@@ -325,10 +328,20 @@ func _is_down(gauge: BreakGauge) -> bool:
 	return not BreakState.is_worse(BreakState.Kind.KNOCKDOWN, gauge.peak_state())
 
 
+## **판정 창을 다 쓸 만큼 긴 체인.** 길이를 손으로 박지 않는다 —
+## 창만 넓히고 체인을 그대로 두면 체인이 먼저 떨어지고, 그 판이 표에 「무승부」로 찍혀
+## **구조가 막은 것처럼 보인다** (§28.20.57).
+##
+## **한 번 짓고 돌려 쓴다.** 판마다 새로 지으면 그것이 제일 큰 비용이 된다 —
+## `SparringBout` 이 어차피 자기 몫을 복사한다.
 func _uniform_chain(cells: int) -> Array[BackpackItem]:
+	if _chains.has(cells):
+		return _chains[cells]
+	var hits := SurveyClock.hits_for(BreakTuning.new().strike_seconds_for(_sized(cells)))
 	var items: Array[BackpackItem] = []
-	for _index in _CHAIN_HITS:
+	for _index in hits:
 		items.append(_sized(cells))
+	_chains[cells] = items
 	return items
 
 

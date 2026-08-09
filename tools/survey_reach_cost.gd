@@ -44,7 +44,8 @@ extends SceneTree
 ## **예산(`_BUDGET`)과 판 짜는 부분(`_fight`)은 안 고친다.** 그래서 그때 나온 표가
 ## 지금 표와 **같은 자로 잰 것**이 된다 — 새 자로 재면 견줄 수가 없다.
 
-const _MAX_SECONDS := 60.0
+const SurveyClock := preload("res://tools/survey_clock.gd")
+const _MAX_SECONDS := SurveyClock.SECONDS
 const _STEP := 1.0 / 60.0
 const _PER_RANK := 3
 

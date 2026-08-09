@@ -26,8 +26,8 @@ extends SceneTree
 ## **그런데 대련장은 지금까지 아무도 안 치웠다** (§28.20.52).
 ## 적이 여섯까지는 그 차이가 작았는데 **물량전에서는 그것이 판 자체**다.
 
-const _CHAIN_HITS := 400
-const _MAX_SECONDS := 180.0
+const SurveyClock := preload("res://tools/survey_clock.gd")
+const _MAX_SECONDS := SurveyClock.SECONDS
 const _STEP := 1.0 / 60.0
 const _CELLS := 4
 const _PER_RANK := 3
@@ -35,6 +35,9 @@ const _SQUAD := 4
 
 ## **끝부터 본다.** §28.6 의 56 / 72 / 100 을 그대로 넣었다.
 const _ENEMY_SIZES: Array[int] = [4, 6, 10, 16, 25, 40, 56, 72, 100]
+
+## 칸 수별로 한 번만 짓는 체인.
+var _chains: Dictionary = {}
 
 
 func _initialize() -> void:
@@ -206,10 +209,20 @@ func _is_down(gauge: BreakGauge) -> bool:
 	return not BreakState.is_worse(BreakState.Kind.KNOCKDOWN, gauge.peak_state())
 
 
+## **판정 창을 다 쓸 만큼 긴 체인.** 길이를 손으로 박지 않는다 —
+## 창만 넓히고 체인을 그대로 두면 체인이 먼저 떨어지고, 그 판이 표에 「무승부」로 찍혀
+## **구조가 막은 것처럼 보인다** (§28.20.57).
+##
+## **한 번 짓고 돌려 쓴다.** 판마다 새로 지으면 그것이 제일 큰 비용이 된다 —
+## `SparringBout` 이 어차피 자기 몫을 복사한다.
 func _uniform_chain(cells: int) -> Array[BackpackItem]:
+	if _chains.has(cells):
+		return _chains[cells]
+	var hits := SurveyClock.hits_for(BreakTuning.new().strike_seconds_for(_sized(cells)))
 	var items: Array[BackpackItem] = []
-	for _index in _CHAIN_HITS:
+	for _index in hits:
 		items.append(_sized(cells))
+	_chains[cells] = items
 	return items
 
 

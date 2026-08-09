@@ -19,8 +19,8 @@ extends SceneTree
 ## §28.20.52 가 계단이라는 것을 이미 봤다. 그래서 **0(제자리)과 아주 빠름을 먼저 재고**
 ## 그 사이를 채운다. 조금씩 밀면 아무 일도 안 일어나는 구간에서 헤맨다.
 
-const _CHAIN_HITS := 400
-const _MAX_SECONDS := 180.0
+const SurveyClock := preload("res://tools/survey_clock.gd")
+const _MAX_SECONDS := SurveyClock.SECONDS
 const _STEP := 1.0 / 60.0
 const _CELLS := 4
 const _PER_RANK := 3
@@ -33,6 +33,9 @@ const _SPEEDS: Array[float] = [0.0, 400.0, 10.0, 40.0]
 
 ## 여덟 살~여든 살. **표본이지 실측이 아니다** — 애니 레인 값이 오면 바뀐다.
 const _SCALES: Array[float] = [0.70, 0.85, 1.00, 1.15]
+
+## 칸 수별로 한 번만 짓는 체인.
+var _chains: Dictionary = {}
 
 
 func _initialize() -> void:
@@ -212,10 +215,20 @@ func _is_down(gauge: BreakGauge) -> bool:
 	return not BreakState.is_worse(BreakState.Kind.KNOCKDOWN, gauge.peak_state())
 
 
+## **판정 창을 다 쓸 만큼 긴 체인.** 길이를 손으로 박지 않는다 —
+## 창만 넓히고 체인을 그대로 두면 체인이 먼저 떨어지고, 그 판이 표에 「무승부」로 찍혀
+## **구조가 막은 것처럼 보인다** (§28.20.57).
+##
+## **한 번 짓고 돌려 쓴다.** 판마다 새로 지으면 그것이 제일 큰 비용이 된다 —
+## `SparringBout` 이 어차피 자기 몫을 복사한다.
 func _uniform_chain(cells: int) -> Array[BackpackItem]:
+	if _chains.has(cells):
+		return _chains[cells]
+	var hits := SurveyClock.hits_for(BreakTuning.new().strike_seconds_for(_sized(cells)))
 	var items: Array[BackpackItem] = []
-	for _index in _CHAIN_HITS:
+	for _index in hits:
 		items.append(_sized(cells))
+	_chains[cells] = items
 	return items
 
 
