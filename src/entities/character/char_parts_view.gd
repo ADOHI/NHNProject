@@ -50,14 +50,17 @@ var _shadow_scale := 1.0
 var _shadow_offset := 0.0
 
 ## 과거 자세들. **기록이 아니라 `sample(t - Δ)` 로 받은 것**이다 (§25.3).
-## **그림이 왼쪽을 보므로 뿌리를 뒤집는다** (§25.41.9).
+## **자리만 뒤집는다** (§25.41.9).
 ##
-## 리그는 `+x` 를 보고 서 있고 클립 수식 전부가 그 전제 위에 있다. 그림만 반대이므로
-## **그림 쪽을 뒤집는 것이 맞다** — 리그를 뒤집으면 수식 스무 개가 따라 뒤집힌다.
+## 리그의 앞은 `+x`(화면 오른쪽)인데 **그림은 왼쪽을 본다.** 그러면 앞발·앞손·검이
+## 오른쪽에 놓이는데 부츠 코와 얼굴은 왼쪽을 봐서 **뒷걸음으로 읽힌다.**
 ##
-## `CharActor.facing` 과 **싸우지 않는다.** 저쪽은 「이 인물이 어느 쪽을 보나」를
-## 뿌리의 `scale.x` 로 말하고, 이것은 「그림이 리그와 반대로 그려져 있다」를 말한다.
-## 둘이 곱해져서 `facing = 1` 이면 오른쪽을 본다 — 뜻이 안 변한다.
+## **뿌리만 뒤집어서는 안 고쳐진다.** 뿌리를 뒤집으면 자리와 그림이 **같이** 뒤집혀
+## 서로의 관계가 그대로다 — 화면에서 왼쪽으로 옮겨 갈 뿐이고 어긋남은 그대로 남는다.
+## **한 번 그렇게 고쳤다가 사용자가 잡았다.**
+##
+## 그래서 **자리만** 뒤집는다: 뿌리가 뒤집고 파츠가 그림을 되뒤집는다.
+## 리그를 안 건드리는 이유는 클립 수식 스무 개가 `+x` 전제 위에 있기 때문이다.
 var _echoes: Array[CharPose] = []
 var _arc: PackedVector2Array = PackedVector2Array()
 var _flash := 0.0
@@ -135,7 +138,12 @@ func _notification(what: int) -> void:
 func _make_part(part: CharPart.Id) -> Node2D:
 	if skin != null and skin.textures.has(part):
 		var sprite := CharPartSprite.new()
-		sprite.setup(part, rig, skin.textures[part], skin.borrowed.get(part, false))
+		# **뒤집기가 두 겹이다.** 뿌리가 자리를 뒤집고(`art_flip`), 파츠가 그림을 되뒤집는다.
+		# 남는 것이 **자리만 뒤집힌 것**이고 그것이 우리가 원하는 것이다 (§25.41.9).
+		# 빌려 쓴 손은 짝의 거울이어야 하므로 한 번 더 뒤집혀 **되뒤집기가 상쇄된다.**
+		var flip_art: bool = skin != null and CharSkin.FACES_LEFT
+		var mirror: bool = flip_art != skin.borrowed.get(part, false)
+		sprite.setup(part, rig, skin.textures[part], mirror)
 		return sprite
 	var shape := CharPartShape.new()
 	shape.setup(part, rig)
