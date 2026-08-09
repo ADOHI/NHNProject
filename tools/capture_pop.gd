@@ -25,6 +25,10 @@ var _saved := 0
 var _posed := -1
 var _still_done := false
 
+## 안마다 크기와 한 바퀴가 다르다. **여기서 하나로 정하면 안이 늘 때 조용히 잘린다.**
+var _card := Vector2(660.0, 700.0)
+var _loop := 4.0
+
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -38,18 +42,24 @@ func _initialize() -> void:
 		quit(1)
 		return
 	_stage = SubViewport.new()
-	_stage.size = Vector2i(SlashSheet.CARD)
+	_stage.size = Vector2i(_card)
 	_stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	root.add_child(_stage)
 	_sheet.call("drive_externally")
 	_stage.add_child(_sheet)
-	_sheet.size = SlashSheet.CARD
+	_sheet.size = _card
 
 
 func _pick() -> Control:
 	match _which:
 		"slash":
+			_card = SlashSheet.CARD
+			_loop = SlashSheet.LOOP
 			return SlashSheet.new()
+		"amber":
+			_card = AmberSheet.CARD
+			_loop = AmberSheet.LOOP
+			return AmberSheet.new()
 		_:
 			return null
 
@@ -75,7 +85,7 @@ func _process(_delta: float) -> bool:
 		return false
 	_stage.get_texture().get_image().save_png("%s_f%03d.png" % [_prefix, _saved])
 	_saved += 1
-	if _saved < int(SlashSheet.LOOP * FPS):
+	if _saved < int(_loop * FPS):
 		return false
 	print("프레임 %d 장: %s" % [_saved, _prefix])
 	return true
