@@ -66,6 +66,23 @@ const REST_ANGLE_WISH := -0.55
 ## 검끝이 바닥에서 최소한 이만큼은 떠 있어야 한다. 자세를 기하로 푸는 기준선이다.
 const TIP_CLEARANCE := 4.0
 
+## 몸 중심에서 손이 뻗는 거리. 리치의 **팔** 몫이다.
+const ARM_REACH := 27.0
+
+## 닿고 싶은 간격. **이 값이 전진 거리를 정한다.**
+##
+## 무기가 짧으면 그만큼 파고들어야 닿는다 — **전진 거리는 길이의 역함수다.**
+## 게임적으로도 맞다: 단검이 붙는 무기고 창이 버티는 무기다.
+const TARGET_GAP := 104.0
+
+## 전진 거리의 위아래 한계. 아래를 0 으로 두면 창이 아예 안 움직여 뻣뻣해 보이고,
+## 위를 안 막으면 단검이 화면을 가로지른다.
+const ADVANCE_MIN := 3.0
+const ADVANCE_MAX := 30.0
+
+## 무게가 더하는 전진. **무거우면 관성으로 더 밀린다.**
+const ADVANCE_FROM_WEIGHT := 9.0
+
 ## **히트스톱.** 닿는 순간 멈춰 있는 시간. **무거운 것은 멈춤이 길다.**
 ##
 ## 25 fps 로 1 칸 약 1 프레임, 4 칸 약 4.5 프레임이다. 처음에 0.02…0.125 로 두었더니
@@ -130,6 +147,25 @@ func time_scale() -> float:
 ## 멈추는 것은 절반이고, 타격감은 둘이 동시에 설 때 난다 (§25.19.2).
 func hitstop_seconds() -> float:
 	return HITSTOP_BASE + HITSTOP_PER_CELL * float(cells - MIN_CELLS)
+
+
+## **닿는 거리.** 팔 + 무기 길이 + 전진 거리.
+##
+## **전투가 「이 무기로 여기서 닿나」를 이 값으로 판정한다** (§25.18.1).
+## 전진을 포함하는 것이 요점이다 — 짧은 무기는 파고들어서 닿기 때문에,
+## 전진을 빼고 재면 단검이 실제보다 훨씬 짧은 무기가 된다.
+func reach_px() -> float:
+	return ARM_REACH + length() + advance_px()
+
+
+## **한 타에 몸이 실제로 나가는 거리.**
+##
+## 닿는 거리를 일정하게 맞추려는 값이라 **길이의 역함수**이고, 거기에 무게가 더해진다.
+## 그래서 사분면이 하나 더 생긴다 — 창은 안 나가고, 단검은 조금 빠르게,
+## 철퇴는 많이 느리게, 대검은 중간이다.
+func advance_px() -> float:
+	var want := TARGET_GAP - (ARM_REACH + length())
+	return clampf(want, ADVANCE_MIN, ADVANCE_MAX) + ADVANCE_FROM_WEIGHT * drag()
 
 
 ## 사람이 읽는 이름. **종류가 아니라 모양에서 나온 것만 말한다** —

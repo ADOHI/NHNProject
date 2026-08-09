@@ -54,7 +54,16 @@ const MIN_SUBJECT_RATIO := 0.03
 
 ## 낱말로 고를 수 있는 클립과 조절판 축.
 const CLIPS: Array[String] = [
-	"idle", "walk", "front", "swing", "swingup", "hit", "run", "jump", "die"
+	"idle",
+	"walk",
+	"front",
+	"swing",
+	"swingup",
+	"swinghome",
+	"hit",
+	"run",
+	"jump",
+	"die",
 ]
 const AXES: Array[String] = ["delay", "arc", "squash", "asymmetry", "depth", "plant"]
 
@@ -168,10 +177,14 @@ func _make_clip(name: String, rig: CharRig) -> CharClip:
 	var swings: Dictionary[String, Array] = {
 		"swing": [WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW],
 		"swingup": [WeaponGuard.Id.LOW, WeaponGuard.Id.HIGH],
+		"swinghome": [WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW],
 	}
 	if name in swings:
 		var pair: Array = swings[name]
-		return CharSwingClip.new(rig, pair[0], pair[1], weapon)
+		var swing := CharSwingClip.new(rig, pair[0], pair[1], weapon)
+		# `swinghome` 은 제자리로 돌아온다. 「남는다 / 돌아온다」를 나란히 보려는 것이다.
+		swing.returns_home = name == "swinghome"
+		return swing
 	var makers: Dictionary[String, Callable] = {
 		"walk": func() -> CharClip: return CharWalkClip.new(rig),
 		"run": func() -> CharClip: return CharRunClip.new(rig),

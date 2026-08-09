@@ -59,9 +59,40 @@ const SETTLE_DECAY := 7.0
 const SETTLE_CYCLES := 1.6
 
 ## 몸이 휘두름을 받아 도는 양. 손만 움직이면 팔이 아니라 막대가 도는 것으로 보인다.
-const TORSO_TWIST := 0.10
+const TORSO_TWIST := 0.20
 const TORSO_SHIFT := 3.4
 const TORSO_DROP := 2.6
+
+## **예비에 몸이 반대로 꼬인다.** 팔만 뒤로 가면 풀리는 힘이 안 생긴다.
+## 예비를 깊게 한 것(§25.19.2)이 여기서 값을 한다 — 시간이 있어야 감긴다.
+const TORSO_COIL := 0.26
+
+## **키가 변한다.** 예비에 낮아지고 타격에 뻗는다.
+## 위아래로 안 움직이면 무슨 짓을 해도 평평해 보인다.
+const TORSO_DIP := 7.5
+const TORSO_EXTEND := 5.5
+
+## **파츠마다 시작 시각이 다르다 — 아래에서 위로.**
+##
+## `die` 에서 찾은 「시작이 다른」 축을 **방향만 반대로** 쓴다. 저쪽은 손 → 발 → 몸 → 머리로
+## 힘이 빠졌고, 이쪽은 **발 → 몸 → 반대손 → 든손 → 머리**로 힘이 올라간다.
+## 그것이 「채찍처럼 이어진다」의 정체다.
+##
+## **든 손이 기준(0)이다.** 무기가 닿는 시각이 여기서 정해지므로, 든 손을 늦추면
+## `impact_seconds()` 가 통째로 밀린다. 기준으로 두면 접점 값이 안 흔들린다.
+const LEAD_FEET := 0.075
+const LEAD_TORSO := 0.048
+const LEAD_OFF_HAND := 0.024
+const LEAD_HEAD := -0.038
+
+## 반대 손이 균형을 잡느라 뻗는 거리.
+const OFF_HAND_SWING := 15.0
+
+## 앞발이 내디딜 때 뜨는 높이.
+const STEP_HEIGHT := 6.0
+
+## 예비에 **살짝 뒤로** 빼는 비율. 그래야 앞으로 나갈 때 힘이 실린다.
+const ADVANCE_BACK := 0.24
 
 ## 머리는 몸보다 늦게 따라온다. idle 과 같은 규칙이다.
 const HEAD_TWIST := 0.07
@@ -74,8 +105,17 @@ const FOOT_SQUASH := 0.045
 var from_guard: WeaponGuard.Id = WeaponGuard.Id.HIGH
 var to_guard: WeaponGuard.Id = WeaponGuard.Id.LOW
 
-## 든 무기. **칸 수 하나가 아래 넷을 전부 정한다** (§25.16).
+## 든 무기. **모양 하나가 나머지를 전부 정한다** (§25.16 · §25.20).
 var weapon := CharWeapon.new(1)
+
+## 한 타 뒤에 **제자리로 돌아오는가.**
+##
+## **이것이 전투의 성격을 바꾼다.** 안 돌아오면 체인이 곧 전진이라 5 타면 다섯 번
+## 밀고 들어간다 — 적을 몰아붙이거나 **너무 깊이 들어가서 포위당한다.**
+## 돌아오면 제자리 콤보라 다루기 쉽고 「밀어붙인다」는 감각이 없다.
+##
+## **값을 안 박았다.** 사용자가 둘을 보고 정한다 (§25.21.3).
+var returns_home := false
 
 ## 무기의 관성에서 나온 구간 길이. **손으로 적은 값이 아니다.**
 ##
@@ -212,55 +252,120 @@ func progress(t: float) -> float:
 	return 1.0 + OVERSHOOT * decay * cos(TAU * SETTLE_CYCLES * u)
 
 
+## **지금 몸이 앞으로 나가 있는 거리.** 예비에는 음수(뒤로)다.
+##
+## 「돌아온다」로 두면 후속 동안 0 으로 되돌아간다. 「남는다」면 그 자리에 남는다.
+func travel_at(t: float) -> float:
+	var at := progress(t)
+	var ratio := (
+		ADVANCE_BACK * at / ANTICIPATE_DEPTH if at < 0.0 else _ease_out(clampf(at, 0.0, 1.0))
+	)
+	if returns_home:
+		var settling := t - (anticipate + still + strike + hitstop)
+		if settling > 0.0:
+			ratio *= 1.0 - smoothstep(0.0, 1.0, clampf(settling / recover, 0.0, 1.0))
+	return weapon.advance_px() * ratio
+
+
+## 그 파츠가 읽는 진행도. **파츠마다 시각이 어긋나 있다** — 발이 먼저, 머리가 나중.
+func progress_for(t: float, lead: float) -> float:
+	return progress(clampf(t + lead * weapon.time_scale(), 0.0, loop_seconds()))
+
+
 func sample(t: float, features: AnimFeatures) -> CharPose:
 	var pose := CharPose.from_rig(rig)
-	var at := progress(clampf(t, 0.0, loop_seconds()))
-	_apply_hand(pose, at, features)
-	_apply_torso(pose, at, features)
-	_apply_head(pose, t, features)
+	var at := clampf(t, 0.0, loop_seconds())
 	_apply_feet(pose, at, features)
+	_apply_torso(pose, at, features)
+	_apply_head(pose, at, features)
+	_apply_hand(pose, at, features)
+	_apply_travel(pose, at, features)
+	keep_weapon_off_floor(pose, weapon)
 	return pose
 
 
 ## 든 손 — 자세에서 자세로. **무기는 이 손의 자식이라 저절로 따라 돈다.**
-func _apply_hand(pose: CharPose, at: float, f: AnimFeatures) -> void:
+##
+## **이 파츠가 사슬의 기준이다** (`lead = 0`). 여기가 밀리면 닿는 시각이 통째로 밀린다.
+func _apply_hand(pose: CharPose, t: float, f: AnimFeatures) -> void:
 	var part := CharWeapon.HOLDER
+	var at := progress(t)
 	pose.positions[part] += _start_offset.lerp(_end_offset, at) * f.arc
 	pose.rotations[part] = lerpf(_start_rotation, _end_rotation, at)
-	# 빈손은 반대로 뻗어 균형을 잡는다. 가만히 있으면 한쪽만 사는 인형이 된다.
+
+	# 빈손은 **반대로** 뻗어 균형을 잡는다. 가만히 있으면 한쪽만 사는 인형이 된다.
+	var off := progress_for(t, LEAD_OFF_HAND * f.delay)
 	var idle_hand := CharPart.Id.HAND_FAR
-	pose.positions[idle_hand] += (
-		Vector2(-_start_offset.lerp(_end_offset, at).x * 0.35, 0.0) * f.arc
-	)
-	pose.rotations[idle_hand] = -0.30 * at * f.arc
+	pose.positions[idle_hand] += Vector2(-OFF_HAND_SWING * off, 3.0 * off) * f.arc
+	pose.rotations[idle_hand] = -0.45 * off * f.arc
 
 
-## 몸 — **무거울수록 끌려간다.** 가벼운 무기는 손만 움직이고 무거운 것은 상체가 따라간다.
-func _apply_torso(pose: CharPose, at: float, f: AnimFeatures) -> void:
+## 몸 — **예비에 꼬이고 낮아졌다가, 타격에 풀리며 뻗는다.**
+##
+## 손만 움직이면 팔이 아니라 막대가 도는 것으로 보인다. 그리고 **키가 안 변하면
+## 무슨 짓을 해도 평평해 보인다.**
+func _apply_torso(pose: CharPose, t: float, f: AnimFeatures) -> void:
 	var part := CharPart.Id.TORSO
+	var at := progress_for(t, LEAD_TORSO * f.delay)
 	var drag := weapon.drag()
-	var shift := TORSO_SHIFT + DRAG_SHIFT * drag
-	pose.positions[part] += Vector2(shift * at, -TORSO_DROP * at) * f.arc
-	pose.rotations[part] = -(TORSO_TWIST + DRAG_TWIST * drag) * at * f.arc
-	pose.scales[part] = CharClip.volume_scale(-0.030 * maxf(at, 0.0) * f.squash)
+	# 예비(음수)에는 꼬임이 크고, 풀릴 때는 그보다 작다 — 감는 데 힘이 더 든다.
+	var twist := TORSO_COIL if at < 0.0 else (TORSO_TWIST + DRAG_TWIST * drag)
+	var forward := clampf(at, 0.0, 1.0)
+	# 예비에 낮아지고 타격 중에 뻗었다가 마무리에 다시 내려앉는다.
+	var height := -TORSO_DIP * maxf(-at, 0.0) / ANTICIPATE_DEPTH
+	height += TORSO_EXTEND * sin(PI * forward) - TORSO_DROP * forward
+	pose.positions[part] += Vector2((TORSO_SHIFT + DRAG_SHIFT * drag) * at, height) * f.arc
+	pose.rotations[part] = -twist * at * f.arc
+	pose.scales[part] = CharClip.volume_scale(-0.030 * forward * f.squash)
 
 
+## 머리 — **맨 마지막으로 따라온다.** 예비에는 살짝 반대로 남는다.
 func _apply_head(pose: CharPose, t: float, f: AnimFeatures) -> void:
 	var part := CharPart.Id.HEAD
-	# 머리는 **늦게** 따라온다 — 지연이 시각의 함수라 그냥 과거의 진행도를 읽으면 된다.
-	var late := progress(clampf(t - HEAD_DELAY * f.delay, 0.0, loop_seconds()))
-	pose.positions[part] += Vector2(TORSO_SHIFT * 0.6 * late, -TORSO_DROP * 0.5 * late) * f.arc
-	pose.rotations[part] = -HEAD_TWIST * late * f.arc
+	var at := progress_for(t, LEAD_HEAD * f.delay)
+	var forward := clampf(at, 0.0, 1.0)
+	var height := -TORSO_DIP * 0.55 * maxf(-at, 0.0) / ANTICIPATE_DEPTH
+	height += TORSO_EXTEND * 0.6 * sin(PI * forward) - TORSO_DROP * 0.5 * forward
+	pose.positions[part] += Vector2(TORSO_SHIFT * 0.6 * at, height) * f.arc
+	pose.rotations[part] = -HEAD_TWIST * at * f.arc
 
 
-## 발 — 휘두르면 앞발을 디디고 뒷발의 뒤꿈치가 뜬다. idle 과 같은 접지 규칙이다.
-func _apply_feet(pose: CharPose, at: float, f: AnimFeatures) -> void:
+## 발 — **가장 먼저 움직인다.** 힘이 땅에서 올라오기 때문이다.
+##
+## 뒷발이 **미는 발**이라 예비에 눌리고 타격에 뒤꿈치가 뜬다. 앞발은 **딛는 발**이라
+## 전진할 때 들려서 앞으로 나간다 (`_apply_travel`).
+func _apply_feet(pose: CharPose, t: float, f: AnimFeatures) -> void:
+	var at := progress_for(t, LEAD_FEET * f.delay)
 	var loaded := maxf(at, 0.0) * f.asymmetry
+	var coiled := maxf(-at, 0.0) / ANTICIPATE_DEPTH * f.asymmetry
+
 	var near := CharPart.Id.FOOT_NEAR
+	# 예비에는 뒤에 실렸다가 타격에 앞발로 넘어간다.
 	pose.scales[near] = CharClip.volume_scale(-FOOT_SQUASH * loaded * f.squash)
+	pose.rotations[near] = FOOT_HEEL_LIFT * 0.5 * coiled
+	pose.positions[near] += Vector2(0.0, pose.lift_to_clear_ground(near, rig))
 
 	var far := CharPart.Id.FOOT_FAR
-	# **회전을 먼저 정하고 나서 올린다.** 재서 올리는 것이라 그 앞의 것만 반영된다 —
-	# 순서를 뒤집었다가 회전이 반영 안 된 0 을 더하고 그대로 파고들었다.
+	# **회전을 먼저 정하고 나서 올린다.** 재서 올리는 것이라 그 앞의 것만 반영된다.
 	pose.rotations[far] = -FOOT_HEEL_LIFT * loaded
+	pose.scales[far] = CharClip.volume_scale(-FOOT_SQUASH * 0.7 * coiled * f.squash)
 	pose.positions[far] += Vector2(0.0, pose.lift_to_clear_ground(far, rig))
+
+
+## **몸이 실제로 앞으로 나간다.** 애니메이션이 아니라 위치다 — 리치와 간격을 만든다.
+##
+## **뒷발은 안 따라간다.** 미는 발이라 땅에 박혀 있어야 힘이 실린다. 앞발만 들려서
+## 나간다 — 그래서 전진이 **미끄러짐이 아니라 내딛기**가 된다 (§25.21.2).
+func _apply_travel(pose: CharPose, t: float, f: AnimFeatures) -> void:
+	var gone := travel_at(t) * f.arc
+	if is_zero_approx(gone):
+		return
+	for part in CharPart.COUNT:
+		if part == CharPart.Id.FOOT_FAR:
+			continue
+		pose.positions[part] += Vector2(gone, 0.0)
+	# 앞발은 나가는 동안 들린다. 안 들면 땅을 긁으며 미끄러진다.
+	var near := CharPart.Id.FOOT_NEAR
+	var lift := STEP_HEIGHT * sin(PI * clampf(progress(t), 0.0, 1.0))
+	pose.positions[near] += Vector2(0.0, lift)
+	pose.positions[near] += Vector2(0.0, pose.lift_to_clear_ground(near, rig))
