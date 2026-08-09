@@ -52,9 +52,12 @@ const REST_ANGLE_WISH := -0.55
 ## 검끝이 바닥에서 최소한 이만큼은 떠 있어야 한다. 자세를 기하로 푸는 기준선이다.
 const TIP_CLEARANCE := 4.0
 
-## 맞는 순간 멈춰 있는 시간. **무거운 것은 멈춤이 길다** — `get hit` 의 경직과 짝이다.
-const HOLD_BASE := 0.02
-const HOLD_PER_CELL := 0.035
+## **히트스톱.** 닿는 순간 멈춰 있는 시간. **무거운 것은 멈춤이 길다.**
+##
+## 25 fps 로 1 칸 약 1 프레임, 4 칸 약 4.5 프레임이다. 처음에 0.02…0.125 로 두었더니
+## 1 칸이 반 프레임도 안 되어 **아무 일도 안 일어났다.**
+const HITSTOP_BASE := 0.045
+const HITSTOP_PER_CELL := 0.045
 
 ## 칸 수. 1 … 4.
 var cells: int
@@ -89,9 +92,12 @@ func time_scale() -> float:
 	return sqrt(inertia_ratio())
 
 
-## 맞는 순간의 멈춤. 무거울수록 길다.
-func hold_seconds() -> float:
-	return HOLD_BASE + HOLD_PER_CELL * float(cells - MIN_CELLS)
+## 히트스톱. 무거울수록 길다.
+##
+## **전투가 이 값으로 때린 쪽과 맞은 쪽을 같이 멈춰야 한다** — 휘두르는 쪽 혼자
+## 멈추는 것은 절반이고, 타격감은 둘이 동시에 설 때 난다 (§25.19.2).
+func hitstop_seconds() -> float:
+	return HITSTOP_BASE + HITSTOP_PER_CELL * float(cells - MIN_CELLS)
 
 
 ## 몸이 무기에 끌려가는 정도 (`0` … `1`). 무거우면 상체가 따라간다.

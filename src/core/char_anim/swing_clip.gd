@@ -14,21 +14,39 @@ extends CharClip
 ##
 ## 무기는 든 손의 자식이라 이 클립도 **무기를 모른다.** 손을 돌리면 검이 따라 돈다.
 
-## 1 칸짜리 기준의 예비 — 치기 전에 **반대로** 물러나는 시간.
-const ANTICIPATE := 0.16
+## 1 칸짜리 기준의 예비 — 치기 전에 **반대로** 물러나는 시간. **끌어야 한다.**
+const ANTICIPATE := 0.26
 
-## 1 칸짜리 기준의 타격 — 실제로 지나가는 시간. **짧을수록 세게 보인다.**
-const STRIKE := 0.11
+## **예비 끝의 정지.** 물러난 자리에서 잠깐 선다.
+##
+## **이 정지가 다음 것을 크게 만든다.** 없으면 물러났다가 그대로 이어져 한 덩어리로
+## 흐르고, 그러면 타격이 「시작되는 순간」이 없다.
+const STILL := 0.05
 
-## 1 칸짜리 기준의 후속 — 지나친 것이 되돌아와 앉는 시간.
+## 1 칸짜리 기준의 타격 — 실제로 지나가는 시간.
+##
+## **한두 프레임이다.** 25 fps 에서 0.045 초면 1.1 프레임이다. 처음에 0.11 초(2.8 프레임)로
+## 두었더니 203 도를 부드럽게 도는 것이 되어 **캐주얼하게** 보였다. 4 칸은 8.3 프레임이었다.
+##
+## **물리적으로 정확한 휘두르기는 등속에 가깝고, 액션의 타격감은 정확히 그 반대다.**
+const STRIKE := 0.045
+
+## 1 칸짜리 기준의 후속 — 지나친 것이 되돌아와 앉는 시간. **다시 늘어진다.**
 const RECOVER := 0.42
+
+## 타격만 무게를 **덜** 탄다. 무거운 검도 지나갈 때는 지나간다 —
+## 무거움은 **들어 올리고 되돌리는 데서** 나오지 지나가는 속도에서 나오지 않는다.
+const STRIKE_WEIGHT_POWER := 0.5
 
 ## 무거울수록 몸이 무기에 끌려간다. `drag` 가 0 이면 손만 움직인다.
 const DRAG_SHIFT := 5.0
 const DRAG_TWIST := 0.09
 
 ## 예비에서 시작 자세의 **반대쪽으로** 얼마나 더 가는가 (진행도 기준).
-const ANTICIPATE_DEPTH := 0.14
+##
+## **깊을수록 휘두르는 각이 커진다.** 0.14 에서 0.26 으로 키웠다 — 예비가 얕으면
+## 검이 도는 각이 작아 역동성이 통째로 죽는다.
+const ANTICIPATE_DEPTH := 0.26
 
 ## 타격이 목표를 지나치는 양. **1 을 넘는 것이 오버슛이다.**
 ##
@@ -60,12 +78,20 @@ var to_guard: WeaponGuard.Id = WeaponGuard.Id.LOW
 var weapon := CharWeapon.new(1)
 
 ## 무기의 관성에서 나온 구간 길이. **손으로 적은 값이 아니다.**
+##
+## **총 길이는 물리가 정하고 그 안의 배분은 연출이 정한다.** 둘은 다른 축이고 곱해진다 —
+## `시간 ∝ √I` 는 한 방이 얼마나 걸리는지만 말하지, 그 시간을 어떻게 쪼개는지는
+## 아무 말도 안 한다. 균등하게 퍼뜨리면 그게 「캐주얼틱」이다 (§25.19).
 var anticipate := ANTICIPATE
+var still := STILL
 var strike := STRIKE
 var recover := RECOVER
 
-## 맞는 순간 멈춰 있는 시간. **무거운 것은 멈춤이 길다** — `get hit` 의 경직과 짝이다.
-var hold := 0.0
+## **히트스톱.** 닿는 순간 멈춰 있는 시간. **무거운 것은 멈춤이 길다.**
+##
+## 이 값을 전투가 받아 **때린 쪽과 맞은 쪽을 같이** 멈춰야 타격감이 난다 —
+## 휘두르는 쪽 혼자 멈추는 것은 절반이다 (§25.19.2).
+var hitstop := 0.0
 
 ## 양 끝 자세를 미리 푼 값. **검끝이 바닥을 안 뚫도록 손본 뒤의 각도**가 들어 있다.
 var _start_offset: Vector2
@@ -87,9 +113,10 @@ func _init(
 	# **넷이 한 값에서 나온다.** 칸을 늘리면 예비도 타격도 회복도 멈춤도 같이 늘어난다.
 	var pace := weapon.time_scale()
 	anticipate = ANTICIPATE * pace
-	strike = STRIKE * pace
+	still = STILL * pace
+	strike = STRIKE * pow(pace, STRIKE_WEIGHT_POWER)
 	recover = RECOVER * pace
-	hold = weapon.hold_seconds()
+	hitstop = weapon.hitstop_seconds()
 	_start_offset = WeaponGuard.hand_offset(from_guard)
 	_end_offset = WeaponGuard.hand_offset(to_guard)
 	_start_rotation = WeaponGuard.hand_rotation(from_guard, rig, weapon)
@@ -113,6 +140,13 @@ func _keep_the_blade_off_the_floor() -> void:
 	_start_rotation = _lifted_to_clear(
 		_end_offset, _end_rotation, _start_offset, _start_rotation, 1.0 + ANTICIPATE_DEPTH
 	)
+
+
+## 빠르게 갔다가 끝에서 느려지는 곡선. **선형 보간을 안 쓴다** —
+## 균등하게 퍼지는 것이 「부드럽게 돈다」이고 그것이 캐주얼함의 정체다.
+func _ease_out(u: float) -> float:
+	var left := 1.0 - clampf(u, 0.0, 1.0)
+	return 1.0 - left * left * left
 
 
 ## `far` 쪽 각도를, 진행도 `beyond` 까지 밀고 나가도 검끝이 뜨도록 들어 올린다.
@@ -139,7 +173,7 @@ func clip_name() -> String:
 
 
 func loop_seconds() -> float:
-	return anticipate + strike + hold + recover
+	return anticipate + still + strike + hitstop + recover
 
 
 ## **루프가 아니다.** 끝나면 마무리 자세에 멈춰 선다 — 그래야 다음 동작이 거기서 잇는다.
@@ -155,19 +189,22 @@ func progress(t: float) -> float:
 	if t <= 0.0:
 		return 0.0
 	if t < anticipate:
-		# 뒤로 물러난다. 끝에서 속도가 0 이 되어야 타격으로 매끄럽게 넘어간다.
-		return -ANTICIPATE_DEPTH * sin(PI * (t / anticipate))
-	var struck := t - anticipate
-	if struck < strike:
-		var u := struck / strike
-		# 뒤로 물러난 자리에서 목표를 지나친 자리까지. 끝이 완만해야 「닿았다」로 읽힌다.
-		return lerpf(-ANTICIPATE_DEPTH, 1.0 + OVERSHOOT, smoothstep(0.0, 1.0, u))
-	# **멈춤.** 지나친 자리에 그대로 서 있는다 — 무거울수록 길다.
-	# `get hit` 의 경직과 같은 것이고, 이 정지가 한 방의 무게를 만든다.
-	if struck < strike + hold:
+		# 뒤로 물러난다. **빠르게 물러났다 느려진다** — 그래야 「당겼다」로 읽힌다.
+		return -ANTICIPATE_DEPTH * _ease_out(t / anticipate)
+	var after := t - anticipate
+	# **예비 끝의 정지.** 여기서 서 있는 것이 다음 한 프레임을 크게 만든다.
+	if after < still:
+		return -ANTICIPATE_DEPTH
+	after -= still
+	if after < strike:
+		# 한두 프레임 만에 지나간다. 끝이 완만해야 「닿았다」로 읽힌다.
+		return lerpf(-ANTICIPATE_DEPTH, 1.0 + OVERSHOOT, _ease_out(after / strike))
+	after -= strike
+	# **히트스톱.** 지나친 자리에 그대로 선다 — 무거울수록 길다.
+	if after < hitstop:
 		return 1.0 + OVERSHOOT
 	# 감쇠 진동으로 마무리에 앉는다. **오버슛이 그냥 진폭이 1 을 넘는 진동이다.**
-	var settling := struck - strike - hold
+	var settling := after - hitstop
 	var u := clampf(settling / recover, 0.0, 1.0)
 	# `(1 - u)` 를 곱해 **끝에서 정확히 1** 이 되게 한다. 감쇠만으로는 0.992 에서 멈추는데,
 	# 마무리 자세가 값과 어긋나면 다음 동작이 그 차이만큼 튄다 (체인의 바탕이다).

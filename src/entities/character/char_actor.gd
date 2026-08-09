@@ -104,12 +104,15 @@ func impact_seconds() -> float:
 	var swing := _clip() as CharSwingClip
 	if swing == null:
 		return -1.0
-	return swing.anticipate + swing.strike
+	return swing.anticipate + swing.still + swing.strike
 
 
-## **맞는 순간 멈춰 있는 시간.** 전투가 히트스톱을 이 길이로 걸면 화면과 맞는다.
-func hold_seconds() -> float:
-	return CharWeapon.new(weapon_cells).hold_seconds()
+## **히트스톱 길이(초).** 전투가 이 시간 동안 **때린 쪽과 맞은 쪽을 같이** 멈추면 된다.
+##
+## 휘두르는 쪽 혼자 멈추는 것은 절반이다 — 타격감은 둘이 동시에 설 때 난다.
+## 눈금도 같이 멈춰야 화면과 규칙이 안 갈린다 (§25.19.2).
+func hitstop_seconds() -> float:
+	return CharWeapon.new(weapon_cells).hitstop_seconds()
 
 
 ## 지금 자세. 체인 조건이 확정되면 `앞.to_guard == 뒤.from_guard` 로 쓴다 (§25.11.4).

@@ -78,8 +78,9 @@ func test_the_strike_is_the_fastest_part() -> void:
 		if speed > fastest:
 			fastest = speed
 			fastest_at = times[i]
-	assert_gt(fastest_at, clip.anticipate - 0.01, "가장 빠른 순간이 예비 안에 있다")
-	assert_lt(fastest_at, clip.anticipate + clip.strike + 0.01, "가장 빠른 순간이 타격 뒤에 있다")
+	var strike_begins := clip.anticipate + clip.still
+	assert_gt(fastest_at, strike_begins - 0.01, "가장 빠른 순간이 타격 앞에 있다")
+	assert_lt(fastest_at, strike_begins + clip.strike + 0.01, "가장 빠른 순간이 타격 뒤에 있다")
 
 
 func test_the_blade_never_goes_through_the_floor() -> void:
@@ -145,7 +146,7 @@ func test_a_heavier_weapon_swings_slower_in_every_phase() -> void:
 	assert_gt(heavy.anticipate, light.anticipate * 1.5, "무거우면 예비가 길어야 한다")
 	assert_gt(heavy.strike, light.strike * 1.5, "무거우면 타격이 느려야 한다")
 	assert_gt(heavy.recover, light.recover * 1.5, "무거우면 자세를 되찾는 데 오래 걸려야 한다")
-	assert_gt(heavy.hold, light.hold, "무거우면 멈춤이 길어야 한다")
+	assert_gt(heavy.hitstop, light.hitstop, "무거우면 히트스톱이 길어야 한다")
 	assert_gt(heavy.loop_seconds(), light.loop_seconds() * 1.5, "한 방이 통째로 느려야 한다")
 
 
@@ -182,3 +183,37 @@ func test_a_long_weapon_cannot_be_lowered_as_far() -> void:
 		WeaponGuard.weapon_angle(low, rig, light),
 		"긴 무기는 덜 가파르게 내려야 바닥에 안 박힌다"
 	)
+
+
+func test_the_strike_is_one_or_two_frames_not_a_smooth_sweep() -> void:
+	# **물리적으로 정확한 휘두르기는 등속에 가깝고, 액션의 타격감은 정확히 그 반대다.**
+	# 처음에 타격이 1 칸 2.8 프레임 · 4 칸 8.3 프레임이었고 203 도를 부드럽게 돌아
+	# 「캐주얼틱」하다는 판정을 받았다. 이 단정이 그리로 되돌아가는 것을 막는다.
+	for cells in range(CharWeapon.MIN_CELLS, CharWeapon.MAX_CELLS + 1):
+		var clip := _clip(WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW, cells)
+		var frames := clip.strike * 25.0
+		assert_lt(frames, 2.6, "%d 칸의 타격이 %.1f 프레임이면 부드럽게 도는 것이다" % [cells, frames])
+
+
+func test_the_swing_pauses_at_the_top_before_it_strikes() -> void:
+	# **그 정지가 다음 한 프레임을 크게 만든다.** 없으면 물러났다가 그대로 이어져
+	# 타격이 「시작되는 순간」이 없다.
+	var clip := _clip()
+	var at := clip.anticipate + clip.still * 0.5
+	assert_almost_eq(clip.progress(at), clip.progress(clip.anticipate), 0.0001, "예비 끝에서 서야 한다")
+	assert_gt(clip.still, 0.02, "정지가 너무 짧으면 안 보인다")
+
+
+func test_most_of_the_swing_is_wind_up_and_recovery_not_the_strike() -> void:
+	# 타격이 전체에서 차지하는 몫이 작아야 「끌었다가 튀고 다시 늘어진다」가 된다.
+	for cells in range(CharWeapon.MIN_CELLS, CharWeapon.MAX_CELLS + 1):
+		var clip := _clip(WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW, cells)
+		assert_lt(clip.strike / clip.loop_seconds(), 0.08, "타격이 한 방의 8 % 를 넘으면 퍼진 것이다")
+
+
+func test_the_hitstop_is_long_enough_to_see() -> void:
+	# 1 칸이 반 프레임도 안 되면 아무 일도 안 일어난다.
+	var light := CharWeapon.new(CharWeapon.MIN_CELLS)
+	var heavy := CharWeapon.new(CharWeapon.MAX_CELLS)
+	assert_gt(light.hitstop_seconds() * 25.0, 1.0, "1 칸 히트스톱이 한 프레임은 돼야 한다")
+	assert_gt(heavy.hitstop_seconds() * 25.0, 4.0, "4 칸 히트스톱이 네 프레임은 돼야 한다")
