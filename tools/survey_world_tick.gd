@@ -45,10 +45,19 @@ func _initialize() -> void:
 		)
 	)
 	_row(world, guild, 0)
+	var fame_before := _fame_line(world, "판 0")
+	var squad_before := _squad_fame_line(world, guild, "내 대원 판 0")
 	for run in _RUNS:
 		_settle(guild, rng, run)
 		if _MARKS.has(run + 1):
 			_row(world, guild, run + 1)
+	print("\n== 유명세 (설계 24.40) ==")
+	print(fame_before)
+	print(_fame_line(world, "판 %d" % _RUNS))
+	# **대원은 매 판 행위자가 된다** (ExpeditionAftermath._bind_together) — 세계 평균과
+	# 따로 봐야 §2.6 의 *"유명 선수 이적 · 주목도가 곧 몸값"* 이 도는지 알 수 있다.
+	print(squad_before)
+	print(_squad_fame_line(world, guild, "내 대원 판 %d" % _RUNS))
 	_report_islands(world)
 	quit()
 
@@ -150,6 +159,46 @@ func _squad_affinity(graph: RelationGraph, ours: PackedInt32Array) -> float:
 			total += graph.affinity(person, other)
 			seen += 1
 	return float(total) / maxf(float(seen), 1.0)
+
+
+## 유명세가 사건으로 어떻게 움직이나 (§24.40).
+##
+## **폭주하는지가 물음이다** — 유명세가 소문의 거리를 늘리고(RelationResolver._fame_reach)
+## 소문이 다시 관계를 만드는 되먹임이 있다. 다만 행위자는 균등하게 뽑히므로
+## (`EventSeeder._roll_one`) 되먹임이 행위자 선택으로는 안 돌아온다.
+##
+## **중위가 0 에서 뜨면 그것도 문제다** — §24.7 의 *"무명인 사람 얘기는 아무도 안 본다"* 가
+## 성립하려면 **무명인 사람이 많아야** 한다.
+func _fame_line(world: NpcWorld, label: String) -> String:
+	var values := PackedInt32Array()
+	var famous := 0
+	for person in world.registry.size():
+		values.append(world.registry.fame_of(person))
+		if world.registry.fame_of(person) >= 50:
+			famous += 1
+	values.sort()
+	return (
+		"%-10s 중위 %d · 90%% %d · 최대 %d · 50이상 %.1f%%"
+		% [
+			label,
+			values[values.size() / 2],
+			values[values.size() * 9 / 10],
+			values[values.size() - 1],
+			100.0 * float(famous) / float(values.size()),
+		]
+	)
+
+
+## 내 대원들의 유명세. 판 0 에서 뽑은 값과 지금 값을 같이 낸다.
+##
+## **세계 평균에는 안 보인다** — 3000명 중 다섯이다. 그런데 이 다섯만 매 판 사건의
+## 행위자가 되므로 **유명세가 실제로 오르는지는 여기서만 보인다.**
+func _squad_fame_line(world: NpcWorld, guild: Guild, label: String) -> String:
+	var now := PackedStringArray()
+	for member in guild.members:
+		if member.is_in_world():
+			now.append(str(world.registry.fame_of(member.person)))
+	return "%-14s %s" % [label, " ".join(now)]
 
 
 ## 가장 큰 덩어리에 든 사람의 비율. **이것이 1 에 닿으면 세계가 한 덩어리다.**

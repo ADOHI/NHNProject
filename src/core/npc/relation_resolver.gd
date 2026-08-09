@@ -120,6 +120,9 @@ func resolve(
 	if kept.is_empty() and event.needs_target:
 		return RelationLedger.NO_CAUSE
 	var cause := _ledger.record(kind, actor, kept)
+	# **유명세는 행위자만 오른다** (설계 24.6 · §24.40). 성향을 안 타고 관여도도 안 탄다 —
+	# 한 일은 한 일이다. 이 값이 다음 사건의 소문 거리를 바꾼다 (`_fame_reach`).
+	_registry.gain_fame(actor, event.fame_gain)
 	for target in kept:
 		_apply_pair(event, actor, target, cause)
 	var seen := _witnesses(event, actor, kept, witnesses)

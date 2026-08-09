@@ -107,6 +107,20 @@ func fame_of(person: int) -> int:
 	return _fames[person]
 
 
+## 유명세를 올린다(내린다). 새 값을 돌려준다.
+##
+## **유명세는 누적이다** (설계 24.7) — 판 안의 「주목도」와 달리 리셋이 없다.
+## 그래서 생성 시점의 값은 **시작점이지 끝값이 아니다**.
+##
+## **여기가 인구 레코드에서 유일하게 뒤에 바뀌는 값이다.** 나이 · 이름 · 성향 · 계열은
+## 다 동결이고(설계 24.24), 유명세만 사건이 민다 — *"무엇을 했는가"* 이기 때문이다.
+func gain_fame(person: int, delta: int) -> int:
+	if not has(person) or delta == 0:
+		return 0 if not has(person) else _fames[person]
+	_fames[person] = clampi(_fames[person] + delta, 0, PersonGenerator.FAME_MAX)
+	return _fames[person]
+
+
 ## 나이. **가족 관계가 여기서 나온다** (설계 24.22) — 부모는 자식보다 위고 형제는 비슷하다.
 func age_of(person: int) -> int:
 	return _ages[person]

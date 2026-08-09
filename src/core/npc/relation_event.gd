@@ -59,6 +59,16 @@ const NOTCH_ONE := 33
 const NOTCH_TWO := 66
 const NOTCH_THREE := 100
 
+## 설계 24.5 표의 **유명세 칸**에 대응하는 값 (설계 24.40.1).
+##
+## 성향 눈금이 33 · 66 · 100 인 것과 달리 **배수 사다리**다 —
+## §24.7 이 유명세를 *"누적"* 이라 못 박았으므로 한 번의 크기가 아니라
+## **몇 번 쌓여야 눈에 띄나**가 척도다. `소↑` 여덟 번이 `↑↑↑` 한 번이다.
+const FAME_FAINT := 1
+const FAME_ONE := 2
+const FAME_TWO := 4
+const FAME_THREE := 8
+
 const _LABELS := [
 	"협력",
 	"배신",
@@ -107,6 +117,15 @@ var actor_kind: RelationKind.Kind
 ## **`NONE` 이면 그 슬롯을 아예 안 건드린다.** 전멸의 대상은 죽은 사람이고
 ## **사망은 관계를 동결하므로**(설계 24.5 D) 죽은 쪽의 호감은 움직이면 안 된다.
 var target_kind: RelationKind.Kind
+
+## **행위자의 유명세가 얼마나 오르나** (설계 24.5 의 유명세 칸 · §24.40).
+##
+## 행위자만이다 — 설계 24.6 이 *"행위자: 평판이 그 방향으로 굳는다"* 라고 했고
+## 대상과 목격자에게는 그 칸이 없다. **성향을 안 탄다**: 사실 관계다.
+##
+## **정보 계열이 전부 0 인 것이 이 칸의 뜻을 말한다** — 설계 24.5 C 표에는
+## 유명세 칸이 아예 없다. **정보는 조용히 하는 일이다.**
+var fame_gain := 0
 
 ## 목격자를 **유대로 훑어 늘리는가.** 전멸과 시체 털이가 참이다 (설계 24.5 B) —
 ## *"죽은 자들과 유대 높은 사람 전원에게 사건이 간다."*
@@ -251,6 +270,7 @@ static func _cooperation() -> RelationEvent:
 	event.bond_gain = 20
 	event.actor_kind = RelationKind.Kind.COMRADESHIP
 	event.target_kind = RelationKind.Kind.COMRADESHIP
+	event.fame_gain = FAME_FAINT
 	return event
 
 
@@ -269,6 +289,7 @@ static func _betrayal() -> RelationEvent:
 	event.bond_gain = 8
 	event.actor_kind = RelationKind.Kind.BETRAYER
 	event.target_kind = RelationKind.Kind.BETRAYED
+	event.fame_gain = FAME_TWO
 	return event
 
 
@@ -292,6 +313,7 @@ static func _wipeout() -> RelationEvent:
 	event.actor_kind = RelationKind.Kind.COMRADESHIP
 	event.target_kind = RelationKind.Kind.NONE
 	event.sweeps_bonded = true
+	event.fame_gain = FAME_TWO
 	return event
 
 
@@ -311,6 +333,7 @@ static func _rescue() -> RelationEvent:
 	# **유형이 양쪽에서 다르다.** 구한 쪽에는 생사고락, 구해진 쪽에는 은혜가 남는다.
 	event.actor_kind = RelationKind.Kind.COMRADESHIP
 	event.target_kind = RelationKind.Kind.GRATITUDE
+	event.fame_gain = FAME_ONE
 	return event
 
 
@@ -353,6 +376,7 @@ static func _ambush() -> RelationEvent:
 	event.bond_gain = 6
 	event.actor_kind = RelationKind.Kind.GRUDGE
 	event.target_kind = RelationKind.Kind.GRUDGE
+	event.fame_gain = FAME_FAINT
 	return event
 
 
@@ -366,6 +390,7 @@ static func _plunder() -> RelationEvent:
 	event.bond_gain = 10
 	event.actor_kind = RelationKind.Kind.GRUDGE
 	event.target_kind = RelationKind.Kind.GRUDGE
+	event.fame_gain = FAME_ONE
 	return event
 
 
@@ -382,6 +407,7 @@ static func _desert() -> RelationEvent:
 	event.bond_gain = 6
 	event.actor_kind = RelationKind.Kind.ABANDONER
 	event.target_kind = RelationKind.Kind.ABANDONED
+	event.fame_gain = FAME_ONE
 	return event
 
 
@@ -505,6 +531,7 @@ static func _defect() -> RelationEvent:
 	event.actor_kind = RelationKind.Kind.NONE
 	event.target_kind = RelationKind.Kind.NONE
 	event.needs_target = false
+	event.fame_gain = FAME_ONE
 	return event
 
 
@@ -519,6 +546,7 @@ static func _break_pact() -> RelationEvent:
 	event._set_axis(NpcAxis.Kind.HONEST, -NOTCH_THREE)
 	event.strength = 45
 	event.needs_target = false
+	event.fame_gain = FAME_ONE
 	return event
 
 
@@ -532,6 +560,7 @@ static func _found_guild() -> RelationEvent:
 	event._set_axis(NpcAxis.Kind.SHOWY, NOTCH_TWO)
 	event.strength = 30
 	event.needs_target = false
+	event.fame_gain = FAME_TWO
 	return event
 
 
@@ -546,6 +575,7 @@ static func _headline() -> RelationEvent:
 	event._set_axis(NpcAxis.Kind.SHOWY, NOTCH_THREE)
 	event.strength = 35
 	event.needs_target = false
+	event.fame_gain = FAME_THREE
 	return event
 
 
@@ -558,6 +588,7 @@ static func _haul() -> RelationEvent:
 	event._set_axis(NpcAxis.Kind.SHOWY, NOTCH_ONE)
 	event.strength = 20
 	event.needs_target = false
+	event.fame_gain = FAME_THREE
 	return event
 
 
@@ -571,6 +602,7 @@ static func _delve() -> RelationEvent:
 	event._set_axis(NpcAxis.Kind.RECKLESS, NOTCH_THREE)
 	event.strength = 30
 	event.needs_target = false
+	event.fame_gain = FAME_ONE
 	return event
 
 

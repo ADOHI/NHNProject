@@ -16,6 +16,44 @@ func _traits(values: Array) -> PackedInt32Array:
 	return traits
 
 
+func test_the_fame_ladder_matches_the_design_table() -> void:
+	# 설계 24.5 의 **유명세 칸**이다 (§24.40.1). `소↑ ↑ ↑↑ ↑↑↑` 이 1 · 2 · 4 · 8 이고,
+	# **한 번의 크기가 아니라 몇 번 쌓여야 눈에 띄나**가 척도다 (§24.7 — 유명세는 누적).
+	var wanted := {
+		RelationEvent.Kind.COOPERATION: RelationEvent.FAME_FAINT,
+		RelationEvent.Kind.AMBUSH: RelationEvent.FAME_FAINT,
+		RelationEvent.Kind.PLUNDER: RelationEvent.FAME_ONE,
+		RelationEvent.Kind.BETRAYAL: RelationEvent.FAME_TWO,
+		RelationEvent.Kind.WIPEOUT: RelationEvent.FAME_TWO,
+		RelationEvent.Kind.FOUND_GUILD: RelationEvent.FAME_TWO,
+		RelationEvent.Kind.HEADLINE: RelationEvent.FAME_THREE,
+		RelationEvent.Kind.HAUL: RelationEvent.FAME_THREE,
+	}
+	for kind in wanted:
+		assert_eq(
+			RelationEvent.of(kind).fame_gain,
+			int(wanted[kind]),
+			RelationEvent.label(kind as RelationEvent.Kind)
+		)
+
+
+func test_information_is_done_quietly() -> void:
+	# **설계 24.5 C 표에는 유명세 칸이 아예 없다.** 없는 칸을 0 으로 읽는 것이 이 절의 답이고,
+	# 그래서 정보 계열은 관계를 만들면서도 사람을 안 도드라지게 한다 (§24.40.2).
+	for kind in [
+		RelationEvent.Kind.INFORM,
+		RelationEvent.Kind.SELL_INFO,
+		RelationEvent.Kind.SNITCH,
+		RelationEvent.Kind.FALSE_LEAD,
+		RelationEvent.Kind.PASS_BY,
+		RelationEvent.Kind.LOOT_BODY,
+		RelationEvent.Kind.BARGAIN,
+	]:
+		assert_eq(
+			RelationEvent.of(kind).fame_gain, 0, RelationEvent.label(kind as RelationEvent.Kind)
+		)
+
+
 func test_information_events_match_the_design_table() -> void:
 	# 설계 24.5 C 의 넷 + 24.5 A 의 시체 털이. **눈금 규칙(§24.21.4)이 수치를 낸다.**
 	var false_lead := RelationEvent.of(RelationEvent.Kind.FALSE_LEAD)
