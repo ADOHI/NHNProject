@@ -40,7 +40,6 @@ import argparse
 import io
 import json
 import pathlib
-import sys
 import time
 import urllib.parse
 import urllib.request
@@ -48,6 +47,8 @@ import uuid
 
 import numpy as np
 from PIL import Image
+
+from console_utf8 import fix_console_encoding
 
 ## 바닥으로 볼 `N.y` 의 문턱과 그 위로 부드럽게 섞을 폭. 딱 자르면 경계에 금이 보인다.
 _FLOOR_FROM = 0.55
@@ -136,11 +137,8 @@ def _stand_floor_up(normal: np.ndarray) -> np.ndarray:
 def main() -> int:
     # **한국어 윈도우 콘솔은 cp949 다.** 줄표(U+2014)가 cp949 에 없어서 이 설명문을
     # 그냥 찍으면 `--help` 가 `UnicodeEncodeError` 로 죽는다 — 실제로 죽었다.
-    # `tools/check_glyphs.gd` 가 웹 폰트에서 잡아 주는 것과 같은 종류의 사고이고,
-    # 이쪽은 잡아 주는 것이 없으므로 도구가 스스로 막는다.
-    for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8")
+    # 같은 위험이 도구 다섯 군데에 더 있어서 `tools/console_utf8.py` 로 뽑아냈다.
+    fix_console_encoding()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("room_dir", help="방 폴더 (…/out/<던전>/<방>)")
     parser.add_argument("--out", default=".renders-lighting/plate_normal")

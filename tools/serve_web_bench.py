@@ -27,6 +27,8 @@ import http.server
 import pathlib
 import urllib.parse
 
+from console_utf8 import fix_console_encoding
+
 _ARGS: argparse.Namespace | None = None
 
 
@@ -60,6 +62,9 @@ def _record(line: str) -> None:
 
 def main() -> None:
     global _ARGS
+    # `description=__doc__` 가 이 파일의 docstring 을 `--help` 에 그대로 찍는다.
+    # 그 안에 줄표(U+2014, 4행)가 있어서 cp949 콘솔에서 `--help` 가 죽는다.
+    fix_console_encoding()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dir", default="build/web")
     parser.add_argument("--port", type=int, default=8071)

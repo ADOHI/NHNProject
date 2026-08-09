@@ -33,8 +33,14 @@ import json
 import sys
 from pathlib import Path
 
+from console_utf8 import fix_console_encoding
+
 
 def main(argv: list[str]) -> int:
+    # `print(__doc__)` 아래 줄이 이 파일의 docstring 을 그대로 찍는다. 그 안에
+    # 줄표(U+2014)가 있어서(25행) 인자 없이 돌리기만 해도 cp949 콘솔에서
+    # `UnicodeEncodeError` 로 죽는다 — `--help` 조차 안 쳐도 죽는 경로였다.
+    fix_console_encoding()
     if len(argv) < 3:
         print(__doc__)
         return 2
