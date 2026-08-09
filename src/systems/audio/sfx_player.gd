@@ -42,7 +42,8 @@ const STAGGER_SECONDS := 0.0035
 var _bank := SfxBank.new()
 var _voices: Array[AudioStreamPlayer] = []
 var _next_voice := 0
-var _pick := 0
+## **사건마다** 다음에 쓸 벌 번호. 하나로 두면 안 된다 — §29.7.13.
+var _picks: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
 var _enabled := true
 ## 자리가 없어 못 낸 소리 수. 실측용이지 게임 로직이 읽는 값이 아니다.
@@ -73,7 +74,7 @@ func play(event: SfxEvent.Kind, weight: float = -1.0) -> bool:
 	if overlapping >= MAX_SAME_EVENT:
 		_dropped += 1
 		return false
-	return _start(_bank.stream_for(event, weight, _next_pick()), overlapping * STAGGER_SECONDS)
+	return _start(_bank.stream_for(event, weight, _next_pick(event)), overlapping * STAGGER_SECONDS)
 
 
 ## 요청을 직접 낸다. 프로토 화면(src/proto/sfx/)이 축을 만져 볼 때 쓴다.
@@ -103,6 +104,7 @@ func stop_all() -> void:
 	for voice in _voices:
 		voice.stop()
 	_recent.clear()
+	_picks.clear()
 
 
 ## 지금 울리고 있는 소리 수.
@@ -155,9 +157,18 @@ func _free_voice() -> AudioStreamPlayer:
 	return null
 
 
-func _next_pick() -> int:
-	_pick += 1
-	return _pick
+## 이 사건이 다음에 쓸 벌 번호.
+##
+## **한때 이 계수기가 사건 전체에 하나였다.** `stream_for` 가 `pick % 벌수` 로 고르므로,
+## 발소리 사이에 다른 소리가 두 개씩 끼면 보폭이 3이 되고 벌 수도 3이라
+## **같은 파일이 스무 번 내리 나왔다** (§29.7.13 실측).
+## 전투 중에는 타격과 UI 가 사이에 끼므로 하필 그때 변주가 죽는다.
+##
+## 사건마다 세면 보폭이 항상 1이라 벌을 빠짐없이 돌게 된다.
+func _next_pick(event: SfxEvent.Kind) -> int:
+	var next := int(_picks.get(event, -1)) + 1
+	_picks[event] = next
+	return next
 
 
 ## 리미터가 달린 버스를 준비한다. 이미 있으면 그대로 쓴다.

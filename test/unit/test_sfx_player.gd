@@ -52,6 +52,38 @@ func test_the_stagger_is_short_enough_to_be_inaudible() -> void:
 	assert_lt(total, SfxVoice.KEEP_ATTACK_SECONDS, "어긋내기가 어택을 먹고 있다")
 
 
+func test_variation_rotates_even_when_other_sounds_interleave() -> void:
+	# **실제로 났던 사고다** (§29.7.13). 벌 번호를 사건 전체에 하나뿐인 계수기로 매겼더니,
+	# 발소리 사이에 다른 소리가 두 개씩 끼면 보폭이 3이 되고 벌 수도 3이라
+	# **같은 파일이 스무 번 내리 나왔다.** 하필 전투 중에 그렇게 된다 —
+	# 조용할 때는 멀쩡하고 시끄러울 때만 변주가 죽는다.
+	var variations := 3
+	for interleave in [0, 1, 2, 3, 5]:
+		var player := SfxPlayer.new()
+		add_child_autofree(player)
+		var picked: Array[int] = []
+		for step in 12:
+			picked.append(player._next_pick(SfxEvent.Kind.FOOT_WALK) % variations)
+			for other in interleave:
+				player._next_pick(SfxEvent.Kind.UI_PRESS)
+		var seen := {}
+		for index in picked.size():
+			seen[picked[index]] = true
+			if index > 0:
+				assert_ne(
+					picked[index], picked[index - 1], "사이에 %d개 낄 때 같은 벌이 연달아 나온다" % interleave
+				)
+		assert_eq(seen.size(), variations, "사이에 %d개 낄 때 벌을 다 안 쓴다" % interleave)
+
+
+func test_each_event_counts_separately() -> void:
+	# 계수기가 사건마다여야 보폭이 1이 된다.
+	var first := _player._next_pick(SfxEvent.Kind.HIT_LANDED)
+	_player._next_pick(SfxEvent.Kind.UI_PRESS)
+	_player._next_pick(SfxEvent.Kind.FOOT_WALK)
+	assert_eq(_player._next_pick(SfxEvent.Kind.HIT_LANDED), first + 1, "다른 사건이 번호를 밀었다")
+
+
 func test_playing_never_raises_even_with_nothing_baked() -> void:
 	# 소리 때문에 게임이 멈추는 일은 없어야 한다.
 	for event in SfxEvent.all():
