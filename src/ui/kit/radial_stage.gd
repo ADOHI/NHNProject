@@ -55,6 +55,10 @@ const PLAIN: int = 0
 const DRESSED: int = 1
 const TOO_MUCH: int = 2
 
+## 판 하나만 그리나. 0 이상이면 그 판을 (0,0) 에 화면 크기로 그린다 —
+## 태블릿 확인 화면이 이 화면을 **텍스처로** 받아 기울여 붙인다.
+@export var only_panel: int = -1
+
 var _figures: Array[Texture2D] = []
 var _sheet: Array[SheetSection] = []
 var _names: Array[String] = []
@@ -121,6 +125,9 @@ func _picked() -> float:
 
 
 func _draw() -> void:
+	if only_panel >= 0:
+		_screen(Vector2.ZERO, only_panel)
+		return
 	draw_rect(Rect2(Vector2.ZERO, size), SHEET)
 	_label("조우 중 — 원형 인물 배치와 홀로그램 창", Vector2(30.0, 48.0), 22, INK)
 	_label("휠로 돌리면 다음 인물. 도는 동안 창이 접히고 멈추면 펴진다. 창을 누르면 그 칸으로 들어간다.", Vector2(30.0, 76.0), 14, DIM)
@@ -140,14 +147,17 @@ func _panel(index: int, title: String) -> void:
 	_label(title, at + Vector2(0.0, -14.0), 16, INK)
 	# 태블릿 뒤로 던전이 비친다. **조우 중이라는 것이 화면에 있어야 한다.**
 	_behind(at)
+	_screen(at, index)
+
+
+## 화면 한 장. 태블릿 확인 화면은 이것만 텍스처로 받아 기울여 붙인다.
+func _screen(at: Vector2, index: int) -> void:
 	draw_rect(Rect2(at, SCREEN), Color(DESK, 0.86))
 	draw_rect(Rect2(at, SCREEN), Color(RULE, 0.6), false, 1.5)
-
-	match index:
-		3:
-			_draw_squad(at)
-		_:
-			_draw_one(at, _picked(), index)
+	if index == 3:
+		_draw_squad(at)
+	else:
+		_draw_one(at, _picked(), index)
 
 
 ## 태블릿 너머의 던전. **화면 안이 아니라 뒤다** — 가장자리로만 스친다.
