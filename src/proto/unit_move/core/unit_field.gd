@@ -673,9 +673,11 @@ func _review_moving(agent: ProtoUnitAgent, arrive: float, crawl: float) -> void:
 	# 줄이 나아가는 동안에는 0 으로 되돌아간다. `이동`도 되돌아올 수 있는 상태여야 한다는
 	# 뜻은 아니다 - 여기서 `기다림`으로 넘어가면 그다음은 `_review_hold` 가 맡는다.
 	if agent.press_frames >= _HOLD_CONFIRM_FRAMES or agent.creep_frames >= _CREEP_STALLED_FRAMES:
-		# 자기 자리 코앞이면 거기가 자기 자리다. 어차피 사람 눈에는 도착이다.
+		# 자기 자리 코앞이면 거기서 그만둔다. 어차피 사람 눈에는 도착이다.
+		# **`ARRIVED` 가 아니라 `STOPPED` 다** - 도착 반경 밖이라 제 자리가 아니고,
+		# 그 몸이 남의 길을 막고 있을 수 있어 밀려도 된다.
 		if distance < agent.radius * _SETTLE_REACH:
-			agent.settle(ProtoUnitAgent.State.ARRIVED)
+			agent.settle(ProtoUnitAgent.State.STOPPED)
 		else:
 			# **여기가 전파의 유일한 입구다.** 매 프레임 돌리면 그 자체가 지터가 된다.
 			# 기다림이 확정되는 순간 한 번만, 앞의 사슬에 비키라고 말한다.
@@ -690,7 +692,7 @@ func _review_moving(agent: ProtoUnitAgent, arrive: float, crawl: float) -> void:
 ## 기다리는 유닛을 다시 본다. **막은 쪽이 비켰으면 스스로 간다.**
 func _review_hold(agent: ProtoUnitAgent, arrive: float) -> void:
 	if not _order_cache.has(agent.order_id):
-		agent.settle(ProtoUnitAgent.State.ARRIVED)
+		agent.settle(ProtoUnitAgent.State.STOPPED)
 		return
 	if agent.position.distance_to(agent.goal) <= arrive:
 		agent.settle(ProtoUnitAgent.State.ARRIVED)
@@ -706,7 +708,7 @@ func _review_hold(agent: ProtoUnitAgent, arrive: float) -> void:
 	collect_neighbors(agent, _scratch)
 	if _slot_taken(agent, arrive):
 		# 내 자리에 이미 다른 아군이 서 있다. 그러면 여기가 내 자리다 — 영원히 기다릴 이유가 없다.
-		agent.settle(ProtoUnitAgent.State.ARRIVED)
+		agent.settle(ProtoUnitAgent.State.STOPPED)
 		return
 	if not _settled_ahead(agent):
 		agent.resume()
@@ -733,7 +735,7 @@ func _review_hold(agent: ProtoUnitAgent, arrive: float) -> void:
 	# 남이 막은 경우(명령이 다른 유닛, 세워 둔 유닛)는 여기 안 걸린다. 그쪽은 언제든
 	# 비킬 수 있고, 비키면 `_settled_ahead` 가 풀어 준다.
 	if _order_done_except_waiters(agent) and _blocked_by_own_settled(agent):
-		agent.settle(ProtoUnitAgent.State.ARRIVED)
+		agent.settle(ProtoUnitAgent.State.STOPPED)
 
 
 ## 같은 명령을 받은 무리 중에 아직 **제 자리로 나아가고 있는** 유닛이 있는가.
@@ -781,7 +783,8 @@ func _blocked_by_own_settled(agent: ProtoUnitAgent) -> bool:
 	if order == null:
 		return false
 	for other in _scratch:
-		if other.state != ProtoUnitAgent.State.ARRIVED:
+		# **둘 다 받는다.** 「다시 안 움직이는가」를 묻는 자리다.
+		if not other.is_settled():
 			continue
 		if not order.member_ids.has(other.id):
 			continue
@@ -862,7 +865,7 @@ func _watch_grinding(agent: ProtoUnitAgent, distance: float) -> void:
 	# **다만 예산이 있어야 한다.** 무한히 다시 시도하게 두었더니 잼 한가운데의 유닛이
 	# 기다림과 이동을 영원히 오가며 멎지 않았고, "전원이 유한 시간에 멎는다"가 무너졌다.
 	if distance < agent.radius * _SETTLE_REACH:
-		agent.settle(ProtoUnitAgent.State.ARRIVED)
+		agent.settle(ProtoUnitAgent.State.STOPPED)
 	elif agent.hold_retries < _HOLD_RETRIES:
 		agent.hold_retries += 1
 		agent.hold()

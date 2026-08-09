@@ -237,7 +237,8 @@ static func finished(field: ProtoUnitField, agent: ProtoUnitAgent) -> bool:
 		#
 		# 대기가 종점이 아니다. 여전히 막혀 있으면 전파가 다시 나고 또 물러난다
 		# (`unit_field.gd` `_review_hold`). 그렇게 **공간이 쌓여 언젠가 뚫린다.**
-		if asker.state == ProtoUnitAgent.State.ARRIVED:
+		# **둘 다 받는다.** 부탁한 쪽이 끝났으면 비켜설 이유가 없다.
+		if asker.is_settled():
 			agent.waiting_for_path = false
 			return true
 		if asker.is_moving() and asker.blocker_id == 0:
