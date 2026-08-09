@@ -29,7 +29,6 @@ const LIT := preload("res://src/ui/kit/cel/phosphor_lit.gdshader")
 const CARD := Vector2(660.0, 760.0)
 const LOOP := 6.4
 const PAD := 26.0
-const GAP := 14.0
 
 const SNAP := 0.34
 
@@ -38,7 +37,7 @@ const SNAP := 0.34
 const ROWS: Array[String] = ["출격", "길드", "인물", "설정", "기록", "상점", "종료"]
 
 ## 강조 방법 셋. 순서가 곧 칸 순서다.
-const WAYS: Array[String] = ["면 — 색으로 채운다", "자리 — 밀려 나간다", "여백 — 둘레가 빈다"]
+const WAYS: Array[String] = ["면 — 색으로 채운다", "자리 — 반대로 기울어 판 밖으로", "여백 — 둘레가 빈다"]
 
 ## 손이 올라가는 때 · 선택이 옮겨가는 때 (§20.39.5).
 ##
@@ -104,6 +103,15 @@ var palette := 0:
 var rip_shown := false:
 	set(value):
 		rip_shown = value
+		queue_redraw()
+
+## 강조를 무엇으로 하나 — 0 면 · 1 **자리** · 2 여백 (§20.40.1).
+##
+## **「자리」로 확정됐다.** 나머지 둘은 코드로 남는다 — 셋을 나란히 놓은 것이 판정의
+## 근거였으니 그 근거를 지울 수 없고, 다시 견주는 것이 한 줄이어야 한다.
+var way := 1:
+	set(value):
+		way = wrapi(value, 0, WAYS.size())
 		queue_redraw()
 
 var _clock := 0.0
@@ -547,35 +555,33 @@ func _window() -> void:
 		)
 
 
-## 강조 세 칸 — **같은 일곱 줄 · 같은 선택 · 같은 시각**으로 방법만 다르다 (§20.39.3).
+## 목록 하나와 값 부품들. **강조는 `way` 가 고른다** — 기본은 「자리」다 (§20.40.1).
 ##
-## 셋을 같은 사건에 묶어 두지 않으면 비교가 아니라 그림 셋이다. 그래서 고른 줄과
-## 올린 줄과 옮겨 가는 시각은 전부 `_marked_row()` · `_hovered_row()` 한 곳에서 나온다.
+## 셋을 나란히 놓았던 판(§20.39.3)은 판정을 위한 것이었고, 판정이 끝났으니 화면에는
+## 하나만 선다. 세 칸을 그대로 두면 **어느 것이 이 UI 인지**를 화면이 말하지 않는다.
 ##
 ## **올림은 선택과 같은 축의 절반**이다. 축을 따로 쓰면(선택은 색, 올림은 테두리)
 ## 둘이 안 겹쳐 보이지만 **규칙이 둘**이 되고, 목록이 길면 매번 다시 배워야 한다.
 func _boards() -> void:
-	var wide := (size.x - PAD * 2.0 - GAP * 2.0) / 3.0
-	var corners := [1, 2, 4]
-	for col in 3:
-		var box := Rect2(PAD + float(col) * (wide + GAP), BOARD_TOP, wide, BOARD_TALL)
-		_plate(GraphicCut.clipped(box, 20.0, corners[col] as int), Color(_paper(), 0.10))
-		draw_string(
-			FONT,
-			Vector2(box.position.x + 2.0, box.position.y - 8.0),
-			WAYS[col],
-			HORIZONTAL_ALIGNMENT_LEFT,
-			-1,
-			12,
-			Color(_paper(), 0.55)
-		)
-		match col:
-			0:
-				_rows_face(box)
-			1:
-				_rows_place(box)
-			_:
-				_rows_air(box)
+	var box := Rect2(PAD, BOARD_TOP, 300.0, BOARD_TALL)
+	_plate(GraphicCut.clipped(box, 20.0, 4), Color(_paper(), 0.10))
+	draw_string(
+		FONT,
+		Vector2(box.position.x + 2.0, box.position.y - 8.0),
+		WAYS[way],
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		12,
+		Color(_paper(), 0.55)
+	)
+	match way:
+		0:
+			_rows_face(box)
+		2:
+			_rows_air(box)
+		_:
+			_rows_place(box)
+	_inputs(Rect2(PAD + 314.0, BOARD_TOP, size.x - PAD * 2.0 - 314.0, BOARD_TALL))
 
 
 func _row_box(box: Rect2, i: int, lift: float) -> Rect2:
@@ -619,36 +625,90 @@ func _rows_face(box: Rect2) -> void:
 			_row_text(row, i, Color(_paper(), 0.55))
 
 
-## **자리** — 색을 하나도 안 쓴다. 밀림 · 쐐기 · 어긋난 뒤판뿐이다.
+## **자리** — 확정된 강조 방법 (§20.40.1). 색을 하나도 안 쓴다.
 ##
-## 옮겨 가는 순간이 셋 중 가장 잘 보인다. 대신 **옮겨간 뒤가 가장 약하다** —
-## 목록 전체가 이미 기울어 있어서 16px 밀림이 기울기와 섞인다 (§20.39.6).
+## ## 오른쪽으로 미는 것을 그만뒀다 — 기울기와 섞였다
+##
+## §20.39.6 이 「밀림이 판 기울기와 섞인다」를 약점으로 적었다. 목록의 모든 줄이
+## 이미 오른쪽으로 기운 평행사변형이라 **오른쪽으로 16px 미는 것은 그 줄이 조금 더
+## 기운 것과 구별이 안 된다.** 같은 축 위에서 더 세게 해 봤자 같은 축이다.
+##
+## 축을 둘 바꿨다. 둘 다 **기울기로는 흉내 낼 수 없는 것**이다.
+##
+## | 축 | 나머지 줄 | 올린 줄 | 고른 줄 |
+## | --- | --- | --- | --- |
+## | **기울기 자체** | +0.20 | **0.0 (반듯하다)** | **-0.20 (반대로 기운다)** |
+## | **판 안인가 밖인가** | 안 | 8px 나간다 | **22px 나간다 — 목록 판을 뚫고 나온다** |
+##
+## 기울기를 축으로 삼으면 **밀림과 절대 안 섞인다** — 밀린 줄은 여전히 평행사변형이지만
+## 반대로 기운 줄은 **다른 도형**이다. 그리고 올린 줄이 그 사이(반듯)에 정확히 앉아서
+## 「같은 축의 반」이 자로 잰 듯 나온다.
+##
+## 목록 판 **밖으로 나가는 것**도 기울기가 흉내 낼 수 없다. 나머지 여섯 줄이 전부
+## 판 안에 있는데 하나만 경계를 넘으면, 그건 정도가 아니라 **종류가 다른 것**이다.
 func _rows_place(box: Rect2) -> void:
 	var mark := _marked_row()
 	var over := _hovered_row()
 	for i in ROWS.size():
-		var shift := 0.0
+		var out := 0.0
+		var slant := 0.20
 		if i == mark:
-			shift = 18.0 * _mark_force()
+			out = 22.0 * _mark_force()
+			slant = 0.20 - 0.40 * _mark_force()
 		elif i == over:
-			shift = 7.0 * _hover_force()
+			out = 8.0 * _hover_force()
+			slant = 0.20 - 0.20 * _hover_force()
 		var row := _row_box(box, i, 0.0)
-		row.position.x += shift
-		row.size.x -= shift
-		var shape := GraphicCut.lean(row, 0.20)
+		row.position.x -= out
+		row.size.x += out
+		var shape := GraphicCut.lean(row, slant)
 		if i == mark:
-			# 뒤판을 **왼아래로** 어긋낸다. 밀린 쪽 반대라서 밀림이 두 번 읽힌다 —
-			# 줄이 오른쪽으로 나갔고 뒤에 있던 판이 그만큼 드러났다.
-			_backplate(shape, 0.0, Vector2(-11.0, 5.0) * _mark_force(), _back())
+			# 뒤판은 **오른아래로** 어긋난다. 줄이 왼쪽으로 나갔으니 뒤판은 반대쪽에
+			# 남아, 판 하나가 두 겹이라는 것이 나간 쪽과 남은 쪽 양쪽에서 읽힌다.
+			_backplate(shape, 0.0, Vector2(10.0, 5.0) * _mark_force(), _back())
 			_plate(shape, Color(_paper(), 0.14))
-			var wedge := Rect2(row.position - Vector2(15.0, 0.0), Vector2(9.0, row.size.y))
-			_plate(GraphicCut.fang(wedge, 7.0), _paper())
-			_row_text(row, i, _paper())
+			_place_idle(shape, row)
+			# 쐐기는 줄의 **왼 끝에 물려** 앉는다. 줄 바깥에 따로 세웠더니 나간 줄이
+			# 카드 왼쪽 가장자리에 닿아 **잘린 것처럼** 보였다 — 나간 것과 잘린 것은 다르다.
+			_plate(GraphicCut.fang(Rect2(row.position, Vector2(9.0, row.size.y)), 7.0), _paper())
+			_row_text(row, i, _paper(), 18.0 + out * 0.5)
 		elif i == over:
 			_plate(shape, Color(_paper(), 0.05 * _hover_force()))
-			_row_text(row, i, Color(_paper(), 0.55 + 0.35 * _hover_force()))
+			_row_text(row, i, Color(_paper(), 0.55 + 0.35 * _hover_force()), 18.0 + out * 0.5)
 		else:
 			_row_text(row, i, Color(_paper(), 0.55))
+
+
+## 고른 줄이 **가만히 있을 때** 무엇이 움직이나 (§20.40.2).
+##
+## 「자리」는 형태만 쓰므로 손이 내려가면 **완전히 정지한다** — §20.39.6 이 찾은 구멍이다.
+## idle 규칙(§20.39.2)이 허락하는 것은 **판 안쪽 무늬**와 **판 밖 눈금·숫자** 둘뿐이라
+## 그 둘만 쓴다. 실루엣은 한 픽셀도 안 바뀐다.
+##
+## 무늬를 **면 색이 아니라 미색 10%** 로 까는 것이 중요하다. 색을 쓰면 「면」 방법을
+## 슬쩍 도로 들여오는 것이 되고, 그러면 무엇으로 강조하는지가 다시 흐려진다.
+func _place_idle(shape: PackedVector2Array, row: Rect2) -> void:
+	for bar in GraphicCut.stripes(shape, -PI * 0.28, 20.0, 6.0, _clock * 13.0):
+		_follow(shape, bar, Color(_paper(), 0.10))
+	# 판 **밖** 눈금 셋과 숫자열. `_rig` 와 같은 낱말이라 새 문법이 아니다.
+	for k in 3:
+		var y := row.position.y + 6.0 + float(k) * 7.0
+		var wobble := CelReadout.tick_jitter(k, _clock, 1.4)
+		draw_line(
+			Vector2(row.end.x + 6.0, y),
+			Vector2(row.end.x + 12.0 + wobble, y),
+			Color(_paper(), 0.34),
+			1.0
+		)
+	draw_string(
+		FONT,
+		Vector2(row.position.x + 2.0, row.position.y - 3.0),
+		CelReadout.noise_hex(4, _clock, 3),
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		9,
+		Color(_paper(), 0.42)
+	)
 
 
 ## **여백** — 고른 줄엔 장식이 하나도 없다. **나머지가 어두워지고 물러나는 것**이 강조다.
@@ -678,9 +738,72 @@ func _rows_air(box: Rect2) -> void:
 		_row_text(row, i, Color(_paper(), 0.86 - 0.40 * (veil / 0.62)))
 
 
-## 강조 — **화면 하나에 「지금 여기」는 하나다.** 세 칸의 고름과 다른 층이다.
+## 슬라이더 · 체크 · 「버리기」. 셋 다 기울어 있다.
 ##
-## 아래 세 칸이 가르는 것은 **목록 안에서** 무엇이 골라져 있나(고름)고,
+## **색을 재는 판이라 세 점 색이 다 면으로 있어야 한다** (§20.40.3). 고름은 목록에서
+## 안 쓰기로 했고(자리는 색을 안 쓴다) 험은 창의 닫기 표시 하나뿐이었다 — 그러면
+## 팔레트 여섯 벌을 나란히 놓아도 **두 색은 실 한 오라기로만 보인다.**
+func _inputs(box: Rect2) -> void:
+	_plate(GraphicCut.clipped(box, 22.0, 1), Color(_paper(), 0.10))
+	draw_string(
+		FONT,
+		box.position + Vector2(20.0, 34.0),
+		"소리",
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		14,
+		Color(_paper(), 0.7)
+	)
+
+	var rail := Rect2(box.position.x + 20.0, box.position.y + 46.0, box.size.x - 40.0, 8.0)
+	_plate(GraphicCut.lean(rail, 0.9), Color(_paper(), 0.18))
+	# 값이 차 있는 쪽도 **고름**이다 — 켜진 것과 골라 둔 것과 찬 것은 같은 종류다.
+	_plate(
+		GraphicCut.lean(Rect2(rail.position, Vector2(rail.size.x * 0.62, rail.size.y)), 0.9),
+		_pick()
+	)
+	var knob := Rect2(
+		rail.position.x + rail.size.x * 0.62 - 8.0, rail.position.y - 11.0, 18.0, 30.0
+	)
+	_backplate(GraphicCut.lean(knob, 0.4), 0.04, Vector2(4.0, 4.0), _void())
+	_plate(GraphicCut.lean(knob, 0.4), _paper())
+
+	var tick := Rect2(box.position.x + 20.0, box.position.y + 96.0, 26.0, 26.0)
+	var shape_tick := GraphicCut.lean(tick, 0.22)
+	_backplate(shape_tick, 0.04, Vector2(5.0, 5.0), _void())
+	_plate(shape_tick, _pick())
+	draw_polyline(
+		PackedVector2Array(
+			[
+				tick.position + Vector2(9.0, 13.0),
+				tick.position + Vector2(14.0, 19.0),
+				tick.position + Vector2(24.0, 5.0)
+			]
+		),
+		_ink(_pick()),
+		3.2
+	)
+	draw_string(
+		FONT,
+		Vector2(tick.end.x + 16.0, tick.position.y + 19.0),
+		"전체 화면",
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		15,
+		_paper()
+	)
+
+	# 험 — 되돌릴 수 없는 것. 화면에서 이 색이 면으로 나오는 자리는 여기 하나다.
+	var wipe := Rect2(box.position.x + 20.0, box.end.y - 58.0, box.size.x - 40.0, 38.0)
+	var shape_wipe := GraphicCut.lean(wipe, 0.22)
+	_backplate(shape_wipe, 0.03, Vector2(6.0, 6.0), _void())
+	_plate(shape_wipe, _peril())
+	_shape_text("기록 버리기", wipe, 17, _peril())
+
+
+## 강조 — **화면 하나에 「지금 여기」는 하나다.** 목록의 고름과 다른 층이다.
+##
+## 아래 목록이 가르는 것은 **목록 안에서** 무엇이 골라져 있나(고름)고,
 ## 이 띠는 **화면 전체가 지금 어디에 있나**(신호)다. 층이 달라서 같이 켜져 있어도
 ## 「지금 여기」가 둘이 되지 않는다 — 둘이 같은 층이면 하나를 꺼야 한다 (§20.35.1).
 ##
@@ -712,7 +835,7 @@ func _weak() -> void:
 	draw_string(
 		FONT,
 		Vector2(PAD, size.y - 20.0),
-		"약한 곳 — [자리]는 옮겨간 뒤가, [면]은 옮겨가는 순간이 약하다. [여백]은 어두워진 줄을 못 읽는다",
+		"약한 곳 — 훑는 띠가 판 위를 지날 때 그 줄이 다 밝아진다. 어느 팔레트에서 제일 거슬리나 보는 중",
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		13,
