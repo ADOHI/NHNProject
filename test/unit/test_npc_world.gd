@@ -116,6 +116,20 @@ func test_empty_world_does_not_crash() -> void:
 # ---------------------------------------------------------------- 연줄이 있는 사람
 
 
+func test_the_world_only_ever_gains_relations() -> void:
+	# **판을 돌려도 관계는 줄지 않는다** (사용자, §24.37.1). 사건은 값을 움직이고
+	# 선을 더할 뿐이라 이 수가 한 번이라도 내려가면 어딘가에 지우는 길이 생긴 것이다.
+	#
+	# 태생 관계와 사건이 다 선 뒤부터 센다 — 세우는 중은 당연히 는다.
+	var world := NpcWorld.create(_SEED, _POPULATION)
+	var seen := world.graph.size()
+	for _tick in 30:
+		world.tick(10)
+		assert_gte(world.graph.size(), seen, "관계가 줄었다")
+		seen = world.graph.size()
+	assert_gt(seen, 0)
+
+
 func test_picked_person_has_connections() -> void:
 	# **관계 없는 사람을 길드 대표로 세우면 접선처가 아무도 못 찾는다.**
 	# 인구의 4분의 1이 관계가 없으므로 그냥 뽑으면 넷 중 하나가 그렇게 된다.

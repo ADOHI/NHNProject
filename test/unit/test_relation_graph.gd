@@ -101,6 +101,24 @@ func test_adjust_moves_both_axes() -> void:
 # ---------------------------------------------------------------- 태생은 안 깎인다
 
 
+func test_a_relation_never_disappears() -> void:
+	# **한 번 생긴 선은 안 사라진다** (사용자, §24.37.1). 이 클래스에는 지우는 함수가
+	# 아예 없고, 그것이 이 시스템의 안전 장치다 — 관계도가 흔들리면 그 위에 얹힌
+	# 화면 · 영입 판정 · 렉카 입력이 다 흔들린다.
+	#
+	# **바닥을 쳐도 남는다.** 호감 −100 · 유대 0 은 「모르는 사이」와 다르다 —
+	# 모르는 사이는 슬롯이 없고, 이쪽은 슬롯이 있고 근거 사건이 붙어 있다.
+	var graph := RelationGraph.new(3)
+	graph.link(0, 1, RelationKind.Kind.COMRADESHIP, 60, 40, 7)
+	for _try in 20:
+		graph.adjust(0, 1, -100, -100, RelationKind.Kind.NONE)
+	assert_true(graph.knows(0, 1), "값이 바닥을 쳐도 선은 남는다")
+	assert_eq(graph.size(), 1)
+	assert_eq(graph.affinity(0, 1), RelationGraph.AFFINITY_MIN)
+	assert_eq(graph.bond(0, 1), RelationGraph.BOND_MIN)
+	assert_eq(graph.cause_of(0, 1), 7, "근거 사건도 안 지워진다")
+
+
 func test_inborn_bond_survives_a_betrayal() -> void:
 	# §24.18 의 핵심 — 배신해도 혈연은 혈연이다.
 	var graph := _graph()

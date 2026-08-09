@@ -136,6 +136,47 @@ func test_the_other_side_still_likes_them() -> void:
 		)
 
 
+func test_the_shock_moves_values_and_nothing_else() -> void:
+	# **「넣었다 뺐다」 하면 안 된다** (사용자, §24.37.1). 후유증이 관계를 지우거나
+	# 딱지를 갈아치우면 그 위에 얹힌 화면과 렉카 입력이 판마다 달라진다.
+	# **움직여도 되는 것은 나가는 호감 하나뿐이다.**
+	var world := _world()
+	var guild := _guild(world)
+	var person := _member_with_ties(world, guild)
+	assert_gte(person, 0, "관계가 있는 대원이 있어야 하는 시험이다")
+
+	var before_size := world.graph.size()
+	var others := world.graph.targets_of(person)
+	var bonds := PackedInt32Array()
+	var kinds := PackedInt32Array()
+	for other in others:
+		bonds.append(world.graph.bond(person, other))
+		kinds.append(int(world.graph.kind_of(person, other)))
+
+	ExpeditionAftermath.apply(guild, _report(guild, ExpeditionReport.Outcome.DOWNED))
+
+	assert_gte(world.graph.size(), before_size, "관계가 줄면 안 된다")
+	for slot in others.size():
+		var other := others[slot]
+		assert_true(world.graph.knows(person, other), "선이 남아 있어야 한다")
+		assert_eq(world.graph.bond(person, other), bonds[slot], "유대는 안 움직인다")
+		assert_eq(int(world.graph.kind_of(person, other)), kinds[slot], "딱지는 안 바뀐다")
+
+
+func test_the_knob_value_is_inside_the_distribution() -> void:
+	# **손잡이 값을 아무도 안 맞으면 그것은 「센 쪽」이다** (§24.37.2).
+	# 위는 `test_nobody_takes_the_knob_value_itself` 가 2% 로 막는다 — 아래도 막는다.
+	var world := _world()
+	var same := 0
+	for person in world.registry.size():
+		if (
+			ExpeditionAftermath.shock_for(world.registry.traits_of(person))
+			== ExpeditionAftermath.SHOCK
+		):
+			same += 1
+	assert_gt(same, 0, "손잡이 값을 실제로 맞는 사람이 있어야 한다")
+
+
 func test_escaping_shocks_nobody() -> void:
 	var world := _world()
 	var guild := _guild(world)

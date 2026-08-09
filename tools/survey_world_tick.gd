@@ -40,8 +40,8 @@ func _initialize() -> void:
 
 	print(
 		(
-			"\n%-5s %7s %6s %6s %6s %8s %8s %8s %8s"
-			% ["판", "관계", "중위", "90%", "최대", "세계호감", "외톨이", "한덩어리", "아는얼굴"]
+			"\n%-5s %7s %6s %6s %6s %8s %8s %8s %8s %8s"
+			% ["판", "관계", "중위", "90%", "최대", "세계호감", "대원호감", "외톨이", "한덩어리", "아는얼굴"]
 		)
 	)
 	_row(world, guild, 0)
@@ -118,7 +118,7 @@ func _row(world: NpcWorld, guild: Guild, run: int) -> void:
 
 	print(
 		(
-			"%-5d %7d %6d %6d %6d %8.1f %7.1f%% %7.1f%% %7.1f%%"
+			"%-5d %7d %6d %6d %6d %8.1f %8.1f %7.1f%% %7.1f%% %7.1f%%"
 			% [
 				run,
 				graph.size(),
@@ -126,12 +126,30 @@ func _row(world: NpcWorld, guild: Guild, run: int) -> void:
 				degrees[degrees.size() * 9 / 10],
 				degrees[degrees.size() - 1],
 				float(total) / maxf(float(graph.size()), 1.0),
+				_squad_affinity(graph, ours),
 				100.0 * float(alone) / float(graph.person_count()),
 				100.0 * float(_largest_share(graph)),
 				100.0 * float(met) / float(_ENCOUNTERS),
 			]
 		)
 	)
+
+
+## 대원의 **나가는** 호감 평균. **후유증이 보이는 유일한 자리다** (§24.30.5) —
+## 3000명 중 다섯만 겪으므로 세계 평균으로는 안 보인다.
+##
+## 나가는 쪽인 이유는 후유증이 **그가 남을 보던 눈**을 나쁘게 하기 때문이다
+## (`ExpeditionAftermath`). 남이 그를 보는 눈은 안 바뀐다.
+##
+## **§24.30.5 가 「사용자가 SHOCK 을 정할 때 볼 숫자」라고 적어 놓고 도구가 안 냈다.**
+func _squad_affinity(graph: RelationGraph, ours: PackedInt32Array) -> float:
+	var total := 0
+	var seen := 0
+	for person in ours:
+		for other in graph.targets_of(person):
+			total += graph.affinity(person, other)
+			seen += 1
+	return float(total) / maxf(float(seen), 1.0)
 
 
 ## 가장 큰 덩어리에 든 사람의 비율. **이것이 1 에 닿으면 세계가 한 덩어리다.**
