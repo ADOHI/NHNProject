@@ -2,9 +2,9 @@ class_name NoiseDossier
 extends NoiseScreen
 ## **노이즈 축을 진짜 화면에 얹는다** — 인물 목록 스무 줄 + 인물 상세 한 창.
 ##
-## docs/design/20-ui-kit.md §20.45.
+## docs/design/20-ui-kit.md §20.45 · §20.47.
 ##
-##     godot --path . -s res://tools/capture_pop.gd -- .renders/58-person person
+##     godot --path . -s res://tools/capture_pop.gd -- .renders/62-person person stills
 ##
 ## ## 견본이 아니라 진짜 자료다
 ##
@@ -19,7 +19,7 @@ extends NoiseScreen
 ##
 ## | 상태 | 노이즈 | 화면에서 |
 ## | --- | --- | --- |
-## | `FILLED` | 0.42 | 읽힌다 |
+## | `FILLED` | 0.55 | 읽힌다 |
 ## | `MISSING` | 0.92 | 왜 없는지가 잡음 속에서 겨우 읽힌다 |
 ## | `HIDDEN` | 0.92 + **잡음 조각** | 값 자리에 글자가 아니라 **찢긴 띠**가 있다 |
 ##
@@ -69,9 +69,10 @@ var _graph: RelationGraph
 var _who: PackedInt32Array = PackedInt32Array([0, 0])
 var _sheets: Array = []
 
-## 관계 줄이 화면 어디에 그려졌나. **초점이 그 줄로 넘어갈 때 쓴다** —
+## 관계 줄이 화면 어디에 얼마만큼 그려졌나. **초점이 그 줄로 넘어갈 때 쓴다** —
 ## 자리를 미리 정해 두면 칸이 자라거나 줄어들 때 초점만 딴 데를 가리킨다.
-var _link_at := Vector2(-2000.0, -2000.0)
+## 걷히는 자리가 **줄의 네모를 따라간다** (§20.47.3).
+var _link_box := Rect2(-2000.0, -2000.0, 10.0, 10.0)
 
 
 func screen_size() -> Vector2:
@@ -146,10 +147,12 @@ func _shown() -> int:
 	return 1 if _clock >= MOVE_AT else 0
 
 
-func focus_at() -> Vector2:
+## 강조 띠는 916px 짜리 가로 띠고 관계 줄은 424px 짜리다 — **동그란 걷힘으로는 둘 다
+## 양 끝이 잡음에 박힌다** (§20.47.3).
+func focus_box() -> Rect2:
 	if _link_force() > 0.5:
-		return _link_at
-	return MARK_BOX.get_center()
+		return _link_box
+	return MARK_BOX
 
 
 func _paint_screen() -> void:
@@ -193,7 +196,7 @@ func _list() -> void:
 		var out := 0.0
 		var slant := SLANT * 0.7
 		if i == mark:
-			# 「자리」 — **기울기가 뒤집히고 판 밖으로 나간다.** 노이즈 0.18 과 같이 온다.
+			# 「자리」 — **기울기가 뒤집히고 판 밖으로 나간다.** 맑음(0.00)과 같이 온다.
 			out = 18.0
 			slant = -SLANT * 0.7
 		elif i == over:
@@ -214,7 +217,8 @@ func _list() -> void:
 			say(line, rect.position + Vector2(12.0, 16.0), LINE_SIZE, ink(pick()), noise)
 			continue
 		if i == over:
-			noise = lerpf(Grain.LIVE, Grain.NEAR + 0.10, _hover_force())
+			# 손 아래 있는 줄은 **끝까지 맑아진다** (§20.47.1).
+			noise = lerpf(Grain.LIVE, Grain.NEAR, _hover_force())
 			paint(shape, Color(paper(), 0.10 * _hover_force()), noise)
 		say(line, rect.position + Vector2(12.0, 16.0), LINE_SIZE, paper(), noise)
 
@@ -263,7 +267,7 @@ func _sheet() -> void:
 		Color(paper(), 0.75),
 		Grain.LIVE
 	)
-	_link_at = Vector2(-2000.0, -2000.0)
+	_link_box = Rect2(-2000.0, -2000.0, 10.0, 10.0)
 	var y := top.y + 52.0
 	for title: String in LEFT_TITLES:
 		y = _section(PersonSheet.section_of(sections, title), Vector2(top.x, y), 400.0)
@@ -294,10 +298,10 @@ func _section(section: SheetSection, at: Vector2, wide: float) -> float:
 func _line(field: SheetField, at: Vector2, wide: float) -> float:
 	var noise := Grain.LIVE
 	var linked := field.link != SheetField.NO_LINK
-	if linked and _link_force() > 0.0 and _link_at.x < -1000.0:
+	if linked and _link_force() > 0.0 and _link_box.position.x < -1000.0:
 		# 첫 관계 줄이 눌린 줄이다. **초점이 여기로 온다.**
 		noise = lerpf(Grain.LIVE, Grain.HERE, _link_force())
-		_link_at = Vector2(at.x + wide * 0.5, at.y - 4.0)
+		_link_box = Rect2(at.x - 6.0, at.y - 15.0, wide + 12.0, LINE_STEP)
 		var hit := Rect2(at.x - 6.0 - 10.0 * _link_force(), at.y - 15.0, wide + 12.0, LINE_STEP)
 		paint(
 			GraphicCut.lean(hit, -SLANT * 0.5 * _link_force()),

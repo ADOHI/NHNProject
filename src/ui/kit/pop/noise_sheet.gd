@@ -2,9 +2,9 @@ class_name NoiseSheet
 extends NoiseScreen
 ## **선명함이 곧 주의(注意)다.** 아직 안 본 것은 노이즈고, 보는 순간 또렷해진다.
 ##
-## docs/design/20-ui-kit.md §20.44.
+## docs/design/20-ui-kit.md §20.44 · §20.47.
 ##
-##     godot --path . -s res://tools/capture_pop.gd -- .renders/57-noise noise
+##     godot --path . -s res://tools/capture_pop.gd -- .renders/62-clear noise
 ##
 ## ## 이 화면에 손잡이는 하나다
 ##
@@ -126,11 +126,13 @@ func _mark_force() -> float:
 	return snap(MOVE_BACK, 0.16)
 
 
-## 지금 또렷한 것의 한가운데. **팝업이 열리면 초점이 팝업으로 넘어간다.**
-func focus_at() -> Vector2:
+## 지금 또렷한 것의 네모. **팝업이 열리면 초점이 팝업으로 넘어간다.**
+##
+## 강조 띠는 가로로 608px 이라 **동그란 걷힘으로는 양 끝이 잡음에 박혔다** (§20.47.3).
+func focus_box() -> Rect2:
 	if _pop_force() > 0.5:
-		return POPUP.get_center()
-	return Vector2(CARD.x * 0.5, MARK_TOP + MARK_TALL * 0.5)
+		return POPUP
+	return Rect2(PAD, MARK_TOP, CARD.x - PAD * 2.0, MARK_TALL)
 
 
 func _paint_screen() -> void:
@@ -239,7 +241,9 @@ func _menu() -> void:
 			say(ROWS[i], rect.position + Vector2(16.0, 20.0), 16, ink(pick()), noise)
 			continue
 		if i == over:
-			noise = lerpf(_noise(Grain.LIVE), _noise(Grain.NEAR) + 0.10, _hover_force())
+			# 손이 닿은 줄은 **끝까지 맑아진다.** 「거의 0」에서 멈추면 손 아래 있는 것이
+			# 여전히 떨고, 그것이 앞 판에서 「선명한 것이 맑지 않다」로 보이던 자리다.
+			noise = lerpf(_noise(Grain.LIVE), _noise(Grain.NEAR), _hover_force())
 			paint(shape, Color(paper(), 0.10 * _hover_force()), noise)
 		say(ROWS[i], rect.position + Vector2(16.0, 20.0), 16, paper(), noise)
 

@@ -2,7 +2,7 @@ class_name NoiseScreen
 extends Control
 ## **노이즈 축을 쓰는 화면의 바탕.** 부품 견본이든 진짜 화면이든 여기서 상속받는다.
 ##
-## docs/design/20-ui-kit.md §20.44 · §20.45.
+## docs/design/20-ui-kit.md §20.44 · §20.45 · §20.47.
 ##
 ## ## 왜 바탕 클래스인가
 ##
@@ -16,7 +16,7 @@ extends Control
 ## | --- | --- |
 ## | 크기와 한 바퀴 | `CARD` · `LOOP` 상수 |
 ## | 무엇을 그리나 | `_paint_screen()` 을 덮어쓴다 |
-## | 지금 또렷한 것이 어디인가 | `focus_at()` 을 덮어쓴다 |
+## | 지금 또렷한 것이 어디에 얼마만큼 있나 | `focus_box()` 를 덮어쓴다 |
 
 const FONT := preload("res://assets/fonts/song_myung/SongMyung-Regular.ttf")
 const FIELD := preload("res://src/ui/kit/cel/grain_field.gdshader")
@@ -32,6 +32,13 @@ const BLEED := 3.0
 
 ## 판이 눕는 기본 기울기. **직사각형이 아니다** (§20.28).
 const SLANT := 0.20
+
+## 또렷한 것의 네모 밖으로 알갱이가 얼마나 더 걷히나(px).
+##
+## 부품 크기에 딱 맞추면 **가장자리 바로 옆이 알갱이 한복판**이라 판의 윤곽이 잡음에
+## 물린다. 여유를 여기 한 곳에 두는 이유는 화면마다 더하면 화면마다 맑음의 크기가
+## 달라지고, 그러면 축이 하나라는 말이 거짓이 되기 때문이다 (§20.47.3).
+const CLEAR_PAD := 16.0
 
 ## 색은 `HoloPalette` 한 곳에서만 정해진다 (§20.31). 화면은 번호만 든다.
 var palette := 0:
@@ -103,16 +110,22 @@ func set_clock(t: float) -> void:
 	if _field != null:
 		var stuff := _field.material as ShaderMaterial
 		stuff.set_shader_parameter("clock", t)
-		# **또렷한 것이 어디 있나.** 그 둘레에서 바탕의 알갱이가 걷힌다.
-		stuff.set_shader_parameter("focus", focus_at())
+		# **또렷한 것이 어디에 얼마만큼 있나.** 그 네모 안에서 바탕의 알갱이가 걷힌다.
+		var clear := focus_box().grow(CLEAR_PAD)
+		stuff.set_shader_parameter("focus", clear.get_center())
+		stuff.set_shader_parameter("span", clear.size * 0.5)
 	if _face != null:
 		_face.queue_redraw()
 	queue_redraw()
 
 
-## 지금 또렷한 것의 한가운데. 상속하는 쪽이 덮어쓴다.
-func focus_at() -> Vector2:
-	return screen_size() * 0.5
+## 지금 또렷한 것이 **어디에 얼마만큼** 있나. 상속하는 쪽이 덮어쓴다.
+##
+## 한가운데만 주던 것을 네모로 바꿨다 (§20.47.3). 「지금 여기」는 대개 가로로 긴 띠인데
+## 걷힘이 동그라면 **그 띠의 양 끝이 알갱이에 박힌다** — 부품 자신은 또렷한데 자리가
+## 안 맑다. 맑은 것은 **잡음에 뚫린 구멍 안에** 서 있어야 한다.
+func focus_box() -> Rect2:
+	return Rect2(screen_size() * 0.25, screen_size() * 0.5)
 
 
 ## 무엇을 그리나. 상속하는 쪽이 덮어쓴다.
@@ -177,18 +190,26 @@ func box_of(rect: Rect2) -> PackedVector2Array:
 ## `unit_y` 를 주면 **안 찢고** 그 높이의 띠 밀림만큼 통째로 민다. 글자를 뚫은 판이
 ## 그렇다 — 판과 획이 따로 찢기면 **획이 끊겨 글자를 못 읽는다**(§20.44.5 의 규칙을
 ## 판·글자 한 덩어리에도 그대로 쓴다). 한 덩어리는 **같은 `unit_y`** 를 받아야 한다.
+##
+## **`unit_y` 를 받은 덩어리는 글자다.** 그래서 밀림과 대비를 `Grain.read()` 가 깎은
+## 값으로 받는다(§20.47.2) — 판의 세기를 그대로 받으면 뚫린 획이 바래서 못 읽는다.
+## 깎는 자리를 여기 두는 이유는 **한 덩어리의 조각들이 다른 값을 받으면 갈라지기**
+## 때문이다: 뒤판 · 판 · 획 · 구멍이 부르는 곳이 넷인데 넷 다 같은 폭으로 밀려야 한다.
 func paint(shape: PackedVector2Array, tint: Color, noise: float, unit_y := INF) -> void:
-	var faint := Grain.dim(tint, noise, void_color())
 	if is_inf(unit_y):
+		var faint := Grain.dim(tint, noise, void_color())
 		for piece in Grain.shred(shape, noise, _clock):
 			if piece.size() < 3 or GraphicCut.area_of(piece) < 0.05:
 				continue
 			_face.draw_colored_polygon(piece, faint)
 		return
-	var whole := Grain.moved(shape, Vector2(Grain.slip(Grain.band_of(unit_y), _clock, noise), 0.0))
+	var legible := Grain.read(noise)
+	var whole := Grain.moved(
+		shape, Vector2(Grain.slip(Grain.band_of(unit_y), _clock, legible), 0.0)
+	)
 	if whole.size() < 3 or GraphicCut.area_of(whole) < 0.05:
 		return
-	_face.draw_colored_polygon(whole, faint)
+	_face.draw_colored_polygon(whole, Grain.dim(tint, legible, void_color()))
 
 
 ## 획 하나. **자기 띠의 밀림을 탄다** — 판과 같은 격자라 같은 줄에서 어긋난다.
@@ -204,6 +225,11 @@ func stroke(from: Vector2, to: Vector2, tint: Color, noise: float, wide: float =
 ##
 ## 덩어리째 자기 띠의 밀림을 타고, 노이즈가 크면 **다른 띠의 밀림으로 한 벌 더** 겹친다.
 ## 읽힘의 경계는 노이즈 0.92 다 (§20.44.5).
+##
+## 밀림과 대비는 **판이 받는 값이 아니라 `Grain.read()` 가 깎은 값**을 받는다 (§20.47.2).
+## 흐린 쪽을 더 흐리게 하려고 판의 세기를 올렸는데 글자가 그것을 그대로 받으면
+## 0.92 에서 못 읽는다. **띠 주사위가 같아 방향은 같고 폭만 작다** — 같은 줄에서
+## 같은 쪽으로 어긋나는 것은 그대로다.
 func say(
 	text: String,
 	at: Vector2,
@@ -214,12 +240,13 @@ func say(
 	align: int = HORIZONTAL_ALIGNMENT_LEFT
 ) -> void:
 	var band := Grain.band_of(at.y - float(tall) * 0.4)
-	var faint := Grain.dim(tint, noise, void_color())
+	var legible := Grain.read(noise)
+	var faint := Grain.dim(tint, legible, void_color())
 	var echo := Grain.echo_force(noise)
 	if echo > 0.0:
-		var ghost := Vector2(Grain.slip(band + 2, _clock, noise), 0.0)
+		var ghost := Vector2(Grain.slip(band + 2, _clock, legible), 0.0)
 		_face.draw_string(FONT, at + ghost, text, align, wide, tall, Color(faint, faint.a * echo))
-	var push := Vector2(Grain.slip(band, _clock, noise), 0.0)
+	var push := Vector2(Grain.slip(band, _clock, legible), 0.0)
 	_face.draw_string(FONT, at + push, text, align, wide, tall, faint)
 
 

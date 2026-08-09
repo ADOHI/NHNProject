@@ -2,9 +2,9 @@ class_name NoiseRadial
 extends NoiseScreen
 ## **원형 스쿼드에 노이즈 축을 얹는다** — 가운데만 또렷하고 옆으로 갈수록 잡음이다.
 ##
-## docs/design/20-ui-kit.md §20.45.
+## docs/design/20-ui-kit.md §20.45 · §20.47.
 ##
-##     godot --path . -s res://tools/capture_pop.gd -- .renders/59-ring ring
+##     godot --path . -s res://tools/capture_pop.gd -- .renders/62-ring ring stills
 ##
 ## ## 두 문장이 같은 말을 하고 있었다
 ##
@@ -93,9 +93,21 @@ func _noise_of(index: int) -> float:
 	return lerpf(Grain.LOST, Grain.HERE, sharp)
 
 
-func focus_at() -> Vector2:
-	var front := RadialDeck.front_index(CREW, _picked())
-	return _figure_of(front).get_center()
+## 걷히는 네모 — **맨 앞 사람의 액자와 이름패, 그리고 붙어 있는 창까지.**
+##
+## 액자는 세로로 긴 판이라 걷힘이 동그라면 위아래가 잡음에 박힌다 (§20.47.3).
+## 창을 합치는 이유는 그 창이 **반투명한 판**이라서다 — 노이즈 0 이라 안 찢기는데
+## 뒤의 알갱이가 그대로 비쳐서 **면이 안 매끈했다.** 「맑음」은 부품의 성질만으로는
+## 안 되고 **그 자리의 성질**이기도 하다.
+func focus_box() -> Rect2:
+	var picked := _picked()
+	var front := RadialDeck.front_index(CREW, picked)
+	var box := _figure_of(front)
+	var seat := Rect2(box.position, box.size + Vector2(0.0, PLATE * 1.6))
+	var unfold := RadialDeck.settled(picked)
+	if unfold <= 0.0:
+		return seat
+	return seat.merge(RadialDeck.slot_rect(RadialDeck.Slot.IDENTITY, box, CARD, unfold))
 
 
 func _paint_screen() -> void:
