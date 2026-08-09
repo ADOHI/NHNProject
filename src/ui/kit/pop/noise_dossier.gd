@@ -183,15 +183,6 @@ func _list() -> void:
 			LIST_BOX.size.x - 20.0,
 			ROW_TALL
 		)
-		var person := _person_of(i)
-		var line := (
-			"%s  %d세 %s"
-			% [
-				_registry.name_of(person),
-				_registry.age_of(person),
-				PersonGender.label(_registry.gender_of(person))
-			]
-		)
 		var noise := Grain.LIVE
 		var out := 0.0
 		var slant := SLANT * 0.7
@@ -205,6 +196,7 @@ func _list() -> void:
 		rect.position.x -= out
 		rect.size.x += out
 		var shape := GraphicCut.lean(rect, slant)
+		var tint := paper()
 		if i == mark:
 			noise = Grain.NEAR
 			backplate(shape, 0.0, Vector2(9.0, 4.0), back(), noise)
@@ -214,13 +206,62 @@ func _list() -> void:
 				paper(),
 				noise
 			)
-			say(line, rect.position + Vector2(12.0, 16.0), LINE_SIZE, ink(pick()), noise)
-			continue
-		if i == over:
+			tint = ink(pick())
+		elif i == over:
 			# 손 아래 있는 줄은 **끝까지 맑아진다** (§20.47.1).
 			noise = lerpf(Grain.LIVE, Grain.NEAR, _hover_force())
 			paint(shape, Color(paper(), 0.10 * _hover_force()), noise)
-		say(line, rect.position + Vector2(12.0, 16.0), LINE_SIZE, paper(), noise)
+		_row_text(i, rect, tint, noise)
+
+
+## 줄 하나의 글 — **이름과 나이·성별이 따로 논다** (§20.48).
+##
+## 초점이 정한 값(`seat`)은 「얼마나 보고 있나」고, 아는 정도는 **맑음의 천장**이다.
+## 그래서 고른 줄이어도 **모르는 사람은 안 맑아진다** — 쳐다본다고 알게 되지 않는다.
+##
+## 나이·성별을 모를 때 **빈칸으로 두지 않는다.** 「없다」와 「모른다」를 가른 것이
+## 이 축이 한 일이라(§20.45.2) 되돌리면 안 된다 — 값 자리에 **찢긴 띠**를 놓는다.
+func _row_text(row: int, rect: Rect2, tint: Color, seat: float) -> void:
+	var person := _person_of(row)
+	var tier := _tier_of(row)
+	var name_noise := KnownNoise.over(seat, tier, KnownNoise.Part.NAME)
+	var trait_noise := KnownNoise.over(seat, tier, KnownNoise.Part.TRAIT)
+	var seat_at := rect.position + Vector2(12.0, 16.0)
+	say(_registry.name_of(person), seat_at, LINE_SIZE, tint, name_noise)
+	var told := Vector2(rect.position.x + 96.0, seat_at.y)
+	if not KnownNoise.tells(tier, KnownNoise.Part.TRAIT):
+		paint(
+			GraphicCut.lean(Rect2(told.x, told.y - 11.0, 96.0, 12.0), 0.5),
+			Color(paper(), 0.5),
+			trait_noise
+		)
+		return
+	var told_line := (
+		"%d세 %s" % [_registry.age_of(person), PersonGender.label(_registry.gender_of(person))]
+	)
+	say(told_line, told, LINE_SIZE, tint, trait_noise)
+
+
+## 이 줄의 사람을 **얼마나 아는가** (§20.48).
+##
+## **임시로 줄 번호로 정해 뒀다.** 세 단을 여기서 흉내 내 두는 이유는 **세 단이 다
+## 화면에 있어야 그림이 판정되기** 때문이지 관계 쪽 셈을 다시 하려는 것이 아니다.
+##
+## **관계 쪽 쌍 단위 질의가 이 저장소에 들어오면 이 함수의 속이 그 한 줄로 바뀐다** —
+## 보는 사람과 보이는 사람의 세계 번호 둘을 넘기면 세 단이 나온다. 세계에 번호가
+## 없는 사람은 `STRANGER` 로 그린다.
+##
+## > **유명세 문턱을 여기서 읽지 마라.** 무엇이 「들어 본 이름」인지는 관계 쪽이 정한다.
+##
+## 비율은 관계 쪽 실측에 맞췄다 — 겪어서 아는 얼굴 3/20(15%) · 들어 본 이름 5/20(25%).
+## 고른 줄(3)은 겪어서 아는 사람이고 **나중에 고르는 줄(12)은 들어 본 이름**이다:
+## 「고른 줄인데 나이·성별이 안 읽힌다」가 이 화면의 물음이다.
+func _tier_of(row: int) -> KnownNoise.Tier:
+	if row in [ROW_FIRST, 7, 15]:
+		return KnownNoise.Tier.KNOWN
+	if row in [1, 5, 9, ROW_NEXT, 18]:
+		return KnownNoise.Tier.HEARD_OF
+	return KnownNoise.Tier.STRANGER
 
 
 ## 이 줄이 누구인가. **고른 줄과 상세가 같은 사람이어야 한다** — 목록은 줄 번호로
