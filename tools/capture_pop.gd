@@ -48,6 +48,11 @@ var _stills_only := false
 var _tier_sweep := false
 var _tier := 1
 
+## 강조를 **선명함만**으로 할 것인가, **선명함 + 자리**로 할 것인가를 나란히 뽑는다
+## (§20.44.6). 확정된 「자리」와 새 컨셉이 같은 일을 하므로 견줘서 하나를 내린다.
+var _place_sweep := false
+var _place := 0
+
 ## 안마다 크기와 한 바퀴가 다르다. **여기서 하나로 정하면 안이 늘 때 조용히 잘린다.**
 var _card := Vector2(660.0, 700.0)
 var _loop := 4.0
@@ -65,6 +70,7 @@ func _initialize() -> void:
 	if args.size() > 2:
 		_stills_only = args[2] == "stills"
 		_tier_sweep = args[2] == "tiers"
+		_place_sweep = args[2] == "place"
 	_sheet = _pick()
 	if _sheet == null:
 		push_error("모르는 안: %s" % _which)
@@ -81,6 +87,10 @@ func _initialize() -> void:
 
 func _pick() -> Control:
 	match _which:
+		"noise":
+			_card = NoiseSheet.CARD
+			_loop = NoiseSheet.LOOP
+			return NoiseSheet.new()
 		"slash":
 			_card = SlashSheet.CARD
 			_loop = SlashSheet.LOOP
@@ -139,6 +149,17 @@ func _process(_delta: float) -> bool:
 		print("%d 단: %s_t%d.png" % [_tier, _prefix, _tier])
 		_tier += 1
 		return _tier > 5
+	if _place_sweep:
+		_sheet.set("palette", PICK)
+		_sheet.call("set_clock", STILL_AT)
+		_sheet.set("place", _place == 1)
+		if _posed != 200 + _place:
+			_posed = 200 + _place
+			return false
+		_stage.get_texture().get_image().save_png("%s_p%d.png" % [_prefix, _place])
+		print("자리 %d: %s_p%d.png" % [_place, _prefix, _place])
+		_place += 1
+		return _place > 1
 	if not _still_done:
 		_still_done = _stills()
 		return false
