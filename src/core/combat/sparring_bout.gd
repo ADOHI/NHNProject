@@ -48,11 +48,18 @@ var _elapsed := 0.0
 var _next_index := 0
 var _settle_left := 0.0
 
+## 각 타가 **떨어지는 시각**(누적). 무기마다 다르므로 미리 쌓아 둔다.
+var _due_times: PackedFloat32Array = PackedFloat32Array()
+
 
 func _init(items: Array[BackpackItem], tuning: BreakTuning = null) -> void:
 	_items = items.duplicate()
 	_tuning = tuning if tuning != null else BreakTuning.new()
 	_gauge = BreakGauge.new(_tuning)
+	var running := 0.0
+	for item in _items:
+		running += _tuning.strike_seconds_for(item)
+		_due_times.append(running)
 
 
 ## 체인 하나를 그대로 받아 판을 만든다.
@@ -94,7 +101,7 @@ func tick(delta: float) -> void:
 func _advance_swings(delta: float) -> void:
 	var remaining := delta
 	while remaining > 0.0 and _next_index < _items.size():
-		var due := float(_next_index) * _tuning.seconds_per_hit
+		var due := _due_times[_next_index]
 		if _elapsed + remaining < due:
 			break
 		# 그 타의 시각까지만 눈금을 흘리고 나서 때린다.
@@ -154,8 +161,9 @@ func elapsed() -> float:
 	return _elapsed
 
 
-## 이 체인이 몇 초짜리인가. **타 간격이 사람이 느끼는 속도가 되는 지점이다.**
+## 이 체인이 몇 초짜리인가. **무기 구성에 따라 달라진다** —
+## 1칸 다섯 개짜리 체인과 4칸 다섯 개짜리 체인은 길이가 전혀 다르다.
 func swing_seconds() -> float:
-	if _items.size() <= 1:
+	if _due_times.is_empty():
 		return 0.0
-	return float(_items.size() - 1) * _tuning.seconds_per_hit
+	return _due_times[_due_times.size() - 1]

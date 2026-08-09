@@ -33,8 +33,19 @@ var knockdown_at: float = 100.0
 ## 초당 빠지는 양. **미정 중의 미정이다** (§28.8 「무너짐 회복」).
 var decay_per_second: float = 20.0
 
-## 한 타와 다음 타 사이의 시간. 체인이 도는 속도다.
-var seconds_per_hit: float = 0.35
+## 검이 닿기까지 걸리는 시간 = `anticipate + strike`. **무기 부피에서 나온다.**
+##
+## 상수로 박으면 안 된다 — 캐릭터 애니 레인이 실측한 값이 **1칸 0.23초 · 4칸 0.71초**다.
+## 「입력 뒤 0.2초에 판정」 같은 상수를 쓰면 4칸에서 **검이 아직 머리 위에 있을 때
+## 적이 날아간다.**
+##
+## 두 값에 직선을 맞춘 것이다: `0.07 + 0.16 * 칸수`
+## (1칸 0.23 · 2칸 0.39 · 3칸 0.55 · 4칸 0.71).
+##
+## **애니 쪽이 `anticipate + strike` 를 내주고 우리가 그것을 읽는다** 는 규약이다.
+## 아직 코드로 잇지 않았다 (§28.20.25). 이으면 이 두 상수가 없어진다.
+var strike_base: float = 0.07
+var strike_per_cell: float = 0.16
 
 ## 한 타의 기본 무게.
 var poise_base: float = 6.0
@@ -59,6 +70,14 @@ func _init(p_decay_per_second: float = 20.0) -> void:
 ## 수치를 손으로 붙일 필요가 없고, 무엇보다 **부피와 무게가 어긋날 수 없다.**
 func poise_for(item: BackpackItem) -> float:
 	return poise_base + poise_per_cell * float(item.shape.size())
+
+
+## 이 무기가 한 번 휘둘러 **검이 닿기까지** 걸리는 시간.
+##
+## 무거운 것이 느리다. 그래서 4칸 철퇴가 1칸 단검과 같은 박자로 때리지 않는다 —
+## **무거운 게 무겁게 보여야 무거운 값이 납득된다.**
+func strike_seconds_for(item: BackpackItem) -> float:
+	return strike_base + strike_per_cell * float(item.shape.size())
 
 
 ## 그 눈금이 어느 단계인가.

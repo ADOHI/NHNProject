@@ -51,8 +51,8 @@ const _DONE_LINE := Color(0.52, 0.86, 0.56)
 const _TAG_TOP_MARGIN := 96.0
 
 ## 대련장 자리. 글자판 아래의 빈 곳이다.
-const ARENA_CENTER_X := 1000.0
-const ARENA_GROUND := 640.0
+const ARENA_CENTER_X := 1150.0
+const ARENA_GROUND := 655.0
 const _LOOT_FILL := Color(0.33, 0.33, 0.31)
 const _TEXT := Color(0.93, 0.95, 0.98)
 const _DIM_TEXT := Color(0.62, 0.66, 0.72)
@@ -740,18 +740,9 @@ func _gauge_caption(shown: float, peak_value: float, highest: BreakState.Kind) -
 func _draw_arena() -> void:
 	var font := get_theme_default_font()
 	var ground := ARENA_GROUND
-	draw_string(
-		font,
-		Vector2(ARENA_CENTER_X - 110.0, ground - 190.0),
-		"대련장    F: 체인 발사",
-		HORIZONTAL_ALIGNMENT_LEFT,
-		-1.0,
-		15,
-		_TEXT
-	)
 	draw_line(
-		Vector2(ARENA_CENTER_X - 130.0, ground),
-		Vector2(ARENA_CENTER_X + 130.0, ground),
+		Vector2(ARENA_CENTER_X - 100.0, ground),
+		Vector2(ARENA_CENTER_X + 100.0, ground),
 		_CELL_LINE,
 		2.0
 	)
@@ -787,9 +778,20 @@ func _draw_arena() -> void:
 	draw_colored_polygon(points, _state_color(state))
 	draw_polyline(points + PackedVector2Array([points[0]]), _TEXT, 2.0)
 
+	# 글자는 **바닥선 아래 한 줄**로 모은다. 위에 두었더니 체인 목록과 겹쳤다 —
+	# 18타짜리를 쐈을 때 캡처에서 드러났다.
 	draw_string(
 		font,
-		Vector2(ARENA_CENTER_X - 110.0, ground + 26.0),
+		Vector2(ARENA_CENTER_X - 100.0, ground + 24.0),
+		"대련장 (F)",
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1.0,
+		14,
+		_DIM_TEXT
+	)
+	draw_string(
+		font,
+		Vector2(ARENA_CENTER_X - 10.0, ground + 24.0),
 		BreakState.label(state),
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1.0,

@@ -13,6 +13,9 @@ extends Control
 ## 표본을 세우고, 격자가 바뀌면 해석기를 돌리고, 결과를 글자로 적는다.
 ## 규칙은 하나도 여기 없다 — 전부 `src/core/combat/` 에 있다.
 
+## 글자판에 한 줄씩 적을 최대 타 수. 넘으면 줄여 적는다.
+const _MAX_LISTED_STEPS := 8
+
 var _grid: BackpackGrid
 
 ## 무너짐 수치들. **확정이 아니다** (§28.8). 여기서 갈아 끼우면 화면이 따라온다.
@@ -122,7 +125,12 @@ func _one_chain_text(chain: ChainResult, number: int) -> PackedStringArray:
 		lines.append("    비어 있다. 시작 노드에 아이템을 놓아라.")
 		return lines
 
+	# **긴 체인은 줄여서 적는다.** 18타짜리를 다 적으면 글자판이 대련장을 덮는다.
+	# 실제로 캡처에서 겹쳤다.
 	for step in chain.steps.size():
+		if step >= _MAX_LISTED_STEPS and chain.steps.size() > _MAX_LISTED_STEPS + 1:
+			lines.append("    ... 외 %d타" % (chain.steps.size() - _MAX_LISTED_STEPS))
+			break
 		lines.append("    %d.  %s" % [step + 1, _step_text(chain.steps[step])])
 
 	lines.append("")

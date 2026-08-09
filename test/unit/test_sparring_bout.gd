@@ -28,6 +28,25 @@ func _pip(id: String) -> BackpackItem:
 	)
 
 
+## 1칸 무기 한 번 휘두르는 데 걸리는 시간. 테스트가 상수를 따로 안 적는다.
+func _strike(tuning: BreakTuning, cells: int = 1) -> float:
+	return tuning.strike_seconds_for(_sized(cells))
+
+
+func _sized(cells: int) -> BackpackItem:
+	var shape: Array[Vector2i] = []
+	for index in cells:
+		shape.append(Vector2i(index, 0))
+	return ItemScript.new(
+		"s%d" % cells,
+		"무기%d" % cells,
+		BackpackItem.Kind.WEAPON,
+		shape,
+		Vector2i(0, 0),
+		ChainDirection.Kind.RIGHT
+	)
+
+
 func _items(count: int) -> Array[BackpackItem]:
 	var items: Array[BackpackItem] = []
 	for index in count:
@@ -61,17 +80,20 @@ func test_hits_land_one_at_a_time() -> void:
 	assert_eq(bout.landed(), 0, "시작만 하고 시간이 안 흘렀으면 아직이다")
 
 	bout.tick(0.001)
-	assert_eq(bout.landed(), 1, "첫 타는 곧바로 나간다")
+	assert_eq(bout.landed(), 0, "휘두르는 시간이 지나야 닿는다")
 
-	bout.tick(tuning.seconds_per_hit)
-	assert_eq(bout.landed(), 2, "타 간격마다 하나씩")
+	bout.tick(_strike(tuning))
+	assert_eq(bout.landed(), 1, "한 번 휘두른 만큼 지나면 첫 타가 닿는다")
+
+	bout.tick(_strike(tuning))
+	assert_eq(bout.landed(), 2)
 
 
 func test_hits_do_not_all_land_at_once() -> void:
 	var tuning := _tuning()
 	var bout := BoutScript.new(_items(6), tuning)
 	bout.start()
-	bout.tick(tuning.seconds_per_hit * 2.5)
+	bout.tick(_strike(tuning) * 3.5)
 	assert_true(bout.landed() < 6, "한 번에 다 나가면 실시간이 아니다")
 	assert_eq(bout.landed(), 3)
 
@@ -80,11 +102,46 @@ func test_it_reports_how_long_the_chain_takes() -> void:
 	# 타 간격이 사람이 느끼는 속도가 되는 지점이다.
 	var tuning := _tuning()
 	var bout := BoutScript.new(_items(5), tuning)
-	assert_almost_eq(bout.swing_seconds(), tuning.seconds_per_hit * 4.0, 0.001)
+	assert_almost_eq(bout.swing_seconds(), _strike(tuning) * 5.0, 0.001)
 
 
-func test_a_single_hit_chain_takes_no_time() -> void:
-	assert_eq(BoutScript.new(_items(1), _tuning()).swing_seconds(), 0.0)
+func test_a_heavy_chain_takes_longer_than_a_light_one() -> void:
+	# **무거운 것이 느리다.** 4칸 철퇴가 1칸 단검과 같은 박자로 때리면 안 된다.
+	var tuning := _tuning()
+	var light: Array[BackpackItem] = []
+	var heavy: Array[BackpackItem] = []
+	for _index in 5:
+		light.append(_sized(1))
+		heavy.append(_sized(4))
+	var light_bout := BoutScript.new(light, tuning)
+	var heavy_bout := BoutScript.new(heavy, tuning)
+	assert_true(
+		heavy_bout.swing_seconds() > light_bout.swing_seconds() * 2.0,
+		"4칸 다섯 타가 1칸 다섯 타의 두 배는 넘게 걸려야 한다"
+	)
+
+
+func test_strike_time_grows_with_volume() -> void:
+	# 캐릭터 애니 레인 실측: 1칸 0.23초 · 4칸 0.71초.
+	var tuning := _tuning()
+	assert_almost_eq(tuning.strike_seconds_for(_sized(1)), 0.23, 0.005)
+	assert_almost_eq(tuning.strike_seconds_for(_sized(4)), 0.71, 0.005)
+	assert_true(
+		tuning.strike_seconds_for(_sized(2)) < tuning.strike_seconds_for(_sized(3)),
+		"칸이 늘면 단조롭게 느려진다"
+	)
+
+
+func test_a_mixed_chain_sums_each_weapons_own_time() -> void:
+	var tuning := _tuning()
+	var mixed: Array[BackpackItem] = [_sized(1), _sized(4), _sized(2)]
+	var bout := BoutScript.new(mixed, tuning)
+	var expected := (
+		tuning.strike_seconds_for(_sized(1))
+		+ tuning.strike_seconds_for(_sized(4))
+		+ tuning.strike_seconds_for(_sized(2))
+	)
+	assert_almost_eq(bout.swing_seconds(), expected, 0.001)
 
 
 # ---------------------------------------------------------------- 계산기와 같아야 한다
@@ -113,7 +170,7 @@ func test_it_matches_even_when_frames_are_lumpy() -> void:
 	for _frame in 200:
 		if not lumpy.is_running():
 			break
-		lumpy.tick(tuning.seconds_per_hit * 2.7)
+		lumpy.tick(_strike(tuning) * 2.7)
 
 	assert_eq(lumpy.landed(), 8, "타가 사라지면 안 된다")
 	assert_almost_eq(lumpy.peak(), expected.peak, 0.5, "프레임이 튀어도 결과가 같아야 한다")

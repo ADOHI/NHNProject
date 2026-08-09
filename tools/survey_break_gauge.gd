@@ -23,8 +23,14 @@ func _initialize() -> void:
 	var tuning := BreakTuning.new()
 	print(
 		(
-			"문턱: 경직 %.0f · 띄우기 %.0f · 쓰러짐 %.0f · 타 간격 %.2f초"
-			% [tuning.stagger_at, tuning.launch_at, tuning.knockdown_at, tuning.seconds_per_hit]
+			"문턱: 경직 %.0f, 띄우기 %.0f, 쓰러짐 %.0f   검이 닿기까지 1칸 %.2f초 / 4칸 %.2f초"
+			% [
+				tuning.stagger_at,
+				tuning.launch_at,
+				tuning.knockdown_at,
+				tuning.strike_seconds_for(_uniform_item(1)),
+				tuning.strike_seconds_for(_uniform_item(4)),
+			]
 		)
 	)
 	print("**이 수치는 확정이 아니다.** 정할 때 보라고 내는 표다.")
@@ -50,7 +56,9 @@ func _report_thresholds() -> void:
 	print("  %-12s %-10s %-10s %-10s %s" % ["초당 빠짐", "경직", "띄우기", "쓰러짐", "한 타 순증"])
 	for decay in _DECAYS:
 		var tuning := BreakTuning.new(decay)
-		var gain := tuning.poise_for(_uniform_item(1)) - decay * tuning.seconds_per_hit
+		var gain := (
+			tuning.poise_for(_uniform_item(1)) - decay * tuning.strike_seconds_for(_uniform_item(1))
+		)
 		print(
 			(
 				"  %-12s %-10s %-10s %-10s %+.1f"
@@ -119,7 +127,9 @@ func _report_cliff() -> void:
 	print("  %-16s %-14s %s" % ["무기 크기", "한계 빠짐 속도", "초당 40 에서"])
 	for cells: int in [1, 2, 3, 4]:
 		var tuning := BreakTuning.new(40.0)
-		var limit := tuning.poise_for(_uniform_item(cells)) / tuning.seconds_per_hit
+		var limit := (
+			tuning.poise_for(_uniform_item(cells)) / tuning.strike_seconds_for(_uniform_item(cells))
+		)
 		print(
 			(
 				"  %-16s %-14s %s"
@@ -131,8 +141,46 @@ func _report_cliff() -> void:
 			)
 		)
 	print("")
-	print("  **같은 빠짐 속도에서 작은 무기는 죽고 큰 무기는 산다.**")
-	print("  빠짐 속도를 올리는 것은 난이도가 아니라 무기 선택을 좁히는 것이다.")
+	print("  **뒤집혔다.** 타 간격이 상수였을 때는 1칸 29 / 4칸 63 이라 큰 무기가 강했다.")
+	print("  휘두르는 시간을 부피에서 뽑자 1칸 43 / 4칸 31 이 됐다 — **작은 무기가 더 강하다.**")
+	print("  무게는 10->22 (2.2배) 인데 시간은 0.23->0.71 (3.1배) 라 초당 무게가 오히려 떨어진다.")
+	print("  (오른쪽 칸의 「안 된다」는 %d타 안에 못 넘겼다는 뜻이다. 1칸은 순증 +0.8 이라 더 치면 된다.)" % _MAX_HITS)
+	print("")
+	_report_proportional_weight()
+
+
+## **큰 무기가 값을 하려면 무게가 최소한 시간에 비례해야 한다.**
+##
+## 지금은 아니다. 그래서 큰 무기는 칸도 더 먹고, 시간도 더 걸리고, 감쇠에도 더 약하다 —
+## **쓸 이유가 없다.**
+##
+## 아래는 「무게를 시간에 비례시키면 어떻게 되는가」를 재 본 것이다.
+## **값을 바꾼 것이 아니다.** 정할 때 보라고 내는 표다 (§28.5 수치는 전부 미정).
+func _report_proportional_weight() -> void:
+	print("== 만약 무게를 휘두르는 시간에 비례시키면 (제안이지 채택이 아니다) ==")
+	var reference := BreakTuning.new()
+	# 1칸 무게를 그대로 두고 시간에 비례하도록 기울기를 잡는다.
+	var rate := (
+		reference.poise_for(_uniform_item(1)) / reference.strike_seconds_for(_uniform_item(1))
+	)
+	print("  %-10s %-14s %-14s %s" % ["무기", "지금 무게", "비례시킨 무게", "한계 빠짐 속도"])
+	for cells: int in [1, 2, 3, 4]:
+		var item := _uniform_item(cells)
+		var proposed := rate * reference.strike_seconds_for(item)
+		print(
+			(
+				"  %-10s %-14s %-14s %s"
+				% [
+					"%d칸" % cells,
+					"%.0f" % reference.poise_for(item),
+					"%.0f" % proposed,
+					"초당 %.0f" % (proposed / reference.strike_seconds_for(item)),
+				]
+			)
+		)
+	print("")
+	print("  그러면 한계가 전부 같아지고 부피 축이 **평평해진다** — 절벽이 무기를 안 고른다.")
+	print("  대신 큰 무기의 값은 「적은 타로 끝낸다」와 「칸을 먹는다」로만 남는다.")
 	print("")
 
 
@@ -157,25 +205,37 @@ func _report_gap() -> void:
 func _report_duration() -> void:
 	var tuning := BreakTuning.new()
 	print("")
-	print("== 체인이 몇 초짜리인가 (타 간격 %.2f초) ==" % tuning.seconds_per_hit)
-	for hits: int in [2, 3, 5, 8, 10, 12]:
-		var items: Array[BackpackItem] = []
-		for _index in hits:
-			items.append(_uniform_item(1))
-		var bout := SparringBout.new(items, tuning)
+	print("== 체인이 몇 초짜리인가 — **무기 구성에 따라 다르다** ==")
+	print("  %-10s %-12s %-12s %s" % ["체인 길이", "1칸만", "4칸만", "번갈아"])
+	for hits: int in [2, 3, 5, 8, 10]:
 		print(
 			(
-				"  %2d타   %.2f초   (마무리 관찰 %.1f초 포함하면 %.2f초)"
+				"  %-10s %-12s %-12s %s"
 				% [
-					hits,
-					bout.swing_seconds(),
-					SparringBout.SETTLE_SECONDS,
-					bout.swing_seconds() + SparringBout.SETTLE_SECONDS
+					"%d타" % hits,
+					"%.2f초" % _duration(tuning, hits, 1),
+					"%.2f초" % _duration(tuning, hits, 4),
+					"%.2f초" % _mixed_duration(tuning, hits),
 				]
 			)
 		)
 	print("")
-	print("  타 간격을 바꾸면 이 표 전체가 움직인다. 무너짐 문턱과 함께 봐야 한다.")
+	print("  **같은 5타라도 무기에 따라 길이가 세 배 갈린다.** 「5타 = 1.4초」는 이제 틀렸다.")
+
+
+func _duration(tuning: BreakTuning, hits: int, cells: int) -> float:
+	var items: Array[BackpackItem] = []
+	for _index in hits:
+		items.append(_uniform_item(cells))
+	return SparringBout.new(items, tuning).swing_seconds()
+
+
+## 1칸과 4칸을 번갈아 놓은 체인.
+func _mixed_duration(tuning: BreakTuning, hits: int) -> float:
+	var items: Array[BackpackItem] = []
+	for index in hits:
+		items.append(_uniform_item(1 if index % 2 == 0 else 4))
+	return SparringBout.new(items, tuning).swing_seconds()
 
 
 func _uniform_item(cells: int) -> BackpackItem:

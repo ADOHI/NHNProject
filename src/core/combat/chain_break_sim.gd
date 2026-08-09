@@ -35,12 +35,12 @@ static func run_items(items: Array[BackpackItem], tuning: BreakTuning = null) ->
 	var gauge := BreakGauge.new(rules)
 	var outcome := ChainBreakOutcome.new()
 
-	for index in items.size():
-		gauge.hit_with(items[index])
+	# **한 타의 시간은 그 무기의 것이다** — 휘두르는 동안 눈금이 빠지고, 그 끝에 닿는다.
+	# 무거운 무기는 세게 치지만 그만큼 오래 걸려서 그동안 더 빠진다.
+	for item in items:
+		gauge.tick(rules.strike_seconds_for(item))
+		gauge.hit_with(item)
 		outcome.record(gauge.value(), gauge.state())
-		# 마지막 타 뒤에는 흘리지 않는다.
-		if index < items.size() - 1:
-			gauge.tick(rules.seconds_per_hit)
 	return outcome
 
 

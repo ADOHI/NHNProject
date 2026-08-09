@@ -82,23 +82,35 @@ func _build_shots() -> Array:
 		["07_out_of_bounds", _stage_out_of_bounds, false],
 		["08_loop", _stage_loop, false],
 		["09_heavy_ready", _stage_heavy_chain, false],
-		["10_bout_early", _fire, false, 0.15],
-		["11_bout_mid", _wait, false, 0.80],
-		["12_bout_launch", _wait, false, 1.50],
-		["13_bout_settled", _wait, false, 4.20],
+		["10_bout_early", _fire, false, 0.5],
+		["11_bout_mid", _wait, false, 1.6],
+		["12_bout_launch", _wait, false, 3.0],
+		["13_bout_settled", _wait, false, 6.5],
 	]
 
 
-## 2x2 무거운 무기를 뱀처럼 이어 붙인다. 표본 5타는 경직까지밖에 안 가서
+## 1칸 무기를 뱀처럼 길게 이어 붙인다. 표본 5타는 경직까지밖에 안 가서
 ## **띄우기가 화면에서 어떻게 보이는지**를 못 본다.
+##
+## **처음에는 2x2 무거운 무기로 짰는데 띄우기에 못 닿았다.** 휘두르는 시간을
+## 부피에서 뽑고 나니(§28.20.25) 4칸은 한 방 22 에 0.71초가 걸려 **초당 31** 이고,
+## 초당 20 이 빠지는 판에서는 다섯 타로 53 까지밖에 안 찬다.
+## 1칸은 **초당 43** 으로 오히려 세다.
+##
+## **이 장면이 뒤집힌 절벽의 증거다.**
 func _stage_heavy_chain() -> void:
 	var grid: BackpackGrid = _screen._grid
 	grid.clear()
-	grid.place(_square("망치1", ChainDirection.Kind.RIGHT, Vector2i(1, 0)), Vector2i(0, 0))
-	grid.place(_square("망치2", ChainDirection.Kind.RIGHT, Vector2i(1, 0)), Vector2i(2, 0))
-	grid.place(_square("망치3", ChainDirection.Kind.DOWN, Vector2i(1, 1)), Vector2i(4, 0))
-	grid.place(_square("망치4", ChainDirection.Kind.DOWN, Vector2i(1, 1)), Vector2i(4, 2))
-	grid.place(_square("망치5", ChainDirection.Kind.DOWN, Vector2i(1, 1)), Vector2i(4, 4))
+	var index := 0
+	for row in 3:
+		var going_right := row % 2 == 0
+		for column in grid.width:
+			var x := column if going_right else grid.width - 1 - column
+			var direction := ChainDirection.Kind.DOWN
+			if column < grid.width - 1:
+				direction = (ChainDirection.Kind.RIGHT if going_right else ChainDirection.Kind.LEFT)
+			index += 1
+			grid.place(_weapon("검%d" % index, direction), Vector2i(x, row))
 	_screen._refresh()
 
 
@@ -109,11 +121,6 @@ func _fire() -> void:
 
 func _wait() -> void:
 	pass
-
-
-func _square(name: String, direction: ChainDirection.Kind, out_cell: Vector2i) -> BackpackItem:
-	var shape: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]
-	return BackpackItem.new(name, name, BackpackItem.Kind.WEAPON, shape, out_cell, direction)
 
 
 ## 시작 아이템이 격자 밖을 가리키는 상황. 「빈 칸」과 다르게 보여야 한다.
