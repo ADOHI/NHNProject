@@ -53,6 +53,19 @@ enum TargetChoice {
 	LEADER_FIRST,  ## **우두머리부터** — 사람 무리는 그 하나로 끝난다 (§28.10 · §28.20.44)
 }
 
+## **우두머리를 어떻게 아나** (§28.20.47).
+##
+## §28.20.44 가 *"노리지 않으면 우두머리 조건은 전원 조건과 구별되지 않는다"* 로 끝났다.
+## 그러면 **노릴 수 있느냐가 먼저**고, 그 앞에 **알 수 있느냐**가 있다.
+## **모르면 못 노린다.**
+##
+## **정하지 않는다.** 셋을 다 만들어 두고 `tools/survey_leader_targeting.gd` 가 잰다.
+enum LeaderKnowledge {
+	VISIBLE,  ## 보인다 — 처음부터 안다
+	ON_HIT,  ## 때려 봐야 안다 — 한 대라도 맞혀야 드러난다
+	HIDDEN,  ## 아예 모른다 — 노릴 수가 없다
+}
+
 ## **미정이다.** 애니 레인이 둘 다 만들어 사용자에게 보냈고 사용자가 정한다.
 ##
 ## 그래서 **둘 다 되게 해 두고 값은 박지 않는다.** 확인 화면에서 T 로 바꿔 가며
@@ -63,6 +76,9 @@ var advance_mode: AdvanceMode = AdvanceMode.RETURN
 ##
 ## 넷을 다 만들어 뒀고 **기본값은 지금까지의 동작**이다. 고르는 것은 사용자다.
 var target_choice: TargetChoice = TargetChoice.NEAREST
+
+## **미정이다** (§28.20.47). 기본값은 **보인다** — 지금까지 잰 표가 그 판이다.
+var leader_knowledge: LeaderKnowledge = LeaderKnowledge.VISIBLE
 
 ## 1픽셀 = 1단위. 화면 좌표와 같은 축을 쓴다 (오른쪽이 +).
 var attacker_x: float = 0.0

@@ -419,12 +419,24 @@ func _sorted_by(candidates: PackedInt32Array, score: Callable) -> PackedInt32Arr
 	return out
 
 
-## 그 적이 이 무리의 우두머리인가.
+## 그 적이 이 무리의 우두머리인가 — **그리고 우리가 그것을 아는가** (§28.20.47).
+##
+## **모르면 못 노린다.** 아는 방법이 정해지지 않았으므로 필드가 손잡이로 들고 있고,
+## 여기서는 그 손잡이를 물어볼 뿐이다.
 func _is_leader(enemy: int) -> bool:
 	if _field == null:
 		return false
 	var stood := _field.enemy_at(enemy)
-	return stood != null and stood.is_leader
+	if stood == null or not stood.is_leader:
+		return false
+	match _field.leader_knowledge:
+		SparringField.LeaderKnowledge.HIDDEN:
+			return false
+		SparringField.LeaderKnowledge.ON_HIT:
+			# 한 대라도 맞혀 봐야 드러난다. 그 전까지는 그냥 적 하나다.
+			return _taken_by(enemy) > 0
+		_:
+			return true
 
 
 ## 그 적이 지금까지 몇 대 맞았나.

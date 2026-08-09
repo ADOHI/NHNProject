@@ -235,3 +235,27 @@ func test_leader_first_goes_for_the_one_at_the_back() -> void:
 	Fixtures.run_to_end(bout)
 	assert_eq(bout.enemy_gauge(2).peak_state(), BreakState.Kind.KNOCKDOWN, "맨 뒤 우두머리를 먼저 눕힌다")
 	assert_eq(bout.enemy_gauge(0).peak(), 0.0, "가까운 적은 아직 안 맞았다")
+
+
+func test_a_hidden_leader_cannot_be_targeted() -> void:
+	# **모르면 못 노린다** (§28.20.47). 규칙이 있어도 대상을 모르면 거리순으로 떨어진다.
+	var field := Fixtures.crowd(NEAR, TIGHT, 3)
+	field.enemy_at(2).is_leader = true
+	field.target_choice = SparringField.TargetChoice.LEADER_FIRST
+	field.leader_knowledge = SparringField.LeaderKnowledge.HIDDEN
+	var bout := BoutScript.from_squad(_squad(1, 40), _tuning(0.0), field)
+	bout.start()
+	Fixtures.run_to_end(bout)
+	assert_true(bout.enemy_gauge(0).peak() > 0.0, "모르면 가까운 것부터 친다")
+
+
+func test_a_leader_learned_by_hitting_is_known_only_after_a_hit() -> void:
+	# **「때려 봐야 안다」는 그를 한 대라도 맞힌 뒤부터다** — 그 전에는 그냥 적 하나다.
+	var field := Fixtures.crowd(NEAR, TIGHT, 2)
+	field.enemy_at(1).is_leader = true
+	field.target_choice = SparringField.TargetChoice.LEADER_FIRST
+	field.leader_knowledge = SparringField.LeaderKnowledge.ON_HIT
+	var bout := BoutScript.from_squad(_squad(1, 40), _tuning(0.0), field)
+	bout.start()
+	Fixtures.run_to_end(bout)
+	assert_true(bout.enemy_gauge(0).peak() > 0.0, "처음에는 우두머리를 못 알아본다")
