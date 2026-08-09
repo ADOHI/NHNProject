@@ -46,7 +46,6 @@ extends SceneTree
 
 const _MAX_SECONDS := 60.0
 const _STEP := 1.0 / 60.0
-const _FRONT := 96.0
 const _PER_RANK := 3
 
 ## 무기가 쓰는 칸 예산. §28.20.15 의 「큰 것만 있으면 3타」와 맞물린다.
@@ -228,7 +227,7 @@ func _fight(enemies: int, chains: Array, splash: bool) -> Vector2:
 		tuning.splash_per_cell = BreakTuning.VOLUME_SPLASH_PER_CELL
 
 	var field := SparringField.new()
-	field.stand_in_ranks(0.0, _FRONT, _rank_counts(enemies))
+	field.stand_in_ranks(0.0, _front(), _rank_counts(enemies))
 	field.target_choice = SparringField.TargetChoice.FINISH_OFF
 
 	# 적은 2칸 무기를 든다 — 앞뒤 어느 켜에서든 우리에게 닿는 표본이다.
@@ -280,3 +279,9 @@ func _sized(cells: int) -> BackpackItem:
 		Vector2i(0, 0),
 		ChainDirection.Kind.RIGHT
 	)
+
+
+## 앞 켜가 서는 거리. **수를 안 박고 `WeaponMotion` 에서 뽑는다** (§28.20.50) —
+## 애니 레인이 리치를 옮기면 이 거리도 같이 옮겨져야 한다.
+func _front() -> float:
+	return WeaponMotion.opening_gap_px()

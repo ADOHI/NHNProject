@@ -32,7 +32,6 @@ const _NEAR := 60.0
 const _SPACING := 4.0
 
 ## 켜로 세울 때. 앞 켜 96, 뒤 켜는 112 가 되어 4칸만 닿는다 (§28.20.38).
-const _FRONT := 96.0
 const _PER_RANK := 3
 
 const _SQUAD_SIZES: Array[int] = [1, 2, 3, 4]
@@ -175,7 +174,7 @@ func _fight_line(
 ## 우두머리가 **뒤 켜**에 선 판. 여기서는 **닿는가**가 갈린다.
 func _leader_time_in_ranks(cells: int, advance: SparringField.AdvanceMode) -> float:
 	var field := SparringField.new()
-	field.stand_in_ranks(0.0, _FRONT, [_PER_RANK, 1] as Array[int])
+	field.stand_in_ranks(0.0, _front(), [_PER_RANK, 1] as Array[int])
 	for index in field.enemy_count():
 		var enemy := field.enemy_at(index)
 		enemy.kind = SparringEnemy.Kind.PERSON
@@ -240,3 +239,9 @@ func _sized(cells: int) -> BackpackItem:
 		Vector2i(0, 0),
 		ChainDirection.Kind.RIGHT
 	)
+
+
+## 앞 켜가 서는 거리. **수를 안 박고 `WeaponMotion` 에서 뽑는다** (§28.20.50) —
+## 애니 레인이 리치를 옮기면 이 거리도 같이 옮겨져야 한다.
+func _front() -> float:
+	return WeaponMotion.opening_gap_px()

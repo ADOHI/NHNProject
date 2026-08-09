@@ -65,6 +65,64 @@ class GuardLinkRule:
 		return _table.closing(from.item) == _table.opening(to.item)
 
 
+## 아이템이 **쓸 수 있는 동작 묶음**. 한 쌍이 아니라 여러 쌍이다 (§28.20.49).
+##
+## 동작 하나가 자세 쌍 하나다 — `Vector2i(시작 자세, 마무리 자세)`.
+## 내려치기가 `(위, 아래)` 면 올려치기는 `(아래, 위)` 다.
+##
+## **묶음이 크면 같은 무기로 여러 동작을 할 수 있다** — 그것이 §28.20.48 의 5번 걸림이다.
+class GuardSetTable:
+	extends RefCounted
+
+	## 자세 이름. 애니 레인의 넷과 같은 순서다 (§28.20.42).
+	const IDLE := 0
+	const HIGH := 1
+	const LOW := 2
+	const THRUST := 3
+
+	var _sets: Dictionary = {}
+	var _all: Array[Vector2i] = []
+
+	## 자세 `guards` 가지에서 만들 수 있는 동작 전부 중 `size` 개씩 나눠 준다.
+	##
+	## **결정적으로 나눈다.** 무작위로 나누면 판마다 답이 달라져서
+	## 「묶음이 크면 느슨해지나」가 아니라 「이번 배당이 운이 좋았나」를 재게 된다.
+	func _init(items: Array[BackpackItem], guards: int, size: int) -> void:
+		for from_guard in guards:
+			for to_guard in guards:
+				if from_guard != to_guard:
+					_all.append(Vector2i(from_guard, to_guard))
+		for index in items.size():
+			var picked: Array[Vector2i] = []
+			for slot in mini(size, _all.size()):
+				picked.append(_all[(index * 7 + slot * 5) % _all.size()])
+			_sets[items[index].id] = picked
+
+	func moves(item: BackpackItem) -> Array[Vector2i]:
+		return _sets.get(item.id, [] as Array[Vector2i])
+
+	## 이 아이템이 그 동작을 할 수 있나. 5번 걸림이 풀렸는지 보는 데 쓴다.
+	func can_do(item: BackpackItem, from_guard: int, to_guard: int) -> bool:
+		return moves(item).has(Vector2i(from_guard, to_guard))
+
+
+## **맞출 수 있으면 이어진다.** 한 쌍짜리의 「맞아야 이어진다」와 성질이 다르다.
+class GuardSetRule:
+	extends ChainLinkRule
+
+	var _table: GuardSetTable
+
+	func _init(table: GuardSetTable) -> void:
+		_table = table
+
+	func can_link(from: BackpackPlacement, to: BackpackPlacement) -> bool:
+		for mine: Vector2i in _table.moves(from.item):
+			for next: Vector2i in _table.moves(to.item):
+				if mine.y == next.x:
+					return true
+		return false
+
+
 func _initialize() -> void:
 	var items := SampleBackpack.create_items()
 	print("== 자세 쌍을 아이템에 붙이면 무엇이 걸리나 ==")
@@ -72,6 +130,7 @@ func _initialize() -> void:
 	print("  **정하는 것이 아니라 재 보는 것이다** (§28.20.45).")
 	print("")
 	_report_tightening(items)
+	_report_sets(items)
 	_report_frictions()
 	quit()
 
@@ -187,6 +246,94 @@ func _fill_randomly(
 
 
 # ---------------------------------------------------------------- 무엇이 걸렸나
+
+
+## **묶음으로 두면 격차가 돌아오나** (§28.20.49).
+##
+## §28.20.48 이 한 쌍짜리로 재고 **격차가 좁아진다**는 것을 찾았다.
+## 손으로 짠 것만 깎이고 아무렇게나는 이미 바닥이라 안 깎였기 때문이다.
+##
+## **묶음이면 눅는다**는 것이 §28.20.48 이 본 길이다. 어디서 돌아오는지를 잰다.
+func _report_sets(items: Array[BackpackItem]) -> void:
+	var base_sample := _sample_length(null)
+	var base_random := _random_average(items, null)
+	var base_gap := float(base_sample) / maxf(0.01, base_random.x)
+
+	print("== 묶음으로 두면 격차가 돌아오나 (자세 4가지) ==")
+	print("  %-14s %-14s %-14s %-12s %s" % ["묶음 크기", "손으로 짠 것", "아무렇게나", "격차", "두 동작 되나"])
+	print(
+		(
+			"  %-14s %-14s %-14s %-12s %s"
+			% [
+				"없음 (지금)",
+				"%d타" % base_sample,
+				"%.2f타" % base_random.x,
+				"%.1f배" % base_gap,
+				"-",
+			]
+		)
+	)
+	for size: int in [1, 2, 3, 4, 6, 12]:
+		var table := GuardSetTable.new(items, 4, size)
+		var rule := GuardSetRule.new(table)
+		var sample := _sample_length(rule)
+		var random := _random_average(items, rule)
+		var gap := float(sample) / maxf(0.01, random.x)
+		print(
+			(
+				"  %-14s %-14s %-14s %-12s %s"
+				% [
+					"%d 개" % size,
+					"%d타" % sample,
+					"%.2f타" % random.x,
+					"%.1f배" % gap,
+					"%d/%d" % [_both_ways(items, table), items.size()],
+				]
+			)
+		)
+	print("")
+	print("  「두 동작 되나」는 같은 무기로 **내려치기와 올려치기를 둘 다** 할 수 있는 아이템 수다 —")
+	print("  §28.20.48 의 5번 걸림(저쪽 자유도를 우리가 닫는다)이 풀렸는지 보는 자리다.")
+	print("")
+
+	# **판정을 지금 잰 값에서 짓는다** (§28.20.29). 문턱 둘을 코드가 찾는다.
+	var gap_back := -1
+	var freedom_back := -1
+	var still_filtering := -1
+	for size: int in [1, 2, 3, 4, 6, 12]:
+		var table := GuardSetTable.new(items, 4, size)
+		var rule := GuardSetRule.new(table)
+		var random := _random_average(items, rule)
+		var gap := float(_sample_length(rule)) / maxf(0.01, random.x)
+		if gap_back < 0 and gap >= base_gap * 0.9:
+			gap_back = size
+		if freedom_back < 0 and _both_ways(items, table) == items.size():
+			freedom_back = size
+		# 조건이 아직 무언가를 거르고 있나 — 아무렇게나가 기준선보다 눈에 띄게 낮은가.
+		if random.x < base_random.x * 0.9:
+			still_filtering = size
+	print("  격차가 기준선(%.1f배)으로 돌아오는 자리: **묶음 %d개**" % [base_gap, gap_back])
+	print("  자유도(두 동작)가 다 풀리는 자리: **묶음 %d개**" % freedom_back)
+	print("  조건이 아무렇게나를 실제로 깎는 마지막 자리: **묶음 %d개**" % still_filtering)
+	print("")
+	if gap_back > still_filtering:
+		print("  **두 문턱이 겹치지 않는다.** 조건이 살아 있는 동안은 격차가 죽고,")
+		print("  격차가 살아나는 자리에서는 조건이 이미 아무것도 안 거른다.")
+		print("  **둘을 같이 가질 수 없다** — 자세 조건은 이 시스템에서 결정을 못 살린다.")
+	else:
+		print("  **겹친다.** 조건이 살아 있으면서 격차도 서는 자리가 있다.")
+	print("")
+
+
+## 내려치기(위->아래)와 올려치기(아래->위)를 **둘 다** 할 수 있는 아이템 수.
+func _both_ways(items: Array[BackpackItem], table: GuardSetTable) -> int:
+	var count := 0
+	for item in items:
+		var down := table.can_do(item, GuardSetTable.HIGH, GuardSetTable.LOW)
+		var up := table.can_do(item, GuardSetTable.LOW, GuardSetTable.HIGH)
+		if down and up:
+			count += 1
+	return count
 
 
 ## **수보다 이쪽이 중요하다.** 만들어 보니 걸린 것들이다.

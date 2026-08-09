@@ -83,12 +83,12 @@ var leader_knowledge: LeaderKnowledge = LeaderKnowledge.VISIBLE
 ## 1픽셀 = 1단위. 화면 좌표와 같은 축을 쓴다 (오른쪽이 +).
 var attacker_x: float = 0.0
 
-## 켜 하나가 얼마나 뒤인가 (§28.20.38). **표본 값이지 확정이 아니다.**
+## 켜 하나가 얼마나 뒤인가 (§28.20.38).
 ##
-## 리치가 1칸 104 · 4칸 118 이다 (§28.20.30). 앞 켜를 96 에 두면 이 값이 16 일 때
-## **뒤 켜(112)는 작은 무기가 못 닿고 큰 무기는 닿는다** — 그래야 「뒷줄에 닿나」가
-## 물음이 된다. 0 에 가까우면 두 켜가 한 켜가 되고, 크면 뒷줄이 영영 무의미해진다.
-var rank_depth: float = 16.0
+## **수를 박지 않고 `WeaponMotion` 에서 뽑는다.** 이 값이 뜻을 가지는 것은
+## 리치와의 관계에서뿐이라 — 작은 무기는 못 닿고 큰 무기는 닿아야 한다 —
+## 애니 레인이 리치를 옮기면 **이것도 같이 옮겨져야** 한다 (§28.20.50).
+var rank_depth: float = WeaponMotion.splitting_rank_depth()
 
 var _enemies: Array[SparringEnemy] = []
 

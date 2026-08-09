@@ -30,7 +30,6 @@ const _MAX_SECONDS := 60.0
 const _STEP := 1.0 / 60.0
 
 ## 앞 켜가 서는 거리. 1칸 리치(104)보다 안쪽이라 누구든 앞 켜는 친다.
-const _FRONT := 96.0
 
 const _SQUAD_SIZES: Array[int] = [1, 2, 3, 4]
 const _ENEMY_SIZES: Array[int] = [1, 2, 3, 4, 5, 6]
@@ -50,7 +49,7 @@ func _initialize() -> void:
 				tuning.launch_at,
 				tuning.knockdown_at,
 				tuning.decay_per_second,
-				_FRONT,
+				_front(),
 				SparringField.new().rank_depth,
 			]
 		)
@@ -74,7 +73,7 @@ func _report_reach() -> void:
 	print("  %-10s %-10s %-14s %s" % ["무기", "리치", "뒤 켜까지", "닿나"])
 	for cells: int in [1, 2, 3, 4]:
 		var reach := WeaponMotion.reach_px(_sized(cells))
-		var back := _FRONT + field.rank_depth
+		var back := _front() + field.rank_depth
 		print(
 			(
 				"  %-10s %-10s %-14s %s"
@@ -196,7 +195,7 @@ func _fight(
 		tuning.splash_per_cell = BreakTuning.VOLUME_SPLASH_PER_CELL
 
 	var field := SparringField.new()
-	field.stand_in_ranks(0.0, _FRONT, _rank_counts(enemies))
+	field.stand_in_ranks(0.0, _front(), _rank_counts(enemies))
 	field.target_choice = rule
 
 	var chains: Array = []
@@ -258,3 +257,9 @@ func _sized(cells: int) -> BackpackItem:
 		Vector2i(0, 0),
 		ChainDirection.Kind.RIGHT
 	)
+
+
+## 앞 켜가 서는 거리. **수를 안 박고 `WeaponMotion` 에서 뽑는다** (§28.20.50) —
+## 애니 레인이 리치를 옮기면 이 거리도 같이 옮겨져야 한다.
+func _front() -> float:
+	return WeaponMotion.opening_gap_px()

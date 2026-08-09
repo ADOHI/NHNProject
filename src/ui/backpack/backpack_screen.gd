@@ -16,15 +16,17 @@ extends Control
 ## 글자판에 한 줄씩 적을 최대 타 수. 넘으면 줄여 적는다.
 const _MAX_LISTED_STEPS := 8
 
-## 대련을 시작하는 간격. 1x1 리치(104)보다 조금 좁아 어떤 무기로도 열 수 있다.
-const DEFAULT_GAP := 96.0
+## 대련을 시작하는 간격. **수를 안 박고 `WeaponMotion` 에서 뽑는다** (§28.20.50).
+##
+## 제일 짧은 리치보다 조금 안쪽이라 **어떤 무기로도 열 수 있다.**
+## 애니 레인이 리치를 옮기면 이 간격이 저절로 따라간다 — 박아 두면 그날 한쪽만 고쳐진다.
 
 ## 뒤에 선 적들이 앞의 적에서 떨어진 거리 (§28.20.34).
 ##
 ## **이 수를 아무렇게나 고르면 걸침이 무슨 값을 하는지가 안 보인다.**
-## 리치는 1x1 이 104 · 4x1 이 118 이다. 간격 96 에 이 값을 더하면 112 라서
-## **작은 무기는 둘째 적에 안 닿고 큰 무기는 닿는다** — 그것이 §28.20.34 의 요점이다.
-const ENEMY_SPACING := 16.0
+## 제일 짧은 리치와 제일 긴 리치 사이에 둘째 적이 서야
+## **작은 무기는 안 닿고 큰 무기는 닿는다** — 그것이 §28.20.34 의 요점이다.
+## 그래서 `WeaponMotion` 이 그 자리를 계산해 준다.
 
 ## 한 화면에서 돌려 볼 적 수. **여럿이 어떻게 달라지는지 만져 보는 자리다.**
 const ENEMY_COUNTS: Array[int] = [1, 2, 3]
@@ -95,7 +97,7 @@ func _fire() -> void:
 func _stand_enemies() -> void:
 	var xs := PackedFloat32Array()
 	for index in _enemy_count:
-		xs.append(DEFAULT_GAP + float(index) * ENEMY_SPACING)
+		xs.append(_default_gap() + float(index) * WeaponMotion.splitting_rank_depth())
 	_field.reset_with(0.0, xs)
 
 
@@ -236,3 +238,8 @@ func _step_text(placement: BackpackPlacement) -> String:
 			ChainDirection.label(item.output_direction)
 		]
 	)
+
+
+## 대련을 시작하는 간격. `WeaponMotion` 에서 뽑는다 (§28.20.50).
+func _default_gap() -> float:
+	return WeaponMotion.opening_gap_px()

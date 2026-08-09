@@ -24,6 +24,9 @@ extends RefCounted
 ## 감싸는 상자 [긴 변, 짧은 변] -> [한 타에 나가는 거리, 닿는 거리].
 ##
 ## **이 표는 애니 레인의 실측이다. 손으로 고치지 마라** — 저쪽이 옮기면 여기가 옮겨진다.
+## 개전 거리를 제일 짧은 리치보다 얼마나 안쪽에 두나. **닿는다는 것만 보장하면 된다.**
+const _OPENING_MARGIN := 8.0
+
 const _TABLE := {
 	Vector2i(1, 1): Vector2(25.0, 104.0),
 	Vector2i(2, 1): Vector2(16.0, 107.0),
@@ -62,6 +65,42 @@ static func reach_px(item: BackpackItem) -> float:
 static func static_reach_px(item: BackpackItem) -> float:
 	var entry := _entry(item)
 	return entry.y - entry.x
+
+
+## 표에 있는 리치 중 **제일 짧은 것**. 누구든 닿는 거리를 잡을 때 쓴다.
+##
+## ## 왜 상수로 안 박고 표에서 뽑나
+##
+## **애니 레인 값이 움직이면 우리 거리 전부가 같이 움직여야 한다** (§28.20.50).
+## 실제로 몸 비례를 고치면 팔 길이가 바뀌어 리치가 통째로 옮겨진다.
+## 96 이나 16 같은 수를 여기저기 박아 두면 **그날 한쪽만 고쳐진다.**
+static func min_reach_px() -> float:
+	var least := INF
+	for entry: Vector2 in _TABLE.values():
+		least = minf(least, entry.y)
+	return least
+
+
+## 표에 있는 리치 중 **제일 긴 것**.
+static func max_reach_px() -> float:
+	var most := 0.0
+	for entry: Vector2 in _TABLE.values():
+		most = maxf(most, entry.y)
+	return most
+
+
+## **누구든 닿는 개전 거리.** 제일 짧은 무기보다 조금 안쪽이다.
+static func opening_gap_px() -> float:
+	return min_reach_px() - _OPENING_MARGIN
+
+
+## **작은 무기는 못 닿고 큰 무기는 닿는 켜 간격** (§28.20.38).
+##
+## 앞 켜를 `opening_gap_px()` 에 두면 뒤 켜가 **제일 짧은 리치와 제일 긴 리치의 한가운데**
+## 에 선다. 그래야 「뒷줄에 닿나」가 물음이 된다 —
+## 0 에 가까우면 두 켜가 한 켜가 되고, 크면 뒷줄이 영영 무의미해진다.
+static func splitting_rank_depth() -> float:
+	return (min_reach_px() + max_reach_px()) * 0.5 - opening_gap_px()
 
 
 ## 이 모양이 표에 그대로 있는가. 없으면 근사값을 쓰고 있다는 뜻이다.
