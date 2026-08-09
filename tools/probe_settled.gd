@@ -23,11 +23,64 @@ const _ROWS := 34
 const _CELL := 32.0
 
 
+## **누가 마지막에 멎는가.** 90 퍼센트와 전원 사이의 꼬리가 누구인지 본다.
+##
+## 손잡이를 이름만 보고 고르면 안 된다 - 「막힘 비용이 크니까 그것 때문이겠거니」로 가기 전에
+## **실제로 늦는 유닛이 무엇을 하고 있는지**부터 본다.
+func _tail(label: String, field: ProtoUnitField, target: Vector2) -> void:
+	field.issue_move(field.all_ids(), target)
+	var count := field.agents.size()
+	var settled_at := PackedFloat32Array()
+	settled_at.resize(count)
+	for index in count:
+		settled_at[index] = -1.0
+	var elapsed := 0.0
+	while elapsed < _MAX_SECONDS:
+		field.step(_STEP)
+		elapsed += _STEP
+		for index in count:
+			# **마지막으로 멎은 시각이다.** 처음 멎은 시각이 아니다 - `양보`는 되돌아올 수
+			# 있는 정지라 한 번 섰다가 다시 걷는다. 처음 것을 적으면 16 초라고 나오는데
+			# 판은 29 초에 멎는다. **자가 대상을 잘못 고르는 것이 도구에서도 난다.**
+			if field.agents[index].is_moving():
+				settled_at[index] = -1.0
+			elif settled_at[index] < 0.0:
+				settled_at[index] = elapsed
+		if field.moving_count() == 0:
+			break
+	var order: Array[int] = []
+	for index in count:
+		order.append(index)
+	order.sort_custom(func(a: int, b: int) -> bool: return settled_at[a] > settled_at[b])
+	print("")
+	print("## %s - 마지막에 멎은 여덟" % label)
+	print("")
+	print("| 번호 | 멎은 시각 | 상태 | 자리까지 | 굳음 | 비빔 | 정체 | 재시도 |")
+	print("| --- | --- | --- | --- | --- | --- | --- | --- |")
+	for rank in mini(8, order.size()):
+		var index: int = order[rank]
+		var agent := field.agents[index]
+		print(
+			(
+				"| %d | %.2f s | %s | %.0f px | %d | %d | %d | %d |"
+				% [
+					agent.id,
+					settled_at[index],
+					agent.state_name(),
+					agent.position.distance_to(agent.goal),
+					agent.stall_frames,
+					agent.grind_frames,
+					agent.creep_frames,
+					agent.hold_retries,
+				]
+			)
+		)
+
+
 func _initialize() -> void:
 	# 뒤진동이 0 이 아닌 자리만 골라 연다. **누가 무엇을 하고 있는지가 종류를 가른다.**
-	for count in [35, 39, 47, 49, 50]:
-		_after_settle("열린 곳 %d" % count, _open_field(count), Vector2(1500, 545))
-	_after_settle("좁은 통로 100", _choke_field(100, 2), Vector2(1500, 545))
+	_tail("좁은 통로 100", _choke_field(100, 2), Vector2(1500, 545))
+	_tail("좁은 통로 40", _choke_field(40, 2), Vector2(1500, 545))
 	quit()
 
 
