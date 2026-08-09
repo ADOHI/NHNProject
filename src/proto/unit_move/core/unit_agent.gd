@@ -140,6 +140,14 @@ var yield_mark_push: float = 0.0
 ## 투영해야** "밀어 준 그 방향으로 실제로 남아 있는가"가 갈린다.
 var yield_mark_dir: Vector2 = Vector2.ZERO
 
+## **문 차례를 기다리는 중인가.** 0 이 아니면 그 좁은 목의 줄에 서 있다(칸 번호 + 1).
+##
+## `yield_goal` 과 **같은 구조다** - 상태로 걸고, 자리에 닿을 때까지 그쪽으로 가고,
+## 조건이 풀리면 놓는다. 새 층이 아니라 그 기계를 한 번 더 쓰는 것이다(README §28).
+## 자리를 따로 든 이유는 비켜서기와 문 차례가 같은 프레임에 서로 다른 곳을 가리킬 수 있어서다.
+var gate_id: int = 0
+var gate_goal: Vector2 = Vector2.ZERO
+
 ## 길이 막혔다고 적혀 있어 **비켜선 자리에서 기다리는 중인가.**
 ##
 ## 의뢰인이 시연을 보고 짚은 것이다 - "뒷자리 애들 길 비키다가 바로 되돌아가더라."
@@ -326,6 +334,8 @@ func accept_order(new_order_id: int, slot: Vector2, sight_interval: float) -> vo
 	yield_goal = Vector2.ZERO
 	yield_was_holding = false
 	waiting_for_path = false
+	gate_id = 0
+	gate_goal = Vector2.ZERO
 	pace = 1.0
 	speed = velocity.length()
 	detour = 0.0

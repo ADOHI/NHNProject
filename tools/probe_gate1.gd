@@ -126,27 +126,22 @@ func _run(count: int, gate_cells: int) -> void:
 		var mutual := blocker != null and blocker.blocker_id == agent.id
 		print(
 			(
-				"| %d | %s | %.0f | %.0f | %.0f | %d | %s | %.0f px | %.0f px | %.0f도 "
-				+ (
-					"| %s | %s | %d | %d | %d |"
-					% [
-						agent.id,
-						agent.state_name(),
-						agent.position.x,
-						agent.position.y,
-						cross_x - agent.position.x,
-						agent.blocker_id,
-						"O" if mutual else "-",
-						travelled[index],
-						start[index].distance_to(agent.position),
-						rad_to_deg(agent.detour),
-						"O" if agent.is_yielding() else "-",
-						"O" if agent.waiting_for_path else "-",
-						agent.stall_frames,
-						agent.grind_frames,
-						agent.hold_retries,
-					]
-				)
+				"| %d | %s | %.0f | %.0f | %.0f | %d | %s | %.0f px | %.0f px | %.0f도 | %s | %s | %d |"
+				% [
+					agent.id,
+					agent.state_name(),
+					agent.position.x,
+					agent.position.y,
+					cross_x - agent.position.x,
+					agent.blocker_id,
+					"O" if mutual else "-",
+					travelled[index],
+					start[index].distance_to(agent.position),
+					rad_to_deg(agent.detour),
+					"O" if agent.is_yielding() else "-",
+					"줄%d" % agent.gate_id if agent.gate_id != 0 else "-",
+					agent.stall_frames,
+				]
 			)
 		)
 

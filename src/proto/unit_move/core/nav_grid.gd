@@ -78,6 +78,9 @@ var _clearance: PackedInt32Array
 ## 정확히 문 한 칸, 두 칸 문과 열린 곳에서 0 칸이다.
 var _corridor: PackedByteArray
 
+## 좁은 목 칸의 번호 목록. 대개 비어 있거나 한둘이라 훑는 값이 없다.
+var _choke_list: PackedInt32Array
+
 ## 위 값이 지금 지형과 맞는가. 벽이 바뀌면 내려간다.
 var _clearance_ready := false
 
@@ -249,6 +252,15 @@ func is_choke_at(point: Vector2) -> bool:
 	return is_choke(world_to_cell(point))
 
 
+## 좁은 목 칸 전부. **대개 비어 있다** - 열린 곳과 두 칸 문에서 0 개다(README §28).
+##
+## 비어 있으면 문 차례 규칙이 통째로 안 돈다. **그 판을 건드릴 수 없다는 것이 규칙이 아니라
+## 구조로 보장되는 자리다.**
+func choke_cells() -> PackedInt32Array:
+	_ensure_clearance()
+	return _choke_list
+
+
 ## 벽에서 바깥으로 퍼지는 너비 우선 탐색. 모든 벽 칸에서 동시에 출발한다.
 ##
 ## 벽마다 따로 재면 칸 수 곱하기 벽 수가 되는데, 전부 한 큐에 넣고 한 번만 퍼뜨리면
@@ -300,6 +312,7 @@ func _bake_corridors() -> void:
 	var count := cols * rows
 	_corridor = PackedByteArray()
 	_corridor.resize(count)
+	_choke_list = PackedInt32Array()
 	for row in rows:
 		for column in cols:
 			var index := row * cols + column
@@ -313,6 +326,7 @@ func _bake_corridors() -> void:
 			var vertical := north and south and not west and not east
 			if horizontal or vertical:
 				_corridor[index] = 1
+				_choke_list.append(index)
 
 
 ## 벽을 피하는 것이 곧 지터를 피하는 것이다.

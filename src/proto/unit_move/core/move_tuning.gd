@@ -86,6 +86,15 @@ const DEFS: Array[Dictionary] = [
 		"hint": "막힌 곳을 기억해 흐름장을 다시 굽는다. 0 이면 처음 길만 쓴다",
 	},
 	{
+		"key": "gate_queue",
+		"label": "문 차례",
+		"min": 0.0,
+		"max": 1.0,
+		"step": 1.0,
+		"value": 1.0,
+		"hint": "한 칸 문 앞에서 줄을 선다. 0 이면 각자 문으로 몰린다",
+	},
+	{
 		"key": "jam_cost",
 		"label": "막힘 비용",
 		"min": 0.0,

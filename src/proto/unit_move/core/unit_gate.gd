@@ -1,0 +1,206 @@
+class_name ProtoUnitGate
+extends RefCounted
+## **한 칸 문에 차례를 준다.** 문 앞에 선 유닛들에게 없던 것이 차례다.
+##
+## 설계는 README §28 에 먼저 썼다. 요점 넷.
+##
+## | 물음 | 답 |
+## | --- | --- |
+## | 차례가 무엇에 붙나 | **문에.** 명령이 달라도 문은 하나다 |
+## | 누가 첫째인가 | **먼저 온 순서.** 한 번 받으면 안 바뀐다. 같은 프레임이면 흐름장 비용으로 가른다 |
+## | 기다리는 유닛은 어디 서 있나 | **문에서 들어온 길로 뻗은 줄 자리.** 문 앞에 뭉치면 지금과 같다 |
+## | 차례를 놓치면 | **정체 시계로 잃는다.** 시간이 아니다 |
+##
+## **좁은 목이 없으면 이 규칙은 통째로 안 돈다.** 복도 판정이 열린 곳과 두 칸 문에서 0 칸을
+## 잡으므로(§28), **지금 잘 도는 판을 건드릴 수 없다는 것이 규칙이 아니라 구조로 보장된다.**
+##
+## `gate_goal` 은 `yield_goal` 과 같은 구조다 - 상태로 걸고, 자리에 닿을 때까지 그쪽으로 가고,
+## 조건이 풀리면 놓는다. **새 층이 아니라 그 기계를 한 번 더 쓰는 것이다.**
+
+## 문에서 이만큼 안에 있는 유닛만 줄에 세운다(픽셀).
+##
+## 너무 넓으면 아직 문을 겨냥하지도 않은 유닛까지 줄을 서고, 너무 좁으면 이미 뭉친 뒤에야
+## 줄이 선다. 여덟 칸이면 몸 열 남짓이라 문 앞 인파를 덮는다.
+const _GATE_REACH := 256.0
+
+## 줄 자리 사이의 간격(몸 반지름의 배수). 2.4 면 몸이 닿지 않고 이어진다.
+const _LINE_STEP := 2.4
+
+## 줄 자리에 이만큼 들면 닿은 것으로 본다(픽셀).
+const _SPOT_REACHED := 6.0
+
+## 줄을 이만큼까지만 세운다. 그 밖은 그냥 오게 둔다 - 어차피 뒤에서 밀려 온다.
+const _LINE_LIMIT := 12
+
+## 앞에서 이만큼은 줄을 안 세우고 그냥 보낸다.
+##
+## **하나만 보내면 줄이 섰다 갔다 한다.** 첫째가 문을 빠져나갈 동안 둘째는 제 자리에 서서
+## 기다리다가, 차례가 오면 그제서야 걷기 시작한다. 그 멈춤과 다시 걷기가 통째로 죽은 시간이라
+## 문이 비어 있는 동안 아무도 안 들어간다. 앞의 몇은 이어서 흐르게 둔다 -
+## **하나는 문을 지나는 중이고 하나는 문턱에 대기하는 그림**이다.
+const _LEAD := 3
+
+## 차례를 받은 유닛이 이만큼 안 나아가면 차례를 잃는다(프레임).
+##
+## **시간이 아니라 정체 시계다.** 문에 낀 유닛 하나가 줄 전체를 영원히 세우는 것을 막는다 -
+## §20 이 겪은 그 모양이다. 2 초면 몸 하나가 문을 지나기에 넉넉하다.
+const _TURN_LOST_FRAMES := 120
+
+## 문 차례를 다시 보는 주기(프레임). 매 프레임 다시 고르는 것이 지터의 씨앗이다.
+const _REVIEW := 6
+
+
+## **문마다 줄을 세운다.** 좁은 목이 없으면 곧바로 돌아간다.
+static func review(field: ProtoUnitField, frame: int) -> void:
+	if frame % _REVIEW != 0:
+		return
+	var chokes := field.grid.choke_cells()
+	if chokes.is_empty():
+		return
+	if field.tuning.get_value("gate_queue") < 0.5:
+		_clear_all(field)
+		return
+	# **먼저 전부 놓고 다시 앉힌다.**
+	#
+	# 줄에서 빠진 유닛의 자리를 안 지우면 **없는 자리로 영원히 걸어간다.** 문에서 멀어져
+	# 사정권 밖으로 나간 유닛이 줄에서 빠지는데, 앉히는 쪽은 줄에 든 유닛만 훑으므로
+	# 그 유닛의 `gate_goal` 이 그대로 남았다. 게다가 줄에 선 유닛은 눌림과 정체 시계를
+	# 안 세므로 **어느 그물에도 안 걸린 채 300 픽셀 뒤에서 맴돌았다** - 한 칸 문에서
+	# 셋이 그렇게 남았다. 상태를 들고 있는 규칙은 놓는 자리를 반드시 한곳에 모아야 한다.
+	for agent in field.agents:
+		if agent.gate_id != 0:
+			_release(agent)
+	for index in chokes:
+		_review_gate(field, index)
+
+
+## 이 문 하나의 줄을 손본다.
+static func _review_gate(field: ProtoUnitField, cell_index: int) -> void:
+	var grid := field.grid
+	var cell := Vector2i(cell_index % grid.cols, cell_index / grid.cols)
+	var gate_pos := grid.cell_to_world(cell)
+	var gate_id := cell_index + 1
+
+	# **아직 문을 지나야 하는 유닛만 줄에 선다.** 이미 넘은 유닛은 흐름장 비용이 문보다 낮다.
+	var waiting: Array[ProtoUnitAgent] = []
+	for agent in field.agents:
+		if not _wants_gate(field, agent, gate_pos, cell):
+			continue
+		waiting.append(agent)
+
+	var queue: PackedInt32Array = field.gate_queues.get(gate_id, PackedInt32Array())
+	var still := PackedInt32Array()
+	var present := {}
+	for agent in waiting:
+		present[agent.id] = agent
+	# **이미 줄에 선 순서를 지킨다.** 먼저 온 순서가 곧 차례이고 한 번 받으면 안 바뀐다.
+	for id in queue:
+		if present.has(id):
+			still.append(id)
+			present.erase(id)
+	# 새로 온 유닛은 뒤에 붙인다. 같은 프레임에 여럿이면 흐름장 비용으로 가른다 - 난수는 안 쓴다.
+	var newcomers: Array[ProtoUnitAgent] = []
+	for id: int in present:
+		newcomers.append(present[id])
+	newcomers.sort_custom(
+		func(a: ProtoUnitAgent, b: ProtoUnitAgent) -> bool:
+			return a.rank < b.rank if a.rank != b.rank else a.id < b.id
+	)
+	for agent in newcomers:
+		still.append(agent.id)
+
+	# **차례를 잃는다.** 앞선 유닛이 안 나아가면 뒤로 보낸다.
+	if still.size() > 1:
+		var head: ProtoUnitAgent = field.agent_of(still[0])
+		if head != null and head.creep_frames >= _TURN_LOST_FRAMES:
+			var rotated := PackedInt32Array()
+			for i in range(1, still.size()):
+				rotated.append(still[i])
+			rotated.append(still[0])
+			still = rotated
+			field.gate_turns_lost += 1
+
+	field.gate_queues[gate_id] = still
+	_place(field, still, gate_pos, cell, gate_id)
+
+
+## 줄에 선 유닛들을 자리에 앉힌다. **첫째는 그냥 간다.**
+static func _place(
+	field: ProtoUnitField, queue: PackedInt32Array, gate_pos: Vector2, cell: Vector2i, gate_id: int
+) -> void:
+	var back := _approach_dir(field, queue, gate_pos, cell)
+	for position_index in queue.size():
+		var agent: ProtoUnitAgent = field.agent_of(queue[position_index])
+		if agent == null:
+			continue
+		if position_index < _LEAD or position_index >= _LINE_LIMIT or back == Vector2.ZERO:
+			_release(agent)
+			continue
+		var spot := gate_pos + back * (agent.radius * _LINE_STEP * float(position_index))
+		if not field.grid.is_circle_free(spot, agent.radius):
+			_release(agent)
+			continue
+		agent.gate_id = gate_id
+		agent.gate_goal = spot
+
+
+## 문으로 들어오는 길의 **반대** 방향. 줄은 그쪽으로 뻗는다.
+##
+## 흐름장 방향을 뒤집어 쓴다 - 그것이 곧 "유닛들이 들어온 길"이다. 명령이 여럿이면
+## 줄에 선 첫 유닛의 명령을 따른다.
+static func _approach_dir(
+	field: ProtoUnitField, queue: PackedInt32Array, gate_pos: Vector2, cell: Vector2i
+) -> Vector2:
+	for id in queue:
+		var agent: ProtoUnitAgent = field.agent_of(id)
+		if agent == null:
+			continue
+		var order: ProtoUnitField.MoveOrder = field.order_by_id(agent.order_id)
+		if order == null:
+			continue
+		var forward := order.flow.direction_at(gate_pos, agent.radius)
+		if forward != Vector2.ZERO:
+			return -forward.normalized()
+		# 흐름장이 답을 안 주면 몸이 서 있는 쪽으로 뻗는다.
+		var away := agent.position - field.grid.cell_to_world(cell)
+		if away.length_squared() > 1.0:
+			return away.normalized()
+	return Vector2.ZERO
+
+
+## 이 유닛이 이 문을 아직 지나야 하는가.
+static func _wants_gate(
+	field: ProtoUnitField, agent: ProtoUnitAgent, gate_pos: Vector2, cell: Vector2i
+) -> bool:
+	if agent.state != ProtoUnitAgent.State.MOVING and agent.state != ProtoUnitAgent.State.HOLDING:
+		return false
+	if agent.is_yielding():
+		return false
+	if agent.position.distance_to(gate_pos) > _GATE_REACH:
+		return false
+	var order: ProtoUnitField.MoveOrder = field.order_by_id(agent.order_id)
+	if order == null:
+		return false
+	# 문보다 비싼 자리에 서 있으면 아직 문 이쪽이다. 넘은 유닛은 문보다 싸다.
+	var mine := order.flow.cost_at(field.grid.world_to_cell(agent.position))
+	var gate_cost := order.flow.cost_at(cell)
+	if mine >= ProtoFlowField.UNREACHABLE * 0.5:
+		return false
+	return mine > gate_cost
+
+
+## 줄에서 놓는다. 자기 목적지로 다시 간다.
+static func _release(agent: ProtoUnitAgent) -> void:
+	agent.gate_id = 0
+	agent.gate_goal = Vector2.ZERO
+
+
+static func _clear_all(field: ProtoUnitField) -> void:
+	field.gate_queues.clear()
+	for agent in field.agents:
+		_release(agent)
+
+
+## 줄 자리에 닿았는가. 닿았으면 그 자리에 선다.
+static func at_spot(agent: ProtoUnitAgent) -> bool:
+	return agent.position.distance_to(agent.gate_goal) <= _SPOT_REACHED

@@ -201,6 +201,15 @@ var propagate_distance: float = 0.0
 ## 자리를 막은 상대로 사슬을 이어 간 횟수. **진단에서 가장 컸던 구멍을 메운 자리다.**
 var propagate_relays: int = 0
 
+## 문마다의 줄. 칸 번호 + 1 을 열쇠로 유닛 번호 목록을 든다.
+##
+## **먼저 온 순서가 곧 차례이고 한 번 받으면 안 바뀐다** - 매 프레임 다시 매기면 그 자체가
+## 지터다(§7 · §10 · §21 이 세 번 가르친 것). 좁은 목이 없는 판에서는 이 표가 영원히 빈다.
+var gate_queues: Dictionary = {}
+
+## 앞선 유닛이 안 나아가 차례를 뒤로 보낸 횟수.
+var gate_turns_lost: int = 0
+
 ## 양보가 얼마나 살아남는가. **밀어 놓은 거리와 그 뒤의 순수 변위를 나란히 잰다.**
 ##
 ## 둘이 크게 벌어지면 "비켰다가 도로 돌아온다"는 뜻이고, 그러면 전파가 아무리 돌아도
@@ -392,6 +401,7 @@ func step(delta: float) -> void:
 	_clamp_positions()
 	_update_states(delta)
 	ProtoUnitYield.watch(self, _frame)
+	ProtoUnitGate.review(self, _frame)
 	ProtoUnitJam.review(self, _frame)
 	for order in orders:
 		order.age += delta
@@ -499,6 +509,20 @@ func _plan(agent: ProtoUnitAgent, delta: float) -> void:
 			agent.steer_dir = to_spot / length if length > 0.001 else agent.steer_dir
 			agent.debug_seek = (agent.steer_dir * tuning.get_value("max_speed") * agent.speed_scale)
 			return
+	# **문 차례를 기다리는 중이면 줄 자리로 간다.** 비켜서기와 같은 구조다 - 상태가 유지되는
+	# 동안 조향이 목적지를 안 가리키므로 문 앞으로 다시 몰리지 않는다.
+	if agent.gate_id != 0:
+		if ProtoUnitGate.at_spot(agent):
+			# 자리에 닿았다. **그 자리에 선다** - 여기서 밀고 들어가면 줄이 아니다.
+			agent.speed = maxf(agent.speed - tuning.get_value("acceleration") * delta, 0.0)
+			agent.velocity = Vector2.ZERO
+			agent.debug_seek = Vector2.ZERO
+			return
+		var to_spot := agent.gate_goal - agent.position
+		var spot_length := to_spot.length()
+		agent.steer_dir = to_spot / spot_length if spot_length > 0.001 else agent.steer_dir
+		agent.debug_seek = agent.steer_dir * tuning.get_value("max_speed") * agent.speed_scale
+		return
 	var wanted := _seek(agent, delta)
 	var target_speed := tuning.get_value("max_speed") * agent.speed_scale * agent.pace
 	var slow := tuning.get_value("slow_radius")
@@ -644,7 +668,9 @@ func _review_moving(agent: ProtoUnitAgent, arrive: float, crawl: float) -> void:
 	# 지금은 **뭉치기 전에** 선다. 문에 가장 가까운 유닛부터 바깥으로 기다림이 번져 나가
 	# 줄이 서고, 앞이 비면 `_review_hold` 가 앞에서부터 하나씩 풀어 준다.
 	# 비켜서는 중인 유닛은 제 목적지에서 멀어지는 것이 정상이다. 막힘으로 세면 안 된다.
-	if agent.is_yielding():
+	if agent.is_yielding() or agent.gate_id != 0:
+		# **줄에 선 것은 막힌 것이 아니다.** 차례를 기다리는 동안 시계를 돌리면
+		# 기다림이 확정되고 §27 의 예산이 그 자리를 자기 자리로 쳐 버린다.
 		agent.press_frames = 0
 		agent.grind_frames = 0
 		agent.creep_frames = 0
