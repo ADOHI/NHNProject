@@ -655,7 +655,6 @@ func _draw_break_gauge() -> void:
 		return
 	var top := GRID_ORIGIN.y + float(_grid.height) * CELL + 26.0
 	var width := float(_grid.width) * CELL
-	var font := get_theme_default_font()
 
 	# 판이 돌고 있으면 **지금 눈금**을, 아니면 계산해 둔 최고치를 보여 준다.
 	# 실시간에 최고치만 그리면 눈금이 빠지는 것이 안 보인다.
@@ -672,26 +671,38 @@ func _draw_break_gauge() -> void:
 			if BreakState.is_worse(outcome.highest, highest):
 				highest = outcome.highest
 
-	draw_string(
-		font,
-		Vector2(GRID_ORIGIN.x, top - 8.0),
-		"무너짐 눈금",
-		HORIZONTAL_ALIGNMENT_LEFT,
-		-1.0,
-		14,
-		_TEXT
-	)
+	_draw_one_gauge(Vector2(GRID_ORIGIN.x, top), width, "적 무너짐", live, peak, highest)
 
-	var bar := Rect2(Vector2(GRID_ORIGIN.x, top), Vector2(width, 26.0))
+	# **우리 쪽도 그린다.** 적에게만 있으면 대련장이 샌드백이다.
+	if _bout != null and _bout.has_enemy():
+		_draw_one_gauge(
+			Vector2(GRID_ORIGIN.x, top + 64.0),
+			width,
+			"우리 무너짐",
+			_bout.own_gauge_value(),
+			_bout.own_peak(),
+			_bout.own_peak_state()
+		)
+
+
+## 눈금 막대 하나. 두 쪽이 **같은 식**으로 그려져야 견줄 수 있다.
+func _draw_one_gauge(
+	at: Vector2, width: float, label: String, live: float, peak: float, highest: BreakState.Kind
+) -> void:
+	var font := get_theme_default_font()
+	draw_string(font, at + Vector2(0.0, -8.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 14, _TEXT)
+
+	var bar := Rect2(at, Vector2(width, 22.0))
 	draw_rect(bar, _CELL_FILL)
 	draw_rect(bar, _CELL_LINE, false, 1.0)
 
 	var shown := live if live >= 0.0 else peak
 	var ratio := clampf(shown / maxf(1.0, _break_tuning.max_value), 0.0, 1.0)
-	var filled := Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y))
-	draw_rect(filled, _state_color(_break_tuning.state_for(shown)))
+	draw_rect(
+		Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)),
+		_state_color(_break_tuning.state_for(shown))
+	)
 	if live >= 0.0 and peak > shown:
-		# 최고 기록 자국. 눈금이 빠져도 어디까지 갔었는지 남는다.
 		var mark := (
 			bar.position.x
 			+ bar.size.x * clampf(peak / maxf(1.0, _break_tuning.max_value), 0.0, 1.0)
@@ -709,16 +720,15 @@ func _draw_break_gauge() -> void:
 
 	draw_string(
 		font,
-		Vector2(bar.position.x + 6.0, bar.end.y + 16.0),
+		Vector2(bar.position.x + 6.0, bar.end.y + 15.0),
 		_gauge_caption(shown, peak, highest),
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1.0,
 		14,
-		_state_color(highest)
+		_state_color(_break_tuning.state_for(shown))
 	)
 
 
-## 단계가 심할수록 뜨거운 색. `match` 를 쓰면 gdlint 가 터진다(gdtoolkit 버그).
 func _state_color(kind: BreakState.Kind) -> Color:
 	if kind == BreakState.Kind.KNOCKDOWN:
 		return Color(0.95, 0.45, 0.35)
@@ -740,10 +750,7 @@ func _gauge_caption(shown: float, peak_value: float, highest: BreakState.Kind) -
 	)
 	if _bout == null or _bout.phase() == SparringBout.Phase.READY:
 		return now
-	return (
-		"%s    (%d / %d 타, 최고 %.0f %s)"
-		% [now, _bout.landed(), _bout.total_hits(), peak_value, BreakState.label(highest)]
-	)
+	return "%s    (최고 %.0f %s)" % [now, peak_value, BreakState.label(highest)]
 
 
 ## 대련장. **적은 네모 하나다** (§28.4 최소 대련장).
@@ -766,7 +773,10 @@ func _draw_arena() -> void:
 		state = _bout.state()
 
 	# 대원과 적. **둘 다 위치를 가진다** — 리치·전진 값이 오면 이 간격 위에 판정이 얹힌다.
-	_draw_fighter(_field.attacker_x, ground, Color(0.42, 0.56, 0.78), BreakState.Kind.NONE)
+	var own_state := BreakState.Kind.NONE
+	if _bout != null and _bout.phase() != SparringBout.Phase.READY:
+		own_state = _bout.own_state()
+	_draw_fighter(_field.attacker_x, ground, Color(0.42, 0.56, 0.78), own_state)
 	_draw_fighter(_field.target_x, ground, _state_color(state), state)
 
 	var left := _arena_x(minf(_field.attacker_x, _field.target_x))
@@ -818,10 +828,10 @@ func _draw_reach(ground: float) -> void:
 	var edge := _arena_x(_field.attacker_x + _field.facing() * reach)
 	var in_range := _field.gap() <= reach
 	var color := _DIM_TEXT if in_range else _BREAK_LINE
-	draw_line(Vector2(edge, ground - 92.0), Vector2(edge, ground + 6.0), color, 2.0)
+	draw_line(Vector2(edge, ground - 122.0), Vector2(edge, ground + 6.0), color, 2.0)
 	draw_string(
 		get_theme_default_font(),
-		Vector2(edge - 26.0, ground - 98.0),
+		Vector2(edge - 88.0, ground - 128.0),
 		"리치 %.0f" % reach,
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1.0,

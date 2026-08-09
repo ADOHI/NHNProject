@@ -285,3 +285,83 @@ func test_a_long_weapon_opens_where_a_short_one_cannot() -> void:
 	_run_to_end(reaching)
 	assert_eq(dagger.landed(), 0, "단검은 이 거리에서 못 연다")
 	assert_true(reaching.landed() > 0, "대검은 같은 거리에서 연다")
+
+
+# ---------------------------------------------------------------- 적도 때린다
+
+
+func _enemy(cells: int = 1) -> BackpackItem:
+	return _sized(cells)
+
+
+func test_without_an_enemy_weapon_nothing_hits_us() -> void:
+	# 눈금만 보던 옛 사용처가 그대로 돌아야 한다.
+	var bout := BoutScript.new(_items(6), _tuning(), _reaching_field(60.0))
+	bout.start()
+	_run_to_end(bout)
+	assert_false(bout.has_enemy())
+	assert_eq(bout.own_gauge_value(), 0.0, "반격이 없으면 우리 눈금은 안 오른다")
+	assert_eq(bout.enemy_landed(), 0)
+
+
+func test_the_enemy_hits_back() -> void:
+	# **이게 없으면 대련장이 샌드백이다.**
+	var bout := BoutScript.new(_items(12), _tuning(), _reaching_field(60.0), _enemy(1))
+	bout.start()
+	_run_to_end(bout)
+	assert_true(bout.has_enemy())
+	assert_true(bout.enemy_landed() > 0, "적이 한 대도 못 때리면 반격이 아니다")
+	assert_true(bout.own_peak() > 0.0, "우리 눈금이 올라야 한다")
+
+
+func test_our_gauge_can_reach_a_break_state() -> void:
+	var bout := BoutScript.new(_items(30), _tuning(0.0), _reaching_field(60.0), _enemy(1))
+	bout.start()
+	_run_to_end(bout)
+	assert_true(BreakState.is_worse(bout.own_peak_state(), BreakState.Kind.NONE), "오래 맞으면 우리도 무너진다")
+
+
+func test_being_hit_does_not_cut_our_chain() -> void:
+	# **§28.8 이 「우리에게도 걸리나」를 미정으로 뒀다.**
+	# 애니 레인의 반응 층도 「때리다 맞아도 스윙이 안 끊긴다」이므로 지금은 안 끊는다.
+	var bout := BoutScript.new(_items(10), _tuning(0.0), _reaching_field(60.0), _enemy(4))
+	bout.start()
+	_run_to_end(bout)
+	assert_eq(bout.landed(), 10, "맞아도 우리 체인은 끝까지 나간다")
+	assert_eq(bout.stop_reason(), SparringBout.Stop.COMPLETED)
+
+
+func test_a_heavier_enemy_weapon_breaks_us_faster() -> void:
+	var light := BoutScript.new(_items(20), _tuning(0.0), _reaching_field(60.0), _enemy(1))
+	var heavy := BoutScript.new(_items(20), _tuning(0.0), _reaching_field(60.0), _enemy(4))
+	light.start()
+	heavy.start()
+	_run_to_end(light)
+	_run_to_end(heavy)
+	assert_true(heavy.own_peak() > 0.0 and light.own_peak() > 0.0)
+	assert_true(
+		(
+			heavy.own_peak() / maxf(1.0, float(heavy.enemy_landed()))
+			> light.own_peak() / maxf(1.0, float(light.enemy_landed()))
+		),
+		"무거운 무기가 한 방에 더 올린다"
+	)
+
+
+func test_the_enemy_cannot_hit_from_out_of_reach() -> void:
+	# 적도 닿아야 때린다. 다만 못 닿아도 판을 끝내지는 않는다 — 헛칠 뿐이다.
+	var far := _reaching_field(400.0)
+	var bout := BoutScript.new(_items(5), _tuning(), far, _enemy(1))
+	bout.start()
+	_run_to_end(bout)
+	assert_eq(bout.enemy_landed(), 0, "멀면 적도 못 때린다")
+	assert_eq(bout.own_gauge_value(), 0.0)
+
+
+func test_both_gauges_drain_together() -> void:
+	var bout := BoutScript.new(_items(8), _tuning(20.0), _reaching_field(60.0), _enemy(1))
+	bout.start()
+	_run_to_end(bout)
+	# 마무리 관찰이 끝나면 둘 다 빠져 있어야 한다.
+	assert_true(bout.gauge_value() < bout.peak(), "적 눈금이 빠졌다")
+	assert_true(bout.own_gauge_value() < bout.own_peak(), "우리 눈금도 빠졌다")

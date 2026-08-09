@@ -19,6 +19,10 @@ const _MAX_LISTED_STEPS := 8
 ## 대련을 시작하는 간격. 1x1 리치(104)보다 조금 좁아 어떤 무기로도 열 수 있다.
 const DEFAULT_GAP := 96.0
 
+## 적이 들고 있는 것. **적도 때린다** — 없으면 대련장이 샌드백이다.
+## 2x1 은 리치 107 이라 기본 간격 96 에서 닿는다.
+const ENEMY_SHAPE: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0)]
+
 var _grid: BackpackGrid
 
 ## 무너짐 수치들. **확정이 아니다** (§28.8). 여기서 갈아 끼우면 화면이 따라온다.
@@ -64,7 +68,7 @@ func _fire() -> void:
 	if chains.is_empty() or chains[0].length() == 0:
 		return
 	_field.reset(0.0, DEFAULT_GAP)
-	_bout = SparringBout.from_chain(chains[0], _break_tuning, _field)
+	_bout = SparringBout.from_chain(chains[0], _break_tuning, _field, _enemy_weapon())
 	_board.set_bout(_bout)
 	_bout.start()
 
@@ -84,6 +88,18 @@ func _refresh() -> void:
 
 
 ## **전진이 남나 돌아오나는 미정이다** (§28.20.30). 만져 보고 정하라고 열어 둔다.
+## 적의 무기. 표본이라 고정이다.
+func _enemy_weapon() -> BackpackItem:
+	return BackpackItem.new(
+		"enemy_blade",
+		"적 무기",
+		BackpackItem.Kind.WEAPON,
+		ENEMY_SHAPE,
+		Vector2i(0, 0),
+		ChainDirection.Kind.LEFT
+	)
+
+
 func _toggle_advance_mode() -> void:
 	if _field.advance_mode == SparringField.AdvanceMode.STAY:
 		_field.advance_mode = SparringField.AdvanceMode.RETURN
