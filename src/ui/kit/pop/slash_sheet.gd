@@ -224,6 +224,39 @@ func _backplate(front: PackedVector2Array, by: float, at: Vector2, tint: Color) 
 		_follow(front, crescent, tint)
 
 
+## 글자의 윤곽을 **다각형으로** 받아 자리에 앉힌다. `draw_set_transform` 을 안 쓰는 이유는
+## 벤 자국이 **판 좌표**에서 계산되기 때문이다 — 변환을 걸어 둔 채로 넘기면 자국이
+## 글자에만 딴 데서 지나간다. 자리와 기울기를 **점에 미리 발라** 넘긴다.
+func _glyphs(text: String, seat: Vector2, lean: float, tall: int) -> Dictionary:
+	var made := GlyphShape.of(text, FONT, tall, Vector2.ZERO)
+	var pose := Transform2D(lean, seat)
+	var out := {"solid": [] as Array[PackedVector2Array], "hole": [] as Array[PackedVector2Array]}
+	for key: String in ["solid", "hole"]:
+		var bag: Array[PackedVector2Array] = out[key]
+		for ring: PackedVector2Array in made[key]:
+			var moved := PackedVector2Array()
+			for point in ring:
+				moved.append(pose * point)
+			bag.append(moved)
+	return out
+
+
+## 글자 획 하나를 **판 안팎으로 갈라** 칠한다. 안은 `within`, 밖은 `beyond`.
+##
+## 판 위에서 `within` 이 바탕색이면 **구멍**이 되고, 뚫린 자리에 바탕과 똑같은 줄무늬를
+## 깔아 뒤가 이어져 보이게 한다. 판 밖에서는 `beyond` 가 미색이라 글자가 **판**이 된다.
+func _pierce(
+	slab: PackedVector2Array, ring: PackedVector2Array, within: Color, beyond: Color
+) -> void:
+	for inside in Geometry2D.intersect_polygons(ring, slab):
+		_follow(slab, inside, within)
+		if within == _void():
+			for bar in GraphicCut.stripes(inside, -PI * 0.28, 46.0, 15.0, _clock * 34.0):
+				_follow(slab, bar, Color(_paper(), 0.045))
+	for outside in Geometry2D.clip_polygons(ring, slab):
+		_follow(slab, outside, beyond)
+
+
 ## 채워진 판 위의 **주사선.** 망점이 있던 자리다 — 무늬만 바뀌고 판은 그대로다.
 ##
 ## 줄의 색을 부르는 쪽이 정하지 않는다. **면이 어두워지면 주사선은 밝아져야** 하고,
@@ -316,15 +349,30 @@ func _backdrop() -> void:
 	draw_colored_polygon(band, Color(_pick(), 0.16))
 
 
-## 제목 — **글자가 도형이다.** 기울고, 검은 판에 잘리고, 판 밖으로 넘친다.
+## 제목 — **글자가 판을 뚫는다.** 그리고 판 밖으로 나가면 **뒤집힌다.**
+##
+## §20.28 부터 「글자가 도형이다」라고 적어 놓고 실제로는 **도형처럼 다뤘을 뿐**이었다 —
+## 기울이고 걸치고 두 번 찍었지 글자는 끝까지 `draw_string` 이었다. 윤곽선을 다각형으로
+## 받으면(`GlyphShape`) 글자에 **판에 하는 짓을 그대로** 할 수 있다.
+##
+## | 글자가 있는 자리 | 무엇인가 |
+## | --- | --- |
+## | 판 **위** | **구멍이다.** 판이 없어서 뒤의 줄무늬가 그대로 이어져 보인다 |
+## | 판 **밖** | **판이다.** 미색으로 차서 바탕 위에 뜬다 |
+##
+## 뚫린 자리에 까는 줄무늬는 바탕과 **각도 · 간격 · 위상이 같아야** 한다.
+## 하나라도 다르면 구멍이 아니라 **무늬를 칠한 글자**가 된다.
 func _title() -> void:
-	var slab := GraphicCut.lean(Rect2(-30.0, 22.0, 340.0, 62.0), 0.30)
+	# 판을 글자보다 **짧게** 잡는다. 안 넘치면 뒤집힘이 한 번도 안 일어나고,
+	# 그러면 이 실험은 「글자를 다각형으로 그렸다」로만 끝난다.
+	var slab := GraphicCut.lean(Rect2(-30.0, 20.0, 148.0, 68.0), 0.30)
 	_backplate(slab, 0.012, Vector2(7.0, 7.0), _back())
 	_plate(slab, _paper())
-	# 글자를 판보다 크게 잡아 오른쪽으로 넘긴다.
-	draw_set_transform(Vector2(24.0, 74.0), -0.075, Vector2.ONE)
-	draw_string(FONT, Vector2.ZERO, "참격", HORIZONTAL_ALIGNMENT_LEFT, -1, 54, _void())
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var mark := _glyphs("참격", Vector2(22.0, 86.0), -0.075, 76)
+	for ring: PackedVector2Array in mark["solid"]:
+		_pierce(slab, ring, _void(), _paper())
+	for ring: PackedVector2Array in mark["hole"]:
+		_pierce(slab, ring, _paper(), _void())
 	draw_string(
 		FONT,
 		Vector2(PAD, 108.0),
