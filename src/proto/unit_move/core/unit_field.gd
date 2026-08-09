@@ -163,6 +163,12 @@ const _WALL_STEP := 3.0
 ## 세 칸이면 96 픽셀이라 몸 반지름 12 에 내다보는 거리 32 를 더해도 벽에 닿을 수 없다.
 const _WALL_CLEAR := 3
 
+## 양보가 살아남았는지 이만큼 뒤에 견준다(프레임).
+##
+## 3 분의 1 초다. 한 프레임 이동량이 아니라 **얼마 뒤에 실제로 옮겨져 있는가**를 봐야
+## 되돌아오는 것이 잡힌다.
+const _YIELD_WATCH := 20
+
 ## 벽까지의 빈 거리를 이 거리까지만 촘촘히 훑는다(픽셀). 그 너머는 몸이 정하는 값을 쓴다.
 const _WALL_NEAR := 15.0
 
@@ -247,6 +253,31 @@ var rebake_count: int = 0
 var propagate_runs: int = 0
 var propagate_moves: int = 0
 var propagate_cycles: int = 0
+
+## 전파를 진단하는 계기들. **어디서 헛도는지 가르려고 단 것이다.** 사슬 방향 · 깊이 ·
+## 고리 길이 · 방아쇠 빈도를 각각 센다. 계기 숫자를 그대로 결론으로 읽으면 안 되고,
+## 무엇이 늘었는지를 갈라 봐야 한다는 것을 이 판에서 두 번 배웠다.
+var propagate_forward: int = 0
+var propagate_backward: int = 0
+var propagate_depth_total: int = 0
+var propagate_cap_hits: int = 0
+var propagate_cycle_len_total: int = 0
+var propagate_cycle_len_two: int = 0
+var press_agent_frames: int = 0
+var hold_confirms: int = 0
+var propagate_blocked: int = 0
+var propagate_distance: float = 0.0
+
+## 자리를 막은 상대로 사슬을 이어 간 횟수. **진단에서 가장 컸던 구멍을 메운 자리다.**
+var propagate_relays: int = 0
+
+## 양보가 얼마나 살아남는가. **밀어 놓은 거리와 그 뒤의 순수 변위를 나란히 잰다.**
+##
+## 둘이 크게 벌어지면 "비켰다가 도로 돌아온다"는 뜻이고, 그러면 전파가 아무리 돌아도
+## 판은 그대로다. 지금까지 못 보던 각도라 따로 낸다.
+var yield_push_sum: float = 0.0
+var yield_net_sum: float = 0.0
+var yield_watch_count: int = 0
 
 var _by_id: Dictionary = {}
 var _next_id := 1
@@ -407,6 +438,7 @@ func step(delta: float) -> void:
 	for agent in agents:
 		agent.goal_distance = agent.position.distance_to(agent.goal)
 		agent.pushed_ago = mini(agent.pushed_ago + 1, 999)
+		agent.chain_ago = mini(agent.chain_ago + 1, 999)
 		# 벽이 내다보는 거리 밖에 있는가. 한 번 물어 두고 이 프레임 내내 쓴다.
 		var cell := grid.world_to_cell(agent.position)
 		agent.wall_far = grid.clearance_at(cell) >= _WALL_CLEAR
@@ -423,6 +455,7 @@ func step(delta: float) -> void:
 	_walk(delta)
 	_clamp_positions()
 	_update_states(delta)
+	ProtoUnitYield.watch(self, _frame)
 	ProtoUnitJam.review(self, _frame)
 	for order in orders:
 		order.age += delta
@@ -517,6 +550,19 @@ func _plan(agent: ProtoUnitAgent, delta: float) -> void:
 		agent.debug_seek = Vector2.ZERO
 		return
 
+	# **비켜서는 중이면 자기 목적지가 아니라 비켜설 자리로 간다.** 이것이 「지속」이다 -
+	# 상태가 유지되는 동안 조향이 목적지를 다시 가리키지 않으므로 밀어 준 것이 안 지워진다.
+	if agent.is_yielding():
+		if ProtoUnitYield.finished(self, agent):
+			agent.end_yield()
+			if not agent.is_moving():
+				return
+		else:
+			var to_spot := agent.yield_goal - agent.position
+			var length := to_spot.length()
+			agent.steer_dir = to_spot / length if length > 0.001 else agent.steer_dir
+			agent.debug_seek = (agent.steer_dir * tuning.get_value("max_speed") * agent.speed_scale)
+			return
 	var wanted := _seek(agent, delta)
 	var target_speed := tuning.get_value("max_speed") * agent.speed_scale * agent.pace
 	var slow := tuning.get_value("slow_radius")
@@ -564,9 +610,8 @@ func _smoothed(current: Vector2, wanted: Vector2, delta: float) -> Vector2:
 
 ## 걷는다. **빈 자리로만 간다. 남을 옮기는 코드는 여기에 없다.**
 ##
-## 유닛 번호 순으로 처리해 앞선 유닛의 **새 위치**를 본다. 전원의 옛 위치로 한꺼번에 판단하면
-## 둘이 같은 빈 자리로 동시에 들어가고, 그러면 겹침을 사후에 풀어야 한다 - 그것이 바로
-## 걷어낸 장치다. 처리 순서가 번호 순이라 프레임마다 뒤바뀌지도 않는다.
+## 유닛 번호 순으로 처리해 앞선 유닛의 **새 위치**를 본다. 한꺼번에 판단하면 둘이 같은
+## 빈 자리로 동시에 들어가고, 그 겹침을 사후에 풀어야 한다 - 그것이 걷어낸 장치다.
 func _walk(delta: float) -> void:
 	if delta <= 0.0:
 		return
@@ -608,21 +653,13 @@ func _walk(delta: float) -> void:
 
 ## 갈 방향을 **고른다.** 앞이 트여 있으면 고를 것이 없다.
 ##
-## 이것은 옆으로 미는 힘이 아니다. 힘은 이웃이 있기만 하면 늘 걸리고 합쳐져 방향을 정하지만,
-## 여기서는 **앞이 막혔을 때만** 후보를 재고 그중 하나를 고른다. 고른 것에는 다음 프레임에
-## 가산점이 붙어 갈팡질팡하지 않는다.
+## 힘이 아니다 - 힘은 이웃이 있기만 하면 늘 걸리지만 여기서는 **앞이 막혔을 때만** 후보를
+## 재고 하나를 고른다. 점수는 "가고 싶던 방향으로 얼마나 나아가는가"라, 정면이 트이는 순간
+## 반드시 정면이 이긴다. 전부 막히면 **그 자리에 선다** - 서는 것은 올바른 결과다.
 ##
-## 점수는 "가고 싶던 방향으로 얼마나 나아가는가"다. 옆으로 크게 도는 후보는 코사인이 작아
-## 웬만큼 트여 있지 않으면 뽑히지 않고, 정면이 트이는 순간 반드시 정면이 이긴다.
-##
-## 후보가 전부 막히면 0 을 돌려준다. 그러면 유닛은 **그 자리에 선다.** 서 있는 것은 실패가
-## 아니라 올바른 결과다.
-##
-## **드는 문턱과 푸는 문턱을 따로 둔다.** 하나로 두었더니 열린 방에서 꺾임이 33 에서 217 로
-## 뛰었다. 대형 간격이 30 픽셀이라 이웃이 늘 앞에 있고, 문턱 하나면 매 프레임 우회가 켜졌다
-## 꺼졌다 하면서 방향이 30 도씩 널뛰었다. **켜짐 자체가 지터였다** — 힘으로 만들던 것과
-## 똑같은 왕복을 고르기로 되풀이한 것이다. 드는 문턱을 "이번 걸음을 못 걷는다"로 좁히고,
-## 푸는 문턱을 그보다 훨씬 넓게 잡아 한번 돌기 시작하면 정면이 확실히 트일 때까지 돈다.
+## **드는 문턱과 푸는 문턱을 따로 둔다.** 하나로 두었더니 열린 방 꺾임이 33 에서 217 로
+## 뛰었다. 문턱 하나면 매 프레임 우회가 켜졌다 꺼졌다 하고 **그 켜짐 자체가 지터였다** -
+## 힘으로 만들던 왕복을 고르기로 되풀이한 셈이다.
 func _choose_step(agent: ProtoUnitAgent, want_dir: Vector2) -> float:
 	var straight := _room(agent, want_dir, true)
 	if agent.detour != 0.0:
@@ -675,17 +712,9 @@ func _turn_toward(agent: ProtoUnitAgent, wanted: Vector2, delta: float) -> Vecto
 ## 이 방향으로 **얼마나 갈 수 있는가**(픽셀). 이웃의 몸과 벽까지의 빈 거리다.
 ##
 ## 이 한 함수가 예전의 분리력 · 접촉 제약 · 위치 자르기 · 겹침 해소를 통째로 대신한다.
-## 넷 다 "얼마나 세게 밀까"를 물었고, 이것은 "갈 수 있는가"를 묻는다.
-##
-## 이웃마다 광선과 원의 교차를 푼다. 지나쳐 가는 이웃(수직 거리가 몸 지름보다 먼)은 걸리지
-## 않으므로, 스쳐 지나가는 데에 아무 값도 치르지 않는다.
-##
-## **이미 겹쳐 있으면 다가가는 방향은 0 이고 멀어지는 방향은 막지 않는다.** 스폰이나 지형
-## 보정이 만든 겹침이 여기 걸리는데, 겹침을 힘으로 푸는 대신 **더 겹치는 걸음을 금지**하면
-## 유닛이 스스로 빠져나오는 걸음만 고르게 된다.
-##
-## `note_block` 이 참이면 나를 세운 것이 **이미 자리를 잡은 아군**인지도 함께 표시한다.
-## 그 판정 하나를 위해 이웃을 또 훑으면 유닛이 늘 때 비용이 배로 든다.
+## 넷 다 "얼마나 세게 밀까"를 물었고, 이것은 "갈 수 있는가"를 묻는다. 이미 겹쳐 있으면
+## 다가가는 방향만 0 이라 **더 겹치는 걸음만 금지**되고 빠져나오는 걸음은 열려 있다.
+## `note_block` 이 참이면 나를 세운 것이 누구인지도 함께 적는다(훑기 한 벌을 아낀다).
 func _room(agent: ProtoUnitAgent, direction: Vector2, note_block: bool) -> float:
 	var limit := _LOOKAHEAD
 	if note_block:
@@ -821,7 +850,14 @@ func _review_moving(agent: ProtoUnitAgent, arrive: float, crawl: float) -> void:
 	#
 	# 지금은 **뭉치기 전에** 선다. 문에 가장 가까운 유닛부터 바깥으로 기다림이 번져 나가
 	# 줄이 서고, 앞이 비면 `_review_hold` 가 앞에서부터 하나씩 풀어 준다.
+	# 비켜서는 중인 유닛은 제 목적지에서 멀어지는 것이 정상이다. 막힘으로 세면 안 된다.
+	if agent.is_yielding():
+		agent.press_frames = 0
+		agent.grind_frames = 0
+		return
 	var progress := agent.goal_distance - distance
+	if agent.pressed:
+		press_agent_frames += 1
 	if agent.pressed and progress < crawl:
 		agent.press_frames += 1
 	else:
@@ -834,6 +870,7 @@ func _review_moving(agent: ProtoUnitAgent, arrive: float, crawl: float) -> void:
 			# **여기가 전파의 유일한 입구다.** 매 프레임 돌리면 그 자체가 지터가 된다.
 			# 기다림이 확정되는 순간 한 번만, 앞의 사슬에 비키라고 말한다.
 			agent.hold()
+			hold_confirms += 1
 			propagate_moves += ProtoUnitPush.propagate(self, agent)
 			propagate_runs += 1
 		return

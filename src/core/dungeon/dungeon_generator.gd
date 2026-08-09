@@ -4,7 +4,7 @@ extends RefCounted
 ##
 ## **순서가 이 생성기의 전부다.**
 ##
-##     자리(블루 노이즈) -> 삼각분할 -> 간선 선택 -> 고도 -> 방 종류
+##     자리(블루 노이즈) -> 삼각분할 -> **구역** -> 간선 선택 -> 고도 -> 방 종류
 ##
 ## 예전에는 반대였다. 층을 나눠 그래프를 먼저 만들고 나중에 힘 기반 완화로 펼쳤다.
 ## 그 순서에서는 평면에 그릴 수 없는 그래프가 나올 수 있고, 그러면 레이아웃이
@@ -23,7 +23,8 @@ extends RefCounted
 ## | --- | --- |
 ## | 간선이 교차하지 않는다 | 후보가 들로네 부분집합이다 (DelaunayTriangulation) |
 ## | 밀도가 고르다 | 푸아송 디스크 샘플링 (PoissonDiskSampler) |
-## | 모든 방에 도달 가능 | 뼈대에 MST 가 들어 있다 (ProximityGraphs) |
+## | 축척이 둘이다 | 구역 안은 촘촘, 구역 사이는 관문 하나 (DungeonZones) |
+## | 모든 방에 도달 가능 | 뼈대가 갈라지면 가장 짧고 읽히는 들로네 간선으로 붙인다 (DungeonEdgeSelector) |
 ## | 민첩 0 탈출구가 있다 | 입구에서 탈출구까지 지형을 깎는다 (DungeonTerrain) |
 ## | 입구에 갈림길이 있다 | 차수가 모자라면 들로네 간선을 붙인다 (DungeonEdgeSelector) |
 ##
@@ -47,14 +48,25 @@ class Params:
 	var dead_end_ratio_min := 0.14
 	var dead_end_ratio_max := 0.30
 
-	## 입구에서 방 하나 거리만큼 멀어질 때 오르는 고도.
-	var elevation_gain := 0.85
+	## **구역 등급 하나가 오를 때의 단차.**
+	##
+	## 예전에는 "입구에서 방 하나 거리만큼 멀어질 때 오르는 고도"였다. 거리 원뿔은
+	## 어디를 봐도 기울기가 같아 절벽이 생기지 않았다 (DungeonTerrain 주석 참고).
+	##
+	## **기본값이 2 인 것은 스쿼드 기본 민첩으로 넘을 수 있는 크기이기 때문이다.**
+	## 지형으로 판 전체를 막지 않는다 — 벽은 보상 봉우리와 지름길에만 세운다.
+	var elevation_gain := 2.0
 
-	## 지형 기복의 크기. 0 이면 입구를 꼭짓점으로 하는 매끈한 원뿔이 된다.
-	var elevation_amplitude := 2.6
+	## 층 안의 잔 기복. 0 이면 구역마다 칼같이 평평해진다.
+	##
+	## 단차(2)보다 작아야 층이 읽힌다. 크면 노이즈가 층을 덮어 구역 경계가 사라진다.
+	var elevation_amplitude := 1.0
 
 	## 기복의 잔 정도. 크면 옆방끼리 고도가 널뛴다.
-	var elevation_frequency := 0.16
+	##
+	## 이 값은 **던전 성격으로 흔들지 않는다.** 실측에서 신호대잡음이 0.12 였고
+	## 단조롭지도 않았다 (§17.16.3).
+	var elevation_frequency := 0.22
 
 	## 탈출구로 삼을 방을 고를 때의 최소 거리 (최대 거리 대비).
 	##
@@ -88,8 +100,25 @@ func generate() -> DungeonBlueprint:
 
 	var delaunay := DelaunayTriangulation.edges(points)
 	var entrance := _pick_entrance(points, region)
+
+	# 구역을 먼저 나눈다. 간선 선택이 이 위에 서고, 고도와 경로 시공도 그럴 것이다
+	# (docs/design/17-dungeon-generation.md §17.17).
+	var zone_count := DungeonZones.count_for(points.size())
+	var zones := DungeonZones.assign(points, entrance, zone_count)
+	var zone_links := DungeonZones.ring(
+		points,
+		zones,
+		DungeonZones.readable_boundaries(points, delaunay, zones),
+		zone_count,
+		zones[entrance]
+	)
+	var ranks := DungeonZones.ranks(zone_links, zones[entrance], zone_count)
+
+	# 고도는 구역 등급에서 나온다. 구역 안은 평탄하고 경계에서만 층이 진다.
 	var elevations := DungeonTerrain.assign(
 		points,
+		zones,
+		ranks,
 		entrance,
 		_seed,
 		_params.elevation_gain,
@@ -97,19 +126,53 @@ func generate() -> DungeonBlueprint:
 		_params.elevation_frequency
 	)
 
-	var selector := DungeonEdgeSelector.new(points, delaunay, elevations, entrance)
+	var selector := DungeonEdgeSelector.new(
+		points, delaunay, elevations, entrance, zones, zone_links
+	)
 	selector.extra_ratio = _params.extra_edge_ratio
 	selector.dead_end_ratio_min = _params.dead_end_ratio_min
 	selector.dead_end_ratio_max = _params.dead_end_ratio_max
 	var edges := selector.select(_rng)
 
+	# 보상 자리를 먼저 정하고 그 주변을 설계한다. **자격으로 걸러서 고른다** —
+	# 차수 4 를 만들 수 있고 두 경로를 낼 수 있는 방만 후보다 (DungeonRouteBuilder).
+	var prize := DungeonRouteBuilder.pick_prize(
+		points, delaunay, elevations, zones, ranks, entrance
+	)
+	edges = DungeonRouteBuilder.expose(points, delaunay, edges, prize)
+	edges = DungeonRouteBuilder.ensure_two_routes(points, delaunay, edges, entrance, prize)
+
+	# **막다른 방 관리가 위상의 마지막이다.** 위 두 단계가 간선을 더하며 정찰 지점을 먹으므로
+	# 여기서 V5 하한을 다시 맞춘다. 방금 시공한 두 경로는 끊지 않는다.
+	# 두 경로의 간선과 **보상 방에 붙은 간선 전부**를 지킨다. 노출(차수 4)이 여기서 깎이면
+	# P3 가 깨진다 — 실측에서 보스 차수가 4 에서 2 로 떨어진 판이 있었다.
+	var planned := DungeonRouteBuilder.routes(points.size(), edges, entrance, prize)
+	var guarded := _route_edges(planned)
+	guarded.append_array(_edges_at(edges, prize))
+	edges = selector.enforce_dead_end_floor(edges, guarded)
+
+	# 여기서부터 고도를 건드린다. **깎는 것이 먼저, 세우는 것이 마지막이다.**
+	# 반대로 하면 탈출 통로가 방금 세운 경사로를 도로 0 으로 깎는다 (DungeonTerrain 주석).
+	# **탈출 경로가 보상 방을 지나면 안 된다.** 지나면 봉우리가 바닥까지 깎여 보스 방의
+	# 필요 민첩이 0 이 되고 V3 가 깨진다. 그래서 탈출구를 고를 때 **비켜 가는 길이 있는지
+	# 함께 본다** — 고른 뒤에 확인하고 물러나는 것이 아니라 자격으로 거른다 (§17.17.9).
 	var parents := _breadth_first(points.size(), edges, entrance)
-	var exit_index := _pick_exit(parents, entrance)
-	var route := _route_to(parents, exit_index)
+	var exit_index := _pick_exit(parents, entrance, prize)
+	var route := _route_avoiding(points.size(), edges, entrance, exit_index, prize)
+	if route.is_empty():
+		exit_index = _pick_exit_clear_of(points.size(), edges, parents, entrance, prize)
+		route = _route_avoiding(points.size(), edges, entrance, exit_index, prize)
+	if route.is_empty():
+		route = _route_to(parents, exit_index)
 	elevations = DungeonTerrain.carve_route(elevations, route)
+
+	var routes := DungeonRouteBuilder.routes(points.size(), edges, entrance, prize)
+	elevations = DungeonTerrain.sharpen(
+		elevations, routes["fast"], routes["slow"], edges, entrance, route
+	)
 	elevations = DungeonTerrain.ensure_a_climb_exists(elevations, _farthest_off(parents, route), 2)
 
-	return _assemble(points, edges, elevations, entrance, exit_index)
+	return _assemble(points, edges, elevations, entrance, exit_index, prize)
 
 
 # ---------------------------------------------------------------- 자리 고르기
@@ -139,7 +202,7 @@ func _pick_entrance(points: PackedVector2Array, region: Vector2) -> int:
 ##
 ## 코앞에 있으면 "언제 나갈까"가 판단이 아니라 반사 신경이 된다
 ## (docs/design/02-overview.md §2.3-A).
-func _pick_exit(parents: Dictionary, entrance: int) -> int:
+func _pick_exit(parents: Dictionary, entrance: int, prize: int) -> int:
 	var depths: Dictionary = parents["depth"]
 	var deepest := 0
 	for index in depths:
@@ -148,7 +211,8 @@ func _pick_exit(parents: Dictionary, entrance: int) -> int:
 
 	var candidates: Array[int] = []
 	for index in depths:
-		if index != entrance and int(depths[index]) >= threshold:
+		# 보상 방을 탈출구로 쓰면 봉우리가 바닥까지 깎여 두 경로가 무의미해진다.
+		if index != entrance and index != prize and int(depths[index]) >= threshold:
 			candidates.append(int(index))
 	if candidates.is_empty():
 		return entrance
@@ -204,6 +268,118 @@ func _breadth_first(count: int, edges: Array[Vector2i], start: int) -> Dictionar
 	return {"depth": depth, "parent": parent}
 
 
+## 보상 방을 비켜 가는 탈출 경로가 있는 탈출구. 없으면 원래 후보를 그대로 돌려준다.
+##
+## **너비 우선 탐색을 한 번만 한다.** 후보마다 경로를 찾아 보게 두었더니 방 50개에서
+## 생성이 20 ms 를 넘었다(프레임 예산 16.7). 보상 방을 지운 그래프에서 입구에서 닿는
+## 방들을 한 번에 구하면, 그 안에 있는 후보는 비켜 가는 길이 있다는 뜻이다.
+func _pick_exit_clear_of(
+	count: int, edges: Array[Vector2i], parents: Dictionary, entrance: int, prize: int
+) -> int:
+	var depths: Dictionary = parents["depth"]
+	var deepest := 0
+	for index in depths:
+		deepest = maxi(deepest, int(depths[index]))
+	var threshold := int(ceil(float(deepest) * _params.exit_distance_ratio))
+	var clear := _reachable_without(count, edges, entrance, prize)
+
+	var best := -1
+	var best_depth := -1
+	for index in depths:
+		if index == entrance or index == prize or int(depths[index]) < threshold:
+			continue
+		if not clear.has(int(index)):
+			continue
+		# 먼 쪽을 고른다. 탈출구는 거리로 값을 치르는 자리다 (§17.4.1).
+		if int(depths[index]) > best_depth:
+			best_depth = int(depths[index])
+			best = int(index)
+	return best if best >= 0 else _pick_exit(parents, entrance, prize)
+
+
+## avoid 를 지운 그래프에서 입구에서 닿는 방들.
+func _reachable_without(count: int, edges: Array[Vector2i], start: int, avoid: int) -> Dictionary:
+	var neighbors := {}
+	for index in count:
+		neighbors[index] = [] as Array[int]
+	for edge in edges:
+		if edge.x == avoid or edge.y == avoid:
+			continue
+		(neighbors[edge.x] as Array[int]).append(edge.y)
+		(neighbors[edge.y] as Array[int]).append(edge.x)
+
+	var seen := {start: true}
+	var frontier: Array[int] = [start]
+	while not frontier.is_empty():
+		var current: int = frontier.pop_front()
+		for other in neighbors[current] as Array[int]:
+			if seen.has(other):
+				continue
+			seen[other] = true
+			frontier.append(other)
+	return seen
+
+
+## 그 방에 붙은 간선들.
+func _edges_at(edges: Array[Vector2i], node: int) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	if node < 0:
+		return result
+	for edge in edges:
+		if edge.x == node or edge.y == node:
+			result.append(edge)
+	return result
+
+
+## 두 경로가 쓰는 간선들. 막다른 방을 만들려고 끊을 때 이것만은 지킨다.
+func _route_edges(routes: Dictionary) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	for key in ["fast", "slow"]:
+		var route: PackedInt32Array = routes[key]
+		for index in range(1, route.size()):
+			result.append(DelaunayTriangulation.edge_key(route[index - 1], route[index]))
+	return result
+
+
+## 입구에서 target 까지, **avoid 를 지나지 않는** 경로. 없으면 빈 배열.
+##
+## 보상 방이 절단점이면 비켜 갈 수 없다. 그때는 부르는 쪽이 보통 경로로 물러난다.
+func _route_avoiding(
+	count: int, edges: Array[Vector2i], start: int, target: int, avoid: int
+) -> PackedInt32Array:
+	var result := PackedInt32Array()
+	if target < 0 or start == target:
+		return result
+	var neighbors := {}
+	for index in count:
+		neighbors[index] = [] as Array[int]
+	for edge in edges:
+		if edge.x == avoid or edge.y == avoid:
+			continue
+		(neighbors[edge.x] as Array[int]).append(edge.y)
+		(neighbors[edge.y] as Array[int]).append(edge.x)
+
+	var parent := {start: -1}
+	var frontier: Array[int] = [start]
+	while not frontier.is_empty():
+		var current: int = frontier.pop_front()
+		if current == target:
+			break
+		for other in neighbors[current] as Array[int]:
+			if parent.has(other):
+				continue
+			parent[other] = current
+			frontier.append(other)
+	if not parent.has(target):
+		return result
+
+	var walk := target
+	while walk >= 0:
+		result.append(walk)
+		walk = int(parent[walk])
+	return result
+
+
 ## 입구에서 target 까지의 경로 (방 인덱스 목록).
 func _route_to(parents: Dictionary, target: int) -> PackedInt32Array:
 	var parent: Dictionary = parents["parent"]
@@ -228,7 +404,8 @@ func _assemble(
 	edges: Array[Vector2i],
 	elevations: PackedInt32Array,
 	entrance: int,
-	exit_index: int
+	exit_index: int,
+	prize: int
 ) -> DungeonBlueprint:
 	var skeleton := DungeonBlueprint.new()
 	for index in points.size():
@@ -242,6 +419,7 @@ func _assemble(
 		skeleton.build(),
 		_id_of(entrance),
 		_id_of(exit_index),
+		_id_of(prize) if prize >= 0 else "",
 		_rng,
 		_params.treasure_ratio,
 		_params.hazard_ratio

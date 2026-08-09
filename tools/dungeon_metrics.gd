@@ -197,11 +197,19 @@ static func degrees_of(count: int, edges: Array[Vector2i]) -> Dictionary:
 	return result
 
 
+## 인접 목록. **범위 밖 간선은 조용히 넘기지 않고 시끄럽게 실패한다.**
+##
+## 한 번 여기서 "Invalid cast" 가 났는데 GDScript 가 그 호출만 건너뛰고 계속 돌아서
+## 지표가 틀린 값으로 계산됐다. 그 뒤 실행에서는 재현되지 않았다(스크립트 캐시로 짐작한다).
+## **소리 없이 틀린 수를 내놓는 것이 가장 비싸다.** 그래서 원인을 남기는 검사를 둔다.
 static func adjacency(count: int, edges: Array[Vector2i]) -> Dictionary:
 	var result := {}
 	for index in count:
 		result[index] = [] as Array[int]
 	for edge in edges:
+		if edge.x < 0 or edge.y < 0 or edge.x >= count or edge.y >= count:
+			push_error("방 범위를 벗어난 간선입니다: %s (방 %d개)" % [edge, count])
+			continue
 		(result[edge.x] as Array[int]).append(edge.y)
 		(result[edge.y] as Array[int]).append(edge.x)
 	return result
