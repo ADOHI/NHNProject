@@ -689,6 +689,68 @@ func _review_hold(agent: ProtoUnitAgent, arrive: float) -> void:
 		return
 	if not _settled_ahead(agent):
 		agent.resume()
+		return
+	# **우리 무리가 다 자리를 잡았고 나를 막은 것이 그중 하나면, 여기가 내 자리다.**
+	#
+	# `양보`는 §8 이 "되돌아올 수 있는 정지"라고 못 박은 상태이고, 풀리는 길이 둘뿐이었다 -
+	# 내 자리를 남이 차지했거나(`_slot_taken`), 앞이 트이거나(`_settled_ahead`).
+	# **앞의 유닛이 `도착`으로 굳어 버리면 둘 다 영원히 안 풀린다.** 실제로 열린 곳은 어느
+	# 인원에서도 40 초가 지나도록 `양보`가 서넛에서 아홉씩 남아 있었다(README §26).
+	#
+	# **되돌아올 수 있는 정지에는 예산이 있어야 한다** - `_watch_grinding` 이 `hold_retries`
+	# 로 이미 배운 규칙이고 여기에만 빠져 있었다. 다만 **예산을 시간이나 「판이 조용한가」로
+	# 주면 안 된다.** 그렇게 해 봤더니 `test_waiting_unit_resumes_when_the_blocker_leaves` 와
+	# `test_waiting_never_becomes_giving_up` 이 깨졌다 - 막고 선 아군이 가만히 있는 판이
+	# 바로 "기다리면 언젠가 비킨다"가 성립하는 판이라서, 조용하다는 것이 곧 가망 없다는
+	# 뜻이 아니다. **그 둘을 가르는 것은 조용함이 아니라 「누가 막고 있는가」다.**
+	#
+	# 가망이 없는 것은 이 짜임뿐이다 - **같은 명령을 받은 무리가 전부 자리를 잡았고, 나를
+	# 막고 선 것이 그중 하나**일 때. 자리를 잡은 유닛은 다시 안 움직이고, 같은 명령의
+	# 누구도 더 걷지 않으니 판이 바뀔 계기가 남아 있지 않다. `_slot_taken` 이 "내 자리에
+	# 남이 서 있으면 여기가 내 자리다"라고 한 것과 같은 판단을 한 칸 넓힌 것이다.
+	#
+	# 남이 막은 경우(명령이 다른 유닛, 세워 둔 유닛)는 여기 안 걸린다. 그쪽은 언제든
+	# 비킬 수 있고, 비키면 `_settled_ahead` 가 풀어 준다.
+	if _order_done_except_waiters(agent) and _blocked_by_own_settled(agent):
+		agent.settle(ProtoUnitAgent.State.ARRIVED)
+
+
+## 같은 명령을 받은 무리 중에 아직 **걷고 있는** 유닛이 있는가. 없으면 판이 더 안 바뀐다.
+##
+## `양보`로 선 유닛은 세지 않는다 - 그들도 나와 같은 처지라 서로를 기다려 봐야 소용없다.
+func _order_done_except_waiters(agent: ProtoUnitAgent) -> bool:
+	var order: MoveOrder = _order_cache.get(agent.order_id, null)
+	if order == null:
+		return false
+	for id in order.member_ids:
+		var other: ProtoUnitAgent = _by_id.get(id, null)
+		if other != null and other.is_moving():
+			return false
+	return true
+
+
+## 나를 막고 선 것이 **같은 명령을 받았다가 이미 자리를 잡은 아군**인가.
+##
+## `settle` 이 `order_id` 를 0 으로 지우므로 상대의 소속은 명령의 명단으로 묻는다.
+## 기다리는 유닛만 이 길로 오고 그마저 `_HOLD_REVIEW_FRAMES` 마다라 값이 크지 않다.
+func _blocked_by_own_settled(agent: ProtoUnitAgent) -> bool:
+	if agent.steer_dir == Vector2.ZERO:
+		return false
+	var order: MoveOrder = _order_cache.get(agent.order_id, null)
+	if order == null:
+		return false
+	for other in _scratch:
+		if other.state != ProtoUnitAgent.State.ARRIVED:
+			continue
+		if not order.member_ids.has(other.id):
+			continue
+		var offset := other.position - agent.position
+		var gap := offset.length()
+		if gap > agent.radius + other.radius + ProtoUnitStep.HOLD_RELEASE:
+			continue
+		if gap > 0.001 and offset.dot(agent.steer_dir) / gap >= ProtoUnitStep.AHEAD_CONE:
+			return true
+	return false
 
 
 ## 자리를 잡은 아군이 아직 앞을 막고 있는가. 기다리는 유닛만 이 길로 온다.

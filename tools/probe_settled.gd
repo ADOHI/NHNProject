@@ -25,8 +25,7 @@ const _CELL := 32.0
 
 func _initialize() -> void:
 	_after_settle("좁은 통로 100", _choke_field(100, 2), Vector2(1500, 545))
-	_after_settle("열린 곳 39", _open_field(39), Vector2(1500, 545))
-	_after_settle("열린 곳 42", _open_field(42), Vector2(1500, 545))
+	_after_settle("열린 곳 100", _open_field(100), Vector2(1500, 545))
 	_open_series()
 	quit()
 
@@ -127,7 +126,10 @@ func _after_settle(label: String, field: ProtoUnitField, target: Vector2) -> voi
 ## 열린 곳을 인원을 하나씩 올려 가며 잰다. **40 만 늦으면 그 판의 배치다.**
 func _open_series() -> void:
 	print("")
-	print("## 열린 곳 인원별 정지")
+	print("## 열린 곳 인원별 정지 - 한 칸씩")
+	print("")
+	print("**눈금 사이가 넓으면 사이에 있는 것은 없는 것이 된다.** 표가 4, 8, 12, 24, 40, 100 만")
+	print("재는 동안 42 와 48 이 헐거워진 것을 아무도 못 봤다. 어디가 헐거운지 지도를 만든다.")
 	print("")
 	print("**정지 두 칸을 나란히 낸다.** 지표가 쓰는 `moving_count()` 는 `이동`만 세므로")
 	print("`양보`로 선 유닛이 남아 있어도 0 이 된다. 그런데 `양보`는 되돌아올 수 있는 정지라")
@@ -135,7 +137,7 @@ func _open_series() -> void:
 	print("")
 	print("| 인원 | 정지 (이동만) | 정지 (양보까지) | 멎을 때 양보 | 뒤진동 |")
 	print("| --- | --- | --- | --- | --- |")
-	for count in [32, 36, 37, 38, 39, 40, 41, 42, 44, 48]:
+	for count in range(32, 51):
 		var field := _open_field(count)
 		field.issue_move(field.all_ids(), Vector2(1500, 545))
 		var elapsed := 0.0

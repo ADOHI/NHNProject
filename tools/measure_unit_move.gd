@@ -43,7 +43,8 @@ extends SceneTree
 ## | 정지밀림 | **서 있는 유닛이 제 뜻과 무관하게 옮겨진 총 거리. 0 이어야 한다** |
 ## | 최대겹침 | 몸이 서로 파고든 최대 깊이. 통과하려면 몸 지름까지 자라야 한다 |
 ## | 막힌이동 | 가려 했으나 앞이 막혀 못 간 거리. 밀치기를 걷어낸 값이다 |
-## | 정지 | 명령부터 전원이 멎기까지의 시간 |
+## | 정지 | 명령부터 **`이동` 상태가 없어지기까지**의 시간. `양보`는 안 센다 |
+## | **전원끝** | **`이동`도 `양보`도 없어지기까지**의 시간. 이쪽이 "전원이 끝났다"이다 |
 ## | 90% | 열에 아홉이 멎기까지의 시간. 정지와의 차이가 뒤끝이다 |
 ## | 통과 | 전원이 벽 너머로 넘어가기까지의 시간(괄호는 못 넘은 인원) |
 ## | 뒤진동 | 멎은 뒤 3 초 동안 움직인 총 거리 |
@@ -363,6 +364,8 @@ func _measure(
 	var cycle_longest := 0
 	var elapsed := 0.0
 	var settle_time := -1.0
+	# **`이동`도 `양보`도 없는 시각.** 「정지」와 다르다 - 그쪽은 `이동`만 센다.
+	var done_time := -1.0
 	var ninety_time := -1.0
 	var cross_time := -1.0
 	var worst_usec := 0
@@ -431,6 +434,8 @@ func _measure(
 			ninety_time = elapsed
 		if cross_time < 0.0 and cross_x > 0.0 and _all_past(field, cross_x):
 			cross_time = elapsed
+		if done_time < 0.0 and moving == 0 and _waiting_count(field) == 0:
+			done_time = elapsed
 		if moving == 0:
 			settle_time = elapsed
 			break
@@ -440,6 +445,9 @@ func _measure(
 		resting.append(agent.position)
 	for _i in int(_AFTER_SECONDS / _STEP):
 		field.step(_STEP)
+		elapsed += _STEP
+		if done_time < 0.0 and field.moving_count() == 0 and _waiting_count(field) == 0:
+			done_time = elapsed
 	var after := 0.0
 	for index in count:
 		after += resting[index].distance_to(field.agents[index].position)
@@ -461,6 +469,17 @@ func _measure(
 			giving_up += 1
 		elif agent.state == ProtoUnitAgent.State.HOLDING:
 			waiting += 1
+
+	# **`전원끝` 만 마저 찾는다.** 위 칸을 전부 뽑은 뒤에 도는 자리라 옛 칸은 하나도 안 건드린다.
+	#
+	# 「정지」는 `이동` 상태가 없어진 시각이고, `양보`로 선 유닛은 그 뒤에도 남아 있다.
+	# 「정지」를 고치면 이 레인의 표가 §11 부터 통째로 끊기므로, **옛 칸은 그대로 두고
+	# 진실을 적는 칸을 하나 더 붙인다.** 둘을 나란히 실으면 그 차이가 그대로 증거다.
+	while done_time < 0.0 and elapsed < _MAX_SECONDS:
+		field.step(_STEP)
+		elapsed += _STEP
+		if field.moving_count() == 0 and _waiting_count(field) == 0:
+			done_time = elapsed
 	return {
 		"label": label,
 		"units": count,
@@ -493,6 +512,7 @@ func _measure(
 		"wiggle": wiggle / float(count),
 		"push": field.overlap_push_total,
 		"settle": settle_time,
+		"done": done_time,
 		"ninety": ninety_time,
 		"cross": cross_time,
 		"stranded": stranded,
@@ -555,6 +575,18 @@ func _smallest_body(field: ProtoUnitField) -> float:
 	return 0.0 if smallest == INF else smallest * 2.0
 
 
+## `양보`(HOLDING)로 선 유닛 수. **`moving_count()` 가 안 세는 쪽이다.**
+##
+## `양보`는 §8 이 "되돌아올 수 있는 정지"라고 못 박은 상태다. 그런데 지표는 `이동`만 세어
+## 멎었는지를 물어 왔고, 그래서 아홉 명이 살아 있는 판을 "전원 멎음"으로 적었다.
+func _waiting_count(field: ProtoUnitField) -> int:
+	var waiting := 0
+	for agent in field.agents:
+		if agent.state == ProtoUnitAgent.State.HOLDING:
+			waiting += 1
+	return waiting
+
+
 func _all_past(field: ProtoUnitField, cross_x: float) -> bool:
 	for agent in field.agents:
 		if agent.position.x < cross_x:
@@ -573,20 +605,20 @@ func _print_table(rows: Array[Dictionary]) -> void:
 	print(
 		(
 			"| 상황 | 걸음꺾임 | 방향반전 /초 | 옆걸음 px | 눌림 % | 역주행 % | 굽이 | 튕김 최대 "
-			+ "| 정지 | 90% | 통과 | 뒤진동 | 막힘 | 양보 | 흐름장 | step 평균 | step 최악 |"
+			+ "| 정지 | 전원끝 | 90% | 통과 | 뒤진동 | 막힘 | 양보 | 흐름장 | step 평균 | step 최악 |"
 		)
 	)
 	print(
 		(
 			"| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- "
-			+ "| --- | --- | --- | --- |"
+			+ "| --- | --- | --- | --- | --- |"
 		)
 	)
 	for row in rows:
 		print(
 			(
 				(
-					"| %s | %.0f | %.2f | %.0f | %.0f | %.1f | %.2f | %.1f px | %s | %s | %s "
+					"| %s | %.0f | %.2f | %.0f | %.0f | %.1f | %.2f | %.1f px | %s | %s | %s | %s "
 					+ "| %.1f px | %d | %d | %.1f ms | %.3f ms | %.2f ms |"
 				)
 				% [
@@ -599,6 +631,7 @@ func _print_table(rows: Array[Dictionary]) -> void:
 					row["wiggle"],
 					row["peak"],
 					_seconds(row["settle"]),
+					_seconds(row["done"]),
 					_seconds(row["ninety"]),
 					_crossing(row["cross"], row["stranded"]),
 					row["after"],
