@@ -10,6 +10,12 @@ const FIRST_SEED := 1
 const _SHEET_SHADER := preload("res://src/ui/style/shaders/press_sheet.gdshader")
 
 var _seed := FIRST_SEED
+
+## 지금 보고 있는 던전 성격 (DungeonCatalog 의 색인).
+##
+## 아웃게임에 성격을 고르는 화면이 아직 없다. 그래서 개발 화면에서는 **새 판을 찍을 때마다
+## 차례로 돈다** — 다섯을 다 보려면 생성 버튼을 다섯 번 누르면 된다.
+var _character := 0
 var _debug_visible := false
 var _sheet: ShaderMaterial
 
@@ -100,6 +106,9 @@ func _unhandled_input(event: InputEvent) -> void:
 ## 시드가 없으면 다시 볼 수 없다 (docs/design/17-dungeon-generation.md §17.7).
 func _generate_new() -> void:
 	_seed = randi() % 1000000
+	# 성격도 함께 돈다. 다섯을 다 보려면 다섯 번 누른다 (_character 주석 참고).
+	_character = DungeonCatalog.wrapped(_character + 1)
+	_update_size_label()
 	_build_run()
 	# 판을 통째로 새로 짠 것이므로 종이를 찢고 다시 찍는다.
 	_print_edition(true)
@@ -107,7 +116,7 @@ func _generate_new() -> void:
 
 func _build_run() -> void:
 	# 판은 여기서 만들어 화면 둘에 나눠 준다. 화면끼리 서로의 내부를 들여다보지 않는다.
-	var run := SampleDungeons.create_run(_seed, int(_size_slider.value))
+	var run := SampleDungeons.create_run(_seed, int(_size_slider.value), _character)
 	_board.setup(run, _seed)
 	_overlay.bind(run, _seed)
 	if not _board.player_acted.is_connected(_overlay.refresh):
@@ -121,7 +130,10 @@ func _build_run() -> void:
 
 func _update_size_label() -> void:
 	var size := int(_size_slider.value)
-	_size_label.text = "판 크기 %d   (칸 %d개 안팎)" % [size, SampleDungeons.room_estimate(size)]
+	_size_label.text = (
+		"%s   크기 %d (칸 %d개 안팎)"
+		% [DungeonCatalog.name_of(_character), size, SampleDungeons.room_estimate(size)]
+	)
 
 
 ## 개발 모드를 켜고 끈다.

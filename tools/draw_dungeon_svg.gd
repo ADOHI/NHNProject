@@ -39,6 +39,9 @@ const _MARGIN := 44.0
 
 const _SEEDS: Array[int] = [11, 23, 47, 91]
 
+## 성격 그림에 쓸 방 개수. 다섯을 **같은 크기**로 그려야 성격만 비교된다.
+const _CHARACTER_ROOMS := 30
+
 ## 사용자 요구 방 개수. 지금 슬라이더 최대(32 안팎) 밖이다.
 const _ROOMS := 50
 
@@ -69,8 +72,23 @@ func _initialize() -> void:
 		target = "res://%s" % arguments[0]
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(target))
 
-	var now := _sheet("지금 생성기", _current_boards())
-	var proto := _sheet("설계안 프로토타입", _proto_boards())
+	var characters := _sheet("던전 성격 후보 — 같은 시드 %d, 파라미터만 다르다" % _SEEDS[0], _character_boards())
+	_write("%s/dungeon_characters.svg" % target, characters, "성격")
+	_write(
+		"%s/dungeon_characters.html" % target,
+		(
+			(
+				'<!doctype html><meta charset="utf-8"><title>던전 성격 후보</title>'
+				+ '<body style="margin:0;background:#0e0e12;color:#e8e8ee;font-family:sans-serif">'
+				+ "%s</body>"
+			)
+			% characters
+		),
+		"성격 묶음"
+	)
+
+	var now := _sheet("지금 생성기 — 구역·관문까지 적용 (덩어리 2/5)", _current_boards())
+	var proto := _sheet("설계안 프로토타입 — 고도·경로 시공까지 (덩어리 3~4 가 남았다)", _proto_boards())
 	_write("%s/dungeon_now.svg" % target, now, "현재")
 	_write("%s/dungeon_proto.svg" % target, proto, "설계안")
 	_write(
@@ -113,6 +131,24 @@ func _current_boards() -> Array[Dictionary]:
 		params.room_count = _ROOMS
 		var board := Metrics.from_blueprint(DungeonGenerator.new(seed_value, params).generate())
 		board["seed"] = seed_value
+		_attach_routes(board)
+		result.append(board)
+	return result
+
+
+## 던전마다 파라미터를 달리 준 판들. **시드는 전부 같다.**
+##
+## 시드를 같이 두는 것이 요점이다. 판이 달라 보이는 이유가 운이 아니라
+## **파라미터**라는 것을 한눈에 보이게 한다.
+func _character_boards() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for index in DungeonCatalog.count():
+		var params := DungeonGenerator.Params.new()
+		params.room_count = _CHARACTER_ROOMS
+		DungeonCatalog.apply(params, index)
+		var board := Metrics.from_blueprint(DungeonGenerator.new(_SEEDS[0], params).generate())
+		board["seed"] = _SEEDS[0]
+		board["label"] = DungeonCatalog.name_of(index)
 		_attach_routes(board)
 		result.append(board)
 	return result
@@ -248,7 +284,16 @@ func _board(board: Dictionary, origin: Vector2) -> String:
 			% [origin.x + 6.0, origin.y + 6.0, _CELL.x - 12.0, _CELL.y - 12.0]
 		)
 	)
-	parts.append(_caption(board, origin))
+	if board.has("label"):
+		parts.append(
+			(
+				'<text x="%.0f" y="%.0f" fill="#e8e8ee" font-size="20" font-weight="bold">%s</text>'
+				% [origin.x + 18.0, origin.y + 26.0, board["label"]]
+			)
+		)
+		parts.append(_caption(board, origin + Vector2(0.0, 18.0)))
+	else:
+		parts.append(_caption(board, origin))
 
 	parts.append(_route(placed, board.get("slow", PackedInt32Array()), "#2fbf8f", 13.0))
 	parts.append(_route(placed, board.get("fast", PackedInt32Array()), "#ff8a3d", 13.0))
@@ -273,6 +318,26 @@ func _caption(board: Dictionary, origin: Vector2) -> String:
 		if elevations[edge.x] == elevations[edge.y]:
 			flat += 1
 
+	# **성격이 쓰는 축은 전부 머리글에 있어야 한다.** 「먼 출구」와 「금고층」은 위상을
+	# 건드리지 않아서 간선·고리만 적으면 다른 판과 구별되지 않는다.
+	var kinds: Dictionary = board["kinds"]
+	var treasures := 0
+	var hazards := 0
+	var exit_room := -1
+	for index in points.size():
+		match kinds.get(index, Room.Kind.EMPTY):
+			Room.Kind.TREASURE:
+				treasures += 1
+			Room.Kind.HAZARD:
+				hazards += 1
+			Room.Kind.EXIT:
+				exit_room = index
+	var exit_hops := 0
+	if exit_room >= 0:
+		exit_hops = int(
+			Metrics.depths(points.size(), edges, int(board["entrance"])).get(exit_room, 0)
+		)
+
 	var fast: PackedInt32Array = board.get("fast", PackedInt32Array())
 	var slow: PackedInt32Array = board.get("slow", PackedInt32Array())
 	var fast_text := "없음"
@@ -288,8 +353,9 @@ func _caption(board: Dictionary, origin: Vector2) -> String:
 			% [origin.x + 18.0, origin.y + 30.0]
 		)
 		+ (
-			"seed %d · 방 %d · 간선 %d · 고리 %d · 평지 %d%% · 최고 고도 %d</text>"
+			"%sseed %d · 방 %d · 간선 %d · 고리 %d · 평지 %d%% · 최고 고도 %d</text>"
 			% [
+				("%s — " % board["label"]) if board.has("label") else "",
 				int(board["seed"]),
 				points.size(),
 				edges.size(),
@@ -306,7 +372,27 @@ func _caption(board: Dictionary, origin: Vector2) -> String:
 			+ '<tspan fill="#ff8a3d">빠른 길</tspan> %s   ' % fast_text.replace("**", "")
 			+ '<tspan fill="#2fbf8f">돌아가는 길</tspan> %s</text>' % slow_text.replace("**", "")
 		)
+		+ (
+			(
+				'<text x="%.0f" y="%.0f" fill="#8a8a98" font-size="14">'
+				% [origin.x + 18.0, origin.y + 70.0]
+			)
+			+ (
+				"탈출구까지 %d칸 · 막다른 방 %d · 귀중품 %d · 위험방 %d</text>"
+				% [exit_hops, _dead_ends(points.size(), edges), treasures, hazards]
+			)
+		)
 	)
+
+
+## 차수 1 인 방의 수. 정찰 지점이 몇 군데인가 (§17.2).
+func _dead_ends(count: int, edges: Array[Vector2i]) -> int:
+	var degrees := Metrics.degrees_of(count, edges)
+	var total := 0
+	for index in count:
+		if int(degrees[index]) <= 1:
+			total += 1
+	return total
 
 
 func _peak_climb(route: PackedInt32Array, elevations: PackedInt32Array) -> int:
