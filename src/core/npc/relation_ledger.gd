@@ -139,19 +139,29 @@ func describe(cause: int, registry: PersonRegistry) -> String:
 func _sentence(kind: RelationEvent.Kind, actor: String, first: String, count: int) -> String:
 	var subject := KoreanParticle.subject(actor)
 	var object_of := KoreanParticle.object_of(first)
+	var text := "협력 • %s%s %s" % [actor, KoreanParticle.conjunction(actor), first]
 	match kind:
 		RelationEvent.Kind.BETRAYAL:
-			return "배신 • %s%s %s%s" % [actor, subject, first, object_of]
+			text = "배신 • %s%s %s%s" % [actor, subject, first, object_of]
+		RelationEvent.Kind.AMBUSH:
+			text = "선제공격 • %s%s %s%s 쳤다" % [actor, subject, first, object_of]
+		RelationEvent.Kind.PLUNDER:
+			text = "약탈 • %s%s %s%s 털었다" % [actor, subject, first, object_of]
+		RelationEvent.Kind.DESERT:
+			text = "유기 • %s%s %s%s 두고 나왔다" % [actor, subject, first, object_of]
+		RelationEvent.Kind.BARGAIN:
+			text = "협상 • %s%s %s와 손을 뗐다" % [actor, subject, first]
+		RelationEvent.Kind.PASS_BY:
+			text = "지나침 • %s%s %s%s 못 본 척했다" % [actor, subject, first, object_of]
 		RelationEvent.Kind.RESCUE:
-			return "구조 • %s%s %s%s 끌고 나왔다" % [actor, subject, first, object_of]
+			text = "구조 • %s%s %s%s 끌고 나왔다" % [actor, subject, first, object_of]
 		RelationEvent.Kind.INFORM:
-			return "정보 • %s%s %s에게 알렸다" % [actor, subject, first]
+			text = "정보 • %s%s %s에게 알렸다" % [actor, subject, first]
 		RelationEvent.Kind.AFTERMATH:
-			return "후유증 • %s%s 제거되고 돌아왔다" % [actor, subject]
+			text = "후유증 • %s%s 제거되고 돌아왔다" % [actor, subject]
 		RelationEvent.Kind.WIPEOUT:
-			return "전멸 • %s%s 이끈 원정에서 %d명" % [actor, subject, count]
-		_:
-			return "협력 • %s%s %s" % [actor, KoreanParticle.conjunction(actor), first]
+			text = "전멸 • %s%s 이끈 원정에서 %d명" % [actor, subject, count]
+	return text
 
 
 func _name(registry: PersonRegistry, person: int) -> String:

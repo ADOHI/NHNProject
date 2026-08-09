@@ -32,6 +32,11 @@ enum Kind {
 	AFTERMATH,  ## 후유증 — 제거되고 돌아왔다 (설계 2.6.1.5)
 	RESCUE,  ## 구조 — 죽을 사람을 끌고 나왔다
 	INFORM,  ## 정보 제공 — 알아야 할 것을 알려 줬다
+	BARGAIN,  ## 협상 성립 — 서로 안 싸우기로 했다
+	AMBUSH,  ## 선제 공격 — 말 없이 먼저 쳤다
+	PLUNDER,  ## 약탈 — 털어 갔다
+	DESERT,  ## 동료 유기 — 두고 나왔다
+	PASS_BY,  ## 못 본 척 지나감 — **아무 일도 안 일어난다**
 }
 
 ## 설계 24.5 표의 `+` / `++` / `+++` 에 대응하는 값 (설계 24.21.4).
@@ -39,7 +44,7 @@ const NOTCH_ONE := 33
 const NOTCH_TWO := 66
 const NOTCH_THREE := 100
 
-const _LABELS := ["협력", "배신", "전멸", "후유증", "구조", "정보"]
+const _LABELS := ["협력", "배신", "전멸", "후유증", "구조", "정보", "협상", "선제공격", "약탈", "유기", "지나침"]
 
 ## 이 사건이 무엇인가.
 var kind: Kind
@@ -91,6 +96,16 @@ static func of(kind: Kind) -> RelationEvent:
 			return _rescue()
 		Kind.INFORM:
 			return _inform()
+		Kind.BARGAIN:
+			return _bargain()
+		Kind.AMBUSH:
+			return _ambush()
+		Kind.PLUNDER:
+			return _plunder()
+		Kind.DESERT:
+			return _desert()
+		Kind.PASS_BY:
+			return _pass_by()
 		_:
 			return _cooperation()
 
@@ -241,6 +256,81 @@ static func _inform() -> RelationEvent:
 	event.bond_gain = 10
 	event.actor_kind = RelationKind.Kind.TRUST
 	event.target_kind = RelationKind.Kind.TRUST
+	return event
+
+
+## 협상 성립 — 정직 + (설계 24.5 A). **거래**를 남긴다.
+static func _bargain() -> RelationEvent:
+	var event := RelationEvent.new(Kind.BARGAIN)
+	event._set_axis(NpcAxis.Kind.HONEST, NOTCH_ONE)
+	event.strength = 15
+	event.target_affinity = 12
+	event.bond_gain = 15
+	event.actor_kind = RelationKind.Kind.DEAL
+	event.target_kind = RelationKind.Kind.DEAL
+	return event
+
+
+## 선제 공격 — 선 −66 무모 +33 (설계 24.5 A). **양쪽에 원한이 남는다** —
+## 친 쪽도 그 사람을 다시 만나면 경계한다.
+static func _ambush() -> RelationEvent:
+	var event := RelationEvent.new(Kind.AMBUSH)
+	event._set_axis(NpcAxis.Kind.GOOD, -NOTCH_TWO)
+	event._set_axis(NpcAxis.Kind.RECKLESS, NOTCH_ONE)
+	event.strength = 40
+	event.target_affinity = -45
+	event.bond_gain = 6
+	event.actor_kind = RelationKind.Kind.GRUDGE
+	event.target_kind = RelationKind.Kind.GRUDGE
+	return event
+
+
+## 약탈 — 선 −100 의리 −33 (설계 24.5 A). 원한을 가장 크게 남긴다.
+static func _plunder() -> RelationEvent:
+	var event := RelationEvent.new(Kind.PLUNDER)
+	event._set_axis(NpcAxis.Kind.GOOD, -NOTCH_THREE)
+	event._set_axis(NpcAxis.Kind.LOYAL, -NOTCH_ONE)
+	event.strength = 50
+	event.target_affinity = -60
+	event.bond_gain = 10
+	event.actor_kind = RelationKind.Kind.GRUDGE
+	event.target_kind = RelationKind.Kind.GRUDGE
+	return event
+
+
+## 동료 유기 — 의리 −100 무모 −66 (설계 24.5 A).
+##
+## **배신과 짝을 이룬다.** 배신은 친 것이고 유기는 안 한 것인데 둘 다 의리 축을 밟는다.
+## 유형이 양쪽에서 다른 것도 같다 — 두고 온 쪽과 남겨진 쪽의 화면이 달라야 한다.
+static func _desert() -> RelationEvent:
+	var event := RelationEvent.new(Kind.DESERT)
+	event._set_axis(NpcAxis.Kind.LOYAL, -NOTCH_THREE)
+	event._set_axis(NpcAxis.Kind.RECKLESS, -NOTCH_TWO)
+	event.strength = 45
+	event.target_affinity = -55
+	event.bond_gain = 6
+	event.actor_kind = RelationKind.Kind.ABANDONER
+	event.target_kind = RelationKind.Kind.ABANDONED
+	return event
+
+
+## 못 본 척 지나감 — 무모 −66 과시 −33 (설계 24.5 A).
+##
+## **관계를 하나도 안 만든다.** 설계 24.5 가 *"거의 아무 일도 일어나지 않는다 —
+## 그래야 회피가 진짜 중립 선택이 된다"* 고 못 박은 자리다.
+## 유형이 양쪽 다 NONE 이라 `RelationResolver` 가 슬롯을 아예 안 건드린다.
+##
+## **대조군이기도 하다.** 호감만 흔들고 선을 안 만드는 사건이 세계를 어떻게 바꾸는지
+## (또는 안 바꾸는지) 이것으로 잰다 (§24.34.2).
+static func _pass_by() -> RelationEvent:
+	var event := RelationEvent.new(Kind.PASS_BY)
+	event._set_axis(NpcAxis.Kind.RECKLESS, -NOTCH_TWO)
+	event._set_axis(NpcAxis.Kind.SHOWY, -NOTCH_ONE)
+	event.strength = 10
+	event.target_affinity = 0
+	event.bond_gain = 0
+	event.actor_kind = RelationKind.Kind.NONE
+	event.target_kind = RelationKind.Kind.NONE
 	return event
 
 

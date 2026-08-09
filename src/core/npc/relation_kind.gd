@@ -30,6 +30,9 @@ enum Kind {
 	TRUST,  ## 신뢰 — 사건을 보고 편이 된 목격자
 	GRUDGE,  ## 원한 — 사건을 보고 등을 돌린 목격자
 	GRATITUDE,  ## 은혜 — 구조가 남긴다
+	DEAL,  ## 거래 — 협상 성립이 남긴다
+	ABANDONED,  ## 유기당함 — 두고 간 쪽에서 본 것
+	ABANDONER,  ## 유기함 — 두고 온 쪽
 }
 
 const _LABELS := [
@@ -45,6 +48,9 @@ const _LABELS := [
 	"신뢰",
 	"원한",
 	"은혜",
+	"거래",
+	"유기당함",
+	"유기함",
 ]
 
 ## 태생 유형. 사건이 이것들의 유대와 유형을 못 건드린다 (설계 24.18).
@@ -87,6 +93,10 @@ static func opposite(kind: Kind) -> Kind:
 			return Kind.BETRAYER
 		Kind.BETRAYER:
 			return Kind.BETRAYED
+		Kind.ABANDONED:
+			return Kind.ABANDONER
+		Kind.ABANDONER:
+			return Kind.ABANDONED
 		_:
 			return kind
 

@@ -138,6 +138,11 @@ func _apply_pair(event: RelationEvent, actor: int, target: int, cause: int) -> v
 			),
 			false
 		)
+	# **행위자 쪽도 유형이 NONE 이면 안 건드린다.** 「못 본 척 지나감」이 그렇다 —
+	# 설계 24.5 가 *"거의 아무 일도 일어나지 않는다"* 고 못 박았고, 그래야
+	# 회피가 진짜 중립 선택이 된다. 슬롯을 만들면 안 만난 것보다 더 엮이게 된다.
+	if event.actor_kind == RelationKind.Kind.NONE:
+		return
 	# 행위자 -> 대상. 유대만 오른다. 평판이 굳는 것은 유명세 쪽이고 아직 없다 (설계 24.15).
 	_graph.set_heard(
 		_graph.adjust(actor, target, 0, event.bond_gain, event.actor_kind, cause), false

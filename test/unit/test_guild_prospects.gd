@@ -17,8 +17,10 @@ const _SEED := 20260808
 const _POPULATION := 400
 
 
-func _world() -> NpcWorld:
-	return NpcWorld.create(_SEED, _POPULATION)
+## 시험마다 인구가 다르다. **작은 세계는 대표의 연줄이 얇아 2홉까지 내려가고,
+## 큰 세계는 1홉이 넉넉해서 영입이 열린다.** 둘이 반대라 한 크기로는 둘 다 못 본다.
+func _world(population: int = _POPULATION) -> NpcWorld:
+	return NpcWorld.create(_SEED, population)
 
 
 func _guild(world: NpcWorld) -> Guild:
@@ -158,9 +160,11 @@ func test_a_prospect_eventually_comes_through_someone() -> void:
 
 func test_recruiting_actually_opens() -> void:
 	# **관계도가 붙기 전에는 이 시험이 성립하지 않았다** — 늘 거짓이었다.
-	var guild := _guild(_world())
+	# **인구가 작으면 대표의 연줄도 얇아 열릴 자리가 없다.** 사건 비율을 바꾸면
+	# 세계의 호감이 같이 움직이므로(설계 24.31.4) 시험이 그 손잡이에 안 매달려야 한다.
+	var guild := _guild(_world(1200))
 	var open := 0
-	for prospect in _settle(guild, 20):
+	for prospect in _settle(guild, 30):
 		if prospect.can_recruit():
 			open += 1
 	assert_gt(open, 0, "연줄로 찾은 후보 중에는 데려올 수 있는 사람이 있어야 한다")
