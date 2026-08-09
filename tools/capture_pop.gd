@@ -2,7 +2,12 @@ extends SceneTree
 ## P5 계열 안을 **움직이는 그림**으로 뽑는다.
 ##
 ##     godot --path . -s res://tools/capture_pop.gd -- .renders/pop-slash slash
+##     godot --path . -s res://tools/capture_pop.gd -- .renders/46-tone slash stills
 ##     python tools/make_gif.py .renders/pop-slash .renders/43-pop-slash.gif 0.6
+##
+## 세 번째 낱말이 `stills` 면 **정지 컷만 뽑고 끝낸다.** 색을 판정하는 판에서는
+## 편이 여든 장 필요 없고, 그 여든 장이 GL 컨텍스트를 그만큼 더 쥔다
+## (CLAUDE.md — GPU 를 나눠 쓴다).
 ##
 ## docs/design/20-ui-kit.md §20.28.
 ##
@@ -29,6 +34,9 @@ var _saved := 0
 var _posed := -1
 var _still_done := false
 
+## 정지 컷만 뽑고 끝낼 것인가.
+var _stills_only := false
+
 ## 안마다 크기와 한 바퀴가 다르다. **여기서 하나로 정하면 안이 늘 때 조용히 잘린다.**
 var _card := Vector2(660.0, 700.0)
 var _loop := 4.0
@@ -43,6 +51,8 @@ func _initialize() -> void:
 		_prefix = "res://%s" % args[0]
 	if args.size() > 1:
 		_which = args[1]
+	if args.size() > 2:
+		_stills_only = args[2] == "stills"
 	_sheet = _pick()
 	if _sheet == null:
 		push_error("모르는 안: %s" % _which)
@@ -105,6 +115,9 @@ func _process(_delta: float) -> bool:
 	if not _still_done:
 		_still_done = _stills()
 		return false
+	if _stills_only:
+		print("정지 컷만: %s" % _prefix)
+		return true
 
 	if _posed != _saved:
 		_sheet.call("set_clock", float(_saved) / FPS)

@@ -16,7 +16,7 @@ extends Control
 ## | 판이 직사각형이 아니다 | 전부 평행사변형이거나 모서리가 잘렸다 |
 ## | 판이 여러 겹 겹친다 | 뒤판이 어긋나 삐져나온다 (그림자가 아니라 **판 한 겹 더**) |
 ## | 글자가 도형이다 | 제목이 기울고 판에 잘리고 판 밖으로 넘친다 |
-## | 색이 둘셋뿐인데 세다 | 검정 · 미색 · 진홍 **셋뿐** |
+## | 색이 적은데 세다 | 바탕 · 미색에 **포인트 셋** — 신호 · 고름 · 험 (§20.32) |
 ## | 무늬가 그래픽 | 사선 줄무늬와 망점이 **평평하게** 깔리고 흐른다 |
 ## | 움직임이 스냅 | 미끄러져 들어와 **탁 멈춘다.** 느리게 빛나지 않는다 |
 ##
@@ -56,11 +56,12 @@ func _ready() -> void:
 	set_process(not _driven)
 
 
-## 덮개의 인광색을 팔레트에 맞춘다.
+## 덮개의 인광색을 팔레트에 맞춘다. **방의 빛이지 신호가 아니라서** 강조색을 안 쓴다 —
+## 화면 전체를 훑는 띠가 신호색이면 「지금 여기」가 매초 화면을 가로지른다.
 func _tint_screen() -> void:
 	if _lit == null:
 		return
-	(_lit.material as ShaderMaterial).set_shader_parameter("glow", _accent())
+	(_lit.material as ShaderMaterial).set_shader_parameter("glow", HoloPalette.glow(palette))
 
 
 func _void() -> Color:
@@ -71,13 +72,29 @@ func _paper() -> Color:
 	return HoloPalette.paper(palette)
 
 
+## **신호.** 이 함수를 부르는 곳은 `_here()` **하나뿐이어야 한다** (§20.32).
 func _accent() -> Color:
 	return HoloPalette.accent(palette)
 
 
-## 어긋난 뒤판의 색. **「혼합」 팔레트만 강조색과 다르다.**
+## **고름** — 켜짐 · 선택 · 값. 신호가 아니라 구분이다.
+func _pick() -> Color:
+	return HoloPalette.pick(palette)
+
+
+## **험** — 되돌릴 수 없는 것.
+func _peril() -> Color:
+	return HoloPalette.peril(palette)
+
+
+## 어긋난 뒤판의 색. **고름의 짙은 쪽**이라 어긋남이 색으로도 읽힌다.
 func _back() -> Color:
 	return HoloPalette.back(palette)
+
+
+## 그 면 위의 글자색. 면이 밝으면 어둡게, 어두우면 밝게 — **화면이 눈으로 안 고른다.**
+func _ink(surface: Color) -> Color:
+	return HoloPalette.ink(palette, surface)
 
 
 func _screen_layer(source: Shader) -> ColorRect:
@@ -122,14 +139,22 @@ func _reveal(shape: PackedVector2Array, from: float) -> Array[PackedVector2Array
 
 
 ## 채워진 판 위의 **주사선.** 망점이 있던 자리다 — 무늬만 바뀌고 판은 그대로다.
-func _scanlines(shape: PackedVector2Array, tint: Color) -> void:
+##
+## 줄의 색을 부르는 쪽이 정하지 않는다. **면이 어두워지면 주사선은 밝아져야** 하고,
+## 색을 갈아 끼울 때 그 뒤집힘을 화면 코드가 일곱 군데에서 따로 기억할 수 없다.
+func _scanlines(shape: PackedVector2Array, surface: Color, force: float) -> void:
+	var tint := Color(_ink(surface), force)
 	for bar in GraphicCut.stripes(shape, 0.0, 4.0, 1.6, _clock * 9.0):
 		draw_colored_polygon(bar, tint)
 
 
 ## 모서리 꺾쇠와 작은 눈금. **큰 판 가장자리에 붙는 장식**이지 판을 대신하지 않는다.
+##
+## 포인트 색 셋 중 **아무것도 안 쓴다** (§20.32). 장식이 신호색을 입는 순간
+## 화면에 「지금 여기」가 다섯 개가 된다 — 앞 판이 정확히 그렇게 죽었다.
 func _rig(box: Rect2, slot: int) -> void:
 	var reach := 13.0
+	var trim := Color(_paper(), 0.42)
 	var corners := [
 		[box.position, Vector2(1, 0), Vector2(0, 1)],
 		[Vector2(box.end.x, box.position.y), Vector2(-1, 0), Vector2(0, 1)],
@@ -138,15 +163,15 @@ func _rig(box: Rect2, slot: int) -> void:
 	]
 	for corner in corners:
 		var at: Vector2 = corner[0]
-		draw_line(at, at + (corner[1] as Vector2) * reach, _accent(), 2.0)
-		draw_line(at, at + (corner[2] as Vector2) * reach, _accent(), 2.0)
+		draw_line(at, at + (corner[1] as Vector2) * reach, trim, 2.0)
+		draw_line(at, at + (corner[2] as Vector2) * reach, trim, 2.0)
 	for i in 9:
 		var x := lerpf(box.position.x + 16.0, box.end.x - 16.0, float(i) / 8.0)
 		var wobble := CelReadout.tick_jitter(slot + i, _clock, 0.6)
 		draw_line(
 			Vector2(x, box.end.y + 4.0),
 			Vector2(x, box.end.y + 8.0 + wobble),
-			Color(_accent(), 0.5),
+			Color(_paper(), 0.3),
 			1.0
 		)
 	draw_string(
@@ -156,7 +181,7 @@ func _rig(box: Rect2, slot: int) -> void:
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		9,
-		Color(_accent(), 0.65)
+		Color(_paper(), 0.42)
 	)
 
 
@@ -201,7 +226,8 @@ func _backdrop() -> void:
 	var band := GraphicCut.lean(
 		Rect2(-260.0 + sweep * (size.x + 520.0), -40.0, 90.0, size.y + 80.0), 0.42
 	)
-	draw_colored_polygon(band, Color(_accent(), 0.10))
+	# 바탕의 띠는 신호색이 아니다 — 화면을 가로지르는 것이 「지금 여기」면 안 된다.
+	draw_colored_polygon(band, Color(_pick(), 0.16))
 
 
 ## 제목 — **글자가 도형이다.** 기울고, 검은 판에 잘리고, 판 밖으로 넘친다.
@@ -232,8 +258,11 @@ func _buttons() -> void:
 		var enter := _snap(0.06 + float(i) * 0.055)
 		var box := Rect2(PAD + float(i) * (wide + 10.0) - (1.0 - enter) * SLIDE, 132.0, wide, 50.0)
 		var shape := GraphicCut.lean(box, 0.24)
-		var hot := i == 1 and _clock > 0.90 and _clock < 1.55
-		var down := i == 2 and _clock > 1.55 and _clock < 1.95
+		# 상태는 순서대로 **켜지고 그대로 걸린다.** 창처럼 잠깐 켰다 끄면
+		# 대표 컷을 어느 시각에 뽑아도 넷 중 둘은 「기본」과 똑같이 찍힌다 —
+		# 색을 판정하는 판에서 그것은 부품이 둘 모자란 것이다.
+		var hot := i == 1 and _clock > 0.90
+		var down := i == 2 and _clock > 1.55
 		if down:
 			shape = GraphicCut.swelled(shape, -0.03, Vector2(4.0, 4.0))
 
@@ -243,13 +272,15 @@ func _buttons() -> void:
 				GraphicCut.swelled(shape, 0.02, Vector2(8.0, 8.0)),
 				_back() if not down else _paper()
 			)
-		draw_colored_polygon(shape, _paper() if not hot else _accent())
+		# 「올림」은 **고름**이다. 켜진 것이지 「지금 여기」가 아니다.
+		var face := _pick() if hot else _paper()
+		draw_colored_polygon(shape, face)
 		if i == 3:
 			for bar in GraphicCut.stripes(shape, -PI * 0.25, 9.0, 4.0, 0.0):
 				draw_colored_polygon(bar, Color(_void(), 0.55))
 		if hot:
-			_scanlines(shape, Color(_void(), 0.30))
-		_shape_text(labels[i], Rect2(box.position, box.size), 18, _void(), 0.35 if i == 3 else 1.0)
+			_scanlines(shape, face, 0.22)
+		_shape_text(labels[i], Rect2(box.position, box.size), 18, face, 0.35 if i == 3 else 1.0)
 
 
 ## 창 — 제목줄 · 테두리 · 닫기 · 배경. **모서리 둘이 잘렸다.**
@@ -266,7 +297,7 @@ func _window() -> void:
 		draw_colored_polygon(piece, _paper())
 	if drawn.size() == 1 and drawn[0].size() != shape.size():
 		return
-	_scanlines(shape, Color(_void(), 0.12))
+	_scanlines(shape, _paper(), 0.10)
 	_rig(box, 2)
 
 	var bar := GraphicCut.lean(Rect2(box.position.x, box.position.y, box.size.x - 26.0, 34.0), 0.0)
@@ -274,9 +305,10 @@ func _window() -> void:
 	draw_string(
 		FONT, box.position + Vector2(14.0, 24.0), "창", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, _paper()
 	)
+	# 닫기는 **험**이다. 창에서 되돌릴 수 없는 것은 이것 하나뿐이라 여기만 그 색이다.
 	var shut := Vector2(box.end.x - 46.0, box.position.y + 17.0)
-	draw_line(shut + Vector2(-6, -6), shut + Vector2(6, 6), _paper(), 2.4)
-	draw_line(shut + Vector2(-6, 6), shut + Vector2(6, -6), _paper(), 2.4)
+	draw_line(shut + Vector2(-6, -6), shut + Vector2(6, 6), _peril(), 2.8)
+	draw_line(shut + Vector2(-6, 6), shut + Vector2(6, -6), _peril(), 2.8)
 	for row in 3:
 		draw_colored_polygon(
 			GraphicCut.lean(
@@ -298,16 +330,18 @@ func _popup() -> void:
 	var box := Rect2(PAD + 356.0, 206.0, 252.0, 178.0)
 	var shape := GraphicCut.clipped(box, 24.0, 1 | 4)
 	for piece in GraphicCut.torn_open(shape, -PI * 0.22, open, 46.0):
+		# 어긋난 뒤판이 **험**의 색이다 — 팝업 전체가 「되돌릴 수 없는 것」이라
+		# 그 사실이 버튼 하나가 아니라 판 테두리에서 먼저 보인다.
 		draw_colored_polygon(
-			GraphicCut.swelled(piece, 0.012, Vector2(8.0, 8.0)), Color(_accent(), 0.55)
+			GraphicCut.swelled(piece, 0.012, Vector2(8.0, 8.0)), Color(_peril(), 0.72)
 		)
 		draw_colored_polygon(piece, _paper())
-		_scanlines(piece, Color(_void(), 0.12))
+		_scanlines(piece, _paper(), 0.10)
 	if open < 0.55:
 		return
 	_rig(box, 5)
 	_shape_text(
-		"버릴까요", Rect2(box.position + Vector2(0.0, 26.0), Vector2(box.size.x, 34.0)), 24, _void()
+		"버릴까요", Rect2(box.position + Vector2(0.0, 26.0), Vector2(box.size.x, 34.0)), 24, _paper()
 	)
 	draw_string(
 		FONT,
@@ -327,8 +361,9 @@ func _popup() -> void:
 		var shape_button := GraphicCut.lean(button, 0.22)
 		if solid:
 			draw_colored_polygon(GraphicCut.swelled(shape_button, 0.03, Vector2(5.0, 5.0)), _void())
-		draw_colored_polygon(shape_button, _accent() if solid else Color(_void(), 0.10))
-		_shape_text("확인" if solid else "취소", button, 16, _void())
+		var face := _peril() if solid else Color(_void(), 0.10)
+		draw_colored_polygon(shape_button, face)
+		_shape_text("확인" if solid else "취소", button, 16, face if solid else _paper())
 
 
 ## 메뉴 — 항목 넷, 하나 선택됨. **「지금 여기」는 여기 하나에서만 흐른다.**
@@ -350,8 +385,9 @@ func _menu() -> void:
 			var grow := 1.0 if _clock < 2.85 else slam
 			var lit := GraphicCut.swelled(shape_row, 0.03 * grow, Vector2(6.0, 6.0) * grow)
 			draw_colored_polygon(lit, _void())
-			draw_colored_polygon(shape_row, _accent())
-			_scanlines(shape_row, Color(_void(), 0.26))
+			# 골라 둔 것은 **고름**이다. 눈에 띄어야 하지만 「지금 여기」는 아니다.
+			draw_colored_polygon(shape_row, _pick())
+			_scanlines(shape_row, _pick(), 0.18)
 		draw_string(
 			FONT,
 			row.position + Vector2(22.0, 23.0),
@@ -359,7 +395,7 @@ func _menu() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT,
 			-1,
 			17,
-			_void() if i == chosen else Color(_paper(), 0.55)
+			_ink(_pick()) if i == chosen else Color(_paper(), 0.55)
 		)
 
 
@@ -380,9 +416,10 @@ func _inputs() -> void:
 
 	var rail := Rect2(box.position.x + 20.0, box.position.y + 46.0, box.size.x - 40.0, 8.0)
 	draw_colored_polygon(GraphicCut.lean(rail, 0.9), Color(_paper(), 0.18))
+	# 값이 차 있는 쪽도 **고름**이다 — 켜진 것과 골라 둔 것과 찬 것은 같은 종류다.
 	draw_colored_polygon(
 		GraphicCut.lean(Rect2(rail.position, Vector2(rail.size.x * 0.62, rail.size.y)), 0.9),
-		_accent()
+		_pick()
 	)
 	var knob := Rect2(
 		rail.position.x + rail.size.x * 0.62 - 8.0, rail.position.y - 11.0, 18.0, 30.0
@@ -395,7 +432,7 @@ func _inputs() -> void:
 	var tick := Rect2(box.position.x + 20.0, box.position.y + 96.0, 26.0, 26.0)
 	var shape_tick := GraphicCut.lean(tick, 0.22)
 	draw_colored_polygon(GraphicCut.swelled(shape_tick, 0.04, Vector2(5.0, 5.0)), _void())
-	draw_colored_polygon(shape_tick, _accent())
+	draw_colored_polygon(shape_tick, _pick())
 	draw_polyline(
 		PackedVector2Array(
 			[
@@ -404,7 +441,7 @@ func _inputs() -> void:
 				tick.position + Vector2(24.0, 5.0)
 			]
 		),
-		_paper(),
+		_ink(_pick()),
 		3.2
 	)
 	draw_string(
@@ -424,8 +461,9 @@ func _here() -> void:
 	var box := Rect2(PAD - (1.0 - enter) * SLIDE * 1.6, 596.0, size.x - PAD * 2.0, 58.0)
 	var shape := GraphicCut.fang(Rect2(box.position, box.size - Vector2(26.0, 0.0)), 26.0)
 	draw_colored_polygon(GraphicCut.swelled(shape, 0.012, Vector2(9.0, 9.0)), _paper())
+	# **화면에서 신호색이 나오는 자리는 여기 하나다** (§20.32).
 	draw_colored_polygon(shape, _accent())
-	_scanlines(shape, Color(_void(), 0.22))
+	_scanlines(shape, _accent(), 0.18)
 	_rig(Rect2(box.position, box.size - Vector2(26.0, 0.0)), 8)
 	draw_string(
 		FONT,
@@ -436,26 +474,30 @@ func _here() -> void:
 		13,
 		Color(_paper(), 0.5)
 	)
-	_shape_text("3층 봉인된 문", box, 24, _void())
+	_shape_text("3층 봉인된 문", box, 24, _accent())
 
 
 func _weak() -> void:
 	draw_string(
 		FONT,
 		Vector2(PAD, size.y - 20.0),
-		"약한 곳 — 사선이 전부라 잔잔한 화면을 못 만든다. 목록이 길면 눈이 미끄러진다",
+		"약한 곳 — 험(붉은 쪽)이 신호보다 먼저 눈에 든다. 실제 화면에서는 팝업이 혼자 뜨니 안 겹친다",
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		13,
-		_accent()
+		Color(_paper(), 0.5)
 	)
 
 
 ## 글자를 **도형처럼** 얹는다. 살짝 기울고, 어긋난 그림자가 한 겹 있다.
 ##
-## 색 분리(RGB split)를 흉내 내지 않고 **두 색으로 어긋나게 두 번 찍는다** —
-## 색이 셋뿐인 문법에서 네 번째 색을 만들지 않으려는 것이다.
-func _shape_text(text: String, box: Rect2, tall: int, tint: Color, fade: float = 1.0) -> void:
+## **부르는 쪽은 글자색이 아니라 「무슨 면 위인가」를 준다.** 포인트 색이 셋이 되면서
+## 면마다 밝기가 달라졌고, 글자색을 손으로 고르면 어느 팔레트에서 하나가 반드시 묻힌다.
+## 어긋난 한 겹도 **글자색의 반대쪽**이라 밝은 면에서든 어두운 면에서든 글자가 선다.
+##
+## 색 분리(RGB split)는 흉내 내지 않는다 — 잠깐 튀는 어긋남은 포인트 색이 아니라
+## **인광색**으로 찍는다. 신호색이 0.1초 동안이라도 다른 자리에서 나오면 안 된다.
+func _shape_text(text: String, box: Rect2, tall: int, surface: Color, fade: float = 1.0) -> void:
 	var jolt := maxf(_jolt(1.62), _jolt(2.88))
 	var lean := -0.045
 	var seat := Vector2(box.position.x, box.get_center().y + float(tall) * 0.36)
@@ -468,7 +510,7 @@ func _shape_text(text: String, box: Rect2, tall: int, tint: Color, fade: float =
 			HORIZONTAL_ALIGNMENT_CENTER,
 			box.size.x,
 			tall,
-			Color(_accent(), 0.85 * jolt)
+			Color(HoloPalette.glow(palette), 0.85 * jolt)
 		)
 	draw_set_transform(seat + Vector2(2.0, 2.0), lean, Vector2.ONE)
 	draw_string(
@@ -478,10 +520,16 @@ func _shape_text(text: String, box: Rect2, tall: int, tint: Color, fade: float =
 		HORIZONTAL_ALIGNMENT_CENTER,
 		box.size.x,
 		tall,
-		Color(_void(), 0.28 * fade)
+		Color(HoloPalette.ink_prop(palette, surface), 0.34 * fade)
 	)
 	draw_set_transform(seat, lean, Vector2.ONE)
 	draw_string(
-		FONT, Vector2.ZERO, text, HORIZONTAL_ALIGNMENT_CENTER, box.size.x, tall, Color(tint, fade)
+		FONT,
+		Vector2.ZERO,
+		text,
+		HORIZONTAL_ALIGNMENT_CENTER,
+		box.size.x,
+		tall,
+		Color(_ink(surface), fade)
 	)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
