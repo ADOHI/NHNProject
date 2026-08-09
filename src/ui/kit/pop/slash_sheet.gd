@@ -34,6 +34,18 @@ const PAD := 26.0
 const SLIDE := 190.0
 const SNAP := 0.34
 
+## **화면을 가로지르는 벤 자국 한 줄.** 각도 · 지나는 점 · 벌어지는 폭.
+##
+## 「참격」이 지금까지 **무늬**였다 — 사선 줄무늬와 기울어진 판. 이 한 줄은
+## 판 다섯(비활성 버튼 · 팝업 · 창 모서리 · 메뉴 · 강조 띠)을 **실제로 가른다.**
+## 판마다 자기 가운데를 여는 것이 아니라 **한 줄이 판들을 건너 이어진다.**
+const RIP_ANGLE := -0.72
+const RIP_THROUGH := Vector2(330.0, 380.0)
+const RIP_APART := 10.0
+
+## 베는 순간. 판이 다 들어와 선 직후에 **한 번에** 지나간다.
+const RIP_AT := 0.78
+
 ## 색은 **`HoloPalette` 한 곳에서만** 정해진다 (§20.31). 화면은 번호만 든다 —
 ## 색만 바꿔 여러 장을 찍으려면 바꾸는 자리가 한 줄이어야 한다.
 var palette := 0:
@@ -138,6 +150,20 @@ func _reveal(shape: PackedVector2Array, from: float) -> Array[PackedVector2Array
 	return GraphicCut.revealed(shape, since / 0.0026)
 
 
+## 지금 벤 자국이 얼마나 벌어져 있나. 스냅으로 **한 번에** 벌어지고 그대로 있는다.
+func _rip() -> float:
+	return _snap(RIP_AT, 0.12) * RIP_APART
+
+
+## 판 하나를 그린다. **벤 자국에 걸리면 두 조각이 되어 어긋난다.**
+##
+## 판을 칠하는 모든 자리가 이 함수를 지나간다 — 한 군데라도 빠지면 그 판만
+## 자국을 안 맞은 것이 되고, 그러면 자국이 **한 줄로 안 이어져** 그냥 깨진 판이 된다.
+func _plate(shape: PackedVector2Array, tint: Color) -> void:
+	for piece in GraphicCut.severed(shape, RIP_ANGLE, RIP_THROUGH, _rip()):
+		draw_colored_polygon(piece, tint)
+
+
 ## 채워진 판 위의 **주사선.** 망점이 있던 자리다 — 무늬만 바뀌고 판은 그대로다.
 ##
 ## 줄의 색을 부르는 쪽이 정하지 않는다. **면이 어두워지면 주사선은 밝아져야** 하고,
@@ -145,7 +171,7 @@ func _reveal(shape: PackedVector2Array, from: float) -> Array[PackedVector2Array
 func _scanlines(shape: PackedVector2Array, surface: Color, force: float) -> void:
 	var tint := Color(_ink(surface), force)
 	for bar in GraphicCut.stripes(shape, 0.0, 4.0, 1.6, _clock * 9.0):
-		draw_colored_polygon(bar, tint)
+		_plate(bar, tint)
 
 
 ## 모서리 꺾쇠와 작은 눈금. **큰 판 가장자리에 붙는 장식**이지 판을 대신하지 않는다.
@@ -233,8 +259,8 @@ func _backdrop() -> void:
 ## 제목 — **글자가 도형이다.** 기울고, 검은 판에 잘리고, 판 밖으로 넘친다.
 func _title() -> void:
 	var slab := GraphicCut.lean(Rect2(-30.0, 22.0, 340.0, 62.0), 0.30)
-	draw_colored_polygon(GraphicCut.swelled(slab, 0.012, Vector2(7.0, 7.0)), _back())
-	draw_colored_polygon(slab, _paper())
+	_plate(GraphicCut.swelled(slab, 0.012, Vector2(7.0, 7.0)), _back())
+	_plate(slab, _paper())
 	# 글자를 판보다 크게 잡아 오른쪽으로 넘긴다.
 	draw_set_transform(Vector2(24.0, 74.0), -0.075, Vector2.ONE)
 	draw_string(FONT, Vector2.ZERO, "참격", HORIZONTAL_ALIGNMENT_LEFT, -1, 54, _void())
@@ -268,16 +294,16 @@ func _buttons() -> void:
 
 		# 뒤판 — **그림자가 아니라 판 한 겹 더**라서 어긋나 있고 색이 있다.
 		if i != 3:
-			draw_colored_polygon(
+			_plate(
 				GraphicCut.swelled(shape, 0.02, Vector2(8.0, 8.0)),
 				_back() if not down else _paper()
 			)
 		# 「올림」은 **고름**이다. 켜진 것이지 「지금 여기」가 아니다.
 		var face := _pick() if hot else _paper()
-		draw_colored_polygon(shape, face)
+		_plate(shape, face)
 		if i == 3:
 			for bar in GraphicCut.stripes(shape, -PI * 0.25, 9.0, 4.0, 0.0):
-				draw_colored_polygon(bar, Color(_void(), 0.55))
+				_plate(bar, Color(_void(), 0.55))
 		if hot:
 			_scanlines(shape, face, 0.22)
 		_shape_text(labels[i], Rect2(box.position, box.size), 18, face, 0.35 if i == 3 else 1.0)
@@ -289,19 +315,19 @@ func _window() -> void:
 	var box := Rect2(PAD - (1.0 - enter) * SLIDE, 206.0, 336.0, 178.0)
 	var shape := GraphicCut.clipped(box, 26.0, 2 | 8)
 	# 뒤판이 **반투명해졌다** — 판 뒤에 다른 판이 비친다.
-	draw_colored_polygon(GraphicCut.swelled(shape, 0.014, Vector2(9.0, 9.0)), Color(_back(), 0.55))
+	_plate(GraphicCut.swelled(shape, 0.014, Vector2(9.0, 9.0)), Color(_back(), 0.55))
 	var drawn := _reveal(shape, 0.24)
 	if drawn.is_empty():
 		return
 	for piece in drawn:
-		draw_colored_polygon(piece, _paper())
+		_plate(piece, _paper())
 	if drawn.size() == 1 and drawn[0].size() != shape.size():
 		return
 	_scanlines(shape, _paper(), 0.10)
 	_rig(box, 2)
 
 	var bar := GraphicCut.lean(Rect2(box.position.x, box.position.y, box.size.x - 26.0, 34.0), 0.0)
-	draw_colored_polygon(bar, _void())
+	_plate(bar, _void())
 	draw_string(
 		FONT, box.position + Vector2(14.0, 24.0), "창", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, _paper()
 	)
@@ -310,7 +336,7 @@ func _window() -> void:
 	draw_line(shut + Vector2(-6, -6), shut + Vector2(6, 6), _peril(), 2.8)
 	draw_line(shut + Vector2(-6, 6), shut + Vector2(6, -6), _peril(), 2.8)
 	for row in 3:
-		draw_colored_polygon(
+		_plate(
 			GraphicCut.lean(
 				Rect2(
 					box.position.x + 16.0,
@@ -332,10 +358,8 @@ func _popup() -> void:
 	for piece in GraphicCut.torn_open(shape, -PI * 0.22, open, 46.0):
 		# 어긋난 뒤판이 **험**의 색이다 — 팝업 전체가 「되돌릴 수 없는 것」이라
 		# 그 사실이 버튼 하나가 아니라 판 테두리에서 먼저 보인다.
-		draw_colored_polygon(
-			GraphicCut.swelled(piece, 0.012, Vector2(8.0, 8.0)), Color(_peril(), 0.72)
-		)
-		draw_colored_polygon(piece, _paper())
+		_plate(GraphicCut.swelled(piece, 0.012, Vector2(8.0, 8.0)), Color(_peril(), 0.72))
+		_plate(piece, _paper())
 		_scanlines(piece, _paper(), 0.10)
 	if open < 0.55:
 		return
@@ -360,9 +384,9 @@ func _popup() -> void:
 		var solid := i == 0
 		var shape_button := GraphicCut.lean(button, 0.22)
 		if solid:
-			draw_colored_polygon(GraphicCut.swelled(shape_button, 0.03, Vector2(5.0, 5.0)), _void())
+			_plate(GraphicCut.swelled(shape_button, 0.03, Vector2(5.0, 5.0)), _void())
 		var face := _peril() if solid else Color(_void(), 0.10)
-		draw_colored_polygon(shape_button, face)
+		_plate(shape_button, face)
 		_shape_text("확인" if solid else "취소", button, 16, face if solid else _paper())
 
 
@@ -371,7 +395,7 @@ func _menu() -> void:
 	var enter := _snap(0.42)
 	var box := Rect2(PAD - (1.0 - enter) * SLIDE, 404.0, 292.0, 168.0)
 	var shape := GraphicCut.clipped(box, 22.0, 4)
-	draw_colored_polygon(shape, Color(_paper(), 0.10))
+	_plate(shape, Color(_paper(), 0.10))
 	var items := ["출격", "길드", "인물", "설정"]
 	# 고른 자리가 2 번에서 시작해 2.9 초에 아래로 **슬램**한다.
 	var chosen := 1 if _clock < 2.85 else 2
@@ -384,9 +408,9 @@ func _menu() -> void:
 		if i == chosen:
 			var grow := 1.0 if _clock < 2.85 else slam
 			var lit := GraphicCut.swelled(shape_row, 0.03 * grow, Vector2(6.0, 6.0) * grow)
-			draw_colored_polygon(lit, _void())
+			_plate(lit, _void())
 			# 골라 둔 것은 **고름**이다. 눈에 띄어야 하지만 「지금 여기」는 아니다.
-			draw_colored_polygon(shape_row, _pick())
+			_plate(shape_row, _pick())
 			_scanlines(shape_row, _pick(), 0.18)
 		draw_string(
 			FONT,
@@ -403,7 +427,7 @@ func _menu() -> void:
 func _inputs() -> void:
 	var enter := _snap(0.50)
 	var box := Rect2(PAD + 312.0 + (1.0 - enter) * SLIDE, 404.0, 296.0, 168.0)
-	draw_colored_polygon(GraphicCut.clipped(box, 22.0, 1), Color(_paper(), 0.10))
+	_plate(GraphicCut.clipped(box, 22.0, 1), Color(_paper(), 0.10))
 	draw_string(
 		FONT,
 		box.position + Vector2(20.0, 34.0),
@@ -415,24 +439,22 @@ func _inputs() -> void:
 	)
 
 	var rail := Rect2(box.position.x + 20.0, box.position.y + 46.0, box.size.x - 40.0, 8.0)
-	draw_colored_polygon(GraphicCut.lean(rail, 0.9), Color(_paper(), 0.18))
+	_plate(GraphicCut.lean(rail, 0.9), Color(_paper(), 0.18))
 	# 값이 차 있는 쪽도 **고름**이다 — 켜진 것과 골라 둔 것과 찬 것은 같은 종류다.
-	draw_colored_polygon(
+	_plate(
 		GraphicCut.lean(Rect2(rail.position, Vector2(rail.size.x * 0.62, rail.size.y)), 0.9),
 		_pick()
 	)
 	var knob := Rect2(
 		rail.position.x + rail.size.x * 0.62 - 8.0, rail.position.y - 11.0, 18.0, 30.0
 	)
-	draw_colored_polygon(
-		GraphicCut.swelled(GraphicCut.lean(knob, 0.4), 0.04, Vector2(4.0, 4.0)), _void()
-	)
-	draw_colored_polygon(GraphicCut.lean(knob, 0.4), _paper())
+	_plate(GraphicCut.swelled(GraphicCut.lean(knob, 0.4), 0.04, Vector2(4.0, 4.0)), _void())
+	_plate(GraphicCut.lean(knob, 0.4), _paper())
 
 	var tick := Rect2(box.position.x + 20.0, box.position.y + 96.0, 26.0, 26.0)
 	var shape_tick := GraphicCut.lean(tick, 0.22)
-	draw_colored_polygon(GraphicCut.swelled(shape_tick, 0.04, Vector2(5.0, 5.0)), _void())
-	draw_colored_polygon(shape_tick, _pick())
+	_plate(GraphicCut.swelled(shape_tick, 0.04, Vector2(5.0, 5.0)), _void())
+	_plate(shape_tick, _pick())
 	draw_polyline(
 		PackedVector2Array(
 			[
@@ -460,9 +482,9 @@ func _here() -> void:
 	var enter := _snap(0.60)
 	var box := Rect2(PAD - (1.0 - enter) * SLIDE * 1.6, 596.0, size.x - PAD * 2.0, 58.0)
 	var shape := GraphicCut.fang(Rect2(box.position, box.size - Vector2(26.0, 0.0)), 26.0)
-	draw_colored_polygon(GraphicCut.swelled(shape, 0.012, Vector2(9.0, 9.0)), _paper())
+	_plate(GraphicCut.swelled(shape, 0.012, Vector2(9.0, 9.0)), _paper())
 	# **화면에서 신호색이 나오는 자리는 여기 하나다** (§20.32).
-	draw_colored_polygon(shape, _accent())
+	_plate(shape, _accent())
 	_scanlines(shape, _accent(), 0.18)
 	_rig(Rect2(box.position, box.size - Vector2(26.0, 0.0)), 8)
 	draw_string(

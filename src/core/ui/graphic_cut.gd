@@ -213,6 +213,50 @@ static func torn_open(
 	return out
 
 
+## **한 줄이 지나가며 판을 벤다.** 선 하나를 화면 좌표로 받아 그 선에 걸린 판을
+## 두 조각으로 가르고, 조각을 서로 반대로 밀어낸다.
+##
+## `torn_open` 과 다른 점은 **선이 판의 것이 아니라는 것**이다. 찢어 여는 것은 판마다
+## 자기 가운데를 열지만, 이것은 **화면을 가로지르는 한 줄**을 판 여럿에 똑같이 대고
+## 지나간다 — 그래서 벤 자리가 판을 건너 **한 줄로 이어져 보인다.**
+##
+## 「참격」이 지금까지 **무늬**였다(사선 줄무늬 · 기울어진 판). 이것은 벤 자국을
+## **구조**로 만든다 — 판의 형태가 그 한 줄의 결과가 된다.
+static func severed(
+	shape: PackedVector2Array, angle: float, through: Vector2, apart: float
+) -> Array[PackedVector2Array]:
+	var out: Array[PackedVector2Array] = []
+	if shape.is_empty():
+		return out
+	if apart <= 0.01:
+		out.append(shape)
+		return out
+	var dir := Vector2.from_angle(angle)
+	var side := dir.orthogonal()
+	# 자르는 반평면은 **판까지 닿아야 한다.** 판 크기만으로 잡으면 선에서 먼 작은 판이
+	# 반평면 밖에 놓여 두 조각 다 비고 — **판이 통째로 사라진다.** 실제로 그렇게 났다:
+	# 체크 상자와 손잡이와 버튼 둘이 글자만 남고 면이 없어졌다.
+	var span := _bounds(shape)
+	var reach := span.size.length() + through.distance_to(span.get_center()) + 64.0
+	var ways: Array[float] = [-1.0, 1.0]
+	for way in ways:
+		var half := PackedVector2Array(
+			[
+				through - dir * reach,
+				through + dir * reach,
+				through + dir * reach + side * reach * way,
+				through - dir * reach + side * reach * way,
+			]
+		)
+		for piece in Geometry2D.intersect_polygons(shape, half):
+			var moved := PackedVector2Array()
+			# 벌어지기만 하면 틈이고, **베인 쪽으로 같이 밀려야** 지나간 자국이 된다.
+			for point in piece:
+				moved.append(point + side * way * apart * 0.5 + dir * way * apart * 0.34)
+			out.append(moved)
+	return out
+
+
 ## 판을 **위에서부터 `upto` 픽셀만큼만** 드러낸다. 한 줄씩 그려지는 표시에 쓴다.
 ##
 ## 잘라 내는 것이라 **판의 형태가 그대로 유지된다** — 사각형으로 가리면
