@@ -24,9 +24,10 @@ const _CELL := 32.0
 
 
 func _initialize() -> void:
+	# 뒤진동이 0 이 아닌 자리만 골라 연다. **누가 무엇을 하고 있는지가 종류를 가른다.**
+	for count in [35, 39, 47, 49, 50]:
+		_after_settle("열린 곳 %d" % count, _open_field(count), Vector2(1500, 545))
 	_after_settle("좁은 통로 100", _choke_field(100, 2), Vector2(1500, 545))
-	_after_settle("열린 곳 100", _open_field(100), Vector2(1500, 545))
-	_open_series()
 	quit()
 
 

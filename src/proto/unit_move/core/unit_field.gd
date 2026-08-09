@@ -80,6 +80,15 @@ const _MIN_PACE := 0.3
 ## 손잡이가 되지 못하므로 슬라이더로 내보내지 않는다.
 const _HOLD_CONFIRM_FRAMES := 15
 
+## 목적지가 안 가까워진 채 이만큼 지나면 **걷고는 있어도 나아가는 것은 아니다**(프레임).
+##
+## 4 초다. `_GRIND_FRAMES` 와 같은 크기로 두었다 - 둘 다 "이만큼이면 정말 안 되는 것이다"를
+## 재는 자리이고, 서로 다른 값을 쓸 이유를 못 찾았다.
+##
+## 정체 시계 자체는 ⓐ 에서 만들었다(README §25). 줄이 나아가는 동안에는 앞이 한 몸씩 빠질
+## 때마다 0 으로 돌아가므로, 이 문턱에 닿는 것은 **정말로 제자리에서 맴도는 유닛뿐**이다.
+const _CREEP_STALLED_FRAMES := 240
+
 ## 기다리는 유닛이 이웃을 다시 훑는 주기(프레임). 유닛마다 어긋나게 돌린다.
 ##
 ## 기다림은 오래 갈 수 있어 매 프레임 훑으면 그대로 비용이 된다. 여섯 프레임이면
@@ -651,7 +660,19 @@ func _review_moving(agent: ProtoUnitAgent, arrive: float, crawl: float) -> void:
 		agent.press_frames += 1
 	else:
 		agent.press_frames = 0
-	if agent.press_frames >= _HOLD_CONFIRM_FRAMES:
+	# **눌림이 확정됐거나, 걷기는 걷는데 오래도록 안 나아갔거나.**
+	#
+	# 뒤엣것이 없으면 **`이동` 채로 영영 남는 유닛**이 생긴다. 열린 곳 42 에서 잡았다 -
+	# 유닛 하나가 자리를 36 픽셀 앞에 두고 자리 잡은 아군에게 막힌 채 40 초를 `이동`으로
+	# 버텼다. `press_frames` 는 **한 프레임이라도 0.6 픽셀을 나아가면 0 으로 되돌아가서**,
+	# 제자리에서 잘게 흔들리는 유닛은 열다섯까지 못 쌓는다. `_watch_grinding` 은 아군에
+	# 눌린 동안 아예 안 세고(그건 줄서기를 지키려고 일부러 그렇게 둔 것이다), 그래서
+	# **어느 그물에도 안 걸리는 틈**이 하나 남아 있었다.
+	#
+	# 정체 시계는 그 틈을 정확히 메운다. 잘게 흔들려도 **목적지가 안 가까워지면 계속 오르고**,
+	# 줄이 나아가는 동안에는 0 으로 되돌아간다. `이동`도 되돌아올 수 있는 상태여야 한다는
+	# 뜻은 아니다 - 여기서 `기다림`으로 넘어가면 그다음은 `_review_hold` 가 맡는다.
+	if agent.press_frames >= _HOLD_CONFIRM_FRAMES or agent.creep_frames >= _CREEP_STALLED_FRAMES:
 		# 자기 자리 코앞이면 거기가 자기 자리다. 어차피 사람 눈에는 도착이다.
 		if distance < agent.radius * _SETTLE_REACH:
 			agent.settle(ProtoUnitAgent.State.ARRIVED)
@@ -715,17 +736,37 @@ func _review_hold(agent: ProtoUnitAgent, arrive: float) -> void:
 		agent.settle(ProtoUnitAgent.State.ARRIVED)
 
 
-## 같은 명령을 받은 무리 중에 아직 **걷고 있는** 유닛이 있는가. 없으면 판이 더 안 바뀐다.
+## 같은 명령을 받은 무리 중에 아직 **제 자리로 나아가고 있는** 유닛이 있는가.
 ##
 ## `양보`로 선 유닛은 세지 않는다 - 그들도 나와 같은 처지라 서로를 기다려 봐야 소용없다.
+##
+## **`is_moving()` 만으로 물으면 이 조건이 스스로를 무너뜨린다.** 열린 곳 43 에서 잡았다 -
+## 기다리는 둘이 서로에게 전파를 돌리는데, 전파는 상대를 비켜서게 하려고 `ProtoUnitYield.begin`
+## 으로 **`양보`를 `이동`으로 바꾼다.** 그러면 "걷는 유닛이 있다"가 참이 되어 예산이 안 걸리고,
+## 비켜서기가 끝나면 다시 `양보`로 돌아온다. **둘이 서로를 영원히 깨워 놓는다.**
+##
+## 그래서 「걷는가」가 아니라 **「나아가는가」**를 묻는다. 둘을 가른다.
+##
+## | 빼는 것 | 왜 |
+## | --- | --- |
+## | **비켜서는 중** | 남의 길을 터 주려고 옆으로 가는 것이지 제 자리로 가는 것이 아니다 |
+## | **정체 시계가 오래된 유닛** | 걷고는 있는데 목적지가 안 가까워진 지 오래다. 열린 곳 42 의 그 하나다 |
+##
+## 정체 시계(`creep_frames`)는 ⓐ 에서 이미 만들어 둔 것이라 값이 0 이다(README §25).
+## 줄이 나아가는 동안에는 이 시계가 안 오르므로, 진짜로 줄 서서 가는 무리는 그대로 걸러진다.
 func _order_done_except_waiters(agent: ProtoUnitAgent) -> bool:
 	var order: MoveOrder = _order_cache.get(agent.order_id, null)
 	if order == null:
 		return false
 	for id in order.member_ids:
 		var other: ProtoUnitAgent = _by_id.get(id, null)
-		if other != null and other.is_moving():
-			return false
+		if other == null or not other.is_moving():
+			continue
+		if other.is_yielding():
+			continue
+		if other.creep_frames >= _CREEP_STALLED_FRAMES:
+			continue
+		return false
 	return true
 
 
