@@ -137,7 +137,7 @@ func _survey_elevation() -> void:
 				value_total += height
 				value_count += 1.0
 				rank_total += _percentile(elevations, height)
-				if graph.neighbors_of(id).size() <= 1:
+				if graph.is_dead_end(id):
 					dead += 1.0
 			exit_total += float(blueprint.elevation_of(_first_of_kind(blueprint, Room.Kind.EXIT)))
 

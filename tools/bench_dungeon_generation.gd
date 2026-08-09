@@ -64,6 +64,6 @@ func _measure(size: int) -> void:
 func _dead_ends(graph: DungeonGraph, blueprint: DungeonBlueprint) -> int:
 	var count := 0
 	for id in blueprint.room_ids():
-		if graph.neighbors_of(id).size() <= 1:
+		if graph.is_dead_end(id):
 			count += 1
 	return count

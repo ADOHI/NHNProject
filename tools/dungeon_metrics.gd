@@ -187,6 +187,14 @@ static func required_agility(
 	return best
 
 
+## **막다른 방 판정은 `DungeonGraph.is_dead_end()` 와 같은 것을 말해야 한다** (차수 <= 1).
+##
+## 여기서 그 함수를 부르지 않는 이유는 이 자가 **색인 기반 판**도 재기 때문이다 —
+## 설계안 프로토타입에는 `DungeonGraph` 가 없다. 그래서 `measure()` 의 `deg1_pct` 는
+## 같은 판정을 색인 위에서 한 번 더 구현한 것이다.
+##
+## **둘이 같은 수를 내는지는 테스트가 묶는다** (`test_dead_end_definition.gd`).
+## 200 판에서 어긋난 적이 없지만, 그건 지금 그렇다는 것이지 앞으로도 그렇다는 뜻이 아니다.
 static func degrees_of(count: int, edges: Array[Vector2i]) -> Dictionary:
 	var result := {}
 	for index in count:
@@ -263,13 +271,13 @@ static func path(count: int, edges: Array[Vector2i], start: int, target: int) ->
 	return result
 
 
+## 그 간선이 길 위에 놓여 있는가.
+##
+## **런타임 판정을 그대로 쓴다.** 예전에는 여기에 같은 코드가 한 벌 더 있었는데,
+## 갈리면 화면이 그리는 두 길과 이 자가 재는 두 길이 달라진다.
+## 도구가 `src/` 를 부르는 것은 허용된 방향이다 (`docs/conventions.md` §3.1).
 static func on_path(route: PackedInt32Array, edge: Vector2i) -> bool:
-	for index in range(1, route.size()):
-		var a := route[index - 1]
-		var b := route[index]
-		if (edge.x == a and edge.y == b) or (edge.x == b and edge.y == a):
-			return true
-	return false
+	return DungeonRouteBuilder.on_path(route, edge)
 
 
 ## 지금 생성기의 설계도를 공용 사전 모양으로 옮긴다.

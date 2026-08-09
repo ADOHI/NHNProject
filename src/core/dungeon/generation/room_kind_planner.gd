@@ -120,7 +120,7 @@ static func _place_valuables(
 	for id in ranked:
 		if int(costs.get(id, 0)) <= 0:
 			continue
-		if graph.neighbors_of(id).size() <= 1:
+		if graph.is_dead_end(id):
 			dead_ends.append(id)
 		else:
 			others.append(id)
