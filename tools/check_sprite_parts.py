@@ -61,6 +61,12 @@ MIN_RUN = 6
 # 바닥 그림자를 잘라 내는 세로 띠. 캐릭터가 가운데 있다고 보고 양옆을 버린다.
 CORRIDOR_MARGIN = 0.18
 
+# 어깨가 대략 키의 몇 % 인가. **이 위는 팔을 안 찾는다** — 머리카락 틈이 걸린다.
+SHOULDER_AT = 0.25
+
+# 팔이 떨어졌다고 인정할 최소 띠 높이(키 대비). 한 줄짜리는 잡음이다.
+MIN_ARM_BAND = 0.05
+
 # 요구값 — 전부 `char_rig.gd` 에서 나온 것이고 **키에 대한 비율**이다 (§25.38.1).
 #
 # 비율로 두는 것이 요점이다. 변환 결과의 해상도를 우리가 못 정하므로,
@@ -152,26 +158,40 @@ def body_extent(rows: list[list[tuple[int, int]]], width: int) -> tuple[int, int
     return top, bottom
 
 
-def arm_window(rows, top: int, bottom: int) -> tuple[int, int, int]:
-    """팔이 몸에서 떨어져 있는 구간과 **가장 좁은 틈**.
+def arm_window(rows, top: int, bottom: int) -> tuple[int, int, int, int]:
+    """팔이 몸에서 떨어져 있는 **띠**와 그 안에서 **가장 좁은 틈**, 그리고 줄 수.
 
-    구간이 3 개인 줄이 「팔 | 몸통 | 팔」이다. 그런 줄이 하나도 없으면
-    팔이 몸에 붙어 있다는 뜻이고, 그러면 레이맨화에서 오려 낼 수가 없다.
+    구간이 3 개 이상인 줄이 「팔 | 몸통 | 팔」이다.
+
+    **두 가지를 걸러야 한다.**
+
+    * **어깨 위는 안 본다.** 머리카락 사이가 벌어진 줄이 「팔이 떨어졌다」로 세어진다 —
+      실제로 확정 몸에서 15 % 높이의 **한 줄**이 그렇게 잡혔다
+    * **가장 넓은 구간이 가운데여야 한다.** 그래야 「팔 | 몸통 | 팔」이지,
+      팔 하나가 둘로 쪼개진 것이 아니다
+
+    **줄 수를 같이 낸다.** 한 줄만 걸린 것은 틈이 아니라 잡음이다 —
+    오려 내려면 팔을 따라 **띠로** 떨어져 있어야 한다.
     """
     first = None
     last = None
     tightest = None
+    rows_seen = 0
     for y in range(top, bottom + 1):
         runs = rows[y]
         if len(runs) < 3:
+            continue
+        widest = max(range(len(runs)), key=lambda i: runs[i][1] - runs[i][0])
+        if widest == 0 or widest == len(runs) - 1:
             continue
         gaps = [runs[i + 1][0] - runs[i][1] for i in range(len(runs) - 1)]
         if first is None:
             first = y
         last = y
+        rows_seen += 1
         near = min(gaps)
         tightest = near if tightest is None else min(tightest, near)
-    return first, last, tightest
+    return first, last, tightest, rows_seen
 
 
 def split_window(rows, top: int, bottom: int, width: int):
@@ -197,13 +217,17 @@ def measure(path: pathlib.Path) -> dict:
     crotch, foot_gap = split_window(rows, top, bottom, width)
     # **팔은 가랑이 위에서만 찾는다.** 아래로 내려가면 두 다리가 만드는 구간이
     # 「팔이 떨어졌다」로 세어져 자가 엉뚱한 데를 잰다.
-    arm_from, arm_to, arm_gap = arm_window(rows, top, crotch if crotch else bottom)
+    # **어깨 위는 안 본다** (머리카락 틈이 팔로 세어진다). 어깨는 대략 키의 25 % 다.
+    arm_top = top + int((bottom - top) * SHOULDER_AT)
+    arm_from, arm_to, arm_gap, arm_rows = arm_window(rows, arm_top, crotch if crotch else bottom)
     return {
         "path": str(path),
         "height_px": height,
         "arm_free_from": None if arm_from is None else (arm_from - top) / height,
         "arm_free_to": None if arm_to is None else (arm_to - top) / height,
         "arm_gap": None if arm_gap is None else arm_gap / height,
+        "arm_rows": arm_rows,
+        "arm_band": arm_rows / height,
         "crotch": None if crotch is None else (crotch - top) / height,
         "foot_gap": None if foot_gap is None else foot_gap / height,
     }
@@ -229,12 +253,22 @@ def report(found: dict) -> int:
     else:
         need = REQUIRED["hand_gap"][0]
         got = found["arm_gap"]
-        mark = "[OK]" if got >= need else "[X] "
-        bad += 0 if got >= need else 1
+        wide = got >= need
+        # **띠로 떨어져 있어야 한다.** 한 줄만 걸린 것은 틈이 아니라 잡음이다.
+        banded = found["arm_band"] >= MIN_ARM_BAND
+        mark = "[OK]" if wide and banded else "[X] "
+        bad += 0 if wide and banded else 1
         say(
             mark,
-            "팔이 몸에서 떨어진 틈 %.1f%% (필요 %.1f%%) · 떨어진 구간 %.0f%%…%.0f%%"
-            % (got * 100, need * 100, found["arm_free_from"] * 100, found["arm_free_to"] * 100),
+            "팔 틈 %.1f%% (필요 %.1f%%) · 떨어진 띠 %.0f%%…%.0f%% (%d 줄%s)"
+            % (
+                got * 100,
+                need * 100,
+                found["arm_free_from"] * 100,
+                found["arm_free_to"] * 100,
+                found["arm_rows"],
+                "" if banded else ", 너무 얇다",
+            ),
         )
 
     # ② 두 다리가 갈라지나. 안 갈리면 두 발을 못 가른다.
