@@ -213,6 +213,23 @@ func _print_targets(rows: Array) -> void:
 			)
 		)
 	print("성격별 최악 순서: %s" % str(range(DungeonCatalog.count()).map(DungeonCatalog.name_of)))
+	print("")
+	# **보장을 걸 수 있는지는 「그 값이 존재하나」가 정한다.** 평균만 보면 1 짜리 판이
+	# 있는 줄 알고 「목록에 하나는 넣자」로 가는데, 없으면 그건 못 거는 보장이다.
+	print("보스 필요 민첩의 분포 — **1 이하가 있는가**")
+	var histogram := {}
+	for row in rows:
+		var need := int((row["targets"] as PackedInt32Array)[0])
+		histogram[need] = int(histogram.get(need, 0)) + 1
+	var keys := histogram.keys()
+	keys.sort()
+	for key in keys:
+		print(
+			(
+				"  민첩 %-3d %4d 판 (%.1f%%)"
+				% [key, histogram[key], 100.0 * float(histogram[key]) / float(rows.size())]
+			)
+		)
 
 
 ## **정책마다 누가 못 들어가는가.** 이것이 고르는 근거다.

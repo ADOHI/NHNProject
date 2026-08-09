@@ -166,3 +166,52 @@ func test_the_rank_size_axis_matches_the_dungeon_size_axis() -> void:
 		SampleDungeons.SIZE_MAX - SampleDungeons.SIZE_MIN + 1,
 		"등급 수와 크기 단계 수가 다르다"
 	)
+
+
+# ---------------------------------------------------------------- 입장 민첩
+
+
+## **기본 민첩으로 목록이 살아 있어야 한다.**
+##
+## 입장 제한(§17.40)이 놓은 구멍은 판 하나가 아니라 **목록 하나**에 있다.
+## 넷이 다 막히면 그 판에서 할 수 있는 일이 없다 — 막다른 상태다.
+##
+## 실측(§17.42)으로는 민첩 2 에서 막다른 목록이 200 판 중 **0** 이고,
+## 민첩 1 에서는 **71~80%** 다. 벼랑이 정확히 2 에 있고, 그 2 는
+## `Params.elevation_gain` 기본값이다 — **그 값을 올리면 이 자가 먼저 빨개진다.**
+func test_a_board_always_has_somewhere_to_go_at_the_default_agility() -> void:
+	for guild_rank in [1, 3, 5]:
+		for board_seed in 12:
+			var gates := BoardScript.create(board_seed * 7919 + guild_rank, guild_rank, 4)
+			var open := 0
+			for gate in gates:
+				if gate.can_enter(SampleDungeons.SQUAD_AGILITY):
+					open += 1
+			assert_gt(
+				open,
+				0,
+				(
+					"등급 %d · 목록 %d: 넷 다 못 들어간다 (필요 민첩 %s)"
+					% [
+						guild_rank,
+						board_seed,
+						str(gates.map(func(gate: Gate) -> int: return gate.required_agility())),
+					]
+				)
+			)
+
+
+## **막는 값은 「끝낼 수 있나」지 「다 볼 수 있나」가 아니다.**
+##
+## 둘을 헷갈려 `full_agility` 로 막으면 민첩 2 가 판의 55% 에서 거절당하고
+## 수직 회랑이 통째로 사라진다 (§17.40.1). 그 혼동을 자로 못 박는다.
+func test_clearing_is_cheaper_than_seeing_it_all() -> void:
+	var cheaper := 0
+	for character in DungeonCatalog.count():
+		for seed_value in [5, 17, 41]:
+			var gate := _make_gate(seed_value)
+			gate.dungeon_character = character
+			assert_true(gate.full_agility() >= gate.required_agility(), "다 보는 값이 더 싸다")
+			if gate.full_agility() > gate.required_agility():
+				cheaper += 1
+	assert_gt(cheaper, 0, "둘이 언제나 같으면 값을 둘로 나눈 이유가 없다")
