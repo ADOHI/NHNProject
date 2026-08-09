@@ -1,7 +1,8 @@
 extends SceneTree
 ## 팝업 화면을 정지 한 장과 움직이는 그림으로 뽑는다.
 ##
-##     godot --path . --resolution 1280x760 -s res://tools/capture_popup.gd -- .renders/20-popups still
+##     godot --path . --resolution 1280x760 \
+##         -s res://tools/capture_popup.gd -- .renders/20-popups still
 ##     godot --path . --resolution 1280x760 -s res://tools/capture_popup.gd -- .renders/pop film
 ##
 ## **팝업은 정지 화면으로 판정할 수 없다.** 사건이 열림과 닫힘이라 상태가 아니라

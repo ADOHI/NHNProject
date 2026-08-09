@@ -1,7 +1,8 @@
 extends SceneTree
 ## 인물 상세를 형태 넷에 얹은 화면을 뽑는다.
 ##
-##     godot --path . --resolution 1280x640 -s res://tools/capture_dossier.gd -- .renders/30-dossier still
+##     godot --path . --resolution 1280x640 \
+##         -s res://tools/capture_dossier.gd -- .renders/30-dossier still
 ##     godot --path . --resolution 1280x640 -s res://tools/capture_dossier.gd -- .renders/dos film
 ##
 ## **넘침 표시가 이 캡처의 결과물이다.** 형태가 예쁜지가 아니라 글이 들어가는지를 본다.
