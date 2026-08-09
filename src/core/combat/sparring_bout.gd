@@ -86,6 +86,14 @@ var _ally_stop := PackedInt32Array()
 var _ally_offset := PackedFloat32Array()
 var _ally_gauges: Array[BreakGauge] = []
 
+## 대원마다의 **몸집 배율** (§28.20.53).
+##
+## 인물이 여덟 살부터 여든 살까지 나온다. 캐릭터 애니 레인이 위험을 적어 뒀다 —
+## **`reach_px()` 값은 안 변하고 쓰는 쪽이 배율을 곱한다.** 우리가 쓰는 쪽이다.
+##
+## **기본값은 1.0 — 지금까지의 동작 그대로다.** 옛 표를 조용히 바꾸지 않는다.
+var _ally_scale := PackedFloat32Array()
+
 ## 대원마다, 그 타가 **몇에게 걸쳤나** (§28.20.34 물음 ①).
 ##
 ## **`Array[int]` 이지 `PackedInt32Array` 가 아니다.** 묶음 배열 안에 넣은 Packed 는
@@ -150,7 +158,8 @@ static func from_squad(
 	chains: Array,
 	tuning: BreakTuning = null,
 	field: SparringField = null,
-	enemy_weapon: BackpackItem = null
+	enemy_weapon: BackpackItem = null,
+	scales: PackedFloat32Array = PackedFloat32Array()
 ) -> SparringBout:
 	var first: Array[BackpackItem] = []
 	if not chains.is_empty():
@@ -160,6 +169,8 @@ static func from_squad(
 		var items: Array[BackpackItem] = []
 		items.assign(chains[index])
 		bout._add_ally(items)
+	for index in mini(scales.size(), bout._ally_scale.size()):
+		bout._ally_scale[index] = scales[index]
 	return bout
 
 
@@ -317,7 +328,7 @@ func _swing_ally(ally: int) -> BackpackItem:
 	# **0번 대원만 낸다.** 필드에 대원 자리가 하나뿐이라 전원이 밀면 사람 수만큼
 	# 빨리 파고든다. 자리가 정해지기 전의 임시 규칙이다 (§28.20.36).
 	if _field != null and ally == 0:
-		_field.swing_advance(WeaponMotion.advance_px(item))
+		_field.swing_advance(WeaponMotion.advance_px(item) * _ally_scale[ally])
 	return item
 
 
@@ -339,7 +350,8 @@ func _swing_ally(ally: int) -> BackpackItem:
 func _reachable_targets(item: BackpackItem, ally: int) -> PackedInt32Array:
 	if _field == null:
 		return PackedInt32Array([0])
-	var reach := WeaponMotion.reach_px(item)
+	# **몸집이 리치를 곱한다** (§28.20.53). 저쪽 표는 그대로 두고 쓰는 쪽에서 곱한다.
+	var reach := WeaponMotion.reach_px(item) * _ally_scale[ally]
 	var reachable := _field.targets_within(reach, _field.enemy_count())
 
 	# **빠진 적은 후보가 아니다** (§28.20.52). 필드는 눈금을 모르므로 여기서 거른다.
@@ -422,6 +434,15 @@ func _sorted_by(candidates: PackedInt32Array, score: Callable) -> PackedInt32Arr
 	var out := PackedInt32Array()
 	for entry in keyed:
 		out.append(int(entry.z))
+	return out
+
+
+## 지금 빠져 있는 적들. 다가오는 줄에서 **자리를 비운다.**
+func _out_enemies() -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for index in enemy_count():
+		if _is_out(index):
+			out.append(index)
 	return out
 
 
@@ -525,8 +546,13 @@ func _apply_hitstop(item: BackpackItem, remaining: float) -> float:
 	return remaining - frozen
 
 
-## 시간이 흐른다. **모든 눈금이 함께 빠진다.**
+## 시간이 흐른다. **모든 눈금이 함께 빠지고, 적이 다가온다.**
+##
+## 다가오는 것을 여기 둔 이유는 눈금과 같다 — **정확한 시각에** 흘러야
+## 프레임 길이에 따라 결과가 달라지지 않는다 (§28.20.31).
 func _drain(seconds: float) -> void:
+	if _field != null:
+		_field.close_in(seconds, _out_enemies())
 	for gauge in _gauges:
 		gauge.tick(seconds)
 	for gauge in _ally_gauges:
@@ -546,6 +572,7 @@ func _add_ally(items: Array[BackpackItem]) -> void:
 	_ally_offset.append(0.0)
 	_ally_gauges.append(BreakGauge.new(_tuning))
 	_ally_spread.append([] as Array[int])
+	_ally_scale.append(1.0)
 
 
 func _every_ally_stopped() -> bool:

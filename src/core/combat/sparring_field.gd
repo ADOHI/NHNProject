@@ -92,6 +92,18 @@ var leader_knowledge: LeaderKnowledge = LeaderKnowledge.VISIBLE
 ## **기본값은 `false` — 지금까지의 동작 그대로다.** 옛 표를 조용히 바꾸지 않는다.
 var downed_leave: bool = false
 
+## **적이 다가오는 속력** (초당 픽셀, §28.20.53).
+##
+## §28.20.52 가 물량전 상한을 **여섯**으로 재고 그 까닭을 「한 번에 몇이 닿나」로 짚었다.
+## 그리고 그 절이 상한을 옮길 후보 넷 중 **이것이 제일 자연스럽다**고 적었다 —
+## 지금 적은 제자리에서만 때린다. **뒷줄이 빈 자리로 들어오면 여섯이 계속 갈린다.**
+##
+## **기본값은 0 — 지금까지의 동작 그대로다.** 옛 표를 조용히 바꾸지 않는다.
+##
+## > 이것은 §28.4 의 RTS 자동 이동이 할 일의 **아주 거친 흉내**다.
+## > 여기서 정하는 것이 아니라 **상한이 얼마나 움직이는지만** 본다.
+var approach_speed: float = 0.0
+
 ## 1픽셀 = 1단위. 화면 좌표와 같은 축을 쓴다 (오른쪽이 +).
 var attacker_x: float = 0.0
 
@@ -256,6 +268,36 @@ func advance(distance: float) -> void:
 func swing_advance(distance: float) -> void:
 	if advance_mode == AdvanceMode.STAY:
 		advance(distance)
+
+
+## **적이 줄을 메우며 다가온다** (§28.20.53).
+##
+## 맨 앞은 `WeaponMotion.opening_gap_px()` 까지 오고, 뒤는 앞사람에서 `rank_depth` 만큼
+## 떨어진 자리까지 온다. **줄이 짧아지는 것이 아니라 앞으로 밀리는 것이다.**
+##
+## `out` 에 든 적은 **자리를 비운다** — 쓰러져 빠진 것이 길을 안 막는다.
+## 시체가 길을 막느냐는 §28.20.34 물음 ③(밀치기)과 같은 자리라 여기서 정하지 않는다.
+func close_in(seconds: float, out: PackedInt32Array = PackedInt32Array()) -> void:
+	if approach_speed <= 0.0 or seconds <= 0.0:
+		return
+
+	# **줄 순서를 다시 세우지 않는다.** 세워 둔 순서가 곧 거리 순서이고
+	# 앞으로만 오므로 그 순서가 안 뒤집힌다. 매번 정렬하면 사건마다 N log N 이 되어
+	# 적 100 명짜리 판이 못 끝난다 — 실제로 한 번 못 끝냈다.
+	var step := approach_speed * seconds
+	var ahead := facing()
+	var want := WeaponMotion.opening_gap_px()
+	for index in _enemies.size():
+		if out.has(index):
+			continue
+		var enemy := _enemies[index]
+		var gap := absf(enemy.x - attacker_x)
+		if gap > want:
+			var goal := attacker_x + ahead * want
+			var moved := enemy.x - ahead * step
+			enemy.x = maxf(moved, goal) if ahead > 0.0 else minf(moved, goal)
+			gap = absf(enemy.x - attacker_x)
+		want = gap + rank_depth
 
 
 ## 적 하나짜리로 되돌린다.
