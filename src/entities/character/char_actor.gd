@@ -68,6 +68,14 @@ const DEFAULT_SCALE := 1.0
 ## 재생 속도. 0 이면 멈춘다.
 @export var speed := 1.0
 
+## 얹는 연출 장치들 (§25.23). 바꾸면 바로 반영된다.
+var flourish := CharFlourish.none():
+	set(value):
+		flourish = value
+		if _view != null:
+			_view.flourish = value
+		_refresh()
+
 var _rig: CharRig
 var _view: CharPartsView
 var _clips: Dictionary[Action, CharClip] = {}
@@ -183,6 +191,7 @@ func _rebuild_weapon() -> void:
 	(_clips[Action.HIT] as CharHitClip).weapon = weapon
 	(_clips[Action.DIE] as CharDieClip).weapon = weapon
 	_view.weapon = weapon
+	_view.flourish = flourish
 	_view.setup(_rig)
 	_refresh()
 
@@ -192,8 +201,10 @@ func _clip() -> CharClip:
 
 
 func _refresh() -> void:
-	if _view != null:
-		_view.apply_pose(_clip().sample(_time, AnimFeatures.all_on()))
+	if _view == null:
+		return
+	# **뷰가 자기 장식을 스스로 만든다.** 클립과 시각만 주면 되므로 캡처 도구도 같은 길을 쓴다.
+	_view.show_at(_clip(), _time, impact_seconds())
 
 
 ## 검이 닿는 시각을 **지나쳤는지**로 낸다. 정확히 그 프레임을 밟기를 기다리면

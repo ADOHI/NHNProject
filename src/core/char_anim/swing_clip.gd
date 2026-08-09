@@ -59,18 +59,30 @@ const SETTLE_DECAY := 7.0
 const SETTLE_CYCLES := 1.6
 
 ## 몸이 휘두름을 받아 도는 양. 손만 움직이면 팔이 아니라 막대가 도는 것으로 보인다.
-const TORSO_TWIST := 0.20
-const TORSO_SHIFT := 3.4
-const TORSO_DROP := 2.6
+##
+## **26 도다.** 처음에 0.10(6 도)으로 두고 「몸이 참여한다」고 적었는데,
+## 참여의 **방향만** 맞고 **양이** 액션의 근처에도 못 갔다 (§25.22).
+const TORSO_TWIST := 0.46
+const TORSO_SHIFT := 7.0
+const TORSO_DROP := 6.0
 
 ## **예비에 몸이 반대로 꼬인다.** 팔만 뒤로 가면 풀리는 힘이 안 생긴다.
+##
+## **33 도.** 감을 때가 풀 때보다 크다 — 감는 데 힘이 더 든다.
 ## 예비를 깊게 한 것(§25.19.2)이 여기서 값을 한다 — 시간이 있어야 감긴다.
-const TORSO_COIL := 0.26
+const TORSO_COIL := 0.58
 
 ## **키가 변한다.** 예비에 낮아지고 타격에 뻗는다.
-## 위아래로 안 움직이면 무슨 짓을 해도 평평해 보인다.
-const TORSO_DIP := 7.5
-const TORSO_EXTEND := 5.5
+##
+## **키(141)의 15 % 다.** 위아래로 안 움직이면 무슨 짓을 해도 평평해 보인다.
+## 처음에 7.5(5 %)였고 그 정도로는 「조금 움찔한다」에 그쳤다.
+const TORSO_DIP := 21.0
+const TORSO_EXTEND := 14.0
+
+## **과장은 무게를 탄다.** 무거운 것이 더 기울고 더 낮아지고 더 멀리 내딛는다.
+##
+## 과장이 무게 축과 안 싸운다 — 오히려 **무게를 읽히게 만든다.**
+const EXAGGERATION_FROM_WEIGHT := 0.40
 
 ## **파츠마다 시작 시각이 다르다 — 아래에서 위로.**
 ##
@@ -86,16 +98,28 @@ const LEAD_OFF_HAND := 0.024
 const LEAD_HEAD := -0.038
 
 ## 반대 손이 균형을 잡느라 뻗는 거리.
-const OFF_HAND_SWING := 15.0
+const OFF_HAND_SWING := 26.0
 
 ## 앞발이 내디딜 때 뜨는 높이.
-const STEP_HEIGHT := 6.0
+const STEP_HEIGHT := 11.0
+
+## **스탠스가 좁았다 넓어진다.** 예비에 앞발을 당기고 타격에 크게 내딛는다.
+##
+## 발이 거의 고정이면 **아무리 위를 흔들어도 서 있는 사람**으로 보인다.
+const STANCE_OPEN := 17.0
+
+## 눌림과 늘어남. **몸 진폭과 짝이다** — 크게 움직이는데 부피가 안 변하면 판자가 된다.
+const SQUASH_WIND := 0.13
+const STRETCH_STRIKE := 0.16
+const SQUASH_LAND := 0.09
 
 ## 예비에 **살짝 뒤로** 빼는 비율. 그래야 앞으로 나갈 때 힘이 실린다.
 const ADVANCE_BACK := 0.24
 
-## 머리는 몸보다 늦게 따라온다. idle 과 같은 규칙이다.
-const HEAD_TWIST := 0.07
+## 머리가 몸통과 **어긋나는** 각. **20 도 넘게** 벌어져야 목이 살아 있는 것으로 보인다.
+##
+## 몸통과 부호가 반대라 실제 어긋남은 둘의 합이다.
+const HEAD_TWIST := 0.34
 const HEAD_DELAY := 0.06
 
 ## 무게가 실리는 발. 휘두르면 앞발을 디디고 뒷발의 뒤꿈치가 뜬다.
@@ -267,6 +291,11 @@ func travel_at(t: float) -> float:
 	return weapon.advance_px() * ratio
 
 
+## 과장 배수. **무거울수록 크게 과장한다.**
+func exaggeration() -> float:
+	return 1.0 + EXAGGERATION_FROM_WEIGHT * weapon.drag()
+
+
 ## 그 파츠가 읽는 진행도. **파츠마다 시각이 어긋나 있다** — 발이 먼저, 머리가 나중.
 func progress_for(t: float, lead: float) -> float:
 	return progress(clampf(t + lead * weapon.time_scale(), 0.0, loop_seconds()))
@@ -295,9 +324,10 @@ func _apply_hand(pose: CharPose, t: float, f: AnimFeatures) -> void:
 
 	# 빈손은 **반대로** 뻗어 균형을 잡는다. 가만히 있으면 한쪽만 사는 인형이 된다.
 	var off := progress_for(t, LEAD_OFF_HAND * f.delay)
+	var big := exaggeration()
 	var idle_hand := CharPart.Id.HAND_FAR
-	pose.positions[idle_hand] += Vector2(-OFF_HAND_SWING * off, 3.0 * off) * f.arc
-	pose.rotations[idle_hand] = -0.45 * off * f.arc
+	pose.positions[idle_hand] += Vector2(-OFF_HAND_SWING * off, 6.0 * off) * big * f.arc
+	pose.rotations[idle_hand] = -0.85 * off * big * f.arc
 
 
 ## 몸 — **예비에 꼬이고 낮아졌다가, 타격에 풀리며 뻗는다.**
@@ -308,26 +338,34 @@ func _apply_torso(pose: CharPose, t: float, f: AnimFeatures) -> void:
 	var part := CharPart.Id.TORSO
 	var at := progress_for(t, LEAD_TORSO * f.delay)
 	var drag := weapon.drag()
+	var big := exaggeration()
 	# 예비(음수)에는 꼬임이 크고, 풀릴 때는 그보다 작다 — 감는 데 힘이 더 든다.
 	var twist := TORSO_COIL if at < 0.0 else (TORSO_TWIST + DRAG_TWIST * drag)
 	var forward := clampf(at, 0.0, 1.0)
+	var wound := maxf(-at, 0.0) / ANTICIPATE_DEPTH
 	# 예비에 낮아지고 타격 중에 뻗었다가 마무리에 다시 내려앉는다.
-	var height := -TORSO_DIP * maxf(-at, 0.0) / ANTICIPATE_DEPTH
-	height += TORSO_EXTEND * sin(PI * forward) - TORSO_DROP * forward
-	pose.positions[part] += Vector2((TORSO_SHIFT + DRAG_SHIFT * drag) * at, height) * f.arc
-	pose.rotations[part] = -twist * at * f.arc
-	pose.scales[part] = CharClip.volume_scale(-0.030 * forward * f.squash)
+	var height := -TORSO_DIP * wound + TORSO_EXTEND * sin(PI * forward) - TORSO_DROP * forward
+	pose.positions[part] += (Vector2((TORSO_SHIFT + DRAG_SHIFT * drag) * at, height * big) * f.arc)
+	pose.rotations[part] = -twist * at * big * f.arc
+	# **부피가 같이 변한다.** 감을 때 눌리고 뻗을 때 늘어나고 마무리에 다시 눌린다.
+	var volume := -SQUASH_WIND * wound + STRETCH_STRIKE * sin(PI * forward)
+	volume -= SQUASH_LAND * forward
+	pose.scales[part] = CharClip.volume_scale(volume * big * f.squash)
 
 
 ## 머리 — **맨 마지막으로 따라온다.** 예비에는 살짝 반대로 남는다.
 func _apply_head(pose: CharPose, t: float, f: AnimFeatures) -> void:
 	var part := CharPart.Id.HEAD
 	var at := progress_for(t, LEAD_HEAD * f.delay)
+	var big := exaggeration()
 	var forward := clampf(at, 0.0, 1.0)
-	var height := -TORSO_DIP * 0.55 * maxf(-at, 0.0) / ANTICIPATE_DEPTH
-	height += TORSO_EXTEND * 0.6 * sin(PI * forward) - TORSO_DROP * 0.5 * forward
-	pose.positions[part] += Vector2(TORSO_SHIFT * 0.6 * at, height) * f.arc
-	pose.rotations[part] = -HEAD_TWIST * at * f.arc
+	var wound := maxf(-at, 0.0) / ANTICIPATE_DEPTH
+	var height := -TORSO_DIP * 0.5 * wound + TORSO_EXTEND * 0.7 * sin(PI * forward)
+	height -= TORSO_DROP * 0.5 * forward
+	pose.positions[part] += Vector2(TORSO_SHIFT * 0.7 * at, height * big) * f.arc
+	# **몸통과 부호가 반대다.** 둘이 반대로 돌아야 목이 살아 있는 것으로 보인다.
+	pose.rotations[part] = HEAD_TWIST * at * big * f.arc
+	pose.scales[part] = CharClip.volume_scale(-SQUASH_WIND * 0.5 * wound * big * f.squash)
 
 
 ## 발 — **가장 먼저 움직인다.** 힘이 땅에서 올라오기 때문이다.
@@ -339,10 +377,15 @@ func _apply_feet(pose: CharPose, t: float, f: AnimFeatures) -> void:
 	var loaded := maxf(at, 0.0) * f.asymmetry
 	var coiled := maxf(-at, 0.0) / ANTICIPATE_DEPTH * f.asymmetry
 
+	var big := exaggeration()
 	var near := CharPart.Id.FOOT_NEAR
-	# 예비에는 뒤에 실렸다가 타격에 앞발로 넘어간다.
+	# **스탠스가 좁았다 넓어진다.** 예비에 당기고 타격에 크게 내딛는다.
+	# 발이 거의 고정이면 아무리 위를 흔들어도 서 있는 사람으로 보인다.
+	pose.positions[near] += Vector2(STANCE_OPEN * at * big * f.arc, 0.0)
 	pose.scales[near] = CharClip.volume_scale(-FOOT_SQUASH * loaded * f.squash)
 	pose.rotations[near] = FOOT_HEEL_LIFT * 0.5 * coiled
+	# 자리를 옮기는 동안에는 떠 있어야 한다 — 안 그러면 땅을 긁는다.
+	pose.positions[near] += Vector2(0.0, STEP_HEIGHT * absf(sin(PI * at)) * big)
 	pose.positions[near] += Vector2(0.0, pose.lift_to_clear_ground(near, rig))
 
 	var far := CharPart.Id.FOOT_FAR
@@ -364,8 +407,7 @@ func _apply_travel(pose: CharPose, t: float, f: AnimFeatures) -> void:
 		if part == CharPart.Id.FOOT_FAR:
 			continue
 		pose.positions[part] += Vector2(gone, 0.0)
-	# 앞발은 나가는 동안 들린다. 안 들면 땅을 긁으며 미끄러진다.
-	var near := CharPart.Id.FOOT_NEAR
-	var lift := STEP_HEIGHT * sin(PI * clampf(progress(t), 0.0, 1.0))
-	pose.positions[near] += Vector2(0.0, lift)
-	pose.positions[near] += Vector2(0.0, pose.lift_to_clear_ground(near, rig))
+	# 앞발이 뜨는 것은 `_apply_feet` 이 이미 했다. 여기서는 파고들지만 않게 다시 본다.
+	pose.positions[CharPart.Id.FOOT_NEAR] += Vector2(
+		0.0, pose.lift_to_clear_ground(CharPart.Id.FOOT_NEAR, rig)
+	)

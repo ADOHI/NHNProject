@@ -79,6 +79,7 @@ var _verified := false
 var _frames := 0
 var _cells := 1
 var _span := 1
+var _flourish := "none"
 
 
 func _initialize() -> void:
@@ -89,6 +90,9 @@ func _initialize() -> void:
 	for token: String in args.slice(1):
 		if token in CLIPS:
 			clip_name = token
+		elif token in CharFlourish.preset_names():
+			# `arc_hard` 처럼 연출 장치를 고른다. 장치마다 약/세/과 셋이 있다 (§25.23).
+			_flourish = token
 		elif token.begins_with("cells"):
 			# `cells3` 은 3 칸 곧은 것, `cells4x2` 는 총 4 칸에 긴 쪽 2 칸(철퇴).
 			# 길이와 무게를 따로 줘야 창과 철퇴가 갈린다 (§25.20).
@@ -115,6 +119,7 @@ func _initialize() -> void:
 
 	_view = CharPartsView.new()
 	_view.weapon = CharWeapon.new(_cells, _span)
+	_view.flourish = CharFlourish.preset(_flourish)
 	_view.position = Vector2(float(VIEW_SIZE.x) * 0.5, GROUND_Y)
 	_view.scale = Vector2(VIEW_SCALE, VIEW_SCALE)
 	stage.add_child(_view)
@@ -128,9 +133,10 @@ func _initialize() -> void:
 	print("캡처: %s  프레임 %d  %d fps  한 바퀴 %.2f 초" % [_out_prefix, _frames, FPS, _clip.loop_seconds()])
 	print(
 		(
-			"클립 %s / 지연 %.1f 호 %.1f 배율 %.1f 비대칭 %.1f 앞뒤 %.1f 디딤 %.1f"
+			"클립 %s [%s] / 지연 %.1f 호 %.1f 배율 %.1f 비대칭 %.1f 앞뒤 %.1f 디딤 %.1f"
 			% [
 				_clip.clip_name(),
+				_flourish,
 				_features.delay,
 				_features.arc,
 				_features.squash,
@@ -159,7 +165,9 @@ func _process(_delta: float) -> bool:
 
 	# 시각을 직접 넣는다. 한 바퀴를 장수로 등분하므로 마지막 다음이 정확히 처음이다.
 	var t := _clip.loop_seconds() * float(_next_frame) / float(_frames)
-	_view.apply_pose(_clip.sample(t, _features))
+	var swing := _clip as CharSwingClip
+	var impact := -1.0 if swing == null else swing.anticipate + swing.still + swing.strike
+	_view.show_at(_clip, t, impact)
 	_pending = _next_frame
 	_next_frame += 1
 	return false

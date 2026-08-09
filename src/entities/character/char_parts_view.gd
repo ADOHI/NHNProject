@@ -12,6 +12,16 @@ extends Node2D
 
 const SHADOW := Color(0.145, 0.161, 0.196, 0.28)
 
+## 잔상 색. 캐릭터보다 차갑게 빼서 「지나간 것」으로 읽히게 한다.
+const ECHO := Color(0.639, 0.749, 0.839)
+
+## 호의 안쪽과 바깥쪽 색. 바깥이 밝아야 날이 지나간 것으로 보인다.
+const ARC_INNER := Color(0.741, 0.827, 0.898, 0.10)
+const ARC_OUTER := Color(0.965, 0.980, 1.0, 0.55)
+
+## 호를 몇 조각으로 쪼개나. 적으면 각이 지고 많으면 그리는 값이 는다.
+const ARC_STEPS := 10
+
 ## 몸이 1 px 오를 때 그림자가 줄어드는 비율. 이 값이 크면 그림자가 따로 노는 것으로 보인다.
 const SHADOW_LIFT_RESPONSE := 0.030
 
@@ -20,10 +30,18 @@ var rig: CharRig
 ## 든 무기. **칸 수가 길이 · 두께를 정하고 그것이 다시 동작을 정한다** (§25.16).
 var weapon := CharWeapon.new(1)
 
+## 얹는 연출 장치들. `null` 이면 아무것도 안 얹는다.
+var flourish := CharFlourish.none()
+
 var _shapes: Array[CharPartShape] = []
 var _weapon: CharWeaponShape
 var _shadow_scale := 1.0
 var _shadow_offset := 0.0
+
+## 과거 자세들. **기록이 아니라 `sample(t - Δ)` 로 받은 것**이다 (§25.3).
+var _echoes: Array[CharPose] = []
+var _arc: PackedVector2Array = PackedVector2Array()
+var _flash := 0.0
 
 
 func setup(p_rig: CharRig) -> void:
@@ -69,6 +87,57 @@ func apply_pose(pose: CharPose) -> void:
 	queue_redraw()
 
 
+## 과거 자세와 호를 넣는다. **뷰는 이것을 그리기만 한다** — 어디서 왔는지 모른다.
+func set_motion(echoes: Array[CharPose], arc: PackedVector2Array, flash: float) -> void:
+	_echoes = echoes
+	_arc = arc
+	_flash = flash
+	queue_redraw()
+
+
+## **클립과 시각만 주면 장식까지 스스로 만든다.**
+##
+## 액터와 캡처 도구가 같은 길을 쓰게 하려는 것이다 — 둘이 갈리면 벤치에서 본 것과
+## 게임에서 나오는 것이 달라진다.
+func show_at(clip: CharClip, at: float, impact := -1.0) -> void:
+	var f := AnimFeatures.all_on()
+	apply_pose(clip.sample(at, f))
+	_stretch_blade(clip, at, f)
+	set_motion(_past_poses(clip, at, f), _blade_sweep(clip, at, f), _flash_left(at, impact))
+
+
+## **스트레치와 스미어.** 빠를수록 검이 진행 방향으로 늘어난다.
+##
+## 정지 프레임으로 보면 **이상하게 생긴 것이 정상이다** — 한두 프레임만 지나가므로
+## 사람은 「빨랐다」로만 읽는다. 2D 액션의 고전 기법이고 에셋이 0 이다.
+##
+## 스미어는 같은 장치를 **더 밀어붙인 것**이라 축을 따로 두지 않고 배수만 키운다.
+func _stretch_blade(clip: CharClip, at: float, f: AnimFeatures) -> void:
+	if _weapon == null:
+		return
+	var pull := flourish.stretch + flourish.smear
+	if pull <= 0.0:
+		_weapon.scale = Vector2.ONE
+		return
+	var speed := _blade_speed(clip, at, f)
+	# 길이 방향으로 늘리고 두께를 줄인다 — 부피를 대충 지켜야 「늘어났다」로 읽힌다.
+	var along := 1.0 + pull * speed
+	_weapon.scale = Vector2(along, 1.0 / sqrt(along))
+
+
+## 검이 지금 얼마나 빨리 도는가 (`0` … `1` 언저리).
+##
+## 클립이 시각의 함수라 **두 시각을 뽑아 빼면 그만이다** — 속도를 따로 안 들고 다닌다.
+func _blade_speed(clip: CharClip, at: float, f: AnimFeatures) -> float:
+	var step := 0.02
+	var before := maxf(at - step, 0.0)
+	if is_equal_approx(before, at):
+		return 0.0
+	var was := clip.sample(before, f).rotations[CharWeapon.HOLDER]
+	var now := clip.sample(at, f).rotations[CharWeapon.HOLDER]
+	return clampf(absf(now - was) / (at - before) / 12.0, 0.0, 1.0)
+
+
 ## 파츠 노드. 나중에 `Sprite2D` 로 갈아 끼울 때의 접점이다.
 func part_node(part: CharPart.Id) -> CharPartShape:
 	return _shapes[part]
@@ -84,3 +153,134 @@ func _draw() -> void:
 		var a := TAU * float(i) / 24.0
 		points.append(Vector2(_shadow_offset + cos(a) * rx, sin(a) * ry))
 	draw_colored_polygon(points, SHADOW)
+	_draw_arc_sweep()
+	_draw_echoes()
+
+
+## 검이 지나간 호를 **면으로** 그린다. 안쪽은 좁고 바깥은 넓다.
+##
+## **폴리곤 하나다.** 잔상보다 훨씬 싸고, 2D 액션에서 타격감의 절반을 낸다.
+func _draw_arc_sweep() -> void:
+	if _arc.size() < 4:
+		return
+	draw_colored_polygon(_arc, ARC_OUTER)
+
+
+## 잔상. **뒤로 갈수록 옅어진다.**
+##
+## 파츠 노드를 복제하지 않는다 — 상자만 찍는다. 6N 개 노드를 만들면 웹에서 죽는다.
+func _draw_echoes() -> void:
+	if _echoes.is_empty():
+		return
+	var count := _echoes.size()
+	for i in count:
+		var fade := flourish.trail_alpha * (1.0 - float(i) / float(count))
+		var tint := Color(ECHO.r, ECHO.g, ECHO.b, fade)
+		var pose := _echoes[i]
+		for part in CharPart.DRAW_ORDER:
+			if not flourish.trail_body and part != CharWeapon.HOLDER:
+				continue
+			_draw_ghost(pose, part, tint)
+		if not flourish.trail_body:
+			_draw_ghost_blade(pose, tint)
+
+
+## 파츠 하나를 옅은 상자로 찍는다.
+func _draw_ghost(pose: CharPose, part: CharPart.Id, tint: Color) -> void:
+	var at := pose.canvas_transform(part)
+	var half := rig.half_sizes[part]
+	var centre := rig.local_centers[part]
+	var box := PackedVector2Array()
+	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+		var local := Vector2(centre.x + corner.x * half.x, -(centre.y + corner.y * half.y))
+		box.append(at * local)
+	draw_colored_polygon(box, tint)
+
+
+## 무기 잔상. 몸을 안 남길 때도 **검은 남겨야** 궤적이 읽힌다.
+func _draw_ghost_blade(pose: CharPose, tint: Color) -> void:
+	var grip := weapon.grip_offset(rig)
+	var mount := (
+		pose.canvas_transform(CharWeapon.HOLDER)
+		* Transform2D(-weapon.rest_angle(rig), Vector2(grip.x, -grip.y))
+	)
+	var half := weapon.blade_half_width()
+	var box := PackedVector2Array(
+		[
+			mount * Vector2(weapon.butt_offset().x, -half),
+			mount * Vector2(weapon.tip_offset().x, -half),
+			mount * Vector2(weapon.tip_offset().x, half),
+			mount * Vector2(weapon.butt_offset().x, half),
+		]
+	)
+	draw_colored_polygon(box, tint)
+
+
+## 과거 자세들. **기록이 아니라 `sample(t - Δ)` 다** — 클립이 시각의 순수 함수라
+## 그냥 뽑힌다. 링 버퍼가 없고 프레임률이 튀어도 간격이 안 변한다 (§25.3).
+func _past_poses(clip: CharClip, at: float, f: AnimFeatures) -> Array[CharPose]:
+	var out: Array[CharPose] = []
+	for i in range(1, flourish.trail_count + 1):
+		var back := at - float(i) * flourish.trail_gap
+		if back < 0.0:
+			if not clip.is_looping():
+				break
+			back = clip.wrapat(back)
+		out.append(clip.sample(back, f))
+	return out
+
+
+## 검이 지나간 호를 면으로 만든다. **바깥은 날 끝, 안쪽은 자루 쪽**이라 부채꼴이 된다.
+func _blade_sweep(clip: CharClip, at: float, f: AnimFeatures) -> PackedVector2Array:
+	var sweep := PackedVector2Array()
+	if not flourish.arc_on:
+		return sweep
+	var weapon := weapon
+	var grip := weapon.grip_offset(rig)
+	var thick := clampf(flourish.arc_weight * weapon.length() / CharWeapon.BASE_LENGTH, 0.2, 3.0)
+	var outer := PackedVector2Array()
+	var inner := PackedVector2Array()
+	for i in ARC_STEPS + 1:
+		var back := at - flourish.arc_span * float(i) / float(ARC_STEPS)
+		if back < 0.0:
+			if not clip.is_looping():
+				break
+			back = clip.wrapat(back)
+		var mount := (
+			clip.sample(back, f).canvas_transform(CharWeapon.HOLDER)
+			* Transform2D(-weapon.rest_angle(rig), Vector2(grip.x, -grip.y))
+		)
+		# 뒤로 갈수록 얇아진다 — 그래야 「지나갔다」로 읽힌다.
+		var taper := 1.0 - float(i) / float(ARC_STEPS + 1)
+		var reach := weapon.tip_offset().x
+		var far_edge := reach * (0.55 + 0.45 * taper)
+		# **안쪽 모서리가 0 으로 무너지면 안 된다.** 점이 겹쳐 삼각분할이 실패한다
+		# (`Invalid polygon data` — 원피스 윤곽에서 한 번 밟은 것과 같은 실패다).
+		var near_edge := maxf(far_edge - reach * 0.34 * thick * taper, reach * 0.12)
+		outer.append(mount * Vector2(far_edge, 0.0))
+		inner.append(mount * Vector2(near_edge, 0.0))
+	if outer.size() < 3:
+		return sweep
+	# **검이 멈춰 있으면 호가 없다.** 정지(예비 끝)와 히트스톱 동안 표본이 전부 한 점에
+	# 모여 넓이 0 인 폴리곤이 되고, 그러면 삼각분할이 실패한다.
+	# 멈춤을 일부러 넣어 둔 클립이라(§25.19) 이 구간이 반드시 생긴다.
+	var lowest := outer[0]
+	var highest := outer[0]
+	for point in outer:
+		lowest = lowest.min(point)
+		highest = highest.max(point)
+	if lowest.distance_to(highest) < 2.0:
+		return sweep
+	sweep.append_array(outer)
+	inner.reverse()
+	sweep.append_array(inner)
+	return sweep
+
+
+## 닿고 나서 얼마나 지났나 — 번쩍임이 남아 있으면 양수.
+func _flash_left(at: float, impact: float) -> float:
+	if flourish.flash <= 0.0:
+		return 0.0
+	if impact < 0.0 or at < impact:
+		return 0.0
+	return maxf(0.0, 1.0 - (at - impact) / flourish.flash)
