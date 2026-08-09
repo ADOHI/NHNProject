@@ -2,7 +2,7 @@ class_name SparringBout
 extends RefCounted
 ## 백팩에서 짠 체인을 **실제로 시간 위에서 발사한다.** 최소 대련 한 판.
 ##
-## `docs/design/28-combat.md` §28.4 (실시간) · §28.5 (무너짐).
+## `docs/design/28-combat.md` §28.4 (실시간) · §28.5 (무너짐) · §28.20.36 (대원 여럿).
 ##
 ## ## 여기까지 오기 전에는 시간이 흐르는 곳이 없었다
 ##
@@ -19,17 +19,23 @@ extends RefCounted
 ## 그래서 타를 **정확한 시각에** 때린다 — 프레임이 길게 튀어도 한 프레임에
 ## 여러 타가 몰리지 않고 각자 제 시각의 눈금 위에서 맞는다.
 ##
-## ## 적이 여럿이어도 시계는 하나다
+## ## 양쪽 다 여럿이어도 시계는 하나다
 ##
-## 우리 다음 타와 **적마다의 다음 타**가 한 시계 위에 올라온다 (§28.20.34).
+## **대원마다의 다음 타**와 **적마다의 다음 타**가 한 시계 위에 올라온다.
 ## 매번 **가장 이른 것 하나**를 골라 거기까지만 흘린다. 한쪽을 몰아 처리하면
 ## 눈금이 잘못된 시점에 빠져 프레임 길이에 따라 결과가 달라지고,
-## 적이 셋이면 그 어긋남이 셋으로 는다.
+## **사람이 늘수록 그 어긋남도 는다.**
+##
+## ## 대원이 여럿일 때 아직 안 정한 것 — **자리**
+##
+## 필드에는 **대원 자리가 하나뿐**이다 (§28.20.36). 전원이 같은 자리에 선다고 친다.
+## 누가 어디 서고 누가 언제 붙는지는 §28.4 의 RTS 자동 이동이 정할 일이라
+## 여기서 발명하지 않는다. **표시만 해 두고 숫자를 낸다.**
 ##
 ## ## 무너진 뒤에 무엇이 되는지는 정하지 않는다
 ##
-## §28.8 이 미정으로 뒀다. 이 판은 **눈금이 차고 빠지는 것까지만** 보여 주고
-## 일어나기 · 제압 · 반격을 만들지 않는다.
+## §28.8 이 미정으로 뒀다. **끊을지 말지는 `BreakTuning.chain_cut_at` 손잡이 하나**이고
+## 기본값은 「안 끊는다」 — 그것이 지금까지의 동작이다.
 
 signal hit_landed(index: int, item: BackpackItem)
 
@@ -58,24 +64,38 @@ enum Phase {
 ## "빠짐 속도가 전부를 정한다"(§28.20.19)는 것이 눈에 안 보인다.
 const SETTLE_SECONDS := 2.5
 
-var _items: Array[BackpackItem] = []
 var _tuning: BreakTuning
 var _phase: Phase = Phase.READY
 var _elapsed := 0.0
-var _next_index := 0
 var _settle_left := 0.0
-var _stop: Stop = Stop.NONE
 
 ## 거리. `null` 이면 거리 판정을 하지 않는다 (눈금만 보는 옛 사용처).
 var _field: SparringField = null
 
-## **우리 쪽 무너짐 눈금.** 적에게만 있으면 대련장이 샌드백이다.
-var _own_gauge: BreakGauge
-
-## **적마다 눈금 하나.** 적 번호로 맞춰 둔 배열이다.
+## ---- 우리 쪽. **대원 번호로 맞춘 배열들** ----
 ##
-## 적에게 달지 않고 여기 두는 이유는 §28.20.34 에 적었다 — 눈금은 판과 함께 살고
-## 죽지만 자리는 판보다 오래 산다.
+## 대원마다 체인 하나 · 눈금 하나 · 자기 시계 하나. 적 쪽과 같은 모양이다.
+var _ally_items: Array = []
+var _ally_due: Array = []
+var _ally_next := PackedInt32Array()
+var _ally_stop := PackedInt32Array()
+
+## 무너져서 못 친 만큼 **뒤로 밀린 시간** (§28.20.36).
+##
+## `chain_cut_at` 이 꺼져 있으면 언제나 0 이라 옛 판과 한 치도 안 다르다.
+var _ally_offset := PackedFloat32Array()
+var _ally_gauges: Array[BreakGauge] = []
+
+## 대원마다, 그 타가 **몇에게 걸쳤나** (§28.20.34 물음 ①).
+##
+## **`Array[int]` 이지 `PackedInt32Array` 가 아니다.** 묶음 배열 안에 넣은 Packed 는
+## 꺼낼 때 **복사본**이 나와서 append 가 조용히 사라진다. 테스트가 그것을 잡았다.
+var _ally_spread: Array = []
+
+## ---- 적 쪽 ----
+##
+## **적마다 눈금 하나.** 적에게 달지 않고 여기 두는 이유는 §28.20.34 에 적었다 —
+## 눈금은 판과 함께 살고 죽지만 자리는 판보다 오래 산다.
 var _gauges: Array[BreakGauge] = []
 
 ## 표본용. 필드의 적 중 **자기 무기가 없는 것**이 이걸 든다.
@@ -86,19 +106,13 @@ var _enemy_weapon: BackpackItem = null
 var _enemy_due := PackedFloat32Array()
 var _enemy_landed := PackedInt32Array()
 
-## 우리 타마다 **몇에게 걸쳤나** (§28.20.34 물음 ①).
-var _spread := PackedInt32Array()
-
 ## 히트스톱으로 멈춰 있는 남은 시간. **이 동안 눈금도 일정도 멈춘다.**
 var _hitstop_left := 0.0
 
-## 각 타가 **떨어지는 시각**(누적). 무기마다 다르므로 미리 쌓아 둔다.
-var _due_times: PackedFloat32Array = PackedFloat32Array()
 
-
-## 판 하나를 짠다.
+## 판 하나를 짠다. **대원 하나짜리다.**
 ##
-## **적 명부는 여기서 굳는다** — 눈금을 그때 적 수만큼 만든다. 판이 도는 중에
+## **명부는 여기서 굳는다** — 눈금을 그때 사람 수만큼 만든다. 판이 도는 중에
 ## 필드에 적을 더해도 그 적에게는 눈금이 없다. 새로 쏘면 다시 짜인다.
 ##
 ## `enemy_weapon` 은 표본용이다. **자기 무기가 없는 적 전부**가 이걸 든다.
@@ -108,17 +122,12 @@ func _init(
 	field: SparringField = null,
 	enemy_weapon: BackpackItem = null
 ) -> void:
-	_items = items.duplicate()
 	_field = field
 	_enemy_weapon = enemy_weapon
 	_tuning = tuning if tuning != null else BreakTuning.new()
-	_own_gauge = BreakGauge.new(_tuning)
+	_add_ally(items)
 	for _index in enemy_count():
 		_gauges.append(BreakGauge.new(_tuning))
-	var running := 0.0
-	for item in _items:
-		running += _tuning.strike_seconds_for(item)
-		_due_times.append(running)
 
 
 ## 체인 하나를 그대로 받아 판을 만든다.
@@ -128,28 +137,50 @@ static func from_chain(
 	field: SparringField = null,
 	enemy_weapon: BackpackItem = null
 ) -> SparringBout:
-	var items: Array[BackpackItem] = []
-	for placement in chain.steps:
-		items.append(placement.item)
-	return SparringBout.new(items, tuning, field, enemy_weapon)
+	return SparringBout.new(_items_of(chain), tuning, field, enemy_weapon)
+
+
+## **대원 여럿짜리 판** (§28.20.36). 체인 목록 하나가 대원 하나다.
+##
+## 전원이 같은 자리에 선다 — 자리는 §28.4 가 정할 일이라 여기서 발명하지 않는다.
+static func from_squad(
+	chains: Array,
+	tuning: BreakTuning = null,
+	field: SparringField = null,
+	enemy_weapon: BackpackItem = null
+) -> SparringBout:
+	var first: Array[BackpackItem] = []
+	if not chains.is_empty():
+		first.assign(chains[0])
+	var bout := SparringBout.new(first, tuning, field, enemy_weapon)
+	for index in range(1, chains.size()):
+		var items: Array[BackpackItem] = []
+		items.assign(chains[index])
+		bout._add_ally(items)
+	return bout
 
 
 func start() -> void:
-	_stop = Stop.NONE
-	_phase = Phase.SWINGING if not _items.is_empty() else Phase.DONE
+	_phase = Phase.DONE if _total_hits() == 0 else Phase.SWINGING
 	_elapsed = 0.0
 	_hitstop_left = 0.0
-	_next_index = 0
 	_settle_left = SETTLE_SECONDS
+
+	for index in ally_count():
+		_ally_next[index] = 0
+		_ally_stop[index] = Stop.NONE
+		_ally_offset[index] = 0.0
+		_ally_gauges[index].reset()
+		(_ally_spread[index] as Array).clear()
+
 	for gauge in _gauges:
 		gauge.reset()
-	_own_gauge.reset()
-	_spread.clear()
 	_enemy_landed.clear()
 	_enemy_due.clear()
 	for index in enemy_count():
 		_enemy_landed.append(0)
 		_enemy_due.append(_enemy_interval(index))
+
 	if _phase == Phase.DONE:
 		finished.emit()
 
@@ -188,11 +219,10 @@ func _advance_swings(delta: float) -> void:
 	while remaining > 0.0:
 		# **모든 사건을 시각 순서대로 처리한다.** 한쪽을 몰아 처리하면
 		# 눈금이 잘못된 시점에 빠져서 결과가 프레임 길이에 따라 달라진다.
-		# 적이 여럿이면 올라오는 사건도 여럿이다 — 그래도 **한 번에 하나씩**이다.
-		var own_due := _due_times[_next_index] if _next_index < _items.size() else INF
-		var soonest := _soonest_enemy()
-		var enemy_due := soonest.x
-		var next_due := minf(own_due, enemy_due)
+		# 사람이 늘면 올라오는 사건도 는다 — 그래도 **한 번에 하나씩**이다.
+		var soonest_ally := _soonest_ally()
+		var soonest_enemy := _soonest_enemy()
+		var next_due := minf(soonest_ally.x, soonest_enemy.x)
 		if next_due == INF or _elapsed + remaining < next_due:
 			break
 
@@ -202,12 +232,10 @@ func _advance_swings(delta: float) -> void:
 		remaining -= step
 
 		var struck: BackpackItem = null
-		if own_due <= enemy_due:
-			struck = _swing_ours()
-			if struck == null:
-				return
+		if soonest_ally.x <= soonest_enemy.x:
+			struck = _swing_ally(int(soonest_ally.y))
 		else:
-			struck = _swing_enemy(int(soonest.y))
+			struck = _swing_enemy(int(soonest_enemy.y))
 
 		if struck != null:
 			remaining = _apply_hitstop(struck, remaining)
@@ -216,9 +244,23 @@ func _advance_swings(delta: float) -> void:
 		_drain(remaining)
 		_elapsed += remaining
 
-	if _next_index >= _items.size():
-		_stop = Stop.COMPLETED
+	if _every_ally_stopped():
 		_phase = Phase.SETTLING
+
+
+## 다음에 칠 대원. [그 시각, 대원 번호]. 없으면 [INF, -1].
+func _soonest_ally() -> Vector2:
+	var best := Vector2(INF, -1.0)
+	for index in ally_count():
+		if _ally_stop[index] != Stop.NONE:
+			continue
+		var due: PackedFloat32Array = _ally_due[index]
+		if _ally_next[index] >= due.size():
+			continue
+		var at := due[_ally_next[index]] + _ally_offset[index]
+		if at < best.x:
+			best = Vector2(at, float(index))
+	return best
 
 
 ## 다음에 때릴 적. [그 시각, 적 번호]. 없으면 [INF, -1].
@@ -232,28 +274,43 @@ func _soonest_enemy() -> Vector2:
 	return best
 
 
-## 우리 한 타. 아무에게도 안 닿으면 `null` 을 돌려주고 판이 끝난다.
+## 대원 하나의 한 타. 그 대원이 더 못 치면 `null` 을 돌려주고 **그 대원만** 멈춘다.
 ##
 ## **걸침이 여기서 일어난다** (§28.20.34 물음 ①) — 닿는 범위 안의 적들이
 ## 가까운 것부터 `splash_targets_for` 명까지 함께 맞는다. 지금 기본값은 한 명이다.
-func _swing_ours() -> BackpackItem:
-	var item := _items[_next_index]
+func _swing_ally(ally: int) -> BackpackItem:
+	var items: Array[BackpackItem] = _ally_items[ally]
+	var item := items[_ally_next[ally]]
+
+	# **무너져서 못 치나** — §28.8 이 미정으로 뒀고 손잡이가 꺼져 있으면 언제나 아니다.
+	#
+	# **체인을 지우지 않고 미룬다.** 지우는 것은 「무너진 뒤에 무엇이 되나」를 정하는
+	# 것이고 그건 §28.5 가 열어 둔 자리다. 눈금이 빠지면 다시 친다.
+	if _tuning.cuts_chain(_ally_gauges[ally].state()):
+		_ally_offset[ally] += _tuning.strike_seconds_for(item)
+		return null
+
 	var targets := _reachable_targets(item)
 
 	# **닿지 않으면 거기서 끝난다.** 백팩에서는 이어져 있어도 필드에서 못 나간다.
 	if targets.is_empty():
-		_stop = Stop.OUT_OF_REACH
-		_phase = Phase.SETTLING
+		_ally_stop[ally] = Stop.OUT_OF_REACH
 		return null
 
 	for index in targets:
 		if index < _gauges.size():
 			_gauges[index].hit_with(item)
-	_spread.append(targets.size())
-	hit_landed.emit(_next_index, item)
-	_next_index += 1
+	(_ally_spread[ally] as Array).append(targets.size())
+	hit_landed.emit(_ally_next[ally], item)
+	_ally_next[ally] += 1
+	if _ally_next[ally] >= items.size():
+		_ally_stop[ally] = Stop.COMPLETED
+
 	# 맞은 만큼 몸이 나간다. 남을지 돌아올지는 미정이라 field 가 고른다.
-	if _field != null:
+	#
+	# **0번 대원만 낸다.** 필드에 대원 자리가 하나뿐이라 전원이 밀면 사람 수만큼
+	# 빨리 파고든다. 자리가 정해지기 전의 임시 규칙이다 (§28.20.36).
+	if _field != null and ally == 0:
 		_field.swing_advance(WeaponMotion.advance_px(item))
 	return item
 
@@ -267,7 +324,7 @@ func _reachable_targets(item: BackpackItem) -> PackedInt32Array:
 	return _field.targets_within(WeaponMotion.reach_px(item), _tuning.splash_targets_for(item))
 
 
-## 적 하나의 한 타. **우리 눈금을 올린다.**
+## 적 하나의 한 타. **그 적이 문 대원의 눈금을 올린다.**
 ##
 ## 적이 닿지 않으면 그냥 헛친다 — 우리처럼 판을 끝내지 않는다.
 ## 적의 체인은 이 판의 관심사가 아니다.
@@ -276,12 +333,26 @@ func _swing_enemy(index: int) -> BackpackItem:
 	if weapon == null:
 		return null
 	_enemy_due[index] += _enemy_interval(index)
+
+	# 무너진 적도 못 친다. **한쪽에만 걸면 무너뜨리는 것이 한쪽 이득이 된다.**
+	if _tuning.cuts_chain(enemy_gauge(index).state()):
+		return null
 	if _field != null and _field.gap_to(index) > WeaponMotion.reach_px(weapon):
 		return null
-	_own_gauge.hit_with(weapon)
+
+	_ally_gauges[_bitten_by(index)].hit_with(weapon)
 	_enemy_landed[index] += 1
 	enemy_hit_landed.emit(weapon)
 	return weapon
+
+
+## **적 하나가 대원 하나를 문다.** 번갈아 나눠 문다.
+##
+## 이것이 §28.20.36 의 측정 가정이다. 전원이 같은 자리에 서 있으니 거리로는 못 고르고,
+## 누가 누구에게 붙는지는 §28.4 의 자동 타겟팅이 정할 일이다.
+## **한 명에게 몰아 주면 스쿼드의 값이 실제보다 낮게 나오고, 나눠 물리면 가장 좋은 쪽이다.**
+func _bitten_by(enemy: int) -> int:
+	return enemy % ally_count()
 
 
 ## 그 적이 든 것. 자기 무기가 없으면 표본 무기를 든다.
@@ -301,7 +372,7 @@ func _enemy_interval(index: int) -> float:
 	return _tuning.strike_seconds_for(weapon)
 
 
-## 히트스톱을 걸고 남은 시간을 돌려준다. **양쪽과 눈금이 함께 멈춘다.**
+## 히트스톱을 걸고 남은 시간을 돌려준다. **모두와 모든 눈금이 함께 멈춘다.**
 func _apply_hitstop(item: BackpackItem, remaining: float) -> float:
 	_hitstop_left = _tuning.hitstop_seconds_for(item)
 	if _hitstop_left <= 0.0:
@@ -315,7 +386,44 @@ func _apply_hitstop(item: BackpackItem, remaining: float) -> float:
 func _drain(seconds: float) -> void:
 	for gauge in _gauges:
 		gauge.tick(seconds)
-	_own_gauge.tick(seconds)
+	for gauge in _ally_gauges:
+		gauge.tick(seconds)
+
+
+func _add_ally(items: Array[BackpackItem]) -> void:
+	var due := PackedFloat32Array()
+	var running := 0.0
+	for item in items:
+		running += _tuning.strike_seconds_for(item)
+		due.append(running)
+	_ally_items.append(items.duplicate())
+	_ally_due.append(due)
+	_ally_next.append(0)
+	_ally_stop.append(Stop.NONE)
+	_ally_offset.append(0.0)
+	_ally_gauges.append(BreakGauge.new(_tuning))
+	_ally_spread.append([] as Array[int])
+
+
+func _every_ally_stopped() -> bool:
+	for index in ally_count():
+		if _ally_stop[index] == Stop.NONE:
+			return false
+	return true
+
+
+func _total_hits() -> int:
+	var total := 0
+	for items in _ally_items:
+		total += (items as Array).size()
+	return total
+
+
+static func _items_of(chain: ChainResult) -> Array[BackpackItem]:
+	var items: Array[BackpackItem] = []
+	for placement in chain.steps:
+		items.append(placement.item)
+	return items
 
 
 # ---------------------------------------------------------------- 지금 상태
@@ -329,60 +437,57 @@ func is_running() -> bool:
 	return _phase == Phase.SWINGING or _phase == Phase.SETTLING
 
 
-## 이 판에 선 적의 수. 거리가 없던 옛 사용처에서도 **하나**다.
-func enemy_count() -> int:
-	if _field == null:
-		return 1
-	return _field.enemy_count()
+## 이 판에 선 대원 수.
+func ally_count() -> int:
+	return _ally_gauges.size()
 
 
-## 그 적이 서 있는 자리. 거리가 없으면 0.
-func enemy_x(index: int) -> float:
-	if _field == null:
-		return 0.0
-	var enemy := _field.enemy_at(index)
-	return enemy.x if enemy != null else 0.0
-
-
-## 그 적의 무너짐 눈금. 범위를 벗어나면 **빈 눈금**이라 그리는 쪽이 안 터진다.
+## 그 대원의 무너짐 눈금. **번호를 안 주면 0번이다** — 대원 하나짜리 판이 대부분이다.
 ##
 ## ## 값을 하나씩 꺼내 주지 않고 눈금을 통째로 준다
 ##
-## 적이 여럿이 되면서 `값 · 최고 · 단계 · 최고 단계` 넷을 적 수만큼 물어보게 됐다.
+## 양쪽이 여럿이 되면서 `값 · 최고 · 단계 · 최고 단계` 넷을 사람 수만큼 물어보게 됐다.
 ## 그걸 다 메서드로 내면 이 클래스가 **읽기 함수로만 서른 개**가 된다.
 ## `BreakGauge` 는 이미 그 넷을 아는 읽기 전용 값이므로 그대로 건넨다.
+func ally_gauge(index: int = 0) -> BreakGauge:
+	if index < 0 or index >= _ally_gauges.size():
+		return BreakGauge.new(_tuning)
+	return _ally_gauges[index]
+
+
+## 그 대원이 지금까지 낸 타 수.
+func ally_landed(index: int = 0) -> int:
+	if index < 0 or index >= _ally_next.size():
+		return 0
+	return _ally_next[index]
+
+
+## 그 대원의 체인 길이.
+func ally_total_hits(index: int = 0) -> int:
+	if index < 0 or index >= _ally_items.size():
+		return 0
+	return (_ally_items[index] as Array).size()
+
+
+## 그 대원이 왜 멈췄나. **닿지 않아 끝난 것**인지는 `Stop.OUT_OF_REACH` 인지로 본다.
+func ally_stop(index: int = 0) -> Stop:
+	if index < 0 or index >= _ally_stop.size():
+		return Stop.NONE
+	return _ally_stop[index]
+
+
+## 그 적의 무너짐 눈금. 범위를 벗어나면 **빈 눈금**이라 그리는 쪽이 안 터진다.
 func enemy_gauge(index: int) -> BreakGauge:
 	if index < 0 or index >= _gauges.size():
 		return BreakGauge.new(_tuning)
 	return _gauges[index]
 
 
-## **우리 쪽 눈금.** 적에게만 있으면 대련장이 샌드백이다.
-##
-## §28.8 이 *"경직 · 띄우기가 우리 대원에게도 걸리나"* 를 미정으로 뒀다.
-## 여기서는 눈금을 쌓고 단계를 알려 줄 뿐 **체인을 끊지 않는다** —
-## 애니 레인의 반응 층도 「때리다 맞아도 스윙이 안 끊긴다」로 만들어져 있다.
-func own_gauge() -> BreakGauge:
-	return _own_gauge
-
-
-## 그 타가 **몇에게 걸쳤나** (§28.20.34). 아직 안 나간 타면 0.
-func spread_at(hit_index: int) -> int:
-	if hit_index < 0 or hit_index >= _spread.size():
-		return 0
-	return _spread[hit_index]
-
-
-## 왜 멈췄나. **닿지 않아 끝난 것**인지는 `Stop.OUT_OF_REACH` 인지로 본다.
-func stop_reason() -> Stop:
-	return _stop
-
-
-## 그 순서의 아이템. 범위를 벗어나면 `null`.
-func item_at(index: int) -> BackpackItem:
-	if index < 0 or index >= _items.size():
-		return null
-	return _items[index]
+## 이 판에 선 적의 수. 거리가 없던 옛 사용처에서도 **하나**다.
+func enemy_count() -> int:
+	if _field == null:
+		return 1
+	return _field.enemy_count()
 
 
 ## 적들이 우리를 때린 횟수의 합.
@@ -401,30 +506,34 @@ func has_enemy() -> bool:
 	return false
 
 
-func landed() -> int:
-	return _next_index
+## 0번 대원의 그 타가 **몇에게 걸쳤나** (§28.20.34). 아직 안 나간 타면 0.
+func spread_at(hit_index: int) -> int:
+	var spread: Array = _ally_spread[0]
+	if hit_index < 0 or hit_index >= spread.size():
+		return 0
+	return spread[hit_index]
 
 
-func total_hits() -> int:
-	return _items.size()
+## 0번 대원 체인의 그 순서 아이템. 범위를 벗어나면 `null`.
+func item_at(index: int) -> BackpackItem:
+	var items: Array[BackpackItem] = _ally_items[0]
+	if index < 0 or index >= items.size():
+		return null
+	return items[index]
 
 
-## 전투 시계. 히트스톱으로 멈춘 동안은 안 흐른다.
-func elapsed() -> float:
-	return _elapsed
-
-
-## 히트스톱까지 더한 체인 길이. `swing_seconds()` 는 멈춤을 뺀 전투 시계다.
+## 히트스톱까지 더한 0번 대원 체인의 길이. `swing_seconds()` 는 멈춤을 뺀 전투 시계다.
 func felt_seconds() -> float:
 	var total := swing_seconds()
-	for item in _items:
+	for item: BackpackItem in _ally_items[0]:
 		total += _tuning.hitstop_seconds_for(item)
 	return total
 
 
-## 이 체인이 몇 초짜리인가. **무기 구성에 따라 달라진다** —
+## 0번 대원 체인이 몇 초짜리인가. **무기 구성에 따라 달라진다** —
 ## 1칸 다섯 개짜리 체인과 4칸 다섯 개짜리 체인은 길이가 전혀 다르다.
 func swing_seconds() -> float:
-	if _due_times.is_empty():
+	var due: PackedFloat32Array = _ally_due[0]
+	if due.is_empty():
 		return 0.0
-	return _due_times[_due_times.size() - 1]
+	return due[due.size() - 1]

@@ -165,7 +165,7 @@ func test_every_armed_enemy_hits_us() -> void:
 	alone.start()
 	Fixtures.run_to_end(alone)
 	assert_true(bout.enemy_landed() > alone.enemy_landed(), "셋이 때리면 더 많이 맞는다")
-	assert_true(bout.own_gauge().peak() > alone.own_gauge().peak(), "우리가 더 빨리 무너진다")
+	assert_true(bout.ally_gauge().peak() > alone.ally_gauge().peak(), "우리가 더 빨리 무너진다")
 
 
 func test_a_far_enemy_swings_but_misses() -> void:
@@ -175,7 +175,7 @@ func test_a_far_enemy_swings_but_misses() -> void:
 	bout.start()
 	Fixtures.run_to_end(bout)
 	assert_true(bout.enemy_landed() > 0, "가까운 적은 때린다")
-	assert_eq(bout.stop_reason(), SparringBout.Stop.COMPLETED, "먼 적이 헛쳐도 판은 끝까지 간다")
+	assert_eq(bout.ally_stop(), SparringBout.Stop.COMPLETED, "먼 적이 헛쳐도 판은 끝까지 간다")
 
 
 # ---------------------------------------------------------------- 시계가 어긋나면 안 된다
@@ -199,9 +199,9 @@ func test_a_crowd_still_matches_across_lumpy_frames() -> void:
 			break
 		lumpy.tick(Fixtures.strike(tuning) * 2.7)
 
-	assert_eq(lumpy.landed(), fine.landed(), "타가 사라지면 안 된다")
+	assert_eq(lumpy.ally_landed(), fine.ally_landed(), "타가 사라지면 안 된다")
 	assert_almost_eq(
-		lumpy.own_gauge().peak(), fine.own_gauge().peak(), 0.5, "프레임이 튀어도 우리 눈금이 같아야 한다"
+		lumpy.ally_gauge().peak(), fine.ally_gauge().peak(), 0.5, "프레임이 튀어도 우리 눈금이 같아야 한다"
 	)
 	assert_almost_eq(lumpy.enemy_gauge(0).peak(), fine.enemy_gauge(0).peak(), 0.5, "적 눈금도 같아야 한다")
 

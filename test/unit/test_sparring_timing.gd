@@ -107,7 +107,7 @@ func test_hitstop_freezes_the_gauge() -> void:
 	bout.start()
 	# 첫 타가 닿을 때까지.
 	for _frame in 6000:
-		if bout.landed() >= 1:
+		if bout.ally_landed() >= 1:
 			break
 		bout.tick(1.0 / 480.0)
 	var right_after := bout.enemy_gauge(0).value()

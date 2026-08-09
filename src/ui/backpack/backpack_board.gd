@@ -690,9 +690,9 @@ func _draw_break_gauge() -> void:
 			Vector2(GRID_ORIGIN.x, top + 64.0),
 			width,
 			"우리 무너짐",
-			_bout.own_gauge().value(),
-			_bout.own_gauge().peak(),
-			_bout.own_gauge().peak_state()
+			_bout.ally_gauge().value(),
+			_bout.ally_gauge().peak(),
+			_bout.ally_gauge().peak_state()
 		)
 
 
@@ -825,7 +825,7 @@ func _draw_arena() -> void:
 
 	var own_state := BreakState.Kind.NONE
 	if _bout != null and _bout.phase() != SparringBout.Phase.READY:
-		own_state = _bout.own_gauge().state()
+		own_state = _bout.ally_gauge().state()
 	_draw_fighter(_field.attacker_x, ground, Color(0.42, 0.56, 0.78), own_state, 26.0)
 
 	# 적들. **가까운 것이 고른 것이다** (§28.20.34 물음 ②) — 그것만 테두리를 준다.
@@ -931,9 +931,9 @@ func _draw_chosen_mark(field_x: float, ground: float, half: float) -> void:
 ## 닿지 않으면 체인이 거기서 끊긴다 — 백팩에서는 이어져 있는데도.
 ## **격자 이유와 다른 층이라** 격자 쪽 가위표와 다르게 보여야 한다.
 func _draw_reach(ground: float) -> void:
-	if _bout == null or _bout.total_hits() == 0:
+	if _bout == null or _bout.ally_total_hits() == 0:
 		return
-	var index := mini(_bout.landed(), _bout.total_hits() - 1)
+	var index := mini(_bout.ally_landed(), _bout.ally_total_hits() - 1)
 	var item := _bout.item_at(index)
 	if item == null:
 		return
@@ -951,7 +951,7 @@ func _draw_reach(ground: float) -> void:
 		13,
 		color
 	)
-	if _bout.stop_reason() == SparringBout.Stop.OUT_OF_REACH:
+	if _bout.ally_stop() == SparringBout.Stop.OUT_OF_REACH:
 		draw_string(
 			get_theme_default_font(),
 			Vector2(ARENA_LEFT - 24.0, ground - 120.0),

@@ -267,7 +267,7 @@ func _our_stage_times(enemies: int) -> PackedStringArray:
 		for index in stages.size():
 			if (
 				times[index] == "안 된다"
-				and not BreakState.is_worse(stages[index], bout.own_gauge().state())
+				and not BreakState.is_worse(stages[index], bout.ally_gauge().state())
 			):
 				times[index] = "%.1f초" % clock
 	return times

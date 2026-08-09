@@ -26,7 +26,7 @@ func test_a_bout_does_nothing_until_started() -> void:
 	var bout := BoutScript.new(Fixtures.items(5), _tuning())
 	assert_eq(bout.phase(), SparringBout.Phase.READY)
 	bout.tick(10.0)
-	assert_eq(bout.landed(), 0, "시작 전에는 아무것도 안 나간다")
+	assert_eq(bout.ally_landed(), 0, "시작 전에는 아무것도 안 나간다")
 	assert_eq(bout.enemy_gauge(0).value(), 0.0)
 
 
@@ -34,17 +34,17 @@ func test_hits_land_one_at_a_time() -> void:
 	var tuning := _tuning()
 	var bout := BoutScript.new(Fixtures.items(4), tuning)
 	bout.start()
-	assert_eq(bout.landed(), 0, "시작만 하고 시간이 안 흘렀으면 아직이다")
+	assert_eq(bout.ally_landed(), 0, "시작만 하고 시간이 안 흘렀으면 아직이다")
 
 	bout.tick(0.001)
-	assert_eq(bout.landed(), 0, "휘두르는 시간이 지나야 닿는다")
+	assert_eq(bout.ally_landed(), 0, "휘두르는 시간이 지나야 닿는다")
 
 	bout.tick(Fixtures.strike(tuning))
-	assert_eq(bout.landed(), 1, "한 번 휘두른 만큼 지나면 첫 타가 닿는다")
+	assert_eq(bout.ally_landed(), 1, "한 번 휘두른 만큼 지나면 첫 타가 닿는다")
 
 	# **다음 타까지는 휘두르는 시간 + 히트스톱이다.** 멈춰 있는 동안 일정도 선다.
 	bout.tick(Fixtures.strike(tuning) + tuning.hitstop_seconds_for(Fixtures.sized(1)))
-	assert_eq(bout.landed(), 2)
+	assert_eq(bout.ally_landed(), 2)
 
 
 func test_hits_do_not_all_land_at_once() -> void:
@@ -52,8 +52,8 @@ func test_hits_do_not_all_land_at_once() -> void:
 	var bout := BoutScript.new(Fixtures.items(6), tuning)
 	bout.start()
 	bout.tick((Fixtures.strike(tuning) + tuning.hitstop_seconds_for(Fixtures.sized(1))) * 3.5)
-	assert_true(bout.landed() < 6, "한 번에 다 나가면 실시간이 아니다")
-	assert_eq(bout.landed(), 3)
+	assert_true(bout.ally_landed() < 6, "한 번에 다 나가면 실시간이 아니다")
+	assert_eq(bout.ally_landed(), 3)
 
 
 # ---------------------------------------------------------------- 계산기와 같아야 한다
@@ -86,7 +86,7 @@ func test_it_matches_even_when_frames_are_lumpy() -> void:
 			break
 		lumpy.tick(Fixtures.strike(tuning) * 2.7)
 
-	assert_eq(lumpy.landed(), 8, "타가 사라지면 안 된다")
+	assert_eq(lumpy.ally_landed(), 8, "타가 사라지면 안 된다")
 	assert_almost_eq(lumpy.enemy_gauge(0).peak(), expected.peak, 0.5, "프레임이 튀어도 결과가 같아야 한다")
 
 
@@ -100,7 +100,7 @@ func test_the_gauge_drains_after_the_last_hit() -> void:
 	# **마지막 타가 떨어진 직후**에 재야 한다. 더 돌리면 이미 다 빠진 뒤라
 	# "안 빠졌다" 와 "다 빠졌다" 를 구분 못 한다.
 	for _frame in 6000:
-		if bout.landed() >= bout.total_hits():
+		if bout.ally_landed() >= bout.ally_total_hits():
 			break
 		bout.tick(1.0 / 240.0)
 	var at_end := bout.enemy_gauge(0).value()
@@ -139,7 +139,7 @@ func test_an_empty_chain_finishes_immediately() -> void:
 	var bout := BoutScript.new([] as Array[BackpackItem], _tuning())
 	bout.start()
 	assert_eq(bout.phase(), SparringBout.Phase.DONE)
-	assert_eq(bout.total_hits(), 0)
+	assert_eq(bout.ally_total_hits(), 0)
 
 
 # ---------------------------------------------------------------- 백팩에서 곧바로
@@ -153,10 +153,10 @@ func test_a_bout_can_be_built_from_a_backpack_chain() -> void:
 	var chain := ChainResolver.resolve_from(grid, Vector2i(0, 0))
 
 	var bout := BoutScript.from_chain(chain, _tuning())
-	assert_eq(bout.total_hits(), chain.length(), "체인 길이만큼 친다")
+	assert_eq(bout.ally_total_hits(), chain.length(), "체인 길이만큼 친다")
 	bout.start()
 	Fixtures.run_to_end(bout)
-	assert_eq(bout.landed(), chain.length())
+	assert_eq(bout.ally_landed(), chain.length())
 
 
 func test_restarting_clears_the_previous_run() -> void:
@@ -165,7 +165,7 @@ func test_restarting_clears_the_previous_run() -> void:
 	Fixtures.run_to_end(bout)
 	var first_peak := bout.enemy_gauge(0).peak()
 	bout.start()
-	assert_eq(bout.landed(), 0, "다시 시작하면 처음부터다")
+	assert_eq(bout.ally_landed(), 0, "다시 시작하면 처음부터다")
 	assert_eq(bout.enemy_gauge(0).value(), 0.0)
 	assert_eq(bout.enemy_gauge(0).peak(), 0.0, "최고 기록도 초기화된다")
 	assert_true(first_peak > 0.0, "전제 확인")

@@ -112,6 +112,22 @@ var poise_per_cell: float = 4.0
 var splash_base: float = 1.0
 var splash_per_cell: float = 0.0
 
+## **무너지면 체인이 끊기나** (§28.8 · §28.20.36).
+##
+## §28.8 이 *"경직 · 띄우기가 우리 대원에게도 걸리나"* 를 미정으로 뒀다.
+## 그래서 **기본값은 `NONE` — 아무 단계에서도 안 끊는다.** 지금 동작 그대로다.
+## 애니 레인의 반응 층도 「때리다 맞아도 스윙이 안 끊긴다」로 만들어져 있다.
+##
+## 값을 넣으면 **그 단계인 동안 그 사람은 못 친다.** 우리에게도 적에게도 똑같이 걸린다 —
+## 한쪽만 걸면 무너뜨리는 것이 한쪽에게만 이득이 된다.
+##
+## **체인을 지우지는 않는다. 미룬다.** 지우는 것은 「무너진 뒤에 무엇이 되나」를 정하는
+## 것이고 그것은 §28.5 가 열어 둔 자리다. 눈금이 빠지면 다시 친다.
+##
+## > **정하지 마라.** 끊는 쪽과 안 끊는 쪽의 표는 §28.20.36 에 둘 다 있다.
+## > `tools/survey_squad_scale.gd` 가 그 둘을 다시 뽑는다.
+var chain_cut_at: BreakState.Kind = BreakState.Kind.NONE
+
 
 ## 감쇠만 갈아 끼우고 나머지는 그대로. 기본값은 위 `decay_per_second` 와 같아야 한다 —
 ## 두 곳에 다른 수를 적으면 `new()` 와 `new(10.0)` 이 다른 판이 된다.
@@ -146,6 +162,15 @@ func splash_targets_for(item: BackpackItem) -> int:
 ## 이 무기를 맞혔을 때 멈추는 시간. **이 동안 눈금은 빠지지 않는다.**
 func hitstop_seconds_for(item: BackpackItem) -> float:
 	return maxf(0.0, hitstop_base + hitstop_per_cell * float(item.shape.size()))
+
+
+## 이 단계면 체인이 끊기나. `chain_cut_at` 이 `NONE` 이면 **언제나 아니다.**
+##
+## `NONE` 이 0 이라 그냥 크기로 비교하면 멀쩡한 사람도 끊긴다. 그래서 따로 묻는다.
+func cuts_chain(kind: BreakState.Kind) -> bool:
+	if chain_cut_at == BreakState.Kind.NONE:
+		return false
+	return not BreakState.is_worse(chain_cut_at, kind)
 
 
 ## 그 눈금이 어느 단계인가.
