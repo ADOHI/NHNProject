@@ -1,4 +1,4 @@
-"""전신 일러스트와 SD 변환의 그래프 · 문자열.
+"""전신 일러스트와 SD 변환의 그래프, 문자열.
 
 **배선은 `2dAnim/minimal-char-studio` 에서 그대로 가져왔다** (§27.22).
 그 스튜디오가 이미 검증한 것을 다시 짜지 않는다 —
@@ -10,9 +10,9 @@
 그 스튜디오는 `instance="modern"`(8001)로 적어 뒀는데 **지금 8001 은 안 떠 있고
 8000 만 떠 있다.** 8000 에 필요한 것이 전부 있는지 실제로 물어봤다 (2026-08-08):
 
-    CheckpointLoaderSimple · CLIPLoader(lumina2 · flux2) · ModelSamplingAuraFlow ·
-    KSampler(res_multistep) · EmptySD3LatentImage · Flux2KleinKSamplerExperimental
-    kompostoZITANI_zitANI_fp8 · z_image_turbo_vae · qwen_3_4b_bf16_fp8_scaled
+    CheckpointLoaderSimple, CLIPLoader(lumina2, flux2), ModelSamplingAuraFlow ,
+    KSampler(res_multistep), EmptySD3LatentImage, Flux2KleinKSamplerExperimental
+    kompostoZITANI_zitANI_fp8, z_image_turbo_vae, qwen_3_4b_bf16_fp8_scaled
 
 **전부 있다.** 그래서 인스턴스를 새로 띄우지 않는다 — 예전에 둘 띄웠다가
 블루스크린이 났고, 그 스튜디오도 *"인스턴스가 하나로 줄어 「로컬 ComfyUI 는
@@ -34,7 +34,7 @@ ModelSamplingAuraFlow shift 3.0` 이었다. 그 레인의 배선은 `euler` 였�
 `cfg 1.0` 이면 `pred = uncond + cfg × (cond − uncond)` 가 `pred = cond` 로 줄어
 **네거티브 항이 수식에서 사라진다.** 그 레인이 실측했다 —
 프롬프트 전체를 부정해도 결과가 **비트 단위로 같았다** (`PROMPTS.md` §7-1).
-그래서 배경·품질 통제는 **긍정 서술로만** 한다. 초상 레인의 §27.9 와 같은 결론이다.
+그래서 배경,품질 통제는 **긍정 서술로만** 한다. 초상 레인의 §27.9 와 같은 결론이다.
 """
 
 from __future__ import annotations
@@ -69,48 +69,66 @@ SD_SIZE = 512
 
 # ── 코드가 고정하는 문장 ─────────────────────────────────────────────────────
 
-#: 전신 시트의 틀. **`water_bishoujo` 가 낸 그림이 이 모양이다** —
-#: 전신 정면 · 흰 배경 · 수채 · 발밑에 옅은 그림자 하나.
+#: **원본을 재구성한 것이다. 내가 지은 문장이 아니다** (§27.24).
 #:
-#: **「water」는 물 속성이 아니라 수채(watercolour)였다.** 폴더 이름만 보고
-#: 물 원소로 읽으면 안 된다 (§27.22).
+#: 1차 배치의 전신 일러스트가 불합격이었다. 원인이 분명하다 —
+#: **`minimal-char-studio` 에 이미 잘 나오는 프롬프트가 있는데 내가 통째로 갈고
+#: 새로 지었다.** 그 프롬프트에는 화풍, 구도, 배경, 품질 어휘가 다 들어 있고
+#: 그것이 그림을 만든다.
 #:
-#: 초상 레인의 `FRAME` 과 같은 자리이고 같은 이유로 코드가 고정한다 —
-#: **GPT 에게 구도를 맡기면 인물마다 구도가 달라진다** (§27.9.1).
+#: 출처는 `mcs/commands/illust.py` 의 `build_prompt()` 이고,
+#: 실제로 모델에 간 문자열은 `2dAnim/outputs/minimal-char/results.jsonl` 에
+#: **212건** 남아 있다 (전부 zitani, 전부 832x1216).
+#:
+#:     A 2D Japanese anime illustration. {style}. {character}. {FRAME}
+#:
+#: **고정 넷, 변수 둘이다.** 우리가 갈아 끼우는 것은 `character` 하나뿐이다.
+ANIME_ANCHOR = "A 2D Japanese anime illustration"
+
+#: 구도, 배경, 그림자를 한 덩어리로 잡는 고정 문자열. **한 글자도 안 고친다.**
+#: 그쪽 주석이 근거를 적어 뒀다 — *"그림자를 세 방향으로 막는다. no shadow on the
+#: ground 만으로는 바닥에 해칭 그림자와 접지 그림자가 계속 그려졌다."*
 ILLUST_FRAME = (
-    "A full body character reference sheet of one single person standing upright and "
-    "still, the whole figure from the top of the head down to the shoes held inside the "
-    "frame with clear empty margin above and below, the arms hanging down at the sides. "
-    "Seen from the front."
+    "Full body from head to toe, standing straight in a neutral idle pose, "
+    "arms slightly away from the body, character centered. "
+    "Isolated on a pure flat white background. No ground, no floor, no cast shadow "
+    "and no contact shadow under the feet. Nothing else in the image."
 )
 
-#: 화풍. **초상의 `STYLE` 과 다른 문자열이다** — 저쪽은 타이틀의 게임 키아트를
-#: 베낀 것이고(§27.6) 이쪽은 `water_bishoujo` 가 낸 수채 캐릭터 원화다.
-#: **둘을 섞지 않는다.** 섞으면 어느 쪽도 아닌 것이 나온다.
-ILLUST_STYLE = (
-    "Soft watercolour and ink character illustration, clean dark linework over pale "
-    "translucent washes, muted restrained colour, the paint pooling and drying unevenly "
-    "inside the shapes."
+#: 기록에 남은 네거티브. **zitani 는 cfg 1.0 이라 실제로는 무효다**(`PROMPTS.md` §7-1) —
+#: 그래도 원본이 보낸 것을 그대로 보낸다. 빼는 것도 바꾸는 것이므로 지금은 안 건드린다.
+ILLUST_NEGATIVE = (
+    "arms, legs, limbs, drop shadow, cast shadow, ground, floor, gradient background, "
+    "photorealistic, 3d render, blurry, cropped, multiple views, text, watermark, fingers"
 )
 
-#: 배경. **긍정 서술로만 한다** — cfg 1.0 이라 네거티브가 수식에서 사라진다.
-ILLUST_BACKGROUND = (
-    "The background is plain flat white all the way to every edge, with one faint pale "
-    "grey shadow pooled on the ground under the shoes."
-)
-
-#: SD 변환. **레퍼런스의 그림체를 따라가는 것이 일이다** (`PROMPTS.md` §6-1 · §6-3) —
-#: Klein 은 그림체 사전분포가 강해 탐색에는 못 쓰지만 **레퍼런스 추종은 잘 한다.**
+#: 화풍 슬롯. **원본은 여기를 인물마다 LLM 이 새로 짓는다** — 무한 탐색이 목적이라 그렇다.
+#: **우리는 고정한다.** 인물마다 화풍이 달라지면 같은 게임의 얼굴이 아니게 된다 (§27.9.1).
 #:
-#: `side` 를 쓰지 않는다. §6-4 실측 — `slightly angled side view` 에서 모델은
-#: `side view` 만 듣고 `slightly angled` 를 버린다. **방향은 복합어 안쪽에 넣는다.**
-SD_CONVERT = (
-    "Redraw this same character as one small chibi game sprite, keeping the same face, "
-    "the same hair, the same clothes, the same colours and the same drawing style. "
-    "The head is as large as the whole rest of the body. The whole figure stands inside "
-    "the frame with empty margin around it. Seen from a three-quarter right view. "
-    "The background is plain flat white all the way to every edge."
+#: 형식은 원본 가이드가 요구하는 **실행 가능한 작화 지시** 그대로다 —
+#: 윤곽선, 음영, 색 셋을 각각 "무엇을 하라"로 적는다. 기록에 남은 표본이 그 모양이다:
+#:
+#:     "Fine dotted outlines, rich velvety shading, sepia tones paired with
+#:      desaturated rose and cypress suggest early 1900s manga nostalgia"
+#:
+#: **이 값은 아직 사용자 검수를 안 받았다.** 값 하나를 바꾸는 자리이므로
+#: 검수에서 갈아 끼우기 쉽다.
+ILLUST_STYLE = (
+    "Fine ink outlines over translucent watercolour washes, the pigment pooling and "
+    "drying unevenly inside each shape, muted slate blue, ochre and dull red"
 )
+
+
+def compose_illust(character: str) -> str:
+    """원본 조립 그대로. **갈아 끼우는 것은 `character` 한 칸뿐이다** (§27.24).
+
+    순서가 곧 가중치다 (`PROMPTS.md` §3) — 매체 앵커가 맨 앞이고, 그 다음이 화풍,
+    그 다음이 인물, 규격이 맨 뒤다. **순서를 바꾸지 마라.**
+
+    품질 태그(`masterpiece, best quality ...`)는 **안 붙인다.**
+    원본이 A/B 로 재고 나서 사용자 결정으로 뺐다.
+    """
+    return f"{ANIME_ANCHOR}. {ILLUST_STYLE.rstrip('.')}. {character.rstrip('.')}. {ILLUST_FRAME}"
 
 
 def zitani_graph(prompt: str, seed: int, width: int, height: int,
@@ -163,9 +181,3 @@ def klein_edit_graph(prompt: str, image: str, seed: int, width: int = SD_SIZE,
         "10": {"class_type": "VAEDecode", "inputs": {"samples": ["9", 0], "vae": ["3", 0]}},
         "11": {"class_type": "SaveImage", "inputs": {"images": ["10", 0], "filename_prefix": prefix}},
     }
-
-
-def compose_illust(look: str) -> str:
-    """전신 일러스트 프롬프트. **틀과 화풍은 코드, 사람은 GPT** (§27.9.1)."""
-    return " ".join(p.strip() for p in [
-        ILLUST_STYLE, ILLUST_FRAME, look, ILLUST_BACKGROUND] if p.strip())

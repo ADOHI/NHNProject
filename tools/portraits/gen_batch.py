@@ -9,7 +9,7 @@
 
 # 왜 단계로 나누고 한 단계를 몰아서 도나
 
-**모델을 한 장마다 갈아 끼우면 적재 시간이 장수만큼 붙는다.** zitani 콜드 18초 ·
+**모델을 한 장마다 갈아 끼우면 적재 시간이 장수만큼 붙는다.** zitani 콜드 18초 ,
 Klein 콜드 21초다. 그래서 **일러스트를 전부 뽑고 → VRAM 을 내리고 → SD 를 전부 뽑는다.**
 적재가 배치당 한 번으로 준다.
 
@@ -57,10 +57,14 @@ def _record(entry: dict) -> None:
 
 
 def _people(folder: str) -> list[tuple[str, str]]:
-    """(인물 번호, 착장 원문). `gen_character.py` 가 낸 `<번호>_look_raw.txt` 를 읽는다."""
+    """(인물 번호, character 슬롯). `gen_character.py` 가 낸 `<번호>_slot.txt` 를 읽는다.
+
+    **`_look_raw.txt` 가 아니다** (§27.24). 저것은 흉상용 한 문단이고, 전신 일러스트의
+    `character` 칸에 들어가는 것은 **명사구 하나**다. 1차 배치가 진 자리가 여기다.
+    """
     out = []
-    for path in sorted(glob.glob(os.path.join(folder, "*_look_raw.txt"))):
-        stem = os.path.basename(path).replace("_look_raw.txt", "")
+    for path in sorted(glob.glob(os.path.join(folder, "*_slot.txt"))):
+        stem = os.path.basename(path).replace("_slot.txt", "")
         with open(path, encoding="utf-8") as f:
             out.append((stem, f.read().strip()))
     return out
@@ -103,7 +107,7 @@ def _cool(label: str) -> None:
 
 
 def stage_illust(folder: str, people, steps: int, redo: bool) -> int:
-    print(f"\n=== ① 전신 일러스트 — zitani {steps}스텝 · {illust.ILLUST_W}x{illust.ILLUST_H} ===")
+    print(f"\n=== ① 전신 일러스트 — zitani {steps}스텝, {illust.ILLUST_W}x{illust.ILLUST_H} ===")
     done = 0
     for stem, look in people:
         dest = os.path.join(folder, f"{stem}_illust.png")
@@ -111,9 +115,14 @@ def stage_illust(folder: str, people, steps: int, redo: bool) -> int:
             print(f"  {stem:>6}  이미 있다 — 건너뛴다", flush=True)
             continue
         prompt = illust.compose_illust(look)
-        hits = prompts.suspects_in(prompt)
+        # **우리 칸만 검사한다** (§27.24.1). 원본의 고정 문자열에는 부정문이 들어 있고
+        # (`No ground, no floor, no cast shadow`) 그것이 **212건으로 검증된 문자열**이다.
+        # §27.9 의 「부정문 금지」는 Klein 흉상 경로에서 얻은 규칙이고,
+        # zitani 전신 경로에서는 원본의 실측이 이긴다. **남의 검증된 문자열을
+        # 내 규칙으로 심판하지 않는다** — 갈아 끼우는 칸만 본다.
+        hits = prompts.suspects_in(look)
         if hits:
-            # **도구 · 무기가 여기서도 걸린다** (§27.20). 전신이라 오히려 더 잘 샌다.
+            # **도구, 무기가 여기서도 걸린다** (§27.20). 전신이라 오히려 더 잘 샌다.
             print(f"  {stem:>6}  [x] 용의자 {len(hits)}개 — {hits[:3]}", flush=True)
             _record({"file": os.path.basename(dest), "person": stem,
                      "stage": "illust", "suspects": hits, "skipped": True})
@@ -138,7 +147,7 @@ def stage_illust(folder: str, people, steps: int, redo: bool) -> int:
 
 
 def stage_sd(folder: str, people, redo: bool) -> int:
-    print(f"\n=== ② SD 변환 — Klein 4B Pro edit {illust.KLEIN_EDIT_STEPS}스텝 · "
+    print(f"\n=== ② SD 변환 — Klein 4B Pro edit {illust.KLEIN_EDIT_STEPS}스텝, "
           f"{illust.SD_SIZE}² ===")
     done = 0
     for stem, _look in people:
@@ -188,8 +197,8 @@ def main() -> int:
 
     running, pending = comfy.queue_depth()
     free, total = _vram()
-    print(f"=== 배치 — 인물 {len(people)}명 · {args.folder} ===")
-    print(f"  큐 {running}/{pending} · VRAM {free:.1f}/{total:.1f} GB")
+    print(f"=== 배치 — 인물 {len(people)}명, {args.folder} ===")
+    print(f"  큐 {running}/{pending}, VRAM {free:.1f}/{total:.1f} GB")
     if running or pending:
         print("  [!] 큐가 비어 있지 않다 — 다른 레인이 쓰는 중일 수 있다")
 

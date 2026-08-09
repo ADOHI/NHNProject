@@ -38,9 +38,9 @@
 
 | 코드가 고정한다 | GPT 가 쓴다 |
 | --- | --- |
-| 화풍 (`STYLE` · `SHADY`) | 그 인물의 삶 · 얼굴 · 표정 |
-| **구도와 사분의 삼** (`FRAME` · `GEOMETRY`) | 그 인물의 옷과 장비 |
-| 조명 · 배경 (`LIGHT` · `BACKGROUND`) | 흉터 · 머리 · 눈 |
+| 화풍 (`STYLE`, `SHADY`) | 그 인물의 삶, 얼굴, 표정 |
+| **구도와 사분의 삼** (`FRAME`, `GEOMETRY`) | 그 인물의 옷과 장비 |
+| 조명, 배경 (`LIGHT`, `BACKGROUND`) | 흉터, 머리, 눈 |
 | **닳음과 나이** (`WEATHER`) | |
 
 **나이는 코드 쪽이다** (§27.18.1). 레코드가 들고 있으므로 `WEATHER` 가 직접 읽는다 —
@@ -48,7 +48,7 @@
 
 # 산출을 그대로 믿지 않는다
 
-`prompts.suspects_in()` 을 걸어 부정문 · 비유 · 정면 지시 · 램프 명사 · **정면을 부르는
+`prompts.suspects_in()` 을 걸어 부정문, 비유, 정면 지시, 램프 명사, **정면을 부르는
 어깨**를 잡는다. 걸리면 **화면에 찍고 파일에 남긴다.** 조용히 지우지 않는다 —
 무엇이 걸렸는지가 다음 판의 시스템 프롬프트를 고치는 근거다.
 """
@@ -66,6 +66,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import console  # noqa: E402
+import illust  # noqa: E402
 import prompts  # noqa: E402
 
 console.utf8()
@@ -156,6 +157,15 @@ SYSTEM_LOOK = (
 팀이 전멸했다고 적혀 있으면 그때 얻은 흉터나 남의 장비를 물려 입은 자국이 있다.
 **직업만 보고 옷을 고르지 마라.** 같은 직업이라도 살아온 것이 다르면 다르게 입는다.
 
+# 그 대신 **일이 몸에 요구하는 것**은 반드시 지켜라
+
+받은 글에 「하는 일」이 적혀 있다. 그 일을 하는 몸이 무엇을 필요로 하는지가 적혀 있고,
+**그 요구를 만족시키는 물건을 네가 지어내라.** 물건 이름은 안 줬다. 일만 줬다.
+
+눈을 지켜야 한다고 적혀 있으면 눈을 지키는 것이 몸에 있어야 한다.
+소리가 나면 안 된다고 적혀 있으면 소리가 나는 것이 몸에 없어야 한다.
+**같은 외투를 입은 사람 다섯이 나오면 네가 일을 안 읽은 것이다.**
+
 # 거름망 둘. 이것을 어기면 그림이 깨진다
 
 **하나 — 가슴 위만 그린다. 화면에는 머리와 어깨와 가슴 윗부분밖에 없다.**
@@ -171,7 +181,7 @@ SYSTEM_LOOK = (
 곡괭이, 망치, 검, 칼, 도끼, 활, 창, 방패, 연장, 밧줄, 가방, 배낭, 주머니 —
 열전에 나와도 쓰지 마라. **어깨에 메거나 등 뒤로 솟은 것도 안 된다.**
 
-**남는 것은 옷 · 방어구 · 흉터 · 머리 · 장신구다.** 몸에 붙어 있고 손에 안 든 것.
+**남는 것은 옷, 방어구, 흉터, 머리, 장신구다.** 몸에 붙어 있고 손에 안 든 것.
 그러니 그 사람의 삶을 **몸에 남은 것**으로 적어라 —
 흉터, 물려 입은 외투, 길드 표식, 지운 문신, 덴 자국, 기운 자리.
 
@@ -205,6 +215,42 @@ SYSTEM_LOOK = (
 - 등불, 횃불, 촛불, 램프 같은 광원을 쓰지 마라."""
 )
 
+#: ②-b 전신 일러스트의 **`character` 슬롯**. §27.24.
+#:
+#: **흉상 착장과 다른 물건이다.** 흉상은 한 문단이고 이것은 **명사구 하나**다.
+#: 원본(`minimal-char-studio`)의 `char_illust` 슬롯 규격을 그대로 받는다 —
+#: 그쪽 가이드가 *"Write ONE noun phrase of 12 to 22 words"* 이고,
+#: 실제 기록 212건이 전부 21~23 낱말이다.
+#:
+#: **길이가 규격인 이유:** 그 자리는 고정 문장들(앵커, 화풍, 프레임) 사이에 끼는
+#: 한 칸이고, 한 칸이 길어지면 뒤에 오는 프레임 지시가 흘러 나간다
+#: (`PROMPTS.md` §3, §4-4 — 지시를 더해서 얻는 것보다 길이가 늘어서 잃는 게 크다).
+#: **1차 배치가 진 자리가 여기다** — 나는 이 칸에 한 문단을 넣었다.
+#:
+#: 원본 가이드에서 그대로 가져온 규칙 셋:
+#: 사람으로 시작할 것, **손과 신발은 비어 있을 것**, 화풍·구도·배경·조명을 말하지 말 것.
+SYSTEM_SLOT = (
+    WORLD
+    + """
+
+너는 인물 열전을 읽고 **그 사람의 전신 겉모습을 명사구 하나로** 쓴다.
+이미지 프롬프트의 한 칸에 그대로 끼워진다. 앞뒤에 화풍과 구도 문장이 이미 있다.
+
+# 규격 — 어기면 뒤 문장이 흘러 나간다
+
+- **영어 명사구 하나. 12~22 낱말.** 문장으로 쓰지 마라. 마침표를 찍지 마라.
+- **사람으로 시작해라** — A woman, A man, A boy, A girl, 또는 직업으로.
+- 그 사람이 누구인지, 무엇을 입는지, 무슨 색인지, 작게 봐도 읽힐 특징 하나.
+- **손과 신발은 비어 있어야 한다.** 손에 든 것, 무기, 도구, 가방을 쓰지 마라.
+  그것들은 나중에 따로 붙는 스프라이트다.
+- **화풍, 구도, 카메라, 자세, 배경, 그림자, 조명을 말하지 마라.** 다른 칸이 맡는다.
+- 실제 색 이름을 써라. colourful, vibrant 는 그림에 아무것도 안 만든다.
+- 나이는 받은 값에 맞춘다. 열전에 있는 흉터와 기운 자국은 써도 좋다.
+- **일이 몸에 요구하는 것**이 받은 글에 적혀 있다. 그것을 만족시키는 옷을 지어내라.
+
+명사구만 답해라. 따옴표도 머리말도 마침표도 붙이지 마라."""
+)
+
 #: ③ 성향 맞추기. **열전이 원인을 댔는지를 재는 자다** (§27.19.2).
 #:
 #: 열전만 준다. 수치도 브리프도 안 준다 — 주면 시험이 무의미해진다.
@@ -213,7 +259,7 @@ SYSTEM_GUESS = """너는 인물 열전을 읽고 그 사람의 성향을 맞춘�
 여섯 축이 있다. 각 축마다 어느 쪽인지 하나만 고른다.
 읽어서 판단이 안 서는 축은 「가운데」라고 답한다. 억지로 고르지 마라.
 
-무모/신중 · 선/악 · 의리/실리 · 위계/자유 · 정직/기만 · 과시/은둔
+무모/신중, 선/악, 의리/실리, 위계/자유, 정직/기만, 과시/은둔
 
 아래 형식으로 여섯 줄만 낸다. 설명을 붙이지 마라.
 
@@ -279,7 +325,7 @@ def truth_of(brief: str) -> dict[str, str]:
         if words.startswith("어느 쪽도"):
             truth[axis] = "가운데"
             continue
-        # `약간 정직 쪽으로 52` · `정직 쪽으로 52  (극)` 둘 다 두 번째에서 첫 낱말을 뺀다.
+        # `약간 정직 쪽으로 52`, `정직 쪽으로 52  (극)` 둘 다 두 번째에서 첫 낱말을 뺀다.
         parts = words.replace("약간 ", "").split()
         truth[axis] = parts[0] if parts else "가운데"
     return truth
@@ -297,7 +343,7 @@ def guessed_of(text: str) -> dict[str, str]:
 
 
 def score(truth: dict[str, str], guess: dict[str, str]) -> tuple[int, int, list[str]]:
-    """맞은 축 수 · 잰 축 수 · 줄별 결과.
+    """맞은 축 수, 잰 축 수, 줄별 결과.
 
     **가운데인 축도 센다.** 「가운데를 가운데로 봤다」도 열전이 제대로 섰다는 증거다 —
     1차 실호출이 진 자리가 정확히 거기였다 (`위계 5` 를 「자유를 중시한다」로 썼다).
@@ -356,7 +402,7 @@ def main() -> int:
     out_dir = args.out or os.path.dirname(os.path.abspath(args.brief))
     os.makedirs(out_dir, exist_ok=True)
 
-    print(f"=== {MODEL} — 인물 {stem} · {gender} · {age}세 · {discipline} ===\n")
+    print(f"=== {MODEL} — 인물 {stem}, {gender}, {age}세, {discipline} ===\n")
 
     # ---- ① 열전 -----------------------------------------------------------
     chronicle = call(SYSTEM_CHRONICLE, brief)
@@ -370,7 +416,13 @@ def main() -> int:
     # **열전만으로는 부족한 둘을 코드가 얹는다.** 성별은 레코드 값이고(§27.19.1)
     # 계열은 착장의 뼈대다 — 열전이 그 둘을 안 적을 수도 있는데, 코드가 아는 것을
     # 모델이 열전에서 다시 읽어 내게 하지 않는다 (§27.18).
-    look_input = f"성별: {gender}\n나이: {age}세\n계열: {discipline}\n\n[열전]\n{chronicle}"
+    # **일이 몸에 요구하는 것을 재료로 넘긴다** (§27.21.4). 옷 이름은 안 준다 —
+    # 카탈로그를 주면 모델이 고르기만 하고 지어내지 않는다.
+    work = prompts.discipline_work(discipline.split("—")[0].strip())
+    look_input = (
+        f"성별: {gender}\n나이: {age}세\n계열: {discipline}\n"
+        f"하는 일: {work}\n\n[열전]\n{chronicle}"
+    )
     look = call(SYSTEM_LOOK, look_input)
     hits = prompts.suspects_in(look)
     print("--- ② 착장 (검사 전) ---")
@@ -380,6 +432,19 @@ def main() -> int:
         print(f"  [x] {h}")
     if not hits:
         print("  (없다)")
+    print()
+
+    # ---- ②-b 전신 일러스트의 character 슬롯 (§27.24) ----------------------
+    # **흉상 착장과 다른 물건이다.** 저쪽은 한 문단, 이쪽은 명사구 하나.
+    slot = call(SYSTEM_SLOT, look_input).strip().rstrip(".")
+    slot_words = len(slot.split())
+    slot_hits = prompts.suspects_in(slot)
+    print(f"--- ②-b 일러스트 character 슬롯 ({slot_words}낱말) ---")
+    print(slot)
+    if not 10 <= slot_words <= 28:
+        print(f"  [!] 낱말 수가 규격(12~22) 밖이다 — 뒤 문장이 흘러 나갈 수 있다")
+    for h in slot_hits:
+        print(f"  [x] {h}")
     print()
 
     # ---- ③ 성향 맞추기 — **합격 기준이다** --------------------------------
@@ -400,6 +465,7 @@ def main() -> int:
     final_hits = prompts.suspects_in(final)
 
     for name, body in (("chronicle", chronicle), ("look_raw", look),
+                       ("slot", slot), ("illust_prompt", illust.compose_illust(slot)),
                        ("prompt", final), ("guess", guess_raw)):
         with open(os.path.join(out_dir, f"{stem}_{name}.txt"), "w", encoding="utf-8") as f:
             f.write(body + "\n")
@@ -411,13 +477,14 @@ def main() -> int:
             "system_chronicle": SYSTEM_CHRONICLE, "system_look": SYSTEM_LOOK,
             "chronicle": chronicle, "trait_words_leaked": leaked,
             "look": look, "look_suspects": hits,
+            "slot": slot, "slot_words": slot_words, "slot_suspects": slot_hits,
             "guess_raw": guess_raw, "truth": truth, "guess": guess,
             "guess_hit": hit, "guess_total": total,
             "final_prompt": final, "final_suspects": final_hits,
             "utc": datetime.now(timezone.utc).isoformat(),
         }, ensure_ascii=False) + "\n")
 
-    print(f"--- 최종 프롬프트 (코드 고정 + GPT 착장) · 용의자 {len(final_hits)}개 ---")
+    print(f"--- 최종 프롬프트 (코드 고정 + GPT 착장), 용의자 {len(final_hits)}개 ---")
     print(final + "\n")
     print(f"  파일: {out_dir}")
     # **걸려도 파일은 남긴다.** 사람이 보고 고쳐야 하므로 (§27.9.1 ③).

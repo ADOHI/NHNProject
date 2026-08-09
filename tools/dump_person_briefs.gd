@@ -30,7 +30,7 @@ extends SceneTree
 ##
 ## ## 나이와 가족이 붙었다
 ##
-## `npc-relations` 의 `924fab1` 을 받았다 (§27.18.1). 나이 16~58 · 중위 28,
+## `npc-relations` 의 `924fab1` 을 받았다 (§27.18.1). 나이 16~58, 중위 28,
 ## 가족이 있는 인물 71.7%. **혈연은 부계뿐이고 혼인이 없다** —
 ## 그것을 브리프가 말하지 않으면 모델이 어머니를 지어낸다 (§24.17.4).
 ##
@@ -38,7 +38,7 @@ extends SceneTree
 ##     godot --headless --path . -s res://tools/dump_person_briefs.gd -- --pick 12
 ##     godot --headless --path . -s res://tools/dump_person_briefs.gd -- --pick 12 --mode kin
 
-## 기준 시드. `survey_npc_population.gd` · `survey_npc_kin.gd` 와 같은 값이라
+## 기준 시드. `survey_npc_population.gd`, `survey_npc_kin.gd` 와 같은 값이라
 ## **같은 3000명이 나온다** (§24.16.7). **데모 캐스트는 시드를 고정한다** (§27.2.2).
 const _SEED := 20260808
 
@@ -99,7 +99,7 @@ const CAST_SLOTS := [
 	# 나이 양 끝. 16 과 55 는 같은 일을 해도 다른 사람이다.
 	"가장어림",
 	"가장늙음",
-	# 관계 양 끝. **가족을 어떻게 쓰나 · 없을 때 무엇을 지어내나.**
+	# 관계 양 끝. **가족을 어떻게 쓰나, 없을 때 무엇을 지어내나.**
 	"가족많음",
 	"혈혈단신",
 	# 소속 없음. §24.2 의 "기본은 모르는 사이" 가 사람으로 나온 자리다.
@@ -111,7 +111,7 @@ const CAST_SLOTS := [
 	"여성-전투",
 ]
 
-## 「가장 어림」 · 「가장 늙음」의 경계. `PersonGenerator` 의 상하한에서 끌어온다 —
+## 「가장 어림」, 「가장 늙음」의 경계. `PersonGenerator` 의 상하한에서 끌어온다 —
 ## 베껴 적으면 상수를 고쳤을 때 거짓말한다 (`survey_npc_kin.gd` 의 규율).
 const _YOUNG_MAX := PersonGenerator.AGE_MIN + 3
 const _OLD_MIN := PersonGenerator.AGE_MAX - 8
@@ -119,7 +119,7 @@ const _OLD_MIN := PersonGenerator.AGE_MAX - 8
 ## 「유명함」의 경계. §24.16.9 실측 — 90 이상이 상위 1.2% 다.
 const _FAMOUS_MIN := 90
 
-## 「가족 많음」의 경계. 차수 중위 1 · 90% 2 라(실측) 5 면 꼬리 끝이다.
+## 「가족 많음」의 경계. 차수 중위 1, 90% 2 라(실측) 5 면 꼬리 끝이다.
 const _MANY_KIN := 5
 
 ## 「극단적」의 경계. §24.16.3 의 가중치에서 넷 이상이 22% 다.
@@ -149,7 +149,7 @@ func _initialize() -> void:
 	quit()
 
 
-## 가족을 심는다. **`survey_npc_kin.gd` 와 같은 시드 · 같은 순서라 같은 가족이 나온다.**
+## 가족을 심는다. **`survey_npc_kin.gd` 와 같은 시드, 같은 순서라 같은 가족이 나온다.**
 func _seed_kin(registry: PersonRegistry) -> RelationGraph:
 	var graph := RelationGraph.new(registry.size())
 	KinSeeder.new(_SEED, registry, graph).seed_all()
@@ -183,7 +183,7 @@ func _print_candidates(
 	registry: PersonRegistry, graph: RelationGraph, want: int, mode: String
 ) -> void:
 	var factions := FactionIndex.new(registry)
-	print("=== 후보 (%s · 시드 %d · 인구 %d) ===" % [mode, _SEED, _POPULATION])
+	print("=== 후보 (%s, 시드 %d, 인구 %d) ===" % [mode, _SEED, _POPULATION])
 	var shown := 0
 	for i in registry.size():
 		if not _matches(registry, graph, i, mode):
@@ -230,7 +230,7 @@ func _print_cast(registry: PersonRegistry, graph: RelationGraph) -> void:
 			chosen[slot] = person
 			break
 
-	print("=== 데모 캐스트 (시드 %d · 인구 %d) ===" % [_SEED, _POPULATION])
+	print("=== 데모 캐스트 (시드 %d, 인구 %d) ===" % [_SEED, _POPULATION])
 	var males := 0
 	var missing := PackedStringArray()
 	for slot in CAST_SLOTS:
@@ -261,7 +261,7 @@ func _print_cast(registry: PersonRegistry, graph: RelationGraph) -> void:
 	# 레코드가 성별을 갖게 된 뒤에도 캐스트가 한쪽으로 쏠리면 자리표가 틀린 것이다.
 	print(
 		(
-			"\n  뽑힌 사람 %d/%d · 남 %d 여 %d"
+			"\n  뽑힌 사람 %d/%d, 남 %d 여 %d"
 			% [chosen.size(), CAST_SLOTS.size(), males, chosen.size() - males]
 		)
 	)
@@ -357,9 +357,9 @@ func brief_of(registry: PersonRegistry, graph: RelationGraph, index: int) -> Str
 
 ## 성별을 **프롬프트가 쓸 말**로 넓힌다 (§27.19.1).
 ##
-## `PersonSheet` 는 `남` · `여` 한 글자를 낸다. **화면에서는 그것이 맞다** — 칸이 좁다.
+## `PersonSheet` 는 `남`, `여` 한 글자를 낸다. **화면에서는 그것이 맞다** — 칸이 좁다.
 ## 그런데 글로 나가면 한 글자는 문장에 못 들어간다. `PersonGender.portrait_word()` 가
-## `남성` · `여성` 을 이미 들고 있고, 머리말이 *"초상 프롬프트에 그대로 들어갈 말"*
+## `남성`, `여성` 을 이미 들고 있고, 머리말이 *"초상 프롬프트에 그대로 들어갈 말"*
 ## 이라고 적어 뒀다. **그것을 쓴다** — §27.18 의 자리다.
 func _widen_gender(text: String, gender: PersonGender.Kind) -> String:
 	var line := "- 성별: %s" % PersonGender.label(gender)
@@ -373,7 +373,7 @@ func _widen_gender(text: String, gender: PersonGender.Kind) -> String:
 ##
 ## **이름 두 글자는 뜻을 실어 나르지 못한다.** 실측으로 걸렸다 (§27.19.3) —
 ## `- 계열: 기공` 만 주었더니 모델이 그것을 **氣功**으로 읽고 열전 전체를
-## *"기의 흐름을 읽는 법"* · *"호흡과 기맥을 다듬고"* 로 썼다. 이 세계의 기공은
+## *"기의 흐름을 읽는 법"*, *"호흡과 기맥을 다듬고"* 로 썼다. 이 세계의 기공은
 ## **고도 차이와 통로 상태를 읽는** 기술자다.
 ##
 ## `MemberDiscipline.eye_note()` 가 그 뜻을 코드로 들고 있다. **그것을 쓴다** —
@@ -452,7 +452,7 @@ func _axis_words(kind: NpcAxis.Kind, value: int) -> String:
 ## 관계 칸에 **자료의 모양**을 한 줄 덧붙인다.
 ##
 ## 혈연 2490건 중 성이 다른 것이 0건이고(실측), `RelationKind._SHARES_SURNAME` 가
-## 부모 · 자식 · 형제뿐이다. **어머니도 배우자도 자료에 없다.**
+## 부모, 자식, 형제뿐이다. **어머니도 배우자도 자료에 없다.**
 ## 안 적으면 모델이 그 자리를 지어낸다 (§24.17.4) — 「빈칸을 빈칸이라고 적는다」.
 func _note_kin(text: String, graph: RelationGraph, person: int) -> String:
 	var lines := PackedStringArray()

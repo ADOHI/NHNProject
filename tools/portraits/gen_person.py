@@ -46,7 +46,7 @@ LOG = os.path.join(ROOT, ".captures", "portraits", "log.jsonl")
 
 
 def seed_of(person: int, plate: int, reroll: int) -> int:
-    """전부 소수 배수라 다른 인물 · 다른 판이 같은 시드를 갖지 않는다 (§27.13)."""
+    """전부 소수 배수라 다른 인물, 다른 판이 같은 시드를 갖지 않는다 (§27.13)."""
     return BASE_SEED + person * 1_000_003 + plate * 101 + reroll * 7_919
 
 
@@ -71,7 +71,7 @@ def main() -> int:
 
     # **넣기 전에 다시 검사한다.** 사람이 파일을 손으로 고쳤을 수 있다 (§27.9.1 ②).
     hits = prompts.suspects_in(prompt)
-    print(f"=== 초상 — 인물 {stem} · {args.plates}장 · {args.steps} 스텝 ===")
+    print(f"=== 초상 — 인물 {stem}, {args.plates}장, {args.steps} 스텝 ===")
     print(f"  함정 검사: 용의자 {len(hits)}개")
     for h in hits:
         print(f"    [x] {h}")
@@ -82,7 +82,7 @@ def main() -> int:
 
     running, pending = comfy.queue_depth()
     if running or pending:
-        print(f"  [!] 시작 전인데 큐가 비어 있지 않다 — 돌는 중 {running} · 대기 {pending}")
+        print(f"  [!] 시작 전인데 큐가 비어 있지 않다 — 돌는 중 {running}, 대기 {pending}")
 
     done = 0
     for plate in range(args.plates):
