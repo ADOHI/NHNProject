@@ -67,6 +67,17 @@ var palette := 0:
 		_tint_screen()
 		queue_redraw()
 
+## **벤 자국을 화면에 낼 것인가.** 기본은 아니다 (§20.38).
+##
+## 자국 하나가 걸린 판을 전부 어긋내는데, 그 대가가 **화면의 모든 줄맞춤**이다.
+## 정렬은 UI 가 공짜로 주는 가장 센 신호고, 전부 어긋나면 어긋남이 배경이 된다.
+## 코드는 남긴다 — **한 부품에서 한 번 쓰는 연출**로는 값이 있고, 켜는 것이 한 줄이라야
+## 다시 견줘 볼 수 있다.
+var rip_shown := false:
+	set(value):
+		rip_shown = value
+		queue_redraw()
+
 var _clock := 0.0
 var _driven := false
 var _dark: ColorRect
@@ -195,6 +206,9 @@ func _paint(shape: PackedVector2Array, tint: Color) -> void:
 
 
 func _plate(shape: PackedVector2Array, tint: Color, least: float = RIP_LEAST) -> void:
+	if not rip_shown:
+		_paint(shape, tint)
+		return
 	for piece in GraphicCut.severed(shape, _rip_angle(), _rip_through(), _rip(), least):
 		_paint(piece, tint)
 
@@ -207,6 +221,9 @@ func _plate(shape: PackedVector2Array, tint: Color, least: float = RIP_LEAST) ->
 ##
 ## **문턱은 판의 성질이지 그 위에 깔리는 것의 성질이 아니다.**
 func _follow(panel: PackedVector2Array, piece: PackedVector2Array, tint: Color) -> void:
+	if not rip_shown:
+		_paint(piece, tint)
+		return
 	var push := GraphicCut.shove(panel, _rip_angle(), _rip_through(), _rip(), RIP_LEAST)
 	if push == Vector2.ZERO:
 		_plate(piece, tint, 0.0)
@@ -362,13 +379,18 @@ func _backdrop() -> void:
 ##
 ## 뚫린 자리에 까는 줄무늬는 바탕과 **각도 · 간격 · 위상이 같아야** 한다.
 ## 하나라도 다르면 구멍이 아니라 **무늬를 칠한 글자**가 된다.
+##
+## ## 뒤집힘은 내렸다 (§20.38.2)
+##
+## §20.37.2 는 뒤집힘을 보려고 판을 글자보다 **짧게** 잡았다. 그러면 「격」이 반쪽씩
+## 다른 색이 되어 **글자로 안 뭉친다.** 판정 기준이 「읽히나」라서 그 경계를 없앴다 —
+## 판이 글자를 다 담고 획은 전부 **구멍**이다. `_pierce` 는 그대로 두므로 `beyond`
+## 가지가 안 돌 뿐이고, 획 하나만 넘는 자리가 생기면 그때는 다시 값이 있다.
 func _title() -> void:
-	# 판을 글자보다 **짧게** 잡는다. 안 넘치면 뒤집힘이 한 번도 안 일어나고,
-	# 그러면 이 실험은 「글자를 다각형으로 그렸다」로만 끝난다.
-	var slab := GraphicCut.lean(Rect2(-30.0, 20.0, 148.0, 68.0), 0.30)
+	var slab := GraphicCut.lean(Rect2(-30.0, 8.0, 190.0, 84.0), 0.30)
 	_backplate(slab, 0.012, Vector2(7.0, 7.0), _back())
 	_plate(slab, _paper())
-	var mark := _glyphs("참격", Vector2(22.0, 86.0), -0.075, 76)
+	var mark := _glyphs("참격", Vector2(22.0, 82.0), -0.075, 64)
 	for ring: PackedVector2Array in mark["solid"]:
 		_pierce(slab, ring, _void(), _paper())
 	for ring: PackedVector2Array in mark["hole"]:
