@@ -176,3 +176,53 @@ func test_forms_that_eat_cuts_are_the_ones_that_dance() -> void:
 				still = false
 		var eats := form in [LedgerForm.Kind.STRATA, LedgerForm.Kind.TERRACE, LedgerForm.Kind.DOCK]
 		assert_eq(still, not eats, "%s — 흔들림과 「cuts 를 먹는가」가 갈라지면 안 된다" % LedgerForm.label(form))
+
+
+## **자리를 말할 수 있는 형태는 정확히 스크롤을 견디는 형태다.**
+##
+## 실루엣이 이미 내용에 잡아먹힌 형태는 자리를 말할 채널이 안 남는다 —
+## 같은 변에 두 가지 뜻을 얹으면 둘 다 안 읽힌다.
+func test_only_forms_that_survive_scrolling_can_tell_position() -> void:
+	var moved := PackedFloat32Array([90.0, 260.0, 350.0])
+	for kind in LedgerForm.count():
+		var form := kind as LedgerForm.Kind
+		var still := true
+		for i in 12:
+			var y := 60.0 + float(i) * 28.0
+			var a := LedgerForm.edge_at(form, SIZE, _cuts(), _reach(), Vector3.ZERO, y)
+			var b := LedgerForm.edge_at(form, SIZE, moved, _reach(), Vector3.ZERO, y)
+			if a.distance_to(b) > 0.5:
+				still = false
+		assert_eq(
+			LedgerForm.tells_position(form),
+			still,
+			"%s — 자리를 말하는 형태와 안 흔들리는 형태가 갈라지면 안 된다" % LedgerForm.label(form)
+		)
+
+
+## > **끝이 성하면 끝이고, 끝이 헐면 이어진다.**
+func test_a_calm_edge_means_there_is_nothing_that_way() -> void:
+	var form := LedgerForm.Kind.RIM
+	var still := LedgerForm.fray(form, Vector2.ZERO)
+	assert_almost_eq(still.x, LedgerForm.FRAY_CALM, 0.01, "흐를 것이 없으면 양 끝이 성하다")
+	assert_almost_eq(still.y, LedgerForm.FRAY_CALM, 0.01, "아래도 성하다")
+
+	var top := LedgerForm.fray(form, Vector2(0.0, 1.0))
+	assert_almost_eq(top.x, LedgerForm.FRAY_CALM, 0.01, "맨 위면 위가 성하다")
+	assert_gt(top.y, LedgerForm.FRAY_CALM + 5.0, "아래로 더 있으면 아래가 헐어 있다")
+
+	var end_here := LedgerForm.fray(form, Vector2(1.0, 1.0))
+	assert_gt(end_here.x, LedgerForm.FRAY_CALM + 5.0, "끝까지 읽었으면 위가 헐어 있다")
+	assert_almost_eq(end_here.y, LedgerForm.FRAY_CALM, 0.01, "아래는 성하다")
+
+
+## 자리를 못 말하는 형태에 자리를 물으면 **아무 말도 안 해야 한다.** 조용히 헐면
+## 그 형태의 실루엣이 두 가지 뜻을 갖게 된다.
+func test_forms_that_cannot_tell_position_stay_calm() -> void:
+	for kind in LedgerForm.count():
+		var form := kind as LedgerForm.Kind
+		if LedgerForm.tells_position(form):
+			continue
+		var asked := LedgerForm.fray(form, Vector2(0.5, 1.0))
+		assert_almost_eq(asked.x, LedgerForm.FRAY_CALM, 0.01, LedgerForm.label(form))
+		assert_almost_eq(asked.y, LedgerForm.FRAY_CALM, 0.01, LedgerForm.label(form))

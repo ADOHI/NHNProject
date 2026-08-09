@@ -70,6 +70,9 @@ var _crossed := 0
 ## 아직 창 아래에 남은 글의 높이(px). 스크롤이 필요한 양이다.
 var _below := 0.0
 
+## `(읽은 비율 0..1, 흐를 수 있는가 0/1)`. **형태가 이 값으로 자리를 말한다.**
+var _reading := Vector2.ZERO
+
 
 func _ready() -> void:
 	if not _driven:
@@ -109,7 +112,7 @@ func crossings() -> int:
 ## 받아도 한 장이고 「겹친 장」은 이음매가 없어도 넉 장이다. 처음에 경계 수로
 ## 적었더니 화면의 숫자와 눈에 보이는 조각 수가 어긋났다.
 func bands() -> int:
-	return LedgerForm.bands(form, size, _cuts, _reach, _event).size()
+	return LedgerForm.bands(form, size, _cuts, _reach, _event, _reading).size()
 
 
 ## 판이 가로로 몇 층으로 나뉘었나. **조각 수와 다르다** — 「층계」는 층이 일곱이어도
@@ -126,6 +129,11 @@ func measure() -> void:
 ## 아직 창 아래에 남은 글의 높이(px).
 func below() -> float:
 	return _below
+
+
+## `(읽은 비율, 흐를 수 있는가)`. 확인 화면이 형태가 자리를 말하는지 볼 때 쓴다.
+func reading() -> Vector2:
+	return _reading
 
 
 ## 지금 실루엣을 스무 자리에서 잰 것. 자리마다 **왼쪽 변과 오른쪽 변 둘 다** 넣는다.
@@ -147,13 +155,18 @@ func _draw() -> void:
 	if shown <= 0.001:
 		return
 	_plan()
-	var here := LedgerForm.bands(form, size, _cuts, _reach, _event)
+	var here := LedgerForm.bands(form, size, _cuts, _reach, _event, _reading)
 	var count := here.size()
 	for i in count:
 		var piece := _fly(here[i], i, count)
 		_stroke(piece, i, count, shown)
-	for shard in LedgerForm.shards(form, size, _event):
-		draw_colored_polygon(shard, Color(RULE_SOFT, 0.55 * shown))
+	# 파편이 **지나간 것과 남은 것**으로 갈린다. 여백의 장식이 그대로 자리 표시가 된다.
+	var lane := LedgerForm.shards(form, size, _event, _reading)
+	for i in lane.size():
+		var past := _reading.y > 0.5 and float(i) / maxf(1.0, float(lane.size() - 1)) <= _reading.x
+		draw_colored_polygon(
+			lane[i], Color(ACCENT, 0.85 * shown) if past else Color(RULE_SOFT, 0.45 * shown)
+		)
 	_ornament(shown)
 	_write_sheet()
 
@@ -211,16 +224,32 @@ func _ornament(shown: float) -> void:
 		LedgerForm.Kind.SCROLL:
 			var win := LedgerForm.window(form, size)
 			draw_rect(Rect2(20.0, win.position.y - 9.0, size.x - 40.0, 2.0), Color(ACCENT, shown))
-			for i in 14:
+			# 점열이 **읽은 만큼 채워진다.** 스크롤바를 덧대지 않고 머리띠가 그 일을 한다.
+			# 이름 옆이 아니라 **오른쪽 끝**이다 — 왼쪽에 두면 인물 이름을 덮는다.
+			for i in 12:
+				var done := _reading.y > 0.5 and float(i) / 11.0 <= _reading.x
 				draw_rect(
-					Rect2(20.0 + float(i) * 11.0, 20.0, 5.0, 5.0), Color(RULE_SOFT, 0.65 * shown)
+					Rect2(size.x - 158.0 + float(i) * 11.0, 24.0, 5.0, 5.0),
+					Color(ACCENT, 0.9 * shown) if done else Color(RULE_SOFT, 0.5 * shown)
 				)
-			# 창의 위아래 끝이 흐려진다. 글이 흘러 들어오고 나가는 자리다.
-			for i in 7:
-				var fade := float(i) / 7.0
+			# **말린 두께가 남은 양이다.** 위로 감긴 만큼 위가 두껍고 아래가 얇아진다.
+			var rolled := LedgerForm.fray(form, _reading)
+			for i in 8:
+				var fall := 1.0 - float(i) / 8.0
 				draw_rect(
-					Rect2(win.position.x, win.position.y + float(i) * 2.0, win.size.x, 2.0),
-					Color(PLATE_HIGH, (1.0 - fade) * 0.5 * shown)
+					Rect2(
+						win.position.x, win.position.y + float(i) * rolled.x * 0.16, win.size.x, 2.0
+					),
+					Color(PLATE_HIGH, fall * 0.55 * shown)
+				)
+				draw_rect(
+					Rect2(
+						win.position.x,
+						win.end.y - 2.0 - float(i) * rolled.y * 0.16,
+						win.size.x,
+						2.0
+					),
+					Color(PLATE_HIGH, fall * 0.55 * shown)
 				)
 		_:
 			pass
@@ -279,6 +308,9 @@ func _plan() -> void:
 		_crossed = LedgerLayout.crossings(_ink.lines, _seams())
 
 	_below = maxf(0.0, _ink.bottom - box.end.y)
+	# 읽은 비율. 흐를 것이 없으면 0 이고, 그때 형태는 **양 끝을 성하게** 둔다.
+	var run := scroll + _below
+	_reading = Vector2(scroll / run, 1.0) if paged and run > 1.0 else Vector2.ZERO
 	# 창이 있는 화면에서 아래로 남은 글은 **넘침이 아니라 아직 안 읽은 것**이다.
 	var spill_down := 0.0 if paged else _below
 	_overflow = Vector2(maxf(0.0, _ink.widest - box.end.x), spill_down)

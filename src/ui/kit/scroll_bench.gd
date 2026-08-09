@@ -92,7 +92,7 @@ func _build() -> void:
 		if registry.name_of(i).length() > registry.name_of(person).length():
 			person = i
 	_who = registry.name_of(person)
-	var sheet := _with_chronicle(PersonSheet.build(registry, person, factions))
+	var sheet := long_sheet(PersonSheet.build(registry, person, factions))
 
 	for i in LedgerForm.count():
 		var card := LedgerCard.new()
@@ -116,7 +116,10 @@ func _build() -> void:
 
 
 ## 열전 칸을 긴 글로 갈아 끼운다. 나머지 칸은 그대로다 — **분량만 바꾸고 비교한다.**
-func _with_chronicle(sheet: Array[SheetSection]) -> Array[SheetSection]:
+##
+## 자리 표시 확인 화면(`HandleBench`)도 같은 글을 써야 비교가 된다. 그래서 정적이다 —
+## 긴 글을 두 군데에 복사해 두면 한쪽만 고쳐지고 두 화면이 다른 것을 재게 된다.
+static func long_sheet(sheet: Array[SheetSection]) -> Array[SheetSection]:
 	var out: Array[SheetSection] = []
 	for section in sheet:
 		if section.title != "인물 열전":

@@ -61,6 +61,14 @@ const TERRACE_BANDS: int = 8
 ## (§20.12).
 const TREAD: float = 12.0
 
+## 이어지는 게 없을 때 변이 헐어 있는 정도(px). **성한 끝이다.**
+const FRAY_CALM: float = 2.5
+
+## 그쪽으로 글이 더 있을 때 변이 헐어 있는 정도(px).
+##
+## **절대값이다** — 헐어 있음은 종이의 성질이지 판의 성질이 아니다(§20.12).
+const FRAY_TORN: float = 17.0
+
 ## 겹인쇄 어긋남(px). §20.11.3 에서 잠근 값 — 면적이 커져도 안 커진다.
 const MISPRINT := Vector2(5.0, -4.0)
 
@@ -158,7 +166,12 @@ static func window(kind: Kind, size: Vector2) -> Rect2:
 ##
 ## `reach` 는 층마다 글이 닿은 오른쪽 끝(x, 카드 좌표). 계단만 쓴다. 비워도 된다.
 static func bands(
-	kind: Kind, size: Vector2, cuts: PackedFloat32Array, reach: PackedFloat32Array, event: Vector3
+	kind: Kind,
+	size: Vector2,
+	cuts: PackedFloat32Array,
+	reach: PackedFloat32Array,
+	event: Vector3,
+	reading := Vector2.ZERO
 ) -> Array[PackedVector2Array]:
 	var out: Array[PackedVector2Array] = []
 	var w := size.x
@@ -180,7 +193,11 @@ static func bands(
 		Kind.RIM:
 			# 한 장이다. **복판을 가르지 않는 것이 이 형태의 전부다.**
 			# 위아래 변만 가로로 물어낸다 — 가로 이음매라 줄 사이로 지나간다.
-			var bite := 9.0 + 5.0 * event.x
+			#
+			# **찢긴 깊이가 「그쪽으로 글이 이어진다」는 뜻이다**(§20.17).
+			var torn := fray(kind, reading)
+			var bite := torn.x + 4.0 * event.x
+			var bite_low := torn.y + 4.0 * event.x
 			out.append(
 				_poly(
 					[
@@ -193,11 +210,11 @@ static func bands(
 						w,
 						0.0,
 						w,
-						h - bite,
+						h - bite_low,
 						w * 0.55,
 						h,
 						w * 0.21,
-						h - bite * 0.7,
+						h - bite_low * 0.7,
 						0.0,
 						h
 					]
@@ -205,9 +222,28 @@ static func bands(
 			)
 		Kind.SHEAF:
 			var step := _sheaf_step(size) * (1.0 + 0.55 * event.x - 0.8 * event.y)
+			# **읽은 장은 위로 넘어가고 안 읽은 장은 아래에 남는다.** 종이 뭉치를
+			# 읽는 방식 그대로다 — 남은 두께가 곧 「얼마나 남았나」다.
+			var turned := reading.x * float(SHEAF_DEPTH) if reading.y > 0.5 else 0.0
 			for back in range(SHEAF_DEPTH, 0, -1):
 				var d := step * float(back)
-				out.append(_poly([d, -d * 0.42, w, -d * 0.42, w, h - d * 0.42, d, h - d * 0.42]))
+				if float(back) <= turned:
+					out.append(
+						_poly(
+							[
+								d * 0.3,
+								-d * 0.62,
+								w,
+								-d * 0.62,
+								w,
+								h - d * 0.62,
+								d * 0.3,
+								h - d * 0.62
+							]
+						)
+					)
+				else:
+					out.append(_poly([d, d * 0.30, w, d * 0.30, w, h + d * 0.30, d, h + d * 0.30]))
 			out.append(
 				_poly(
 					[
@@ -253,7 +289,9 @@ static func band_shift(kind: Kind, index: int, count: int, size: Vector2, event:
 ##
 ## §20.9.4 가 남긴 것을 형태로 옮긴 것이다 — 화려함은 밀도 대비에서 나오고,
 ## 골고루 뿌리면 죽는다. 그래서 파편은 **왼쪽 여백 한 자리**에만 몰려 있다.
-static func shards(kind: Kind, size: Vector2, event: Vector3) -> Array[PackedVector2Array]:
+static func shards(
+	kind: Kind, size: Vector2, event: Vector3, reading := Vector2.ZERO
+) -> Array[PackedVector2Array]:
 	var out: Array[PackedVector2Array] = []
 	if kind != Kind.RIM:
 		return out
@@ -262,7 +300,10 @@ static func shards(kind: Kind, size: Vector2, event: Vector3) -> Array[PackedVec
 	for i in 7:
 		var turn := fposmod(0.17 + float(i) * 0.6180339887, 1.0)
 		var top := box.position.y + box.size.y * (0.06 + 0.13 * float(i))
-		var wide := lane * (0.30 + 0.62 * turn)
+		# **지나간 파편이 더 길게 뻗는다.** 색만 바꾸면 흑백으로 뽑았을 때 사라진다 —
+		# 자리 표시는 길이로도 읽혀야 한다.
+		var past := reading.y > 0.5 and float(i) / 6.0 <= reading.x
+		var wide := lane * (0.30 + 0.62 * turn) * (1.35 if past else 0.78)
 		var tall := 5.0 + 13.0 * turn
 		var push := (0.6 + turn) * 9.0 * (event.x - event.y)
 		var left := lane - wide - push
@@ -272,6 +313,35 @@ static func shards(kind: Kind, size: Vector2, event: Vector3) -> Array[PackedVec
 			)
 		)
 	return out
+
+
+## 이 형태가 **어디까지 읽었는지를 형태로 말할 수 있는가.**
+##
+## `seam_shows()` 로 갈린 「이음매를 자료가 먹는 형태」와 **정확히 반대 집합**이다.
+## 실루엣이 이미 내용에 잡아먹힌 형태는 자리를 말할 채널이 남아 있지 않다 —
+## 같은 변에 두 가지 뜻을 얹으면 둘 다 안 읽힌다.
+##
+## > **형태가 자리를 말하면 스크롤바가 필요 없다.** 에셋 없이 기능을 얻는다.
+static func tells_position(kind: Kind) -> bool:
+	return kind == Kind.RIM or kind == Kind.SHEAF or kind == Kind.SCROLL
+
+
+## 위아래 변이 얼마나 헐었나(px). `reading` 은 `(읽은 비율 0..1, 흐를 수 있는가 0/1)`.
+##
+## > **끝이 성하면 끝이고, 끝이 헐면 이어진다.**
+##
+## 위가 반듯하면 그게 글의 처음이라는 뜻이고, 위가 찢겨 있으면 위로 더 있다는 뜻이다.
+## 스크롤바처럼 **덧붙인 부품이 아니라 판의 실루엣 자체**라 「도형과 선 면으로만」에서
+## 값이 난다. 모따기를 실루엣에서 잘라낸 것과 같은 판단이다(`PaneDeck`).
+## `size` 를 안 받는다 — **헐어 있는 정도는 절대값이라 판 크기와 무관하다**(§20.12).
+static func fray(kind: Kind, reading: Vector2) -> Vector2:
+	if not tells_position(kind) or reading.y <= 0.5:
+		return Vector2(FRAY_CALM, FRAY_CALM)
+	var read := clampf(reading.x, 0.0, 1.0)
+	return Vector2(
+		FRAY_CALM + (FRAY_TORN - FRAY_CALM) * read,
+		FRAY_CALM + (FRAY_TORN - FRAY_CALM) * (1.0 - read)
+	)
 
 
 ## 같은 윤곽을 강세색으로 한 번 더 어긋나게 찍는가. **가장 값싸고 가장 세다**(§20.9.3).
