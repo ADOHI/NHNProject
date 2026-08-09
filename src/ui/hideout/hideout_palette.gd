@@ -14,7 +14,7 @@ const BACKDROP := Color(0.07, 0.08, 0.11)
 ## 바닥 마름모.
 const FLOOR_FILL := Color(0.15, 0.17, 0.21)
 const FLOOR_FILL_ALT := Color(0.13, 0.15, 0.19)
-const FLOOR_LINE := Color(0.22, 0.25, 0.31)
+const FLOOR_LINE := Color(0.27, 0.31, 0.39)
 const BOARD_EDGE := Color(0.40, 0.44, 0.54)
 
 ## 마우스가 올라간 칸.

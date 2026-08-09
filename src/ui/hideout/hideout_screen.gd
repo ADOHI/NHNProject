@@ -26,9 +26,9 @@ const _ZOOM_MAX := 2.5
 ## 시설 셋을 놓아 보는 자리. **잠정이다** — §30.9 ★3(건물 종류)이 정해지면 갈린다.
 ## 발자국 2x2 는 이름 한 줄이 지붕에 들어가는 최소 크기다.
 const _STARTING_LAYOUT: Array[Dictionary] = [
-	{"kind": Facility.Kind.WORKSHOP, "size": Vector2i(2, 2), "at": Vector2i(3, 3)},
-	{"kind": Facility.Kind.INTEL_ROOM, "size": Vector2i(2, 3), "at": Vector2i(12, 4)},
-	{"kind": Facility.Kind.CONTACT_POINT, "size": Vector2i(3, 2), "at": Vector2i(6, 13)},
+	{"kind": Facility.Kind.WORKSHOP, "size": Vector2i(2, 2), "at": Vector2i(2, 2)},
+	{"kind": Facility.Kind.INTEL_ROOM, "size": Vector2i(2, 3), "at": Vector2i(9, 3)},
+	{"kind": Facility.Kind.CONTACT_POINT, "size": Vector2i(3, 2), "at": Vector2i(4, 9)},
 ]
 
 var _grid: HideoutGrid
