@@ -25,23 +25,14 @@ const PLATE_HIGH := Color("#dde5ee")
 const RULE := Color("#6f8098")
 const RULE_SOFT := Color("#93a2b5")
 const INK := Color("#212a37")
-const BODY_INK := Color("#4a5768")
-const FAINT_INK := Color("#7c8798")
 const SHADOW := Color("#a8b1bd")
 const ACCENT := Color("#c0705f")
 const ALARM := Color("#b03a2b")
 
 const TITLE_SIZE: int = 18
-const SECTION_SIZE: int = 14
-const LINE_SIZE: int = 13
-const LINE_STEP: float = 16.0
-const SECTION_GAP: float = 11.0
 
 ## 성향 막대의 길이. 6 축이 나란히 서야 축끼리 비교가 되므로 고정이다.
 const BAR_WIDTH: float = 64.0
-
-## 이름 칸이 줄에서 차지하는 비율. 값은 그 뒤부터다.
-const LABEL_SHARE: float = 0.42
 
 @export var form: LedgerForm.Kind = LedgerForm.Kind.STRATA
 @export var person_name: String = ""
@@ -64,8 +55,7 @@ var paged := false
 var _motion := PopupMotion.new()
 var _driven := false
 
-var _left: Array[Rect2] = []
-var _right: Array[Rect2] = []
+var _ink := SheetPainter.new()
 var _cuts := PackedFloat32Array()
 var _edges := PackedFloat32Array()
 var _reach := PackedFloat32Array()
@@ -264,49 +254,34 @@ func _fly(piece: PackedVector2Array, index: int, count: int) -> PackedVector2Arr
 ## 안 그리는 바퀴. **줄 상자를 재고 이음매 자리를 얻는다.**
 func _plan() -> void:
 	var box := LedgerForm.text_box(form, size)
-	var column := (box.size.x - 18.0) * 0.5
-	var top := box.position.y - scroll
-	_left = []
-	_right = []
-	var floor_left := _column(
-		PersonSheet.LEFT_TITLES, Vector2(box.position.x, top), column, 1.0, true, _left
-	)
-	var floor_right := _column(
-		PersonSheet.RIGHT_TITLES,
-		Vector2(box.position.x + column + 18.0, top),
-		column,
-		1.0,
-		true,
-		_right
-	)
+	_ink.sections = sections
+	_ink.scroll = scroll
+	_ink.paged = paged
+	_ink.plan(box)
 
-	var bottom := maxf(floor_left, floor_right)
-	var holes_left := LedgerLayout.gaps(_left, box.position.y, bottom)
-	var holes_right := LedgerLayout.gaps(_right, box.position.y, bottom)
-	# 이음매가 보이는 형태는 **두 열이 동시에 빈 자리**에만 설 수 있고, 안 보이는
+	var holes: Array[Array] = []
+	for column in _ink.by_column:
+		holes.append(LedgerLayout.gaps(column, box.position.y, _ink.bottom))
+	# 이음매가 보이는 형태는 **모든 열이 동시에 빈 자리**에만 설 수 있고, 안 보이는
 	# 형태는 아무 데나 선다. 자유도가 네 배 다르다 — `LedgerForm.seam_shows()`.
-	var where := (
-		LedgerLayout.common(holes_left, holes_right)
-		if LedgerForm.seam_shows(form)
-		else LedgerLayout.merge(holes_left, holes_right)
-	)
+	var where: Array[Vector2] = holes[0]
+	for i in range(1, holes.size()):
+		where = (
+			LedgerLayout.common(where, holes[i])
+			if LedgerForm.seam_shows(form)
+			else LedgerLayout.merge(where, holes[i])
+		)
 	_cuts = LedgerLayout.cuts(where, LedgerForm.max_bands(form) - 1)
 	_edges = LedgerForm.edges(form, size, _cuts)
-	var all_lines: Array[Rect2] = []
-	all_lines.append_array(_left)
-	all_lines.append_array(_right)
-	_reach = LedgerLayout.reaches(all_lines, _edges)
+	_reach = LedgerLayout.reaches(_ink.lines, _edges)
 	_crossed = 0
 	if LedgerForm.seam_shows(form):
-		_crossed = LedgerLayout.crossings(all_lines, _seams())
+		_crossed = LedgerLayout.crossings(_ink.lines, _seams())
 
-	var far := box.position.x
-	for line in all_lines:
-		far = maxf(far, line.end.x)
-	_below = maxf(0.0, bottom - box.end.y)
+	_below = maxf(0.0, _ink.bottom - box.end.y)
 	# 창이 있는 화면에서 아래로 남은 글은 **넘침이 아니라 아직 안 읽은 것**이다.
 	var spill_down := 0.0 if paged else _below
-	_overflow = Vector2(maxf(0.0, far - box.end.x), spill_down)
+	_overflow = Vector2(maxf(0.0, _ink.widest - box.end.x), spill_down)
 
 
 ## 실제로 판이 갈린 자리. `_cuts` 중 형태가 받아들인 것만 남는다.
@@ -327,179 +302,11 @@ func _write_sheet() -> void:
 		FONT, head, person_name, HORIZONTAL_ALIGNMENT_LEFT, -1, TITLE_SIZE, Color(INK, shown)
 	)
 	draw_rect(Rect2(head.x, head.y + 7.0, 24.0, 2.0), Color(ACCENT, shown))
-
-	var column := (box.size.x - 18.0) * 0.5
-	var top := box.position.y - scroll
-	var spare: Array[Rect2] = []
-	_column(PersonSheet.LEFT_TITLES, Vector2(box.position.x, top), column, shown, false, spare)
-	_column(
-		PersonSheet.RIGHT_TITLES,
-		Vector2(box.position.x + column + 18.0, top),
-		column,
-		shown,
-		false,
-		spare
-	)
+	_ink.paint(self, box, shown)
 	if _overflow.x > 0.5:
 		draw_rect(Rect2(box.end.x, 0.0, 2.0, size.y), Color(ALARM, 0.9 * shown))
 	if _overflow.y > 0.5:
 		draw_rect(Rect2(0.0, box.end.y, size.x, 2.0), Color(ALARM, 0.9 * shown))
-
-
-## 열 하나. `dry` 면 아무것도 안 그리고 `into` 에 줄 상자만 쌓는다.
-##
-## **그리는 바퀴와 같은 함수다.** 다르면 잰 값이 화면과 어긋난다.
-func _column(
-	titles: Array, at: Vector2, wide: float, shown: float, dry: bool, into: Array[Rect2]
-) -> float:
-	var y := at.y
-	for title in titles:
-		var section := PersonSheet.section_of(sections, title)
-		if section == null:
-			continue
-		var head_wide := FONT.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, SECTION_SIZE).x
-		if not _in_view(y - 12.0, 20.0):
-			pass
-		elif dry:
-			into.append(Rect2(at.x, y - 12.0, head_wide, 20.0))
-		else:
-			draw_string(
-				FONT,
-				Vector2(at.x, y),
-				title,
-				HORIZONTAL_ALIGNMENT_LEFT,
-				-1,
-				SECTION_SIZE,
-				Color(INK, shown)
-			)
-			draw_rect(Rect2(at.x, y + 4.0, wide, 1.0), Color(RULE_SOFT, 0.8 * shown))
-		y += 16.0
-		y = _section(section, Vector2(at.x, y), wide, shown, dry, into)
-		y += SECTION_GAP
-	return y
-
-
-func _section(
-	section: SheetSection, at: Vector2, wide: float, shown: float, dry: bool, into: Array[Rect2]
-) -> float:
-	if section.shape == SheetSection.Shape.FRAME:
-		var side := minf(wide, 66.0)
-		if not _in_view(at.y, side):
-			return at.y + side + 4.0
-		if dry:
-			into.append(Rect2(at.x, at.y, side, side))
-		else:
-			draw_rect(Rect2(at.x, at.y, side, side), Color(RULE_SOFT, 0.28 * shown))
-			draw_rect(Rect2(at.x, at.y, side, side), Color(RULE, 0.8 * shown), false, 1.0)
-		return at.y + side + 4.0
-
-	var y := at.y
-	for field in section.fields:
-		y = _field(field, Vector2(at.x, y), wide, shown, dry, into)
-	return y
-
-
-func _field(
-	field: SheetField, at: Vector2, wide: float, shown: float, dry: bool, into: Array[Rect2]
-) -> float:
-	var tone := BODY_INK
-	var text := field.value
-	if field.state == SheetField.State.MISSING:
-		tone = FAINT_INK
-		text = field.reason
-	elif field.state == SheetField.State.HIDDEN:
-		tone = FAINT_INK
-		text = "가려짐"
-
-	if field.label.is_empty():
-		return _flow(text, at, wide, LINE_SIZE, Color(tone, shown), dry, into)
-
-	var label_wide := wide * LABEL_SHARE
-	_put(field.label, at, LINE_SIZE, Color(FAINT_INK, shown), dry, into)
-	var value_x := at.x + label_wide
-	if field.bar < 0.0:
-		return _flow(
-			text,
-			Vector2(value_x, at.y),
-			wide - label_wide,
-			LINE_SIZE,
-			Color(tone, shown),
-			dry,
-			into
-		)
-
-	if not dry:
-		draw_rect(Rect2(value_x, at.y - 9.0, BAR_WIDTH, 5.0), Color(RULE_SOFT, 0.45 * shown))
-		draw_rect(
-			Rect2(value_x, at.y - 9.0, BAR_WIDTH * clampf(field.bar, 0.0, 1.0), 5.0),
-			Color(ACCENT, shown)
-		)
-	# **막대 뒤에 값 글자가 붙는 줄이 앞 판을 옆으로 터뜨렸다**(§20.13.1).
-	# 자리가 모자라면 자르지 않고 다음 줄로 내린다 — 잘린 글자는 넘친 것보다 나쁘다.
-	var rest := wide - label_wide - BAR_WIDTH - 6.0
-	var value_wide := FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, LINE_SIZE).x
-	if value_wide <= rest:
-		_put(
-			text, Vector2(value_x + BAR_WIDTH + 6.0, at.y), LINE_SIZE, Color(tone, shown), dry, into
-		)
-		return at.y + LINE_STEP
-	return _flow(
-		text,
-		Vector2(value_x, at.y + LINE_STEP),
-		wide - label_wide,
-		LINE_SIZE,
-		Color(tone, shown),
-		dry,
-		into
-	)
-
-
-## 이 줄이 창 안에 온전히 들어오나. 스크롤이 없으면 늘 참이다.
-func _in_view(top: float, tall: float) -> bool:
-	if not paged:
-		return true
-	var box := LedgerForm.text_box(form, size)
-	return top >= box.position.y - 1.0 and top + tall <= box.end.y + 1.0
-
-
-## 글줄 하나. 재는 폭과 그리는 폭이 같은 곳이 여기뿐이다.
-func _put(
-	text: String, at: Vector2, points: int, tone: Color, dry: bool, into: Array[Rect2]
-) -> void:
-	var reach := FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, points).x
-	if not _in_view(at.y - float(points), float(points) + 4.0):
-		return
-	if dry:
-		into.append(Rect2(at.x, at.y - float(points), reach, float(points) + 4.0))
-		return
-	draw_string(FONT, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, points, tone)
-
-
-## 폭에 맞춰 감아 여러 줄로 흘린다. **자르지 않는다** — 자르면 잰 값이 거짓이 된다.
-func _flow(
-	text: String, at: Vector2, wide: float, points: int, tone: Color, dry: bool, into: Array[Rect2]
-) -> float:
-	var y := at.y
-	for line in _wrap(text, wide, points):
-		_put(line, Vector2(at.x, y), points, tone, dry, into)
-		y += LINE_STEP
-	return y
-
-
-func _wrap(text: String, wide: float, points: int) -> Array[String]:
-	var out: Array[String] = []
-	var line := ""
-	for word in text.split(" ", false):
-		var trial := word if line.is_empty() else line + " " + word
-		if FONT.get_string_size(trial, HORIZONTAL_ALIGNMENT_LEFT, -1, points).x > wide:
-			if not line.is_empty():
-				out.append(line)
-			line = word
-		else:
-			line = trial
-	if not line.is_empty():
-		out.append(line)
-	return out
 
 
 func _closed(shape: PackedVector2Array) -> PackedVector2Array:
