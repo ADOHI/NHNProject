@@ -43,6 +43,25 @@ const WITNESS_FLOOR := 0.15
 ## **이미 있는 관계는 이 문턱을 안 본다.** 아는 사이의 호감은 조금씩도 움직여야 한다.
 const WITNESS_MARK_MIN := 5
 
+## 전해 들은 이야기가 얼마나 약해지나 (설계 24.10).
+##
+## **1홉만 간다.** 2홉 이상은 계산이 터지고 플레이어가 체감하지도 못한다.
+## 그래서 감쇠를 세게 준다 — 소문이 목격만큼 세면 **목격이 뜻을 잃는다.**
+const RUMOR_DECAY := 0.35
+
+## 소문이 **새 관계를 만들** 호감의 최소 크기.
+##
+## 목격의 문턱(WITNESS_MARK_MIN)보다 높다. **전파는 성김을 죽인다** —
+## 사건마다 연루자 여섯이 각자 아는 사람 두셋에게 전하면 관계가 배로 늘어난다.
+##
+## **그리고 이 문턱이 유명세를 「거리」로 바꾸는 장치다.** 문턱을 낮추면 무명인 사람의
+## 소문도 다 통과해서 유명세가 아무 일도 안 한다 — 실측으로 소문 대상이 유명할 비율이
+## 문턱 8 에서 17%, 5 에서 12% 다 (인구 자체는 7.8%). 설계 24.28.3 에 표가 있다.
+const RUMOR_MARK_MIN := 8
+
+## 한 사건의 소문이 닿을 수 있는 사람 수의 상한.
+const RUMOR_MAX := 24
+
 ## 전멸이 유대로 훑을 때의 문턱. **이 아래는 「유대 높은 사람」이 아니다.**
 ##
 ## 태생 관계의 유대 하한이 사제 45 이므로(KinSeeder) 가족과 스승은 전부 들어오고,
@@ -59,11 +78,24 @@ var _registry: PersonRegistry
 var _graph: RelationGraph
 var _ledger: RelationLedger
 
+## 소문을 퍼뜨리나 (설계 24.10).
+##
+## **끄는 스위치가 있는 이유는 재기 위해서다.** 전파가 성김을 죽이는지는
+## 같은 시드의 세계를 켜고 끄고 두 번 세워야 답이 나온다 — 도구가 그렇게 쓴다
+## (`tools/survey_npc_events.gd`). 게임은 늘 켜고 돈다.
+var _spreads: bool
 
-func _init(registry: PersonRegistry, graph: RelationGraph, ledger: RelationLedger) -> void:
+
+func _init(
+	registry: PersonRegistry,
+	graph: RelationGraph,
+	ledger: RelationLedger,
+	spreads_rumors: bool = true
+) -> void:
 	_registry = registry
 	_graph = graph
 	_ledger = ledger
+	_spreads = spreads_rumors
 
 
 ## 사건 하나를 굴린다. 돌려주는 것은 **근거 사건 id** 이고 그것이 관계에 박힌다.
@@ -86,8 +118,11 @@ func resolve(
 	var cause := _ledger.record(kind, actor, kept)
 	for target in kept:
 		_apply_pair(event, actor, target, cause)
-	for witness in _witnesses(event, actor, kept, witnesses):
+	var seen := _witnesses(event, actor, kept, witnesses)
+	for witness in seen:
 		_apply_witness(event, witness, actor, kept, cause)
+	if _spreads:
+		_spread(event, actor, kept, seen, cause)
 	return cause
 
 
@@ -96,11 +131,17 @@ func _apply_pair(event: RelationEvent, actor: int, target: int, cause: int) -> v
 	# 대상 -> 행위자. 호감이 가장 크게 움직이고 유형과 근거가 남는다.
 	# 유형이 NONE 이면 그 슬롯을 안 건드린다 — 전멸의 대상은 죽은 사람이다.
 	if event.target_kind != RelationKind.Kind.NONE:
-		_graph.adjust(
-			target, actor, event.target_affinity, event.bond_gain, event.target_kind, cause
+		# 당한 사람은 소문으로 안 것이 아니다 — 표시가 남아 있으면 지운다.
+		_graph.set_heard(
+			_graph.adjust(
+				target, actor, event.target_affinity, event.bond_gain, event.target_kind, cause
+			),
+			false
 		)
 	# 행위자 -> 대상. 유대만 오른다. 평판이 굳는 것은 유명세 쪽이고 아직 없다 (설계 24.15).
-	_graph.adjust(actor, target, 0, event.bond_gain, event.actor_kind, cause)
+	_graph.set_heard(
+		_graph.adjust(actor, target, 0, event.bond_gain, event.actor_kind, cause), false
+	)
 
 
 ## 목격자 하나. **여기서만 성향이 작동한다.**
@@ -120,7 +161,10 @@ func _apply_witness(
 	# **유형은 새로 생길 때만 정한다.** 이미 있는 관계의 딱지를 목격이 갈아치우면
 	# 생사고락이 한 번 본 일로 「원한」이 되어 설계 24.2 의 "유형은 딱지" 가 무너진다.
 	if _graph.knows(witness, actor):
-		_graph.adjust(witness, actor, shift, 0, RelationKind.Kind.NONE, cause)
+		# 소문으로 알던 사람을 이번에는 직접 봤다. 그러면 더 이상 들은 이야기가 아니다.
+		_graph.set_heard(
+			_graph.adjust(witness, actor, shift, 0, RelationKind.Kind.NONE, cause), false
+		)
 		return
 
 	# 무색한 사람과 남의 일을 스친 사람은 관계가 안 남는다 (설계 24.21.6) —
@@ -129,6 +173,95 @@ func _apply_witness(
 		return
 	var kind := RelationKind.Kind.TRUST if shift > 0 else RelationKind.Kind.GRUDGE
 	_graph.link(witness, actor, kind, shift, RelationGraph.BOND_MIN, cause)
+
+
+## 소문 — **1홉만 간다** (설계 24.10).
+##
+## *"친구의 원수는 나의 원수."* 그 자리에 없던 사람도 *"그 사람이 배신했다더라"* 를 안다.
+##
+## ## 무엇이 전해지나
+##
+## **사건 그 자체다.** 들은 사람도 제 성향으로 판단한다 — 같은 이야기를 듣고
+## 의리형은 치를 떨고 실리형은 고개를 끄덕인다 (설계 24.4). 규칙이 하나뿐인 것이
+## 여기서도 값을 한다. 다른 것은 셋이다.
+##
+## | | 목격 | 소문 |
+## | --- | --- | --- |
+## | 관여도 | 행위자·대상과의 유대 | **전한 사람과의 유대** — 남의 말은 그 사람만큼만 무겁다 |
+## | 세기 | 그대로 | `RUMOR_DECAY` 만큼 준다 |
+## | 관계에 남는 것 | 「봤다」 | **「들었다」** |
+##
+## ## 유명세가 소문의 거리를 정한다 (설계 24.7)
+##
+## 설계 24.7 — *"무명인 사람 얘기는 아무도 보지 않는다."*
+## 행위자의 유명세가 세기를 밀어 올리고, 문턱이 그것을 **거리**로 바꾼다 —
+## **무명인 사람의 사건은 소문이 아무에게도 안 닿고 유명한 사람의 사건은 멀리 간다.**
+## 유명세 중위가 0 이라(설계 24.16.6) 대부분의 사건은 보정이 없다. 그것이 의도다.
+##
+## ## 저장한다 — 설계 24.10 의 「조회할 때 계산」과 갈린다
+##
+## §24.10 은 전파를 조회 시 보정으로 그렸다. **그러면 화면에 안 나온다** —
+## 관계가 없는 쌍에는 보여줄 줄이 없고, 그러면 *"그 사람이 배신했다더라"* 가
+## 플레이어에게 도달하지 않는다. 전멸(§24.21.7)과 같은 판단으로 여기서는 만든다.
+func _spread(
+	event: RelationEvent,
+	actor: int,
+	targets: PackedInt32Array,
+	witnesses: PackedInt32Array,
+	cause: int
+) -> void:
+	var told := {}
+	told[actor] = true
+	for target in targets:
+		told[target] = true
+	for witness in witnesses:
+		told[witness] = true
+
+	# 전하는 사람은 그 자리에 있던 사람 전부다. 대상은 죽었을 수 있으므로 빼지 않는다 —
+	# 죽은 사람의 이야기를 그 가족이 전한다.
+	var tellers := PackedInt32Array([actor])
+	tellers.append_array(targets)
+	tellers.append_array(witnesses)
+
+	var reach := float(event.strength) * RUMOR_DECAY * _fame_reach(actor)
+	var spread := 0
+	for teller in tellers:
+		for hearer in _graph.mutuals_of(teller):
+			if spread >= RUMOR_MAX:
+				return
+			if told.has(hearer):
+				continue
+			told[hearer] = true
+			if _tell(event, hearer, teller, actor, reach, cause):
+				spread += 1
+
+
+## 한 사람에게 전한다. 관계가 실제로 움직였으면 true.
+func _tell(
+	event: RelationEvent, hearer: int, teller: int, actor: int, reach: float, cause: int
+) -> bool:
+	var trust := float(_graph.bond(hearer, teller)) / float(RelationGraph.BOND_MAX)
+	var shift := roundi(event.alignment(_registry.traits_of(hearer)) * reach * trust)
+	if shift == 0:
+		return false
+
+	# 이미 아는 사이면 호감만 움직인다. **「들었다」 표시는 안 켠다** —
+	# 직접 겪어서 안 사람이 소문을 한 번 들었다고 전해 들은 사이가 되지 않는다.
+	if _graph.knows(hearer, actor):
+		_graph.adjust(hearer, actor, shift, 0, RelationKind.Kind.NONE, cause)
+		return true
+
+	if absi(shift) < RUMOR_MARK_MIN:
+		return false
+	var kind := RelationKind.Kind.TRUST if shift > 0 else RelationKind.Kind.GRUDGE
+	var slot := _graph.link(hearer, actor, kind, shift, RelationGraph.BOND_MIN, cause)
+	_graph.set_heard(slot, true)
+	return true
+
+
+## 유명세가 소문을 얼마나 멀리 보내나. 무명이면 1.0, 유명세 100 이면 2.0.
+func _fame_reach(actor: int) -> float:
+	return 1.0 + float(_registry.fame_of(actor)) / float(PersonGenerator.FAME_MAX)
 
 
 ## 관여도 — **행위자 · 대상 중 가까운 쪽과의 유대 / 100** (설계 24.21.5).

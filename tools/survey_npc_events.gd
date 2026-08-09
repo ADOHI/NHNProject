@@ -24,6 +24,7 @@ func _initialize() -> void:
 	_report_probe()
 	var world := _build_world()
 	_report_graph(world)
+	_report_rumors(world)
 	_report_asymmetry(world)
 	_report_recruit(world)
 	_report_person(world)
@@ -173,6 +174,78 @@ func _report_graph(world: Array) -> void:
 	print("%-26s %s" % ["사건 종류", " ".join(mix)])
 
 
+## **전파가 성김을 죽이지 않았는가** (설계 24.10 · 24.28.3).
+##
+## **같은 시드로 소문 없는 세계를 하나 더 세워 나란히 놓는다.** 소문이 만든 관계만
+## 세면 안 되는 이유가 있다 — 소문이 만든 관계를 **뒤의 사건이 다시 읽어서**
+## 누구를 대상으로 고를지가 달라진다. 세계는 되먹임 고리라 한쪽만 봐서는 못 잰다.
+func _report_rumors(world: Array) -> void:
+	var graph: RelationGraph = world[1]
+	var registry: PersonRegistry = world[0]
+	var quiet := NpcWorld.create(_SEED, _POPULATION, false)
+
+	print("\n== 전파 1홉 (설계 24.10) ==")
+	print(
+		(
+			"%-26s 감쇠 %.2f  문턱 %d  상한 %d"
+			% [
+				"설정",
+				RelationResolver.RUMOR_DECAY,
+				RelationResolver.RUMOR_MARK_MIN,
+				RelationResolver.RUMOR_MAX,
+			]
+		)
+	)
+	print("\n%-14s %10s %10s %12s %10s" % ["", "관계", "한쪽만", "차수 중위/90%", "최대"])
+	_print_sparsity("소문 없음", quiet.graph)
+	_print_sparsity("소문 있음", graph)
+
+	var heard := 0
+	var strongest := 0
+	var famous := 0
+	for slot in graph.size():
+		if not graph.slot_is_heard(slot):
+			continue
+		heard += 1
+		strongest = maxi(strongest, absi(graph.slot_affinity(slot)))
+		if registry.fame_of(graph.slot_to(slot)) >= 50:
+			famous += 1
+	print("\n%-26s %d" % ["소문이 만든 관계", heard])
+	print("%-26s %d" % ["소문 관계의 최대 호감", strongest])
+	# 유명세 50 이상은 인구의 7.8% 다 (설계 24.16.9). 그보다 높으면 유명세가 값을 한 것이다.
+	print(
+		(
+			"%-26s %.0f%% (인구에서는 7.8%%)"
+			% ["소문의 대상이 유명한 비율", 100.0 * float(famous) / maxf(float(heard), 1.0)]
+		)
+	)
+
+
+## 성김 한 줄. **차수가 안 늘어야 설계 24.2 의 예산이 지켜진다.**
+func _print_sparsity(label: String, graph: RelationGraph) -> void:
+	var one_way := 0
+	var degrees := PackedInt32Array()
+	for person in graph.person_count():
+		degrees.append(graph.degree_of(person))
+	for slot in graph.size():
+		if not graph.knows(graph.slot_to(slot), graph.slot_from(slot)):
+			one_way += 1
+	degrees.sort()
+	print(
+		(
+			"%-14s %10d %9.1f%% %6d / %-5d %10d"
+			% [
+				label,
+				graph.size(),
+				100.0 * float(one_way) / maxf(float(graph.size()), 1.0),
+				degrees[degrees.size() / 2],
+				degrees[degrees.size() * 9 / 10],
+				degrees[degrees.size() - 1],
+			]
+		)
+	)
+
+
 ## **비대칭이 실제로 생겼는가.** 태생 관계는 늘 양방향이라 사건만이 한쪽 관계를 만든다.
 func _report_asymmetry(world: Array) -> void:
 	var registry: PersonRegistry = world[0]
@@ -277,20 +350,32 @@ func _report_recruit(world: Array) -> void:
 	)
 
 
-## 관계가 가장 많은 인물의 화면. **상세 화면이 실제로 무엇을 내는지**를 글로 본다.
+## 인물 둘의 화면. **상세 화면이 실제로 무엇을 내는지**를 글로 본다.
+##
+## 가장 엮인 사람과 **소문으로 누군가를 알게 된 사람**을 같이 낸다 —
+## 「봤다」와 「들었다」가 화면에서 갈리는지는 후자에서만 보인다 (설계 24.28.4).
 func _report_person(world: Array) -> void:
 	var registry: PersonRegistry = world[0]
 	var graph: RelationGraph = world[1]
-	var ledger: RelationLedger = world[2]
 
 	var best := 0
 	for person in registry.size():
 		if graph.degree_of(person) > graph.degree_of(best):
 			best = person
-	print("\n== 인물 %d 의 관계 칸과 열전 ==" % best)
-	print(registry.summary_of(best))
+	_print_sheet(world, best, "가장 엮인 인물")
+
+	for slot in graph.size():
+		if graph.slot_is_heard(slot):
+			_print_sheet(world, graph.slot_from(slot), "소문으로 누군가를 알게 된 인물")
+			return
+
+
+func _print_sheet(world: Array, person: int, note: String) -> void:
+	var registry: PersonRegistry = world[0]
+	print("\n== %s — 인물 %d ==" % [note, person])
+	print(registry.summary_of(person))
 	var sections := PersonSheet.build(
-		registry, best, FactionIndex.new(registry), SheetDisclosure.Level.DEV, graph, ledger
+		registry, person, FactionIndex.new(registry), SheetDisclosure.Level.DEV, world[1], world[2]
 	)
 	for title in ["관계", "인물 열전"]:
 		print("-- %s" % title)

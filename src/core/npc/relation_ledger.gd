@@ -67,21 +67,27 @@ func targets_of(cause: int) -> PackedInt32Array:
 
 
 ## 이 사람이 이 사건에서 무엇이었나. 열전이 *"나는 무엇이었나"* 를 말하는 근거다.
-func role_of(cause: int, person: int) -> String:
+##
+## **소문으로 안 것은 목격이 아니다.** 그것은 사건이 아니라 관계가 아는 사실이므로
+## (RelationGraph.is_heard) 호출자가 알려 준다 — 안 가르면 화면이
+## **모두가 모든 것을 목격한 것처럼** 말한다.
+func role_of(cause: int, person: int, heard: bool = false) -> String:
 	if not has(cause):
 		return ""
 	if _actors[cause] == person:
 		return "행위자"
 	if Array(targets_of(cause)).has(person):
 		return "대상"
-	return "목격자"
+	return "소문" if heard else "목격자"
 
 
-## `행위자였다` · `대상이었다`. 받침이 서술어를 가르므로 조사와 같이 낸다.
-func role_phrase(cause: int, person: int) -> String:
-	var role := role_of(cause, person)
+## `행위자였다` · `대상이었다` · `들었다`. 받침이 서술어를 가르므로 조사와 같이 낸다.
+func role_phrase(cause: int, person: int, heard: bool = false) -> String:
+	var role := role_of(cause, person, heard)
 	if role.is_empty():
 		return ""
+	if role == "소문":
+		return "전해 들었다"
 	return "%s%s" % [role, "이었다" if KoreanParticle.has_final(role) else "였다"]
 
 
@@ -97,6 +103,17 @@ func causes_of(graph: RelationGraph, person: int) -> PackedInt32Array:
 	var found := PackedInt32Array(seen.keys())
 	found.sort()
 	return found
+
+
+## 이 사람이 이 사건을 **전해 들었나.** 그 사건을 근거로 삼는 관계에 표시가 있다.
+##
+## 관계마다 다르므로 사건이 아니라 관계에 물어야 한다 (RelationGraph.is_heard) —
+## 같은 배신을 누구는 봤고 누구는 들었다.
+func heard_by(graph: RelationGraph, person: int, cause: int) -> bool:
+	for other in graph.targets_of(person):
+		if graph.cause_of(person, other) == cause:
+			return graph.is_heard(person, other)
+	return false
 
 
 ## 한 줄 사연 — `배신 • 최윤호가 김건규를`.

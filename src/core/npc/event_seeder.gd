@@ -70,12 +70,16 @@ var _by_faction: Dictionary = {}
 
 
 func _init(
-	seed_value: int, registry: PersonRegistry, graph: RelationGraph, ledger: RelationLedger
+	seed_value: int,
+	registry: PersonRegistry,
+	graph: RelationGraph,
+	ledger: RelationLedger,
+	spreads_rumors: bool = true
 ) -> void:
 	_seed = seed_value
 	_registry = registry
 	_graph = graph
-	_resolver = RelationResolver.new(registry, graph, ledger)
+	_resolver = RelationResolver.new(registry, graph, ledger, spreads_rumors)
 	_total = maxi(registry.size() / PEOPLE_PER_EVENT, 1) if registry.size() > 0 else 0
 	_build_buckets()
 

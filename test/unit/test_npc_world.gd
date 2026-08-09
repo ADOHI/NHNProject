@@ -126,7 +126,7 @@ func test_picked_person_has_connections() -> void:
 		var person := world.pick_connected(rng)
 		# **차수가 아니라 서로 아는 수다.** 차수만 크고 아무도 그를 모르는 사람이 있다 —
 		# 전멸을 낸 인솔자가 죽은 사람들에게 한쪽 관계를 쌓는다.
-		assert_gte(world.graph.mutual_degree(person), 2, "시도 %d" % attempt)
+		assert_gte(world.graph.mutuals_of(person).size(), 2, "시도 %d" % attempt)
 
 
 func test_picking_is_deterministic() -> void:

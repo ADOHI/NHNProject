@@ -59,13 +59,17 @@ func _add(traits: PackedInt32Array) -> int:
 
 
 ## 인물의 성향을 갈아 끼운다. 등록 뒤에 바꿀 방법이 없어서 새로 만든다.
-func _world_with(traits: Array) -> void:
+##
+## spreads 를 끄면 **소문이 안 퍼진다.** 행위자·대상 규칙만 보려는 시험은 꺼야 한다 —
+## 안 그러면 앞 사건의 소문이 뒤 사건의 수치를 한둘 밀어 놓는다
+## (그것 자체는 옳은 동작이고 `test_relation_rumor.gd` 가 따로 덮는다).
+func _world_with(traits: Array, spreads: bool = true) -> void:
 	_registry = PersonRegistry.new()
 	for entry in traits:
 		_add(entry as PackedInt32Array)
 	_graph = RelationGraph.new(_registry.size())
 	_ledger = RelationLedger.new()
-	_resolver = RelationResolver.new(_registry, _graph, _ledger)
+	_resolver = RelationResolver.new(_registry, _graph, _ledger, spreads)
 
 
 func _resolve(kind: RelationEvent.Kind, actor: int, target: int, witnesses: Array = []) -> int:
@@ -119,7 +123,8 @@ func test_target_affinity_ignores_traits() -> void:
 			_blank(),
 			_axis(NpcAxis.Kind.LOYAL, 95),
 			_axis(NpcAxis.Kind.LOYAL, -95),
-		]
+		],
+		false
 	)
 	_resolve(RelationEvent.Kind.BETRAYAL, 0, 1)
 	_resolve(RelationEvent.Kind.BETRAYAL, 0, 2)

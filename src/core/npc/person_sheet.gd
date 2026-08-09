@@ -289,8 +289,12 @@ static func _inborn_entry(
 ## 얻은 것 한 줄 — `원한 한쪽만 : 최윤호 호감-31 유대0 [42]`.
 ##
 ## **「한쪽만」이 이 화면에서 가장 중요한 글자다.** 상대가 나를 모르는 관계는
-## 태생으로는 절대 안 생기고(가족은 늘 양방향이다) **사건의 목격자만 만든다**
-## (§24.21.5). 비대칭을 고른 이유가 화면에 드러나는 자리가 여기뿐이다.
+## 태생으로는 절대 안 생기고(가족은 늘 양방향이다) **사건의 목격자와 소문만 만든다**
+## (§24.21.5 · §24.10). 비대칭을 고른 이유가 화면에 드러나는 자리가 여기뿐이다.
+##
+## **「소문」이 「한쪽만」을 대신한다.** 전해 들은 관계는 만들어질 때 늘 한쪽뿐이라
+## (상대는 그런 사람이 있는 줄도 모른다) 둘을 같이 쓰면 같은 말을 두 번 하는 것이고
+## 좁은 열에서 줄이 감긴다. **더 많이 말하는 쪽을 남긴다.**
 ##
 ## 대괄호 안은 근거 사건 번호다. **같은 번호가 열전 칸에 문장으로 있다** —
 ## 좁은 열에 사연을 다 쓰면 줄이 감기므로 번호로 잇는다.
@@ -298,7 +302,9 @@ static func _earned_entry(
 	registry: PersonRegistry, person: int, other: int, graph: RelationGraph, ledger: RelationLedger
 ) -> SheetField:
 	var label := RelationKind.label(graph.kind_of(person, other))
-	if not graph.knows(other, person):
+	if graph.is_heard(person, other):
+		label = "%s 소문" % label
+	elif not graph.knows(other, person):
 		label = "%s 한쪽만" % label
 	var cause := graph.cause_of(person, other)
 	var mark := "" if ledger == null or not ledger.has(cause) else " [%d]" % cause
@@ -347,12 +353,23 @@ static func _chronicle(
 		var shown := causes.slice(maxi(causes.size() - CHRONICLE_SHOWN, 0))
 		for slot in range(shown.size() - 1, -1, -1):
 			var cause: int = shown[slot]
-			section.add(
-				SheetField.filled(
-					"[%d]" % cause,
+			(
+				section
+				. add(
 					(
-						"%s — 나는 %s"
-						% [ledger.describe(cause, registry), ledger.role_phrase(cause, person)]
+						SheetField
+						. filled(
+							"[%d]" % cause,
+							(
+								"%s — 나는 %s"
+								% [
+									ledger.describe(cause, registry),
+									ledger.role_phrase(
+										cause, person, ledger.heard_by(graph, person, cause)
+									),
+								]
+							)
+						)
 					)
 				)
 			)

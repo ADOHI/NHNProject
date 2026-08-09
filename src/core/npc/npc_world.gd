@@ -67,21 +67,29 @@ var ledger: RelationLedger = null
 var factions: FactionIndex = null
 
 var _population: int
+var _spreads: bool
 var _stage := Stage.POPULATION
 var _generator: PersonGenerator
 var _kin: KinSeeder
 var _events: EventSeeder
 
 
-func _init(world_seed: int, population: int = DEFAULT_POPULATION) -> void:
+## spreads_rumors 를 끄면 **소문이 없는 세계**가 선다. 게임은 안 끄고,
+## 전파가 성김을 죽이는지 재는 도구만 쓴다 (설계 24.28.3).
+func _init(
+	world_seed: int, population: int = DEFAULT_POPULATION, spreads_rumors: bool = true
+) -> void:
 	seed_value = world_seed
 	_population = maxi(population, 0)
+	_spreads = spreads_rumors
 	_generator = PersonGenerator.new(world_seed, _population)
 
 
 ## 다 선 세계 하나. 도구와 시험이 쓴다 — 화면은 `build_chunk()` 쪽이다.
-static func create(world_seed: int, population: int = DEFAULT_POPULATION) -> NpcWorld:
-	var world := NpcWorld.new(world_seed, population)
+static func create(
+	world_seed: int, population: int = DEFAULT_POPULATION, spreads_rumors: bool = true
+) -> NpcWorld:
+	var world := NpcWorld.new(world_seed, population, spreads_rumors)
 	while not world.build_chunk():
 		pass
 	return world
@@ -167,7 +175,7 @@ func pick_connected(rng: RandomNumberGenerator, samples: int = LEADER_SAMPLES) -
 	var best_degree := -1
 	for _try in maxi(samples, 1):
 		var person := rng.randi() % registry.size()
-		var degree := 0 if graph == null else graph.mutual_degree(person)
+		var degree := 0 if graph == null else graph.mutuals_of(person).size()
 		if degree > best_degree:
 			best_degree = degree
 			best = person
@@ -189,7 +197,7 @@ func _build_kin() -> void:
 	_kin = null
 	_stage = Stage.EVENTS
 	ledger = RelationLedger.new()
-	_events = EventSeeder.new(seed_value, registry, graph, ledger)
+	_events = EventSeeder.new(seed_value, registry, graph, ledger, _spreads)
 
 
 func _build_events() -> void:
