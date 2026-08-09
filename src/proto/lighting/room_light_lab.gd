@@ -4,6 +4,7 @@ extends Node2D
 ##     godot --path . res://src/proto/lighting/room_light_lab.tscn
 ##     godot --path . res://src/proto/lighting/room_light_lab.tscn -- shot     # 판마다 저장
 ##     godot --path . res://src/proto/lighting/room_light_lab.tscn -- ladder   # 어둠 단계
+##     godot --path . res://src/proto/lighting/room_light_lab.tscn -- normal   # 판 노멀맵
 ##
 ## `docs/design/26-2d-lighting.md` §26.6 의 두 항목을 한 장면이 같이 답한다 —
 ## 소품 알파에서 뽑은 가림 폴리곤이 **화면에서 그림자를 지우는가**, 그리고
@@ -25,6 +26,7 @@ extends Node2D
 ## | `4` | 가림 폴리곤 on/off |
 ## | `5` | 폴리곤 외곽선 보기 |
 ## | `6` | 그림자 필터 순환 (없음 → PCF5 → PCF13) |
+## | `7` | **판 노멀맵** 순환 (없음 → 휘도 → DSINE). §26.4.5 |
 ## | `[` `]` | 폴리곤 `epsilon` (화면 픽셀). 점 수가 즉시 바뀐다 |
 ## | `←` `→` | 카메라 |
 ## | `Tab` | 방 바꾸기 |
@@ -56,9 +58,19 @@ const _FILTER_NAMES: Array[String] = ["없음", "PCF5", "PCF13"]
 const _DARK_STEPS: Array[float] = [1.0, 0.85, 0.70, 0.55, 0.42, 0.30]
 const _DARK_NAMES: Array[String] = ["없음", "0.85", "0.70", "0.55", "0.42", "0.30"]
 
+## 판에 씌울 노멀맵. `없음` → `휘도` → `DSINE` 순으로 돈다 (§26.4.5).
+const _NORMAL_NAMES: Array[String] = ["없음", "휘도", "DSINE", "DSINE 바닥고침"]
+## 모드별 파일 꼬리. 휘도는 파일이 아니라 엔진이 그 자리에서 만든다.
+const _NORMAL_SUFFIX: Array[String] = ["", "", ".normal", ".normal_fixed"]
+## `tools/make_plate_normal.py` 가 적어 둔 판 노멀. 판이 다시 그려지면 **같이 다시 만들어야 한다.**
+const _NORMAL_DIR := "res://.renders-lighting/plate_normal"
+
 var _room := 0
 var _epsilon := 1.0
 var _dark_step := 0
+var _normal_mode := 0
+var _plate_image: Image
+var _normal_cache: Dictionary = {}
 var _lamp_on := false
 var _squad_on := true
 var _occluders_on := true
@@ -88,10 +100,12 @@ var _shot := false
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	_shot = args.has("shot") or args.has("ladder")
+	_shot = args.has("shot") or args.has("ladder") or args.has("normal")
 	_build_nodes()
 	_load_room(_ROOMS[_room])
-	if args.has("ladder"):
+	if args.has("normal"):
+		_run_normal()
+	elif args.has("ladder"):
 		_run_ladder()
 	elif _shot:
 		_run_shots()
@@ -167,7 +181,9 @@ func _load_room(room_id: String) -> void:
 	if plate == null:
 		_note = "파노라마를 못 읽었다: %s" % dir
 		return
-	_plate.texture = ImageTexture.create_from_image(plate)
+	_plate_image = plate
+	_normal_cache.clear()
+	_apply_normal()
 
 	var authored: Array = _manifest.get("screen", [_AUTHORED_WIDTH, 1080])
 	var scale := get_viewport_rect().size.x / float(authored[0])
@@ -249,6 +265,36 @@ func _emitting_props() -> Dictionary:
 	return out
 
 
+## **판에 노멀맵을 씌운다.** `CanvasTexture` 로 감싸야 `PointLight2D` 가 법선을 읽는다 —
+## `Sprite2D.texture` 에 그냥 `ImageTexture` 를 넣으면 노멀 슬롯 자체가 없다.
+##
+## 여기가 §26.4 가 못 본 자리다. 그쪽은 **벽 타일** 한 장을 재료로 봤는데, 실제로 대원
+## 빛이 닿는 것은 **구워진 파노라마**다. 소품도 그림자도 램프 불빛도 이미 그 안에 있다.
+func _apply_normal() -> void:
+	if _plate_image == null:
+		return
+	var texture := CanvasTexture.new()
+	texture.diffuse_texture = ImageTexture.create_from_image(_plate_image)
+	if _normal_mode > 0:
+		var key := _NORMAL_NAMES[_normal_mode]
+		if not _normal_cache.has(key):
+			_normal_cache[key] = _build_normal(_normal_mode)
+		if _normal_cache[key] != null:
+			texture.normal_texture = ImageTexture.create_from_image(_normal_cache[key])
+	_plate.texture = texture
+
+
+func _build_normal(mode: int) -> Image:
+	if mode == 1:
+		return ProtoNormalFromLuminance.build(_plate_image, 2.0)
+	# DSINE 은 GPU 로 만들어 파일에 있다. 없으면 조용히 넘어가지 않고 화면에 적는다.
+	var path := "%s/%s%s.png" % [_NORMAL_DIR, _ROOMS[_room], _NORMAL_SUFFIX[mode]]
+	var image := Image.load_from_file(ProjectSettings.globalize_path(path))
+	if image == null:
+		_note = "DSINE 노멀이 없다: %s\n  python tools/make_plate_normal.py <방 폴더>" % path
+	return image
+
+
 ## **어둠의 색조는 방이 가지고 있다.** 매니페스트 `lights[0].color` 가 그 방의
 ## 채움광이고 (두 방 모두 `[146, 172, 200]`, 차가운 푸른빛이다), 어둠은 그 채움광이
 ## 약해진 것이지 다른 색이 아니다.
@@ -325,10 +371,18 @@ func _status() -> String:
 			% [_DARK_NAMES[_dark_step], _mark(_lamp_on), _mark(_squad_on)]
 		)
 	)
-	lines.append(
-		(
-			"4 가림 %s   5 외곽선 %s   6 그림자필터 %s"
-			% [_mark(_occluders_on), _mark(_outlines_on), _FILTER_NAMES[_filter]]
+	(
+		lines
+		. append(
+			(
+				"4 가림 %s   5 외곽선 %s   6 그림자필터 %s   7 노멀 %s"
+				% [
+					_mark(_occluders_on),
+					_mark(_outlines_on),
+					_FILTER_NAMES[_filter],
+					_NORMAL_NAMES[_normal_mode],
+				]
+			)
 		)
 	)
 	lines.append(
@@ -382,6 +436,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			_outlines_on = not _outlines_on
 		KEY_6:
 			_filter = (_filter + 1) % _FILTERS.size()
+		KEY_7:
+			_normal_mode = (_normal_mode + 1) % _NORMAL_NAMES.size()
+			_apply_normal()
 		KEY_BRACKETLEFT:
 			_epsilon = maxf(0.25, _epsilon - 0.25)
 			_rebuild_occluders()
@@ -495,6 +552,60 @@ func _run_ladder() -> void:
 					)
 				)
 	get_tree().quit()
+
+
+## **판 노멀맵 세 가지를 대원 빛 아래에서 나란히 찍는다.**
+##
+## 판정 기준은 §26.4 와 같다 — **빛이 닿을 때 화면에서 차이가 보이는가.** 다만 재료가
+## 다르다. §26.4 는 벽 타일이었고 여기는 **구워진 파노라마**다. 소품도 그림자도 램프
+## 불빛도 이미 그 안에 들어 있다.
+func _run_normal() -> void:
+	var out := ProjectSettings.globalize_path(_SHOT_DIR)
+	DirAccess.make_dir_recursive_absolute(out)
+	_lamp_on = false
+	_squad_on = true
+	_occluders_on = true
+	_outlines_on = false
+	_dark_step = 3
+	# 소품 위에 빛을 세운다 — **노멀이 뜻이 있다면 소품에서 먼저 보인다.**
+	_squad.position = _anchor_prop() + Vector2(60, -110)
+	print("| 노멀 | 빛 안 밝기 표준편차 | 평균 |")
+	print("| --- | ---: | ---: |")
+	for mode in _NORMAL_NAMES.size():
+		_normal_mode = mode
+		_apply_normal()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		var image := get_viewport().get_texture().get_image()
+		image.save_png("%s/normal_%d_%s.png" % [out, mode, _NORMAL_NAMES[mode]])
+		var stats := _luma_stats(image, _to_screen(_squad.position), 150)
+		print("| %s | **%.2f** | %.1f |" % [_NORMAL_NAMES[mode], stats.y * 255.0, stats.x * 255.0])
+	get_tree().quit()
+
+
+## 상자 안 휘도의 평균(x)과 표준편차(y). **표준편차가 노멀의 몫이다** —
+## 노멀이 일하면 같은 빛 아래에서도 면마다 밝기가 갈리고, 안 하면 고르게 밝아진다.
+func _luma_stats(image: Image, at: Vector2, half: int) -> Vector2:
+	var values := PackedFloat32Array()
+	var x0 := clampi(int(at.x) - half, 0, image.get_width() - 1)
+	var x1 := clampi(int(at.x) + half, 0, image.get_width() - 1)
+	var y0 := clampi(int(at.y) - half, 0, image.get_height() - 1)
+	var y1 := clampi(int(at.y) + half, 0, image.get_height() - 1)
+	for y in range(y0, y1 + 1):
+		for x in range(x0, x1 + 1):
+			var c := image.get_pixel(x, y)
+			values.append(0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b)
+	if values.is_empty():
+		return Vector2.ZERO
+	var mean := 0.0
+	for v in values:
+		mean += v
+	mean /= float(values.size())
+	var variance := 0.0
+	for v in values:
+		variance += (v - mean) * (v - mean)
+	return Vector2(mean, sqrt(variance / float(values.size())))
 
 
 func _to_screen(world: Vector2) -> Vector2:
