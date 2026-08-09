@@ -22,6 +22,23 @@ const VOICE_COUNT := 12
 ## 재생 때 흔드는 피치 폭. 굽지 않고 얻는 변주라 공짜다 (§29.6).
 const PITCH_JITTER := SfxVoice.PITCH_JITTER
 
+## 같은 사건이 이 안에 다시 오면 "겹친 것" 으로 본다.
+const SAME_EVENT_WINDOW := 0.06
+
+## 같은 사건을 동시에 몇 개까지 낼지.
+##
+## **실측으로 정한 값이다** (§29.7.12). 같은 소리가 정확히 같은 순간에 시작하면
+## 어택의 위상이 맞아서 **그대로 배로 더해진다** — 셋이면 피크 1.308 로 넘쳤다.
+## 벌을 돌려 다른 녹음을 걸어도 어택 시각이 같으면 1.116 로 여전히 넘친다.
+const MAX_SAME_EVENT := 3
+
+## 겹칠 때 뒤엣것을 이만큼 앞에서부터 재생한다.
+##
+## **늦추는 것이 아니라 건너뛴다.** 늦추면 지연이 늘지만, 앞을 조금 잘라 내면
+## 위상만 어긋나고 타이밍은 그대로다. 어차피 첫 소리에 가려 안 들리는 구간이다.
+## 4 ms 만 어긋나도 여섯이 겹쳐서 0.839 로 떨어졌다.
+const STAGGER_SECONDS := 0.0035
+
 var _bank := SfxBank.new()
 var _voices: Array[AudioStreamPlayer] = []
 var _next_voice := 0
@@ -30,6 +47,8 @@ var _rng := RandomNumberGenerator.new()
 var _enabled := true
 ## 자리가 없어 못 낸 소리 수. 실측용이지 게임 로직이 읽는 값이 아니다.
 var _dropped := 0
+## 사건별 최근 재생 시각. 같은 소리가 겹치는 것을 보기 위한 것이다.
+var _recent: Dictionary = {}
 
 
 func _ready() -> void:
@@ -49,7 +68,12 @@ func _ready() -> void:
 func play(event: SfxEvent.Kind, weight: float = -1.0) -> bool:
 	if not _enabled:
 		return false
-	return _start(_bank.stream_for(event, weight, _next_pick()))
+	var overlapping := _count_recent(event)
+	# 같은 소리를 넷 이상 겹쳐 봐야 커지기만 하고 또렷해지지 않는다.
+	if overlapping >= MAX_SAME_EVENT:
+		_dropped += 1
+		return false
+	return _start(_bank.stream_for(event, weight, _next_pick()), overlapping * STAGGER_SECONDS)
 
 
 ## 요청을 직접 낸다. 프로토 화면(src/proto/sfx/)이 축을 만져 볼 때 쓴다.
@@ -78,6 +102,7 @@ func is_enabled() -> bool:
 func stop_all() -> void:
 	for voice in _voices:
 		voice.stop()
+	_recent.clear()
 
 
 ## 지금 울리고 있는 소리 수.
@@ -97,15 +122,28 @@ func bank() -> SfxBank:
 	return _bank
 
 
-func _start(stream: AudioStreamWAV) -> bool:
+func _start(stream: AudioStreamWAV, from_position: float = 0.0) -> bool:
 	var voice := _free_voice()
 	if voice == null:
 		_dropped += 1
 		return false
 	voice.stream = stream
 	voice.pitch_scale = 1.0 + _rng.randf_range(-PITCH_JITTER, PITCH_JITTER)
-	voice.play()
+	voice.play(minf(from_position, maxf(stream.get_length() - 0.01, 0.0)))
 	return true
+
+
+## 이 사건이 방금 몇 번 났나. 창을 벗어난 기록은 버린다.
+func _count_recent(event: SfxEvent.Kind) -> int:
+	var now := Time.get_ticks_msec() / 1000.0
+	var times: Array = _recent.get(event, [])
+	var kept: Array = []
+	for at in times:
+		if now - float(at) < SAME_EVENT_WINDOW:
+			kept.append(at)
+	kept.append(now)
+	_recent[event] = kept
+	return kept.size() - 1
 
 
 func _free_voice() -> AudioStreamPlayer:

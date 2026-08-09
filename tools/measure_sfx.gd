@@ -28,6 +28,7 @@ func _init() -> void:
 	_overlap()
 	_polyphony()
 	_variation()
+	_same_sound_overlap()
 	_ui_versus_combat()
 	print("")
 	quit()
@@ -302,6 +303,80 @@ func _variation() -> void:
 		for b in range(a + 1, rendered.size()):
 			pair_min = minf(pair_min, _difference(rendered[a], rendered[b]))
 	print("벌끼리 최소 차이  %.1f %%   (0 이면 같은 소리다)" % (100.0 * pair_min))
+
+
+## **같은 소리가 겹칠 때.** 데모는 하나씩 차례로 내므로 여기가 안 드러난다.
+##
+## 전투 레인 실측으로 적 셋이면 2.2초 안에 우리가 눕는다. 그 사이 타격이 여러 번 나고,
+## 여럿이 같은 프레임에 맞으면 **같은 파형이 그대로 더해진다.**
+## 같은 파형끼리는 위상이 맞아서 두 배가 되고(+6 dB), 서로 다른 녹음은 그만큼 안 는다.
+func _same_sound_overlap() -> void:
+	print("")
+	print("--- 같은 소리가 같은 순간에 겹칠 때 ---")
+	print("겹친 수   같은 벌(최악)   벌을 돌림   피치까지 흔듦")
+	var request := SfxCatalog.request_for(SfxEvent.Kind.HIT_LANDED).with_weight(2.0)
+	var span := int(1.5 * COMMON_RATE)
+	for count in [1, 2, 3, 4, 6]:
+		var same := PackedFloat32Array()
+		var rotated := PackedFloat32Array()
+		var jittered := PackedFloat32Array()
+		same.resize(span)
+		rotated.resize(span)
+		jittered.resize(span)
+		for index in count:
+			# (가) 최악 - 같은 벌이 그대로 겹친다
+			SfxSynth.mix_into(same, _at_common(SfxRender.render(request, 0)), 0)
+			# (나) 은행이 하는 것 - 벌을 돌려 다른 녹음이 걸린다
+			SfxSynth.mix_into(rotated, _at_common(SfxRender.render(request, index)), 0)
+			# (다) 재생 때 pitch_scale 까지 흔든 것에 준하는 상태
+			var shifted := _at_common(SfxRender.render(request, index))
+			SfxSynth.mix_into(jittered, shifted, int(index * 0.004 * COMMON_RATE))
+		print(
+			(
+				"   %d      %8.3f      %8.3f     %8.3f"
+				% [count, SfxSynth.peak(same), SfxSynth.peak(rotated), SfxSynth.peak(jittered)]
+			)
+		)
+	print("같은 벌이 겹치면 정확히 배로 는다 - 위상이 같아서다")
+
+	# 실제 전투 상황. 적 셋이 각자 체인을 돌린다.
+	print("")
+	print("--- 실제 전투 (적 셋, 2.2초) ---")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var field := PackedFloat32Array()
+	field.resize(int(3.2 * COMMON_RATE))
+	var hits := 0
+	for attacker in 3:
+		var phase := rng.randf() * CHAIN_INTERVAL
+		var at := phase
+		while at < 2.2:
+			var weight := 1.0 + float(attacker)
+			var clip := SfxRender.render(
+				SfxCatalog.request_for(SfxEvent.Kind.HIT_LANDED).with_weight(weight), hits % 3
+			)
+			SfxSynth.mix_into(field, _at_common(clip), int(at * COMMON_RATE))
+			# 맞은 쪽 소리도 같이 난다
+			var reaction := SfxRender.render(
+				SfxCatalog.request_for(SfxEvent.Kind.HIT_REACTION).with_weight(weight), hits % 3
+			)
+			SfxSynth.mix_into(field, _at_common(reaction), int(at * COMMON_RATE))
+			hits += 1
+			at += CHAIN_INTERVAL * 2.0
+	var peak := SfxSynth.peak(field)
+	print(
+		(
+			"타격 %d회 (소리 %d개) 피크 %.3f  RMS %.3f  %s"
+			% [
+				hits,
+				hits * 2,
+				peak,
+				SfxSynth.rms(field),
+				"넘침" if peak > 1.0 else "여유",
+			]
+		)
+	)
+	print("리미터 천장 -1 dB (0.891) 대비 %s" % ("넘어서 눌린다" if peak > 0.891 else "안 걸린다"))
 
 
 func _ui_versus_combat() -> void:
