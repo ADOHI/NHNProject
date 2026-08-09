@@ -14,15 +14,14 @@ extends Node2D
 ## 그래서 사람과 건물을 **한 노드에서 같은 자로 정렬해 그린다** — 노드를 나누면
 ## 사람이 항상 건물 위이거나 항상 아래가 된다. 이 파일이 그 합침을 맡는다.
 
-## 대원 키(px). **잠정이다** — 이 값을 재려고 세운 것이다.
+## 대원 키(칸). 칸 한 변을 2 m 로 보면 사람 1.7 m 는 0.85 칸이다.
 ##
-## 유도: 칸 한 변을 2 m 로 보면 사람 1.7 m 는 0.85 칸이고,
-## 칸 한 변 높이가 64 px(`IsoProjection.CELL_HEIGHT_PX`)이므로 **54 px** 이 된다.
-## 그림에서 나온 값이 아니라 격자에서 나온 값이다.
-const PERSON_HEIGHT := 54.0
+## **픽셀로 박지 않는다.** 격자 비율이 갈리면 같이 갈려야 한다 —
+## 3:1 에서 54 px 이던 것이 2:1 에서는 50 px 이다.
+const PERSON_CELLS := 0.85
 
-## 몸 굵기(px). 키의 3할이면 사람으로 읽히고 그보다 굵으면 통으로 보인다.
-const PERSON_WIDTH := 17.0
+## 몸 굵기는 키에 견준다. 3할이면 사람으로 읽히고 그보다 굵으면 통으로 보인다.
+const PERSON_WIDTH_RATIO := 0.32
 
 ## 발밑 그림자의 가로 반지름(px). 접지가 없으면 사람이 떠 보인다.
 const SHADOW_RADIUS := 11.0
@@ -33,6 +32,11 @@ var _crowd: HideoutCrowd
 
 ## 지금 집어 든 대원. ⑤ 가 쓸 자리이고 지금은 강조만 한다.
 var _highlight := -1
+
+
+## 대원 키(px). 격자 비율에서 나온다.
+static func person_height_px() -> float:
+	return IsoProjection.height_to_px(PERSON_CELLS)
 
 
 func bind(iso: IsoProjection, grid: HideoutGrid, crowd: HideoutCrowd) -> void:
@@ -86,12 +90,10 @@ func _draw_person(index: int) -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	var body := HideoutPalette.PERSON_LIT if lit else HideoutPalette.PERSON
-	var half := PERSON_WIDTH * 0.5
-	var head := PERSON_HEIGHT * 0.30
-	draw_rect(
-		Rect2(foot.x - half, foot.y - PERSON_HEIGHT + head, PERSON_WIDTH, PERSON_HEIGHT - head),
-		body
-	)
-	draw_circle(Vector2(foot.x, foot.y - PERSON_HEIGHT + head * 0.5), head * 0.62, body)
+	var tall := person_height_px()
+	var wide := tall * PERSON_WIDTH_RATIO
+	var head := tall * 0.30
+	draw_rect(Rect2(foot.x - wide * 0.5, foot.y - tall + head, wide, tall - head), body)
+	draw_circle(Vector2(foot.x, foot.y - tall + head * 0.5), head * 0.62, body)
 	if lit:
 		draw_arc(foot, SHADOW_RADIUS + 4.0, 0.0, TAU, 20, HideoutPalette.HOVER_LINE, 2.0)

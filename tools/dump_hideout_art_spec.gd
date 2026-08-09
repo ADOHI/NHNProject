@@ -43,12 +43,16 @@ func _initialize() -> void:
 
 func _view_spec() -> Dictionary:
 	var iso := IsoProjection.new()
+	var tile_w := iso.tile_width()
+	var tile_h := iso.tile_height()
+	var ratio := tile_w / maxf(1.0, tile_h)
+	var projection := "dimetric 2:1" if is_equal_approx(ratio, 2.0) else "쿼터뷰 %.0f:1" % ratio
 	return {
-		"projection": "쿼터뷰 3:1",
-		"tile_width_px": iso.tile_width(),
-		"tile_height_px": iso.tile_height(),
-		"pitch_degrees": snappedf(rad_to_deg(asin(iso.tile_height() / iso.tile_width())), 0.01),
-		"cell_height_px": IsoProjection.CELL_HEIGHT_PX,
+		"projection": projection,
+		"tile_width_px": tile_w,
+		"tile_height_px": tile_h,
+		"pitch_degrees": snappedf(rad_to_deg(asin(tile_h / tile_w)), 0.01),
+		"cell_height_px": snappedf(IsoProjection.cell_height_px(), 0.01),
 	}
 
 
@@ -56,13 +60,16 @@ func _rules() -> Dictionary:
 	return {
 		"pivot": "바닥 마름모의 아래꼭짓점. 캔버스 왼쪽 위에서 잰다",
 		"pivot_reason": "그림이 위로 자라도 땅에 닿는 자리가 안 움직여야 한다",
-		"storey_height_px": IsoProjection.CELL_HEIGHT_PX * HideoutBuildingArt.STOREY_CELLS,
+		"storey_height_px": snappedf(
+			IsoProjection.cell_height_px() * HideoutBuildingArt.STOREY_CELLS, 0.01
+		),
 		"max_storeys": HideoutBuildingArt.MAX_STOREYS,
 		"margin_px": HideoutBuildingArt.MARGIN_PX,
-		"occlusion": "N 층은 바로 뒤 2N 칸을 완전히 가린다",
+		"occlusion": "높이를 tile_height 로 나눈 몫만큼 바로 뒤를 완전히 가린다 (IsoProjection.hidden_cells_behind)",
 		"door_face": "남서쪽 벽(화면에서 왼쪽 아래를 보는 면) 한 곳뿐",
 		"door_reason": "카메라도 건물도 돌지 않는다. 네 방향을 그릴 이유가 없다",
-		"style": "미정 — 아지트 화풍이 정해지면 여기에 문장이 들어간다",
+		"style": "1990s anime cel, high chroma, one small complementary accent area, hard specular highlights",
+		"fit": "알파 아래끝→기준점 · 가로 가운데 · 가로 배율 (30-hideout §30.10.7). 그리드 발자국에 맞춤",
 	}
 
 

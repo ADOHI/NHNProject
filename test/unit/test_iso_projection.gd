@@ -18,12 +18,12 @@ func test_origin_sits_at_zero() -> void:
 
 func test_x_axis_goes_right_and_down() -> void:
 	var iso := _iso()
-	assert_eq(iso.cell_to_world(Vector2i(1, 0)), Vector2(48.0, 16.0))
+	assert_eq(iso.cell_to_world(Vector2i(1, 0)), Vector2(48.0, 24.0))
 
 
 func test_y_axis_goes_left_and_down() -> void:
 	var iso := _iso()
-	assert_eq(iso.cell_to_world(Vector2i(0, 1)), Vector2(-48.0, 16.0))
+	assert_eq(iso.cell_to_world(Vector2i(0, 1)), Vector2(-48.0, 24.0))
 
 
 func test_round_trip_returns_the_same_cell() -> void:
@@ -74,7 +74,7 @@ func test_rect_polygon_covers_the_whole_footprint() -> void:
 	var single := iso.cell_polygon(Vector2i(2, 2))
 	var span := iso.rect_polygon(Vector2i(2, 2), Vector2i(2, 2))
 	assert_eq(span[0], single[0], "위 꼭짓점은 원점 칸의 것과 같다")
-	assert_eq(span[2].y, single[2].y + 32.0, "2x2 는 세로로 한 칸 더 내려간다")
+	assert_eq(span[2].y, single[2].y + 48.0, "2x2 는 세로로 한 칸 더 내려간다")
 
 
 func test_depth_grows_towards_the_viewer() -> void:
@@ -90,15 +90,21 @@ func test_rect_depth_uses_the_front_corner() -> void:
 	assert_gt(big, IsoScript.rect_depth(Vector2i(0, 0), Vector2i(1, 1)))
 
 
-## 시점은 캐릭터 그림에 맞춘 것이지 고른 것이 아니다 (§30.9 ★1 — 확정).
+## 건물 그림이 이 각도로 확정됐다 (LANE-RULES §5 — dimetric 2:1 · 26.57도).
 ##
-## 이 비율이 조용히 바뀌면 인물이 바닥과 어긋난 채로 서 있게 되고, 그것은
-## 눈으로 봐야만 잡힌다. 값을 여기서 못 박아 둔다.
-func test_default_view_is_the_quarter_view_matched_to_the_characters() -> void:
+## 이 비율이 조용히 바뀌면 건물이 바닥과 어긋난 채로 앉고, 그것은 눈으로 봐야만 잡힌다.
+func test_default_view_is_the_confirmed_dimetric() -> void:
 	var iso := _iso()
 	assert_eq(iso.tile_width(), 96.0)
-	assert_eq(iso.tile_height(), 32.0)
-	assert_almost_eq(iso.tile_height() / iso.tile_width(), 1.0 / 3.0, 0.001, "3:1 쿼터뷰")
+	assert_eq(iso.tile_height(), 48.0)
+	assert_almost_eq(iso.tile_height() / iso.tile_width(), 0.5, 0.001, "2:1 dimetric")
+	assert_almost_eq(rad_to_deg(atan(iso.half_height / iso.half_width)), 26.57, 0.01, "모서리 26.57도")
+
+
+## 칸 높이는 상수가 아니라 **비율에서 나온다.** 3:1 일 때 박아 둔 64 가 혼자 낡았었다.
+func test_cell_height_follows_the_ratio() -> void:
+	assert_almost_eq(IsoScript.cell_height_px(), 58.79, 0.01)
+	assert_almost_eq(IsoScript.height_to_px(2.0), IsoScript.cell_height_px() * 2.0, 0.001)
 
 
 ## 시점을 바꾸는 지점은 이 두 값뿐이다.
@@ -110,4 +116,4 @@ func test_tile_size_is_the_only_knob() -> void:
 
 func test_board_size_grows_with_both_axes() -> void:
 	var iso := _iso()
-	assert_eq(iso.board_size(20, 20), Vector2(1920.0, 640.0))
+	assert_eq(iso.board_size(20, 20), Vector2(1920.0, 960.0))

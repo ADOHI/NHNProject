@@ -3,7 +3,7 @@
     {
       "canvas": [
         208,
-        144
+        200
       ],
       "facility": 0,
       "file": "workshop_1l.png",
@@ -14,37 +14,37 @@
       "ground_polygon_north_east_south_west": [
         [
           104.0,
-          72.0
+          96.0
         ],
         [
           200.0,
-          104.0
+          144.0
         ],
         [
           104.0,
-          136.0
+          192.0
         ],
         [
           8.0,
-          104.0
+          144.0
         ]
       ],
       "ground_size": [
         192,
-        64
+        96
       ],
-      "hides_cells_behind": 2,
+      "hides_cells_behind": 1,
       "label": "공방",
       "pivot": [
         104,
-        136
+        192
       ],
       "storeys": 1
     },
     {
       "canvas": [
         208,
-        208
+        288
       ],
       "facility": 0,
       "file": "workshop_2l.png",
@@ -55,37 +55,37 @@
       "ground_polygon_north_east_south_west": [
         [
           104.0,
-          136.0
+          184.0
         ],
         [
           200.0,
-          168.0
+          232.0
         ],
         [
           104.0,
-          200.0
+          280.0
         ],
         [
           8.0,
-          168.0
+          232.0
         ]
       ],
       "ground_size": [
         192,
-        64
+        96
       ],
-      "hides_cells_behind": 4,
+      "hides_cells_behind": 3,
       "label": "공방",
       "pivot": [
         104,
-        200
+        280
       ],
       "storeys": 2
     },
     {
       "canvas": [
         256,
-        160
+        224
       ],
       "facility": 1,
       "file": "intel_room_1l.png",
@@ -96,37 +96,37 @@
       "ground_polygon_north_east_south_west": [
         [
           104.0,
-          72.0
+          96.0
         ],
         [
           248.0,
-          104.0
+          144.0
         ],
         [
           104.0,
-          152.0
+          216.0
         ],
         [
           8.0,
-          120.0
+          168.0
         ]
       ],
       "ground_size": [
         240,
-        80
+        120
       ],
-      "hides_cells_behind": 2,
+      "hides_cells_behind": 1,
       "label": "정보실",
       "pivot": [
         104,
-        152
+        216
       ],
       "storeys": 1
     },
     {
       "canvas": [
         256,
-        224
+        312
       ],
       "facility": 1,
       "file": "intel_room_2l.png",
@@ -137,37 +137,37 @@
       "ground_polygon_north_east_south_west": [
         [
           104.0,
-          136.0
+          184.0
         ],
         [
           248.0,
-          168.0
+          232.0
         ],
         [
           104.0,
-          216.0
+          304.0
         ],
         [
           8.0,
-          184.0
+          256.0
         ]
       ],
       "ground_size": [
         240,
-        80
+        120
       ],
-      "hides_cells_behind": 4,
+      "hides_cells_behind": 3,
       "label": "정보실",
       "pivot": [
         104,
-        216
+        304
       ],
       "storeys": 2
     },
     {
       "canvas": [
         256,
-        160
+        224
       ],
       "facility": 2,
       "file": "contact_point_1l.png",
@@ -178,37 +178,37 @@
       "ground_polygon_north_east_south_west": [
         [
           152.0,
-          72.0
+          96.0
         ],
         [
           248.0,
-          120.0
+          168.0
         ],
         [
           152.0,
-          152.0
+          216.0
         ],
         [
           8.0,
-          104.0
+          144.0
         ]
       ],
       "ground_size": [
         240,
-        80
+        120
       ],
-      "hides_cells_behind": 2,
+      "hides_cells_behind": 1,
       "label": "접선처",
       "pivot": [
         152,
-        152
+        216
       ],
       "storeys": 1
     },
     {
       "canvas": [
         256,
-        224
+        312
       ],
       "facility": 2,
       "file": "contact_point_2l.png",
@@ -219,30 +219,30 @@
       "ground_polygon_north_east_south_west": [
         [
           152.0,
-          136.0
-        ],
-        [
-          248.0,
           184.0
         ],
         [
+          248.0,
+          256.0
+        ],
+        [
           152.0,
-          216.0
+          304.0
         ],
         [
           8.0,
-          168.0
+          232.0
         ]
       ],
       "ground_size": [
         240,
-        80
+        120
       ],
-      "hides_cells_behind": 4,
+      "hides_cells_behind": 3,
       "label": "접선처",
       "pivot": [
         152,
-        216
+        304
       ],
       "storeys": 2
     }
@@ -251,19 +251,20 @@
   "rules": {
     "door_face": "남서쪽 벽(화면에서 왼쪽 아래를 보는 면) 한 곳뿐",
     "door_reason": "카메라도 건물도 돌지 않는다. 네 방향을 그릴 이유가 없다",
+    "fit": "알파 아래끝→기준점 · 가로 가운데 · 가로 배율 (30-hideout §30.10.7). 그리드 발자국에 맞춤",
     "margin_px": 8,
     "max_storeys": 2,
-    "occlusion": "N 층은 바로 뒤 2N 칸을 완전히 가린다",
+    "occlusion": "높이를 tile_height 로 나눈 몫만큼 바로 뒤를 완전히 가린다 (IsoProjection.hidden_cells_behind)",
     "pivot": "바닥 마름모의 아래꼭짓점. 캔버스 왼쪽 위에서 잰다",
     "pivot_reason": "그림이 위로 자라도 땅에 닿는 자리가 안 움직여야 한다",
-    "storey_height_px": 64.0,
-    "style": "미정 — 아지트 화풍이 정해지면 여기에 문장이 들어간다"
+    "storey_height_px": 88.18,
+    "style": "1990s anime cel, high chroma, one small complementary accent area, hard specular highlights"
   },
   "view": {
-    "cell_height_px": 64.0,
-    "pitch_degrees": 19.47,
-    "projection": "쿼터뷰 3:1",
-    "tile_height_px": 32.0,
+    "cell_height_px": 58.79,
+    "pitch_degrees": 30.0,
+    "projection": "dimetric 2:1",
+    "tile_height_px": 48.0,
     "tile_width_px": 96.0
   }
 }

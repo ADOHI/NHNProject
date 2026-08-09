@@ -22,17 +22,22 @@ extends RefCounted
 ## 아래꼭짓점을 고른 두 번째 이유는 **그리는 차례와 같은 점**이기 때문이다 —
 ## `IsoProjection.rect_depth` 도 발자국의 앞 모서리로 순서를 정한다 (§30.2).
 
-## 층 하나의 높이(칸). 1층 = 칸 한 변 높이 = 64 px.
+## 층 하나의 높이(칸).
 ##
-## **잠정이다.** 사람 키와 견줘 정한 값이 아니라 **격자에서 딱 떨어지는 값**으로 잡았다.
-## 배회(①)에 사람이 서 보면 그때 견줄 수 있다.
-const STOREY_CELLS := 1.0
+## **1.5 다.** 칸 한 변을 2 m 로 보면 한 층(3 m)은 1.5 칸이다.
+##
+## 처음에는 1.0 으로 뒀다 — 격자에서 딱 떨어져서였지 사람 키에서 나온 값이 아니었다.
+## 그러자 **1층 건물이 사람과 키가 비슷해 담으로 보였다**(§30.12.2).
+## 배회에 사람을 세우고 나서야 드러난 것이다.
+const STOREY_CELLS := 1.5
 
 ## **높이 상한(층).** 이보다 높은 건물은 그리지 않는다.
 ##
-## 근거는 가림이다 — §30.10.3. N 층 건물은 바로 뒤 **2N 칸**을 완전히 가린다.
-## 2층이면 네 칸이고, 14 칸짜리 판(§30.9.1)에서 네 칸은 이미 크다.
-## **3층을 허용하면 여섯 칸이 사라져 뒤쪽 절반이 안 보인다.**
+## 근거는 가림이다 — §30.10.3. 2:1 에서 1층은 뒤 **1 칸**, 2층은 **3 칸**을 가린다.
+## 14 칸짜리 판(§30.9.1)에서 세 칸이면 21% 다.
+##
+## 3:1 이었을 때는 같은 층 높이에 2층이 **여섯 칸(43%)** 을 가렸다. 그것이 2:1 로 옮긴
+## 결정적인 이유다 (§30.12.2).
 const MAX_STOREYS := 2
 
 ## 그림 가장자리에 두는 여백(px). 외곽선과 글로우가 잘리지 않게 한다.
@@ -44,11 +49,12 @@ const MARGIN_PX := 8
 
 ## 이 발자국의 **바닥 마름모** 크기(px). 그림에서 땅에 닿는 부분이다.
 ##
-## 가로 `48 x (w+h)` · 세로 `16 x (w+h)` — 발자국이 무엇이든 **항상 3:1** 이다.
+## 가로 `half_width x (w+h)` · 세로 `half_height x (w+h)`.
+## 타일 비가 2:1 이면 바닥 마름모도 **항상 2:1** 이다 (발자국과 무관).
 static func ground_size(footprint: Vector2i) -> Vector2i:
 	var span := _clamped(footprint)
 	var reach := span.x + span.y
-	return Vector2i(48 * reach, 16 * reach)
+	return Vector2i(int(_half_width()) * reach, int(_half_height()) * reach)
 
 
 ## 그림 한 장의 캔버스 크기(px). 바닥 마름모 + 솟는 높이 + 여백.
@@ -65,7 +71,7 @@ static func canvas_size(footprint: Vector2i, storeys: int) -> Vector2i:
 static func pivot(footprint: Vector2i, storeys: int) -> Vector2i:
 	var span := _clamped(footprint)
 	var canvas := canvas_size(footprint, storeys)
-	return Vector2i(MARGIN_PX + 48 * span.x, canvas.y - MARGIN_PX)
+	return Vector2i(MARGIN_PX + int(_half_width()) * span.x, canvas.y - MARGIN_PX)
 
 
 ## 캔버스 안에서 바닥 마름모의 네 점. 위 - 오른쪽 - 아래 - 왼쪽 순서다.
@@ -79,9 +85,9 @@ static func ground_polygon(footprint: Vector2i, storeys: int) -> PackedVector2Ar
 	return PackedVector2Array(
 		[
 			south + Vector2(0.0, -ground.y),
-			south + Vector2(48.0 * span.y, -16.0 * span.y),
+			south + Vector2(_half_width() * span.y, -_half_height() * span.y),
 			south,
-			south + Vector2(-48.0 * span.x, -16.0 * span.x),
+			south + Vector2(-_half_width() * span.x, -_half_height() * span.x),
 		]
 	)
 
@@ -92,6 +98,16 @@ static func hidden_cells_behind(storeys: int) -> int:
 	return iso.hidden_cells_behind(
 		IsoProjection.height_to_px(_clamped_storeys(storeys) * STOREY_CELLS)
 	)
+
+
+## 마름모 반폭. **여기서만 IsoProjection 을 읽는다** — 픽셀 숫자를 이 파일에 박으면
+## 비율을 바꿀 때 발주서만 혼자 낡는다.
+static func _half_width() -> float:
+	return IsoProjection.DEFAULT_TILE_WIDTH * 0.5
+
+
+static func _half_height() -> float:
+	return IsoProjection.DEFAULT_TILE_HEIGHT * 0.5
 
 
 static func _clamped(footprint: Vector2i) -> Vector2i:

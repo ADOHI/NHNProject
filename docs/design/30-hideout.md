@@ -1,12 +1,16 @@
 # 30. 아지트 화면 — 아이소메트릭 거점
 
-> **상태: 착수.** 이 문서는 코드보다 먼저 쓰였고, 판단이 바뀔 때마다 여기를 고친다.
-> **④ 시점 · ③ 배치 · ① 배회가 선다. 건물 그림 규격(§30.10)도 나왔다.**
-> 나머지 절은 만들 것을 적어 둔 자리다.
+> **상태: 진행 중 (건물 에셋 · fit 대기).** 이 문서는 코드보다 먼저 쓰였고, 판단이 바뀔 때마다 여기를 고친다.
+>
+> **④ 시점(2:1) · ③ 배치 · ① 배회가 선다.** 건물 그림은 **그리드 규격 + fit** (§30.10.7).
+> 다음 작업: 생성 산출물 도착 → `fit` → 그리드 배치·캡처. 이어받기 요약은 **§30.14** 와
+> [`HANDOFF-hideout.md`](../HANDOFF-hideout.md).
 >
 > [`22-guild-base.md`](22-guild-base.md) 와 **다른 층이다.** 22 는 아지트의 *규칙*
 > (자원 · 시설 효과 · 정산)을 정했고 `src/ui/base/` 에 배선 확인용 사각형 화면을 두었다.
 > 이 문서는 그 규칙이 **공간으로 보이는 화면**을 정한다. 22 의 코어를 그대로 쓴다.
+>
+> **브랜치:** `hideout` · 워크트리 `.claude/worktrees/hideout` · **main 에 아직 없음.**
 
 ---
 
@@ -98,7 +102,8 @@
 
 ### 투영식
 
-**2:1 마름모.** 칸 하나가 가로 `TILE_W` · 세로 `TILE_H` 이고 `TILE_W = 2 × TILE_H` 다.
+**2:1 마름모 (현재 확정).** 칸 하나가 가로 `TILE_W` · 세로 `TILE_H` 이고 `TILE_W = 2 × TILE_H` 다.
+(한때 3:1 로 두었다가 §30.12 로 되돌렸다. 식의 형태는 같고 상수만 다르다.)
 
 ```
 screen.x = (cell.x - cell.y) * TILE_W / 2
@@ -109,35 +114,26 @@ screen.y = (cell.x + cell.y) * TILE_H / 2
 **둘이 왕복해도 같은 칸이 나오는지를 테스트가 지킨다** — 아이소에서 가장 흔한
 버그가 클릭한 칸과 그려진 칸이 한 칸씩 어긋나는 것이다.
 
-### 30.2.1 각도는 캐릭터 그림에서 읽었다 — ★1 확정
+### 30.2.1 시점 비율 — ★1 (이력 → **2:1 확정**)
 
-> **쿼터뷰 3:1. `TILE_W = 96 · TILE_H = 32`. 내려보는 각 약 19.5도.**
+> **현재: dimetric 2:1. `TILE_W = 96 · TILE_H = 48`. 피치 30° · 마름모 모서리 26.57°.**
+> 코드: `IsoProjection.DEFAULT_TILE_WIDTH/HEIGHT`. 아래는 **어떻게 여기 왔는지** 기록이다.
 
-사용자 답: **「쿼터뷰 (캐릭터와 맞춤)」** — 캐릭터를 이미 사선 사이드뷰로 뽑고 있으니
-바닥을 거기 맞추면 캐릭터를 다시 안 뽑아도 된다. **각도를 정한 것은 그림이지 취향이 아니다.**
+**1차 (폐기):** 인물 시트(`pp1_*`) 접지·장화를 보고 **3:1** 을 골랐다.
+사용자 답 「쿼터뷰 (캐릭터와 맞춤)」에 맞춘 것이었으나, 시트는 게임 카메라 증거가 약했다
+(§30.12.3).
 
-세로/가로 = sin(내려보는 각) 이다. 그래서 비율 하나가 곧 카메라 각이다.
+| 비율 | 각 | 1차 판단 (시트 기준) | 이후 |
+| --- | --- | --- | --- |
+| **2:1** | **30°** | 인물이 판때기처럼 보임 | **채택** — 가림·건물 각 |
+| 3:1 | 19.5° | 시트와 맞아 보임 | **폐기** — 2층이 판 43% 가림 |
+| 4:1 | 14.5° | 칸 뭉개짐 | 폐기 |
 
-| 비율 | 각 | 그림과 겹쳐 본 결과 |
-| --- | --- | --- |
-| 2:1 | 30도 | **인물이 기울어진 상 위에 세운 판때기로 읽힌다.** 바닥이 인물보다 훨씬 빨리 눕는다 |
-| **3:1** | **19.5도** | **맞는다.** 바닥이 눕는 속도가 인물의 접지 그림자와 어긋나지 않고, 칸도 읽힌다 |
-| 4:1 | 14.5도 | 칸이 뭉개져 깊이가 안 읽힌다. 지붕 면도 납작해진다 |
+**2차 (확정):** 배회에 사람을 세운 뒤 층 높이·가림을 재니 3:1 불가 (§30.12.2).
+건물 그림 각도도 2:1. **`DEFAULT_TILE_HEIGHT` 32→48.**
 
-인물 그림(`pp1_*`)에서 읽은 근거 둘. **숫자로 정하지 않고 발밑을 확대해서 봤다.**
-
-- **접지 그림자가 고인 웅덩이가 아니라 얇은 칼날이다.** 30도로 내려다보면 훨씬 둥글어야 한다
-- **장화 윗면이 거의 안 보인다.** 발등과 밑창을 거의 옆에서 본다 — 카메라가 낮다는 뜻이다
-
-레이맨 파츠(`hand_near`/`far` · `foot_near`/`far`)도 같은 쪽을 가리킨다.
-가까운 발이 먼 발보다 화면에서 겨우 20px 아래에 있다(`parts.json` 무게중심).
-가로로 270px 벌어진 데 비해 세로 차가 그것뿐이면 **바닥이 아주 완만하다.**
-
-> **고칠 때는 `IsoProjection` 의 상수 둘만 고친다.** 2:1 에서 3:1 로 옮기면서
-> `HideoutGrid` · 격자 테스트 · 겹침 규칙은 **한 줄도 안 건드렸다.** §30.2 의 값이 이것이다.
-
-**건물 높이는 같이 안 따라간다.** 카메라가 낮으면 벽이 바닥보다 크게 보이므로
-`BUILDING_HEIGHT` 를 44 -> 58 로 올렸다. 벽 높이는 바닥의 기울기가 아니라 **실제 높이**를 따른다.
+> **고칠 때는 `IsoProjection` 상수만 고친다.** 격자·배치·배회는 칸 단위라 안 건드린다.
+> 발주서·JSON 은 dump 로 다시 뽑는다.
 
 ### 30.2.2 게임 안에서 확인했다 — ★8
 
@@ -426,14 +422,15 @@ godot --path . res://src/ui/hideout/hideout_screen.tscn
 
 | ★ | 물음 | 답 | 어디에 |
 | --- | --- | --- | --- |
-| ★1 | 아이소메트릭인가 쿼터뷰인가 | **쿼터뷰 3:1 (`TILE 96×32`, 약 19.5도).** 캐릭터 그림에 맞춰 읽었다 | §30.2.1 |
+| ★1 | 시점 비율 | **dimetric 2:1 (`TILE 96×48`, 피치 30°).** 3:1 을 썼다가 배회+가림으로 되돌림. **코드에 반영됨** (`IsoProjection.DEFAULT_TILE_HEIGHT = 48`) | §30.2.1, §30.12.3 |
 | ★5 | 아지트에 시간이 흐르는가 | **나중에 정한다. 지금은 시계 없이 — 배회는 연출.** 조건: 시계가 붙어도 배회 쪽만 고치면 되게 | §30.3.4 |
 | ★4 | 이동 코어를 어디까지 옮기는가 | **아래층 둘(`nav_grid`·`flow_field`)만 `src/core/nav/` 로. 위층은 그대로** | §30.3.5 |
 | ★8 | 창을 띄워 확인해도 되나 | **된다.** 띄워서 확인했고 바로 놓았다 | §30.2.2 |
-| — | 건물 그림 규격 | **나왔다.** 캔버스 · 기준점 · 높이 상한 2층 · 문 한 방향 | §30.10 |
+| — | 건물 그림 규격 | **나왔다.** 캔버스 · 기준점 · 높이 상한 2층 · 문 한 방향. **숫자는 코어/JSON 이 진실** | §30.10 |
 | ★9 | 아지트 화풍 | **인물 화풍 그대로.** 전부 하나다 — 오브젝트 전용 화풍은 폐기 | §30.10.1 |
-| — | 자르는 기준 | **알파 아래끝 -> 기준점 · 가로 가운데 · 가로로 배율.** 도구까지 냈다 | §30.10.7 |
+| — | 자르는 기준 (fit) | **알파 아래끝 → 기준점 · 가로 가운데 · 가로 배율.** 그리드 캔버스에 맞춤 | §30.10.7 |
 | ★2 | 아지트 판 크기 | **임시로 14 × 14.** 창에 띄워 보고 20×20 에서 줄였다 | §30.9.1 |
+| ★10 | 건물 배치·에셋 정합 | **그리드 + fit 유지.** 충돌식 자유 배치(「스티커」)는 검토만 하고 **채택 안 함** | §30.13 |
 
 ### 열린 것
 
@@ -442,7 +439,6 @@ godot --path . res://src/ui/hideout/hideout_screen.tscn
 | ★3 | 건물 종류 | **시설 셋뿐** (공방 · 정보실 · 접선처, §22.4) | 늘리면 §22.4 의 "배치가 결정" 이 흐려진다. 늘릴지 말지가 기획 판단 |
 | ★6 | 아지트에 있는 인원은 대원뿐인가 | 대원뿐 | §24 는 인물 3000명을 만든다. 손님 · 지나가는 사람이 있는가는 정해진 바 없다 |
 | ★7 | 자원 종류 | **자금 하나** (`Guild.funds`) | ③의 건설 비용이 여기 걸린다. 건축 자재 같은 축을 늘릴지가 기획 판단 |
-| ★8 | 화면 캡처를 위해 창을 띄워도 되는가 | 안 띄웠다 | 각도를 PIL 로만 확인했다. 게임 안에서 본 적이 없다 (§30.2.2) |
 
 ### 30.9.1 ★2 판 크기 — 임시로 14 × 14 로 뒀다
 
@@ -454,12 +450,12 @@ godot --path . res://src/ui/hideout/hideout_screen.tscn
 | 건물 셋이 차지하는 비율 | 4 % (사백 칸에 흩어져 텅 빈 벌판) | **8 %** |
 | 빈 칸 | 384 | 180 |
 
-**마름모의 가로세로 비는 칸 수와 무관하다 — 항상 3:1 이다.** 타일 비가 정하기 때문이다.
+**마름모의 가로세로 비는 칸 수와 무관하다 — 타일 비가 정한다. 지금은 항상 2:1 이다.**
 그래서 「세로를 늘리든 가로를 줄이든」으로 화면을 채울 방법이 없고,
 **손잡이는 칸 수 하나뿐**이었다.
 
 아지트는 **사람이 돌아다니는 것을 지켜보는 화면**이므로 줌 없이 다 보이는 쪽을 골랐다.
-3:1 판을 16:9 화면에 넣으면 위아래가 남는데, 그 자리는 ⑥(메뉴 · 출정)이 앉을 곳이다.
+2:1 판을 16:9 화면에 넣으면 위아래가 남는데, 그 자리는 ⑥(메뉴 · 출정)이 앉을 곳이다.
 
 **배회(①)를 넣어 보고 다시 정한다.** 열몇 명이 180 칸에서 어떻게 보이는지는
 아직 아무도 못 봤고, 이 값은 그때 가장 크게 흔들릴 값이다.
@@ -482,25 +478,30 @@ python tools/draw_hideout_art_template.py                           # json -> �
 
 ### 30.10.1 한 장에 필요한 것
 
+> **아래 표는 2026-08-10 기준 코어 산출이다.** 갱신:
+> `godot --headless --path . -s res://tools/dump_hideout_art_spec.gd`
+> → `docs/design/hideout-building-art.json`. **표와 JSON 이 갈리면 JSON 이 맞다.**
+
 | | 값 |
 | --- | --- |
-| 형식 | PNG · RGBA · 배경 투명 |
-| 시점 | **쿼터뷰 3:1, 내려보는 각 19.47도** (§30.2.1) |
-| **한 층 높이** | **64 px** — 칸 한 변의 높이와 같다 |
-| **높이 상한** | **2층 (128 px).** 근거는 §30.10.3 |
-| 여백 | 사방 8 px. 외곽선이 배경 제거에 먹히는 것을 막는다 |
+| 형식 | PNG · RGBA · 배경 투명 (생성 직후는 단색 배경 허용 → fit 이 키잉) |
+| 시점 | **dimetric 2:1**, 내려보는 각 **30°**, 마름모 모서리 **26.57°** (`TILE 96×48`) |
+| **한 층 높이** | **약 88 px** (`cell_height_px ≈ 58.79` × `STOREY_CELLS 1.5`) |
+| **높이 상한** | **2층.** 가림은 `hidden_cells_behind` — 2:1 에서 1층 ≈ 1칸, 2층 ≈ 3칸 |
+| 여백 | 사방 8 px |
+| **정합** | **fit → 그리드 캔버스** (§30.10.7). 생성 원본을 발주 크기에 맞춘다 |
 | **화풍** | **인물 화풍 그대로 — 전부 하나다** (LANE-RULES §5)<br>`1990s anime cel, high chroma, one small complementary accent area, hard specular highlights` |
 
-건물 종류별 캔버스와 기준점 — **밑그림 PNG 가 이미 이 치수로 깔려 있다.**
+건물 종류별 캔버스와 기준점 (**2:1 타일 기준, dump 결과**):
 
-| 시설 | 발자국 | 바닥 마름모 | 캔버스 1층 | 캔버스 2층 | 기준점 x |
+| 시설 | 발자국 | 바닥 마름모 | 캔버스 1층 | 캔버스 2층 | 기준점 (1층) |
 | --- | --- | --- | --- | --- | --- |
-| 공방 | 2 x 2 | 192 x 64 | 208 x 144 | 208 x 208 | 104 (가운데) |
-| 정보실 | 2 x 3 | 240 x 80 | 256 x 160 | 256 x 224 | **104 (가운데 아님)** |
-| 접선처 | 3 x 2 | 240 x 80 | 256 x 160 | 256 x 224 | **152 (가운데 아님)** |
+| 공방 | 2 × 2 | **192 × 96** (2:1) | **208 × 200** | **208 × 288** | (104, 192) 가운데 x |
+| 정보실 | 2 × 3 | **240 × 120** (2:1) | **256 × 224** | **256 × 312** | (**104**, 216) x 아님 |
+| 접선처 | 3 × 2 | **240 × 120** (2:1) | **256 × 224** | **256 × 312** | (**152**, 216) x 아님 |
 
-바닥 마름모는 발자국이 무엇이든 **항상 3:1** 이다 — `48 x (w+h)` 대 `16 x (w+h)`.
-타일 비가 정하는 것이라 발자국으로는 못 바꾼다.
+바닥 마름모는 발자국이 무엇이든 **항상 타일 비와 같다 (지금 2:1)**.
+`half_width×(w+h)` 대 `half_height×(w+h)`.
 
 ### 30.10.2 기준점은 바닥 마름모의 **아래꼭짓점**이다
 
@@ -521,15 +522,14 @@ python tools/draw_hideout_art_template.py                           # json -> �
 
 > **N 층 건물은 바로 뒤 2N 칸을 완전히 가린다.**
 
-화면에서 대각선 위로 한 칸 물러나면 세로로 마름모 하나(32 px)만큼 올라간다.
-그래서 가려지는 칸 수는 **높이 ÷ 32** 다.
+화면에서 대각선 위로 한 칸 물러나면 세로로 마름모 하나(`tile_height`, 지금 **48 px**)만큼 올라간다.
+그래서 가려지는 칸 수는 **높이 ÷ tile_height** 다. 값은 `IsoProjection.hidden_cells_behind` 이 잰다.
 
-| 높이 | px | 뒤로 가리는 칸 |
+| 높이 | 대략 px (2:1) | 뒤로 가리는 칸 (공식·실측) |
 | --- | --- | --- |
-| 0.5층 | 32 | 1 |
-| **1층** | **64** | **2** |
-| **2층** | **128** | **4** |
-| 3층 | 192 | 6 |
+| **1층** | **~88** | **1** |
+| **2층** | **~176** | **3** |
+| 3층 | ~264 | (상한 밖) |
 
 **공식만 믿지 않았다.** `test_hideout_building_art.gd` 가 칸의 꼭짓점 넷을 건물 실루엣에
 실제로 넣어 보고 세며, 그 개수가 공식과 같은지 확인한다. 1층·2층 둘 다 맞았다.
@@ -742,22 +742,19 @@ python tools/fit_hideout_building_art.py <원본.png> --facility workshop --stor
 
 지금 모인 것을 나란히 놓으면:
 
-| | 3:1 | 2:1 |
+| | 3:1 (폐기) | **2:1 (채택 · 코드 반영)** |
 | --- | --- | --- |
-| 건물 그림 각도 | 안 맞는다 | **확정된 각도가 이쪽** (`dimetric 2:1, 26.57°`) |
-| 인물 시트의 접지 | 맞는다 | 안 맞는다 — **다만 시트는 카메라 증거가 약하다** |
-| 2층 건물의 가림 | 판의 43% | **21%** |
-| 한 칸 높이 | 정확히 64.0 px | 58.8 px (안 떨어진다) |
-| 바닥 타일 | 다시 안 뽑아도 된다 | **다시 안 뽑아도 된다** (타일 레인 실측) |
-| 내 쪽 전환 비용 | — | **상수 둘 + 재생성 한 번** |
+| 건물 그림 각도 | 안 맞음 | **dimetric 2:1, 26.57°** |
+| 인물 시트의 접지 | 맞아 보였음 | 시트는 카메라 증거가 약했음 (§30.12.3 위) |
+| 2층 가림 | 판의 43% | **약 21%** |
+| 한 칸 세로 높이 | 64.0 px (딱 떨어짐) | ≈ 58.8 px |
+| 전환 비용 | — | `DEFAULT_TILE_HEIGHT` 32→48 + dump/밑그림 재생성 |
 
-**바뀔 것: `IsoProjection` 의 `DEFAULT_TILE_HEIGHT` 32 -> 48 하나.**
-발주서 · 밑그림 · 맞추는 도구는 전부 코어에서 생성되므로 명령 두 줄이면 따라온다 (§30.10).
-`HideoutGrid` · 배치 · 배회는 **한 줄도 안 바뀐다** — 전부 칸으로만 계산한다.
+**적용:** `IsoProjection.DEFAULT_TILE_HEIGHT = 48`. 격자·배치·배회는 칸 단위라 로직 변경 없음.
+발주서·JSON 은 dump 로 다시 뽑는다 (§30.10).
 
-> ★ **사람 판단이 필요하다.** 건물 각도가 2:1 로 확정됐다면 격자도 2:1 이어야 하고,
-> 그러면 게임용 인물 스프라이트도 2:1 로 맞춰야 한다(아직 없으니 잃을 것은 없다).
-> **나는 2:1 을 권한다** — 확정된 건물 각도와 맞고, 가림이 절반이 되고, 내 비용이 거의 없다.
+> **확정.** 사람 키가 선 뒤의 가림 수치가 결정타였다. 인물 시트 각도는 기각.
+> 게임용 인물 스프라이트도 2:1 에 맞춘다 (아직 없으면 잃을 것 없음).
 
 ### 30.12.4 아직 잠정인 것
 
@@ -773,3 +770,151 @@ python tools/fit_hideout_building_art.py <원본.png> --facility workshop --stor
 §30.11.1 에서 「대원이 아직 없어 못 정한다」고 미뤘던 것 — **이제 대원이 선다.**
 잴 기준도 그때 적어 뒀다: **대원 한 명을 집을 수 있는가.**
 대원은 화면에서 54 px 이고 몸통은 17 px 이다. UI 킷이 알갱이 장을 주면 그 위에 얹어 잰다.
+
+---
+
+## 30.13 ★10 건물 정합 — **그리드 + fit** (충돌식 · 「스티커」 폐기)
+
+> **오해 정리 (2026-08-10):** 대화 중 「스티커」는 **그리드를 버리고 충돌로 자유 배치할 때**
+> 의 비유였다. **그리드 + fit 경로의 아트 모드 이름이 아니다.**
+> fit 으로 캔버스·기준점·가로에 맞춘 뒤에는 스티커 모드 같은 별칭이 필요 없다.
+> 문서에 `art_mode: sticker` 를 넣었던 것은 **잘못**이었고 제거했다.
+
+### 30.13.1 채택 / 폐기
+
+| | |
+| --- | --- |
+| **채택** | **칸 그리드** (`HideoutGrid`) + **fit** (§30.10.7) → 규격 캔버스에 건물 그림 |
+| **폐기** | 그리드 포기 후 **충돌 박스 자유 배치** (「스티커 붙이기」) |
+| **보류** | 생성 각도가 어긋날 때 fit 에 호모그래피/전단을 더할지 — 필요하면 별도 허가 |
+
+규칙은 칸이 진실이고, 그림은 **그 칸 발주서에 fit 된 텍스처**다.
+
+### 30.13.2 생성 파이프라인
+
+```
+1) 사람: 이미지 생성 (GPT Image 등) — 프롬프트 §30.13.4
+2) 원본 보관: docs/design/samples/hideout_art/in/
+3) fit: python tools/fit_hideout_building_art.py <원본> --facility workshop --storeys 1
+   → 그리드 발주 캔버스(workshop_1l 등)에 맞춤
+4) 화면: hideout UI 가 fit 된 PNG 를 기준점에 그림
+5) 검증: capture_hideout + GUT
+```
+
+**fit 이 맞추는 것 (§30.10.7):**
+
+1. 세로 — 알파 맨 아래 → 기준점(바닥 마름모 아래꼭짓점)
+2. 가로 — 알파 bbox 가운데 → 캔버스 가운데
+3. 배율 — 알파 가로 ≈ 바닥 마름모 가로 (그리드 접지 폭)
+4. 손보정 — `fit_overrides.json` (`dx` / `dy` / `scale`)
+
+### 30.13.3 생성 프롬프트 — 공방 1층 (첫 장)
+
+**목표 규격 (코드 dump):** 발자국 2×2 · 바닥 마름모 192×96 (2:1) · 캔버스 208×200 · 기준점 (104, 192).
+
+생성 해상도 **1024×1024** 권장. 모델은 footprint 숫자를 못 지키므로 **비율·구도**로 말하고,
+**fit 이 그리드 규격에 맞춘다.**
+
+**Positive**
+
+```
+Single small guild workshop building prop for a 2D isometric game, isolated object only,
+no ground plane texture, no grid lines, no UI, no characters, no text, no watermark.
+
+Camera: true dimetric 2:1 isometric (side angles ~26.6°), looking down ~30 degrees,
+same as classic SNES/iso city builders. NOT top-down, NOT side-view, NOT random 3/4 RPG tilt.
+
+Footprint / massing (so the asset can be fit onto a 2:1 diamond tile footprint):
+- The building sits on a diamond ground footprint whose width:height ratio is exactly 2:1
+- Footprint covers about 2×2 map tiles (compact, not a skyscraper)
+- Full subject bounding box including roof is roughly square (~1:1 width:height),
+  about as tall as it is wide — one storey only, low roof, no tower, no tall chimney
+- Building width on screen should feel ~2 tiles wide
+
+Building: small urban hunter-guild workshop / garage-forge hybrid in a modern gate-fantasy city,
+concrete and sheet metal, roll-up door on the southwest face (lower-left visible wall),
+windows on the southeast face (lower-right wall), small roof equipment, humble not monumental.
+
+Style: 1990s anime cel, high chroma, one small complementary accent area,
+hard specular highlights, clean readable silhouette, game building prop,
+flat solid color background (pure white or pure #00FF00 chroma key), full body of building visible with margin.
+
+Composition: centered, entire building in frame, generous empty margin around silhouette,
+ground contact is a clean bottom tip of the diamond (no floating), no drop shadow needed.
+```
+
+**Negative**
+
+```
+perspective vanishing points, 3-point perspective, top-down orthographic, side scroller view,
+ultra tall building, multi-storey tower, skyscraper, huge chimney, characters, people, cars,
+street, full city block, terrain, grass, asphalt ground plane filling the image,
+text, logo, watermark, frame, UI, multiple buildings, collage, cropped roof, cropped base
+```
+
+정보실(2×3)·접선처(3×2)·2층은 같은 틀에서 발자국·층수만 바꾸고, 전체 bbox 비는
+§30.10.1 표의 캔버스 비를 따른다.
+
+### 30.13.4 다른 시설 생성 시 한 줄 힌트
+
+| 파일 | 발자국 | 바닥 마름모 | 캔버스 1층 | 전체 비 W:H |
+| --- | --- | --- | --- | --- |
+| `workshop_1l` | 2×2 | 192×96 | 208×200 | ≈1.04 (거의 정사각) |
+| `intel_room_1l` | 2×3 | 240×120 | 256×224 | ≈1.14 |
+| `contact_point_1l` | 3×2 | 240×120 | 256×224 | ≈1.14 |
+| `*_2l` | 같음 | 같음 | 세로 +~88 | 더 김 |
+
+---
+
+## 30.14 이어받기 (다음 에이전트 · 클로드 코드)
+
+### 지금 상태 (2026-08-10)
+
+| 항목 | 상태 |
+| --- | --- |
+| 브랜치 / 워크트리 | `hideout` / `.claude/worktrees/hideout` — **main 미머지** |
+| ④ 시점 2:1 | 코드 반영 (`iso_projection.gd` 등). **커밋 여부 확인** |
+| ③ 배치 · ① 배회 | 선다 |
+| 건물 정합 | **그리드 + fit** (§30.10.7 · §30.13). 충돌식/스티커 모드 **아님** |
+| 건물 생성 그림 | **사용자 추출 대기.** 첫 장은 공방 1층 · 프롬프트 §30.13.3 |
+| ② 끌어넣기 · ⑤ 줌/말풍선 · ⑥ 메뉴 | 미착수 |
+| `main.tscn` 연결 | **안 함** (의도) |
+
+### 사용자가 파일을 주면 할 일 (순서)
+
+1. 원본을 `docs/design/samples/hideout_art/in/` 에 두고 경로 기록
+2. 규격 최신화:
+   ```bash
+   godot --headless --path . -s res://tools/dump_hideout_art_spec.gd
+   ```
+3. **fit → 그리드 발주 캔버스:**
+   ```bash
+   python tools/fit_hideout_building_art.py <원본.png> --facility workshop --storeys 1
+   ```
+4. 산출물을 화면이 읽는 경로/이름에 연결 (`workshop_1l.png` 등 — painter/UI preload 확인)
+5. 캡처:
+   ```bash
+   godot --path . -s res://tools/capture_hideout.gd
+   ```
+   (GPU 짧게 · 끝나면 정리. CLAUDE.md GPU 규칙)
+6. 검증:
+   ```bash
+   godot --headless --path . --import
+   godot --headless --path . -s res://addons/gut/gut_cmdln.gd
+   ```
+7. 문서: 이 절·`HANDOFF-hideout.md` 에 fit 결과·캡처 경로 기록
+
+### 하지 말 것 (다시)
+
+- 그리드 → 물리 충돌 재설계 / 「스티커 모드」 재도입
+- 공용 문서(`11`·`ai-usage`·`architecture`)를 레인에서 멋대로 길게 개편
+- `main` 강제 머지 / 다른 레인 워크트리 정리
+
+### 알려진 함정
+
+| 함정 | 대응 |
+| --- | --- |
+| 옛 문서·밑그림 PNG 가 **3:1(96×32)** 수치 | **무시.** 코드·`hideout-building-art.json` 이 진실 |
+| dump 가 `CELL_HEIGHT_PX` 로 깨지던 것 | **`cell_height_px()` 로 고침** |
+| 문서에 `art_mode: sticker` 가 남아 있음 | **오기록.** 제거함. 보이면 지울 것 |
+| 워킹트리 2:1 미커밋 | `git status` 확인 후 이어서 |

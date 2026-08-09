@@ -14,26 +14,27 @@ const BuildingScript := preload("res://src/core/hideout/hideout_building.gd")
 # ------------------------------------------------------------------ 캔버스와 기준점
 
 
-## 바닥 마름모는 발자국이 무엇이든 3:1 이다 — 타일 비가 정하기 때문이다.
-func test_ground_is_always_three_to_one() -> void:
+## 바닥 마름모는 발자국이 무엇이든 2:1 이다 — 타일 비가 정하기 때문이다.
+func test_ground_is_always_two_to_one() -> void:
 	for footprint in [Vector2i.ONE, Vector2i(2, 2), Vector2i(2, 3), Vector2i(3, 2)]:
 		var ground := ArtScript.ground_size(footprint)
-		assert_eq(ground.x, ground.y * 3, "%s 가 3:1 이 아니다" % footprint)
+		assert_eq(ground.x, ground.y * 2, "%s 가 2:1 이 아니다" % footprint)
 
 
 func test_the_two_by_two_ground_is_the_number_we_quoted() -> void:
-	assert_eq(ArtScript.ground_size(Vector2i(2, 2)), Vector2i(192, 64))
-	assert_eq(ArtScript.ground_size(Vector2i(2, 3)), Vector2i(240, 80))
-	assert_eq(ArtScript.ground_size(Vector2i(3, 2)), Vector2i(240, 80))
+	assert_eq(ArtScript.ground_size(Vector2i(2, 2)), Vector2i(192, 96))
+	assert_eq(ArtScript.ground_size(Vector2i(2, 3)), Vector2i(240, 120))
+	assert_eq(ArtScript.ground_size(Vector2i(3, 2)), Vector2i(240, 120))
 
 
 ## 캔버스는 바닥 + 솟는 높이 + 여백 양쪽이다.
-func test_canvas_grows_by_one_cell_height_per_storey() -> void:
+func test_canvas_grows_by_one_storey_at_a_time() -> void:
 	var one := ArtScript.canvas_size(Vector2i(2, 2), 1)
 	var two := ArtScript.canvas_size(Vector2i(2, 2), 2)
-	assert_eq(two.y - one.y, int(IsoScript.CELL_HEIGHT_PX), "한 층은 칸 한 변 높이다")
+	var storey := int(IsoScript.height_to_px(ArtScript.STOREY_CELLS))
+	assert_eq(two.y - one.y, storey, "한 층씩 자란다")
 	assert_eq(one.x, two.x, "층이 늘어도 가로는 그대로다")
-	assert_eq(one, Vector2i(192 + 16, 64 + 64 + 16))
+	assert_eq(one, Vector2i(192 + 16, 96 + storey + 16))
 
 
 ## 기준점은 바닥 마름모의 아래꼭짓점이고, **가운데가 아니다.**
@@ -54,9 +55,10 @@ func test_square_footprints_do_land_on_the_centre() -> void:
 func test_taller_art_does_not_move_the_ground_contact() -> void:
 	var one := ArtScript.ground_polygon(Vector2i(2, 2), 1)
 	var two := ArtScript.ground_polygon(Vector2i(2, 2), 2)
+	var storey := float(int(IsoScript.height_to_px(ArtScript.STOREY_CELLS)))
 	for index in one.size():
 		var moved: Vector2 = two[index] - one[index]
-		assert_eq(moved.y, 64.0, "캔버스가 커진 만큼만 내려간다 — 기준점 기준으로는 제자리")
+		assert_eq(moved.y, storey, "캔버스가 커진 만큼만 내려간다 — 기준점 기준으로는 제자리")
 		assert_eq(moved.x, 0.0)
 
 
@@ -106,10 +108,12 @@ func test_hidden_count_matches_a_vertex_by_vertex_count() -> void:
 		assert_eq(counted, ArtScript.hidden_cells_behind(storeys), "%d층" % storeys)
 
 
-## N 층이 뒤 2N 칸을 가린다 — 이 한 줄이 높이 상한의 근거다.
-func test_each_storey_costs_two_cells_of_sight() -> void:
-	assert_eq(ArtScript.hidden_cells_behind(1), 2)
-	assert_eq(ArtScript.hidden_cells_behind(2), 4)
+## 2:1 로 옮기면서 가림이 절반이 됐다. 이 두 줄이 그 이득의 증거다 (§30.12.2).
+##
+## 3:1 에서는 같은 층 높이에 1층 3칸 · 2층 6칸(판의 43%)이었다.
+func test_two_to_one_halves_the_occlusion() -> void:
+	assert_eq(ArtScript.hidden_cells_behind(1), 1)
+	assert_eq(ArtScript.hidden_cells_behind(2), 3)
 
 
 func test_height_cap_is_enforced_where_it_is_used() -> void:
@@ -117,15 +121,21 @@ func test_height_cap_is_enforced_where_it_is_used() -> void:
 		"tall", Facility.Kind.WORKSHOP, Vector2i(2, 2), Vector2i.ZERO, 9
 	)
 	assert_eq(tall.storeys, ArtScript.MAX_STOREYS, "상한을 넘겨 지을 수 없다")
-	assert_eq(tall.hidden_cells_behind(), 4)
+	assert_eq(tall.hidden_cells_behind(), 3)
 
 
-func test_a_storey_is_exactly_one_cell_of_height() -> void:
-	assert_eq(IsoScript.height_to_px(1.0), 64.0)
+## 한 층은 1.5 칸이다 — 칸을 2 m 로 보면 한 층(3 m)이 그것이다.
+##
+## 1.0 으로 뒀을 때 **1층 건물이 사람과 키가 비슷해 담으로 보였다** (§30.12.2).
+func test_a_storey_is_one_and_a_half_cells() -> void:
 	var one: HideoutBuilding = BuildingScript.new(
 		"one", Facility.Kind.WORKSHOP, Vector2i(2, 2), Vector2i.ZERO, 1
 	)
-	assert_eq(one.height_px(), 64.0)
+	assert_almost_eq(one.height_px(), IsoScript.cell_height_px() * 1.5, 0.001)
+	# 사람은 0.85 칸이다(HideoutSceneView.PERSON_CELLS). 한 층이 그 1.7 배는 돼야
+	# 건물이 담으로 안 보인다 — 1.0 층이었을 때 정확히 그래 보였다.
+	var person := IsoScript.height_to_px(0.85)
+	assert_gt(one.height_px() / person, 1.7, "1층이 사람 키의 1.7배는 넘어야 한다")
 
 
 # ------------------------------------------------------------------ 문
