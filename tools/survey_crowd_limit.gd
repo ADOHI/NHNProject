@@ -5,6 +5,12 @@ extends SceneTree
 ##
 ## `docs/design/28-combat.md` §28.6 · §28.20.52.
 ##
+## ## 이 도구는 **서 있는 판**을 잰다
+##
+## 2026-08-10 에 다가옴이 게임 기본값이 됐다 (§28.20.55). 이 도구는 **일부러 그것을 끈다** —
+## 여기서 묻는 것이 **「한 번에 몇이 닿나」**이고, 걸어오면 그 물음이 성립하지 않는다.
+## 걸어오는 판은 `tools/survey_queue_fill.gd` 가 잰다.
+##
 ## ## 왜 끝인가
 ##
 ## §28.6 이 물량전 상한을 **56 / 72 / 100** 으로 실측해 뒀다 — 그런데 그것은
@@ -145,6 +151,10 @@ func _fight(
 	field.target_choice = SparringField.TargetChoice.FINISH_OFF
 	field.downed_leave = leave
 	field.advance_mode = advance
+	# **이 도구는 서 있는 판을 재는 자다** (§28.20.52). 2026-08-10 에 다가옴이 게임
+	# 기본값이 됐지만(§28.20.55) 여기서 켜면 「한 번에 몇이 닿나」를 못 잰다 —
+	# 걸어오는 판은 `tools/survey_queue_fill.gd` 가 잰다.
+	field.approach_speed = 0.0
 
 	var chains: Array = []
 	for _index in _SQUAD:

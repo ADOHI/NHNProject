@@ -120,6 +120,10 @@ var _enemy_taken := PackedInt32Array()
 ## 히트스톱으로 멈춰 있는 남은 시간. **이 동안 눈금도 일정도 멈춘다.**
 var _hitstop_left := 0.0
 
+## `_out_enemies()` 가 매번 다시 채우는 자리. **결과가 아니라 그릇이다** —
+## 받는 쪽이 들고 있으면 안 된다.
+var _out_buffer := PackedInt32Array()
+
 
 ## 판 하나를 짠다. **대원 하나짜리다.**
 ##
@@ -428,29 +432,35 @@ func _sorted_by(candidates: PackedInt32Array, score: Callable) -> PackedInt32Arr
 		keyed.append(
 			Vector3(float(score.call(candidates[slot])), float(slot), float(candidates[slot]))
 		)
-	keyed.sort_custom(
-		func(a: Vector3, b: Vector3) -> bool: return a.x < b.x if a.x != b.x else a.y < b.y
-	)
+	# **비교기를 여기서 만들지 않는다** — `SparringField.targets_within` 과 같은 까닭이다.
+	keyed.sort_custom(_lower_score_first)
 	var out := PackedInt32Array()
 	for entry in keyed:
 		out.append(int(entry.z))
 	return out
 
 
+## `(점수, 자리, 번호)` 셋을 견준다. **점수가 작은 것 먼저, 같으면 가까운 쪽.**
+static func _lower_score_first(a: Vector3, b: Vector3) -> bool:
+	return a.x < b.x if a.x != b.x else a.y < b.y
+
+
 ## 지금 빠져 있는 적들. 다가오는 줄에서 **자리를 비운다.**
+##
+## **묶음을 새로 만들지 않는다.** 이 함수는 사건마다 불리고 사건은 초당 수십 번 온다 —
+## 적 100 명짜리 판에서 그때마다 배열을 지으면 그것이 제일 큰 쓰레기가 된다.
 func _out_enemies() -> PackedInt32Array:
-	var out := PackedInt32Array()
+	_out_buffer.clear()
 	for index in enemy_count():
 		if _is_out(index):
-			out.append(index)
-	return out
+			_out_buffer.append(index)
+	return _out_buffer
 
 
 ## 그 적이 **판에서 빠졌나** (§28.20.52).
 ##
 ## §28.10 이 「몬스터는 죽고 사람은 제압」을 확정했으므로 쓰러진 쪽은 그 판에서 빠진다.
-## 다만 **대련장이 지금까지 아무도 안 치웠고** 옛 표가 전부 그 위에 서 있어서
-## 필드의 손잡이가 꺼져 있으면 옛 동작 그대로다.
+## **2026-08-10 부터 기본으로 켜져 있다** (§28.20.55) — 끄면 §28.20.36~52 의 옛 판이 된다.
 func _is_out(enemy: int) -> bool:
 	if _field == null or not _field.downed_leave:
 		return false

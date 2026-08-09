@@ -50,9 +50,9 @@ static func strike(tuning: BreakTuning, cells: int = 1) -> float:
 	return tuning.strike_seconds_for(sized(cells))
 
 
-## 적 하나가 그 간격에 선 대련장.
+## 적 하나가 그 간격에 선 대련장. **서 있는 판이다** — `still()` 을 보라.
 static func field_at(gap: float) -> SparringField:
-	return SparringField.new(0.0, gap)
+	return still(SparringField.new(0.0, gap))
 
 
 ## 적 여럿이 줄지어 선 대련장. 첫째가 `gap`, 그 뒤로 `spacing` 씩 물러선다.
@@ -62,6 +62,28 @@ static func crowd(gap: float, spacing: float, count: int) -> SparringField:
 		xs.append(gap + float(index) * spacing)
 	var field := SparringField.new()
 	field.reset_with(0.0, xs)
+	return still(field)
+
+
+## 적이 켜로 선 대련장. **서 있는 판이다.**
+static func ranks(front: float, counts: Array[int]) -> SparringField:
+	var field := SparringField.new()
+	field.stand_in_ranks(0.0, front, counts)
+	return still(field)
+
+
+## **아무도 안 걷고 아무도 안 빠지는 판으로 만든다.**
+##
+## 2026-08-10 에 `approach_speed` 와 `downed_leave` 가 게임 기본값으로 켜졌다 (§28.20.55).
+## 그런데 **리치 · 걸침 · 표적 고르기를 재는 표본은 자리가 안 움직여야 한다** —
+## 적이 걸어오면 「리치 밖」이 몇 초 뒤에 「리치 안」이 되어서
+## 무엇이 닿게 만들었는지를 못 가른다.
+##
+## 그래서 표본은 **일부러 게임 기본값이 아니다.** 기본값 자체는
+## `test_sparring_queue.gd` 가 따로 지킨다.
+static func still(field: SparringField) -> SparringField:
+	field.approach_speed = 0.0
+	field.downed_leave = false
 	return field
 
 

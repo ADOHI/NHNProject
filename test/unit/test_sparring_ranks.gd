@@ -26,9 +26,7 @@ func _tuning(decay: float = 10.0) -> BreakTuning:
 
 
 func _ranked(counts: Array[int]) -> SparringField:
-	var field := FieldScript.new()
-	field.stand_in_ranks(0.0, FRONT, counts)
-	return field
+	return Fixtures.ranks(FRONT, counts)
 
 
 # ---------------------------------------------------------------- 켜가 자리를 정한다
