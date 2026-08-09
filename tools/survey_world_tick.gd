@@ -121,13 +121,18 @@ func _row(world: NpcWorld, guild: Guild, run: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _SEED
 	var met := 0
+	var heard_of := 0
 	for trial in _ENCOUNTERS:
-		if not RivalSquad.draw(world, rng, ours).familiar_to(ours).is_empty():
+		var squad := RivalSquad.draw(world, rng, ours)
+		if not squad.familiar_to(ours).is_empty():
 			met += 1
+		# **겪어서 아는 것과 이름을 들어 본 것은 다른 줄이다** (설계 24.42).
+		if not squad.famous_faces().is_empty():
+			heard_of += 1
 
 	print(
 		(
-			"%-5d %7d %6d %6d %6d %8.1f %8.1f %7.1f%% %7.1f%% %7.1f%%"
+			"%-5d %7d %6d %6d %6d %8.1f %8.1f %7.1f%% %7.1f%% %7.1f%% %9.1f%%"
 			% [
 				run,
 				graph.size(),
@@ -139,6 +144,7 @@ func _row(world: NpcWorld, guild: Guild, run: int) -> void:
 				100.0 * float(alone) / float(graph.person_count()),
 				100.0 * float(_largest_share(graph)),
 				100.0 * float(met) / float(_ENCOUNTERS),
+				100.0 * float(heard_of) / float(_ENCOUNTERS),
 			]
 		)
 	)
@@ -174,16 +180,17 @@ func _fame_line(world: NpcWorld, label: String) -> String:
 	var famous := 0
 	for person in world.registry.size():
 		values.append(world.registry.fame_of(person))
-		if world.registry.fame_of(person) >= 50:
+		if world.registry.fame_of(person) >= PersonGenerator.FAME_KNOWN:
 			famous += 1
 	values.sort()
 	return (
-		"%-10s 중위 %d · 90%% %d · 최대 %d · 50이상 %.1f%%"
+		"%-10s 중위 %d · 90%% %d · 최대 %d · 이름값(%d↑) %.1f%%"
 		% [
 			label,
 			values[values.size() / 2],
 			values[values.size() * 9 / 10],
 			values[values.size() - 1],
+			PersonGenerator.FAME_KNOWN,
 			100.0 * float(famous) / float(values.size()),
 		]
 	)

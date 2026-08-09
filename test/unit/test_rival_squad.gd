@@ -133,3 +133,38 @@ func test_meeting_creates_no_relation() -> void:
 	for trial in 20:
 		RivalSquad.draw(world, rng, _ours(world))
 	assert_eq(world.graph.size(), before)
+
+
+# ------------------------------------------------- 이름을 들어 본 얼굴 (§24.42)
+
+
+func test_a_famous_stranger_is_recognised() -> void:
+	# 설계 24.7 — *"관계가 없어도 유명하면 상대가 나를 안다."*
+	var world := NpcWorld.create(_SEED, _POPULATION)
+	var squad := RivalSquad.new(world)
+	squad.members = PackedInt32Array([0, 1])
+	world.registry.gain_fame(1, PersonGenerator.FAME_MAX)
+	assert_eq(Array(squad.famous_faces()), [1])
+	assert_true(squad.familiar_to(PackedInt32Array([2])).is_empty(), "관계는 여전히 없다")
+
+
+func test_fame_and_acquaintance_are_counted_apart() -> void:
+	# **합치면 화면의 줄이 하나가 된다** — 겪어서 아는 사람에게는 관계 한 줄이 붙고
+	# 유명해서 아는 사람에게는 「이름은 들어 봤다」밖에 못 쓴다 (§24.32.2).
+	var world := NpcWorld.create(_SEED, _POPULATION)
+	var squad := RivalSquad.new(world)
+	squad.members = PackedInt32Array([0])
+	world.graph.link(1, 0, RelationKind.Kind.COMRADESHIP, 40, 40)
+	assert_eq(Array(squad.familiar_to(PackedInt32Array([1]))), [0], "겪어서 안다")
+	assert_true(squad.famous_faces().is_empty(), "그렇다고 유명한 것은 아니다")
+
+
+func test_the_threshold_has_one_source() -> void:
+	# 도구들이 50 을 베껴 쓰고 있었다. 원본은 `PersonGenerator.FAME_KNOWN` 하나다.
+	var world := NpcWorld.create(_SEED, _POPULATION)
+	var squad := RivalSquad.new(world)
+	squad.members = PackedInt32Array([0])
+	world.registry.gain_fame(0, PersonGenerator.FAME_KNOWN - 1)
+	assert_true(squad.famous_faces().is_empty())
+	world.registry.gain_fame(0, 1)
+	assert_eq(Array(squad.famous_faces()), [0])

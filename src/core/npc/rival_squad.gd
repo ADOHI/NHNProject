@@ -108,6 +108,29 @@ func familiar_to(viewers: PackedInt32Array) -> PackedInt32Array:
 	return found
 
 
+## **이름을 들어 본 사람들.** 관계가 하나도 없어도 유명하면 알아본다 (설계 24.42).
+##
+## §24.7 — *"관계가 없어도 유명하면 상대가 나를 안다."*
+##
+## ## `familiar_to` 와 합치지 않는다
+##
+## 둘은 **화면에 다른 줄을 낸다.** 겪어서 아는 사람에게는 관계 한 줄이 붙고
+## (*"당신 대원 차소경의 아들"*, §24.32.2), 유명해서 아는 사람에게는
+## *"이름은 들어 봤다"* 밖에 못 쓴다. **하나로 세면 그 차이가 사라지고,**
+## §24.29.3 이 실측으로 잡은 「아는 얼굴」 비율도 뜻이 달라진다.
+##
+## **보는 사람이 누구든 상관없다** — 유명한 것은 세계에 대해 유명한 것이다.
+## 그래서 `viewers` 를 안 받는다. 그 점이 `familiar_to` 와 다르다.
+func famous_faces() -> PackedInt32Array:
+	var found := PackedInt32Array()
+	if _world == null:
+		return found
+	for member in members:
+		if _world.registry.fame_of(member) >= PersonGenerator.FAME_KNOWN:
+			found.append(member)
+	return found
+
+
 ## 어느 소속을 만나나. 절반은 **우리가 엮인 소속**, 절반은 아무 소속.
 ##
 ## 「우리가 엮인 소속」은 우리 사람들이 아는 이들이 몸담은 곳이다 —

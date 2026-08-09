@@ -291,7 +291,7 @@ func _report_rumors(world: Array) -> void:
 			continue
 		heard += 1
 		strongest = maxi(strongest, absi(graph.slot_affinity(slot)))
-		if registry.fame_of(graph.slot_to(slot)) >= 50:
+		if registry.fame_of(graph.slot_to(slot)) >= PersonGenerator.FAME_KNOWN:
 			famous += 1
 	print("\n%-26s %d" % ["소문이 만든 관계", heard])
 	print("%-26s %d" % ["소문 관계의 최대 호감", strongest])
@@ -425,12 +425,40 @@ func _report_recruit(world: Array) -> void:
 		(
 			"%-26s 의리 +100 -> %d, 실리 -100 -> %d"
 			% [
-				"요구 호감",
+				"요구 호감 (무명)",
 				RecruitStanding.required_affinity_for(NpcAxis.MAX_VALUE),
 				RecruitStanding.required_affinity_for(NpcAxis.MIN_VALUE),
 			]
 		)
 	)
+	# **유명세가 몸값이다** (설계 24.42). 같은 성향이라도 이름값이 있으면 더 요구한다.
+	print(
+		(
+			"%-26s 의리 +100 -> %d, 실리 -100 -> %d"
+			% [
+				"요구 호감 (유명세 100)",
+				RecruitStanding.required_affinity_for(NpcAxis.MAX_VALUE, PersonGenerator.FAME_MAX),
+				RecruitStanding.required_affinity_for(NpcAxis.MIN_VALUE, PersonGenerator.FAME_MAX),
+			]
+		)
+	)
+	# **이름값 때문에 막힌 쌍이 몇인가.** 0 이면 이 손잡이가 아무 일도 안 하는 것이다.
+	var priced := 0
+	for from in graph.person_count():
+		for to in graph.targets_of(from):
+			var one := RecruitStanding.of(registry, graph, from, to)
+			if one.can_recruit():
+				continue
+			if one.prospect_fame < PersonGenerator.FAME_KNOWN:
+				continue
+			if (
+				one.affinity
+				>= RecruitStanding.required_affinity_for(
+					registry.trait_of(from, NpcAxis.Kind.LOYAL)
+				)
+			):
+				priced += 1
+	print("%-26s %d 쌍" % ["이름값 때문에만 막힌 것", priced])
 
 
 ## 인물 둘의 화면. **상세 화면이 실제로 무엇을 내는지**를 글로 본다.

@@ -8,6 +8,7 @@ extends GutTest
 ## 1. **관계가 없으면 안 된다.** 자원으로 사는 영입은 설계 6.1 이 막았다
 ## 2. **실리형은 호감이 낮아도 온다.** 의리형은 사람을 보고 실리형은 조건을 본다
 ## 3. **자유형은 위계 강한 길드에 안 온다**
+## 4. **유명한 사람은 더 요구한다** — 이 게임에는 이적료가 없고 화폐가 관계다 (§24.42)
 
 var _registry: PersonRegistry
 var _graph: RelationGraph
@@ -112,6 +113,48 @@ func test_the_same_affinity_splits_two_people() -> void:
 	_graph.link(1, 2, RelationKind.Kind.COMRADESHIP, middling, 60)
 	assert_false(_standing(0, 2).can_recruit(), "의리형은 더 요구한다")
 	assert_true(_standing(1, 2).can_recruit(), "실리형은 이 정도로 온다")
+
+
+func test_fame_is_the_transfer_fee() -> void:
+	# 설계 02 §2.6 — *"영입 — 유명 선수 이적. 주목도가 곧 몸값."*
+	# **이적료가 없으므로 호감으로 치른다** (§24.42).
+	assert_gt(
+		RecruitStanding.required_affinity_for(0, PersonGenerator.FAME_MAX),
+		RecruitStanding.required_affinity_for(0, 0),
+		"유명한 사람은 더 요구한다"
+	)
+	assert_eq(
+		(
+			RecruitStanding.required_affinity_for(0, PersonGenerator.FAME_MAX)
+			- RecruitStanding.required_affinity_for(0, 0)
+		),
+		RecruitStanding.AFFINITY_FAME_PRICE
+	)
+
+
+func test_an_unknown_prospect_barely_pays() -> void:
+	# **유명세 중위가 4 다** (§24.40.3). 거기서 붙는 값이 1 이라야 한다 —
+	# 크면 「관계를 쌓아 영입한다」가 「유명한 사람을 피해 영입한다」가 된다.
+	#
+	# **0 이 아니라 1 이다.** 유명세 2 부터 붙는다 — 처음에 0 일 줄 알고 썼다가 떨어졌고,
+	# 실측에서도 이 손잡이 때문에만 막히는 쌍이 46 이라 0 이 아닌 것이 맞다 (§24.42.2).
+	var median := RecruitStanding.required_affinity_for(0, 4)
+	assert_eq(median - RecruitStanding.required_affinity_for(0), 1)
+	assert_lt(
+		median - RecruitStanding.required_affinity_for(0),
+		RecruitStanding.AFFINITY_FAME_PRICE / 2,
+		"중위에서 몸값이 절반 넘게 붙으면 아무나 비싸진 것이다"
+	)
+
+
+func test_a_famous_prospect_is_told_apart_from_a_cold_one() -> void:
+	# 같은 「호감이 모자라다」라도 **플레이어가 할 일이 다르다** (§24.17.4).
+	_add(_blank())
+	_add(_blank())
+	_registry.gain_fame(0, PersonGenerator.FAME_KNOWN)
+	_ready_graph()
+	_graph.link(0, 1, RelationKind.Kind.COMRADESHIP, 0, RelationGraph.BOND_MAX)
+	assert_string_contains(_standing(0, 1).blocked_reason(), "이름값")
 
 
 func test_free_spirit_refuses_a_rigid_guild() -> void:
