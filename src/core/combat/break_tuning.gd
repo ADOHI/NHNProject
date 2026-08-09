@@ -22,6 +22,13 @@ extends RefCounted
 ## 빨리 빠지면 긴 체인만 의미 있고, 안 빠지면 여러 번 나눠 쳐도 되어 체인이 필요 없어진다.
 ## **이 한 값이 「체인이 왜 필요한가」를 정한다.**
 
+## **부피대로 걸치게 하면** 이런 눈금이 된다 — 1칸 한 명 · 3칸부터 두 명 (§28.20.34).
+##
+## **채택이 아니다.** 상수로 적어 둔 것은 화면과 측정 도구와 문서가
+## 같은 수를 보게 하려는 것뿐이다. 세 곳에 따로 적으면 하나만 고쳐진다.
+const VOLUME_SPLASH_BASE := 0.667
+const VOLUME_SPLASH_PER_CELL := 0.333
+
 ## 눈금의 최댓값. 여기까지 차면 더 안 오른다.
 var max_value: float = 100.0
 
@@ -69,6 +76,26 @@ var poise_base: float = 6.0
 ## > 이 관계 자체가 제안이다. 확정된 것이 아니다.
 var poise_per_cell: float = 4.0
 
+## 한 타가 **몇에게 걸치나** (§28.20.34 물음 ①).
+##
+## **기본값이 한 명인 것은 「하나만 때린다」를 고른 것이 아니라 아무것도 안 고른 것이다.**
+## §28.20.31 까지의 동작이 그대로 남는다.
+##
+## ## 왜 여기서 답이 나올 수 있는가
+##
+## 리치가 무기마다 다르고(§28.20.30) 리치는 **닿는 거리**다.
+## 그러니 **닿는 범위가 곧 걸치는 범위**이고, 새로 잴 것은 「몇 명까지」 하나뿐이다.
+##
+## ## 늘리면 무엇이 달라지나 (제안이지 채택이 아니다)
+##
+## 큰 무기가 지금 **받는 것은 둘**(한 방 무게 · 개전)이고 **내주는 것은 셋**
+## (칸 · 속도 · 감쇠)이다. 셋째를 여기서 줄 수 있다.
+##
+## 그리고 §28.6 의 물량전(상한 56 / 72 / 100)에 **처음으로 답이 생긴다** —
+## 지금은 적이 열이면 체인을 열 번 짜야 한다.
+var splash_base: float = 1.0
+var splash_per_cell: float = 0.0
+
 
 func _init(p_decay_per_second: float = 20.0) -> void:
 	decay_per_second = p_decay_per_second
@@ -88,6 +115,14 @@ func poise_for(item: BackpackItem) -> float:
 ## **무거운 게 무겁게 보여야 무거운 값이 납득된다.**
 func strike_seconds_for(item: BackpackItem) -> float:
 	return strike_base + strike_per_cell * float(item.shape.size())
+
+
+## 이 무기 한 타가 **몇에게 걸치나.** 최소 한 명이다.
+##
+## 걸치는 **범위**는 여기서 안 정한다 — 리치(`WeaponMotion.reach_px`)가 곧 범위다.
+## 여기가 정하는 것은 그 범위 안에서 **몇 명까지**인가 하나뿐이다.
+func splash_targets_for(item: BackpackItem) -> int:
+	return maxi(1, roundi(splash_base + splash_per_cell * float(item.shape.size())))
 
 
 ## 이 무기를 맞혔을 때 멈추는 시간. **이 동안 눈금은 빠지지 않는다.**

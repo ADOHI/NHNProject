@@ -27,6 +27,12 @@ signal fire_requested
 ## 전진이 남을지 돌아올지를 바꿔 보라는 요청. **미정이라 만져 볼 수 있게 둔다** (§28.20.30).
 signal advance_mode_toggled
 
+## 적 수를 바꿔 보라는 요청. **여럿이 되면 물음 셋이 생긴다** (§28.20.34).
+signal enemy_count_cycled
+
+## 걸침을 켜고 꺼 보라는 요청. **콤보의 뜻이 바뀌는 결정이라 값을 안 박았다** (§28.20.34).
+signal splash_toggled
+
 const GRID_ORIGIN := Vector2(40.0, 110.0)
 const CELL := 72.0
 
@@ -54,11 +60,22 @@ const _DONE_LINE := Color(0.52, 0.86, 0.56)
 const _TAG_TOP_MARGIN := 96.0
 
 ## 대련장 자리. 글자판 아래의 빈 곳이다.
-const ARENA_LEFT := 1052.0
-const ARENA_GROUND := 640.0
+##
+## 바닥선을 640 에 뒀더니 **아래 글자 셋째 줄이 화면 밖(720)으로 잘렸다.** 캡처에서 걸렸다.
+const ARENA_LEFT := 960.0
+const ARENA_GROUND := 596.0
 
-## 대련장 거리를 화면에 줄여 그리는 비율. 기본 간격 240 이 화면 밖으로 나갔다.
-const ARENA_SCALE := 0.78
+## 바닥선이 뻗는 폭. **리치 눈금이 여기 밖으로 나가면 안 된다** —
+## 파고든 뒤(간격 96)에 4칸 리치 118 을 그리면 화면 오른쪽 끝을 넘었다. 캡처에서 걸렸다.
+const ARENA_WIDTH := 300.0
+
+## 대련장 거리를 화면에 옮겨 그리는 비율.
+##
+## 처음에는 0.78 이었다 — 기본 간격이 240 이던 때다. 지금 간격은 96 이고 적이 몰려 서므로
+## **줄이는 게 아니라 늘려야 읽힌다.** 적 셋(96 · 112 · 128)이 네모로 안 겹칠 만큼이다.
+##
+## 위쪽은 **파고든 뒤의 리치 눈금**(96 + 118)이 정한다. 그보다 크면 화면을 넘는다.
+const ARENA_SCALE := 1.3
 const _LOOT_FILL := Color(0.33, 0.33, 0.31)
 const _TEXT := Color(0.93, 0.95, 0.98)
 const _DIM_TEXT := Color(0.62, 0.66, 0.72)
@@ -185,6 +202,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			fire_requested.emit()
 		KEY_T:
 			advance_mode_toggled.emit()
+		KEY_E:
+			enemy_count_cycled.emit()
+		KEY_G:
+			splash_toggled.emit()
 		_:
 			return
 	get_viewport().set_input_as_handled()
@@ -656,22 +677,12 @@ func _draw_break_gauge() -> void:
 	var top := GRID_ORIGIN.y + float(_grid.height) * CELL + 26.0
 	var width := float(_grid.width) * CELL
 
-	# 판이 돌고 있으면 **지금 눈금**을, 아니면 계산해 둔 최고치를 보여 준다.
-	# 실시간에 최고치만 그리면 눈금이 빠지는 것이 안 보인다.
-	var peak := 0.0
-	var highest := BreakState.Kind.NONE
-	var live := -1.0
-	if _bout != null and _bout.phase() != SparringBout.Phase.READY:
-		peak = _bout.peak()
-		highest = _bout.peak_state()
-		live = _bout.gauge_value()
-	else:
-		for outcome in _outcomes:
-			peak = maxf(peak, outcome.peak)
-			if BreakState.is_worse(outcome.highest, highest):
-				highest = outcome.highest
-
-	_draw_one_gauge(Vector2(GRID_ORIGIN.x, top), width, "적 무너짐", live, peak, highest)
+	# **적마다 막대 하나.** 여럿이면 나란히 줄여 그린다 — 세로로 쌓으면 화면을 넘는다.
+	# 걸침(§28.20.34)이 켜졌는지는 **두 막대가 같이 오르는가**로만 보인다.
+	var count := _bout.enemy_count() if _bout != null else 1
+	var slot := (width - float(count - 1) * 10.0) / float(count)
+	for index in count:
+		_draw_enemy_gauge(Vector2(GRID_ORIGIN.x + float(index) * (slot + 10.0), top), slot, index)
 
 	# **우리 쪽도 그린다.** 적에게만 있으면 대련장이 샌드백이다.
 	if _bout != null and _bout.has_enemy():
@@ -679,10 +690,39 @@ func _draw_break_gauge() -> void:
 			Vector2(GRID_ORIGIN.x, top + 64.0),
 			width,
 			"우리 무너짐",
-			_bout.own_gauge_value(),
-			_bout.own_peak(),
-			_bout.own_peak_state()
+			_bout.own_gauge().value(),
+			_bout.own_gauge().peak(),
+			_bout.own_gauge().peak_state()
 		)
+
+
+## 적 하나의 눈금 막대. **판이 돌기 전에는 계산기가 낸 최고치**를 보여 준다.
+##
+## 실시간에 최고치만 그리면 눈금이 빠지는 것이 안 보이고, 돌기 전에 0 만 그리면
+## 배치를 만질 때 체인 길이가 무슨 값을 하는지가 안 보인다.
+func _draw_enemy_gauge(at: Vector2, width: float, index: int) -> void:
+	var many := _bout != null and _bout.enemy_count() > 1
+	var label := "적 %d 무너짐" % (index + 1) if many else "적 무너짐"
+	if _bout != null and _bout.phase() != SparringBout.Phase.READY:
+		_draw_one_gauge(
+			at,
+			width,
+			label,
+			_bout.enemy_gauge(index).value(),
+			_bout.enemy_gauge(index).peak(),
+			_bout.enemy_gauge(index).peak_state()
+		)
+		return
+
+	# 아직 안 쐈다. 계산기(`ChainBreakSim`)가 낸 것은 **적 하나짜리**라 0번에만 얹는다.
+	var peak := 0.0
+	var highest := BreakState.Kind.NONE
+	if index == 0:
+		for outcome in _outcomes:
+			peak = maxf(peak, outcome.peak)
+			if BreakState.is_worse(outcome.highest, highest):
+				highest = outcome.highest
+	_draw_one_gauge(at, width, label, -1.0, peak, highest)
 
 
 ## 눈금 막대 하나. 두 쪽이 **같은 식**으로 그려져야 견줄 수 있다.
@@ -718,13 +758,16 @@ func _draw_one_gauge(
 		var x := bar.position.x + bar.size.x * (threshold / maxf(1.0, _break_tuning.max_value))
 		draw_line(Vector2(x, bar.position.y), Vector2(x, bar.end.y), _TEXT, 1.5)
 
+	# **좁은 막대에는 짧게 적는다.** 적 셋을 나란히 놓았더니 세 글줄이 서로 겹쳤다 —
+	# 캡처에서 걸렸다. 자리를 재서 줄이는 게 아니라 **좁으면 다른 문장**을 쓴다.
+	var compact := width < 220.0
 	draw_string(
 		font,
-		Vector2(bar.position.x + 6.0, bar.end.y + 15.0),
-		_gauge_caption(shown, peak, highest),
+		Vector2(bar.position.x + 4.0, bar.end.y + 15.0),
+		_gauge_caption(shown, peak, highest, compact),
 		HORIZONTAL_ALIGNMENT_LEFT,
-		-1.0,
-		14,
+		width,
+		13 if compact else 14,
 		_state_color(_break_tuning.state_for(shown))
 	)
 
@@ -743,48 +786,65 @@ func _state_color(kind: BreakState.Kind) -> Color:
 ##
 ## 처음에 최고 단계를 적었더니 눈금이 32(경직)로 빠진 뒤에도 "띄우기" 라고 적혀 있었다.
 ## 캡처에서 걸렸다 — 막대 색은 초록인데 글자는 띄우기였다.
-func _gauge_caption(shown: float, peak_value: float, highest: BreakState.Kind) -> String:
+func _gauge_caption(
+	shown: float, peak_value: float, highest: BreakState.Kind, compact: bool = false
+) -> String:
+	var running := _bout != null and _bout.phase() != SparringBout.Phase.READY
+	if compact:
+		# 좁을 때는 **지금 값과 최고 단계**만. 최고 단계를 버리면 「띄웠나」가 안 남는다.
+		if not running:
+			return "%.0f" % shown
+		return "%.0f  최고 %.0f %s" % [shown, peak_value, BreakState.label(highest)]
 	var now := (
 		"%.0f / %.0f    %s"
 		% [shown, _break_tuning.max_value, BreakState.label(_break_tuning.state_for(shown))]
 	)
-	if _bout == null or _bout.phase() == SparringBout.Phase.READY:
+	if not running:
 		return now
 	return "%s    (최고 %.0f %s)" % [now, peak_value, BreakState.label(highest)]
 
 
-## 대련장. **적은 네모 하나다** (§28.4 최소 대련장).
+## 대련장. **적은 네모다** — 하나일 수도 여럿일 수도 있다 (§28.20.34).
 ##
 ## 캐릭터 애니 레인이 `hit` 을 따로 만들었고 이름이 겹치지만 **지금 붙이지 않는다** —
 ## 양쪽이 굳은 다음에 붙인다. 여기서는 네모가 무너짐 단계를 그대로 비춘다.
 ##
 ## **이동 · 회전 · 배율만 쓴다** (§28.7). 프레임 교체도 변형도 없다.
+## 적이 몰리면 네모를 **좁힌다** — 그것도 배율이다.
 func _draw_arena() -> void:
 	if _field == null:
 		return
 	var font := get_theme_default_font()
 	var ground := ARENA_GROUND
 	draw_line(
-		Vector2(ARENA_LEFT - 24.0, ground), Vector2(ARENA_LEFT + 224.0, ground), _CELL_LINE, 2.0
+		Vector2(ARENA_LEFT - 24.0, ground),
+		Vector2(ARENA_LEFT + ARENA_WIDTH, ground),
+		_CELL_LINE,
+		2.0
 	)
 
-	var state := BreakState.Kind.NONE
-	if _bout != null and _bout.phase() != SparringBout.Phase.READY:
-		state = _bout.state()
-
-	# 대원과 적. **둘 다 위치를 가진다** — 리치·전진 값이 오면 이 간격 위에 판정이 얹힌다.
 	var own_state := BreakState.Kind.NONE
 	if _bout != null and _bout.phase() != SparringBout.Phase.READY:
-		own_state = _bout.own_state()
-	_draw_fighter(_field.attacker_x, ground, Color(0.42, 0.56, 0.78), own_state)
-	_draw_fighter(_field.target_x, ground, _state_color(state), state)
+		own_state = _bout.own_gauge().state()
+	_draw_fighter(_field.attacker_x, ground, Color(0.42, 0.56, 0.78), own_state, 26.0)
 
-	var left := _arena_x(minf(_field.attacker_x, _field.target_x))
-	var right := _arena_x(maxf(_field.attacker_x, _field.target_x))
+	# 적들. **가까운 것이 고른 것이다** (§28.20.34 물음 ②) — 그것만 테두리를 준다.
+	var count := _field.enemy_count()
+	var half := 26.0 if count <= 1 else 10.0
+	var chosen := _field.target_index()
+	for index in count:
+		var state := _enemy_state_at(index)
+		var enemy := _field.enemy_at(index)
+		_draw_fighter(enemy.x, ground, _state_color(state), state, half)
+		if index == chosen and count > 1:
+			_draw_chosen_mark(enemy.x, ground, half)
+
+	var left := _arena_x(minf(_field.attacker_x, _field.target_x()))
+	var right := _arena_x(maxf(_field.attacker_x, _field.target_x()))
 	draw_line(Vector2(left, ground + 12.0), Vector2(right, ground + 12.0), _DIM_TEXT, 1.0)
 	_draw_reach(ground)
 
-	# 글자는 **바닥선 아래 한 줄**로 모은다. 위에 두었더니 체인 목록과 겹쳤다 —
+	# 글자는 **바닥선 아래**로 모은다. 위에 두었더니 체인 목록과 겹쳤다 —
 	# 18타짜리를 쐈을 때 캡처에서 드러났다.
 	draw_string(
 		font,
@@ -801,16 +861,69 @@ func _draw_arena() -> void:
 		14,
 		_DIM_TEXT
 	)
-	# 단계는 **둘째 줄**에 둔다. 간격·전진까지 한 줄에 넣었더니 글자가 겹쳤다.
+	# 적 수와 걸침은 **둘째 줄**. 한 줄에 다 넣었더니 글자가 겹쳤다.
 	draw_string(
 		font,
 		Vector2(ARENA_LEFT - 24.0, ground + 52.0),
-		BreakState.label(state),
+		"적 %d (E)   걸침 %s (G)" % [count, _splash_text()],
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1.0,
+		14,
+		_DIM_TEXT
+	)
+	# 고른 적의 단계는 **셋째 줄**.
+	var chosen_state := _enemy_state_at(chosen)
+	draw_string(
+		font,
+		Vector2(ARENA_LEFT - 24.0, ground + 74.0),
+		BreakState.label(chosen_state),
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1.0,
 		16,
-		_state_color(state)
+		_state_color(chosen_state)
 	)
+
+
+func _enemy_state_at(index: int) -> BreakState.Kind:
+	if _bout == null or _bout.phase() == SparringBout.Phase.READY:
+		return BreakState.Kind.NONE
+	return _bout.enemy_gauge(index).state()
+
+
+## 걸침이 지금 몇 명짜리인가. **무기마다 다르므로 범위로 적는다** (§28.20.34).
+func _splash_text() -> String:
+	if _break_tuning == null:
+		return "한 명"
+	var low := _break_tuning.splash_targets_for(_probe_item(1))
+	var high := _break_tuning.splash_targets_for(_probe_item(4))
+	if low == high:
+		return "%d 명" % low
+	return "%d~%d 명 (부피대로)" % [low, high]
+
+
+## 걸침 인원을 물어보기 위한 **크기만 있는 가짜 아이템.**
+## 표본 목록에서 꺼내 오면 그 목록이 바뀔 때 이 글자가 조용히 달라진다.
+func _probe_item(cells: int) -> BackpackItem:
+	var shape: Array[Vector2i] = []
+	for index in cells:
+		shape.append(Vector2i(index, 0))
+	return BackpackItem.new(
+		"probe", "probe", BackpackItem.Kind.WEAPON, shape, Vector2i(0, 0), ChainDirection.Kind.RIGHT
+	)
+
+
+## 고른 적 위에 작은 표. **글자를 안 쓴다** — 본문 폰트에 기호가 하나도 없다.
+func _draw_chosen_mark(field_x: float, ground: float, half: float) -> void:
+	var top := ground - half * 2.0 - 14.0
+	var at := _arena_x(field_x)
+	var points := PackedVector2Array(
+		[
+			Vector2(at, top + 9.0),
+			Vector2(at - 7.0, top),
+			Vector2(at + 7.0, top),
+		]
+	)
+	draw_colored_polygon(points, _START_LINE)
 
 
 ## 다음에 나갈 무기가 **어디까지 닿는지**를 눈금으로 세운다.
@@ -838,7 +951,7 @@ func _draw_reach(ground: float) -> void:
 		13,
 		color
 	)
-	if _bout.was_out_of_reach():
+	if _bout.stop_reason() == SparringBout.Stop.OUT_OF_REACH:
 		draw_string(
 			get_theme_default_font(),
 			Vector2(ARENA_LEFT - 24.0, ground - 120.0),
@@ -855,7 +968,11 @@ func _arena_x(field_x: float) -> float:
 
 
 ## 싸우는 것 하나. **이동 · 회전 · 배율만** 쓴다 (§28.7).
-func _draw_fighter(field_x: float, ground: float, color: Color, state: BreakState.Kind) -> void:
+##
+## `half_width` 는 몰렸을 때 좁히려고 받는다 — 여럿이 같은 자리에 서면 겹쳐서 안 읽힌다.
+func _draw_fighter(
+	field_x: float, ground: float, color: Color, state: BreakState.Kind, half_width: float = 26.0
+) -> void:
 	var lift := 0.0
 	var tilt := 0.0
 	var squash := 1.0
@@ -868,7 +985,7 @@ func _draw_fighter(field_x: float, ground: float, color: Color, state: BreakStat
 		squash = 0.32
 		tilt = 1.35
 
-	var half := Vector2(26.0, 38.0 * squash)
+	var half := Vector2(half_width, 38.0 * squash)
 	var center := Vector2(_arena_x(field_x), ground - half.y - lift)
 	var corners: Array[Vector2] = [
 		Vector2(-half.x, -half.y),

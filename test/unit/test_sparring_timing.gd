@@ -110,12 +110,12 @@ func test_hitstop_freezes_the_gauge() -> void:
 		if bout.landed() >= 1:
 			break
 		bout.tick(1.0 / 480.0)
-	var right_after := bout.gauge_value()
+	var right_after := bout.enemy_gauge(0).value()
 	assert_true(right_after > 0.0, "전제 확인")
 
 	# 히트스톱 길이만큼 흘려도 눈금이 그대로여야 한다.
 	bout.tick(tuning.hitstop_seconds_for(_sized(4)) * 0.9)
-	assert_almost_eq(bout.gauge_value(), right_after, 0.001, "멈춘 동안에는 안 빠진다")
+	assert_almost_eq(bout.enemy_gauge(0).value(), right_after, 0.001, "멈춘 동안에는 안 빠진다")
 
 
 func test_hitstop_does_not_change_the_outcome() -> void:
@@ -126,7 +126,7 @@ func test_hitstop_does_not_change_the_outcome() -> void:
 	var bout := BoutScript.new(_items(7), tuning)
 	bout.start()
 	_run_to_end(bout)
-	assert_almost_eq(bout.peak(), expected.peak, 0.5, "히트스톱이 결과를 바꾸면 안 된다")
+	assert_almost_eq(bout.enemy_gauge(0).peak(), expected.peak, 0.5, "히트스톱이 결과를 바꾸면 안 된다")
 
 
 func test_hitstop_makes_the_chain_feel_longer() -> void:

@@ -86,7 +86,38 @@ func _build_shots() -> Array:
 		["11_bout_mid", _wait, false, 5.0],
 		["12_bout_launch", _wait, false, 9.5],
 		["13_bout_settled", _wait, false, 17.5],
+		["14_crowd_ready", _stage_crowd, false],
+		["15_crowd_no_splash", _fire, false, 6.0],
+		["16_crowd_splash", _stage_crowd_splash, false],
+		["17_crowd_splash_mid", _fire, false, 6.0],
 	]
+
+
+## 적 셋을 세우고 **큰 무기 체인**을 짠다 (§28.20.34).
+##
+## 1칸으로는 둘째 적에 애초에 못 닿아서 걸침이 켜졌는지 안 켜졌는지가 안 보인다.
+## 4칸(리치 118)이어야 112 에 선 둘째가 범위에 든다.
+func _stage_crowd() -> void:
+	_screen._enemy_count = 3
+	_screen._stand_enemies()
+	_screen._field.advance_mode = SparringField.AdvanceMode.STAY
+	var grid: BackpackGrid = _screen._grid
+	grid.clear()
+	for row in 3:
+		var direction := ChainDirection.Kind.DOWN if row < 2 else ChainDirection.Kind.RIGHT
+		grid.place(_big_weapon("대검%d" % row, direction), Vector2i(0, row * 2))
+	_screen._refresh()
+
+
+## 같은 판에서 걸침만 켠다. **두 막대가 같이 오르는가**가 유일한 차이여야 한다.
+func _stage_crowd_splash() -> void:
+	_screen._toggle_splash()
+
+
+## 2x2 (4칸). 리치 113 이라 둘째 적(112)에 닿는다.
+func _big_weapon(name: String, direction: ChainDirection.Kind) -> BackpackItem:
+	var shape: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]
+	return BackpackItem.new(name, name, BackpackItem.Kind.WEAPON, shape, Vector2i(0, 1), direction)
 
 
 ## 1칸 무기를 뱀처럼 길게 이어 붙인다. 표본 5타는 경직까지밖에 안 가서

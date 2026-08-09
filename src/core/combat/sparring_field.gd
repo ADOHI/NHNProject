@@ -1,39 +1,46 @@
 class_name SparringField
 extends RefCounted
-## 대련장의 **거리**. 대원이 어디 있고 적이 어디 있는가.
+## 대련장의 **자리**. 대원이 어디 있고 적들이 어디 있는가.
 ##
-## `docs/design/28-combat.md` §28.20.27.
+## `docs/design/28-combat.md` §28.20.27 · §28.20.34.
 ##
-## ## 왜 지금 만드나
+## ## 왜 거리가 필요한가
 ##
 ## 사용자가 확정했다: *"무기 액션할때 각 무기 움직임이 애니메이션 말고 실제 캐릭터를
 ## 얼마나 움직일지도 계산되어야 해. 내리치기가 전진 공격으로 나간다던지 하는것 말이야"*
 ##
-## 그러려면 **둘 다 위치를 가져야 한다.** 지금까지 대련장은 적이 네모 하나고
-## 거리가 없었다. 자리를 먼저 만들어 두면 애니 레인의 값이 오는 즉시 붙는다.
-##
-## ## 아직 안 만드는 것 — 짐작으로 숫자를 넣지 않는다
-##
-## 애니 레인이 낼 값 둘이 아직 없다.
-##
-## | 값 | 뜻 |
-## | --- | --- |
-## | `advance_px(칸수)` | 한 타에 몸이 실제로 나가는 거리 |
-## | `reach_px(칸수)` | 닿는 거리 = 팔 + 무기 길이 + 전진 |
+## 그러려면 **둘 다 위치를 가져야 한다.** 값은 `WeaponMotion` 이 낸다 (애니 레인 실측).
 ##
 ## **전진은 무기 길이의 역함수다** — `전진 = 목표 간격 - (팔 + 무기 길이)`.
-## **짧은 무기가 더 파고든다.** 단검은 붙어야 닿고 창은 제자리에서 닿는다.
+## 짧은 무기가 더 파고든다. 다만 실측해 보니 **큰 무기는 전진도 느렸다** (§28.20.30).
 ##
-## 지금 짐작으로 넣으면 값이 왔을 때 두 번 짠다. 그래서 **거리만** 만든다.
+## ## 적은 **목록**이다
+##
+## 하나여도 목록으로 든다. §28.20.33 이 「적이 여럿이면」을 물음으로 남겼는데,
+## 하나를 특별 취급해 두면 여럿이 될 때 판정하는 쪽이 두 갈래로 갈린다.
+##
+## ## 시간은 여기 없다
+##
+## 이 클래스는 **자리만** 안다. 눈금도 다음 타 시각도 `SparringBout` 의 것이다.
+## 그래서 판을 다시 쏴도 여기 있는 것은 안 지워진다.
 ##
 ## ## 「전진 뒤 제자리로 돌아오나」는 미정이다
 ##
 ## 사용자가 정한다. **남으면 5타 체인이 다섯 번 밀고 들어간다.**
-## 그래서 `advance` 를 여기서 처리하지 않고 자리만 비워 둔다.
+## 그래서 규칙을 고르지 않고 둘 다 되게 둔다.
 
 enum AdvanceMode {
 	RETURN,  ## 휘두른 뒤 제자리로 돌아온다
 	STAY,  ## 나간 자리에 남는다 — 5타 체인이 다섯 번 밀고 들어간다
+}
+
+## **리치 안에 둘이 있으면 누구를 때리나** (§28.20.33 물음 ②).
+##
+## 지금은 **가장 가까운 것** 하나뿐이다. 값이 하나뿐인 열거형인 것이 요점이다 —
+## §28.4 의 자동 타겟팅이 무엇으로 고를지가 정해지면 **여기에 값이 는다.**
+## 고르는 규칙이 코드 여기저기 흩어져 있지 않고 이 한 곳에서 갈린다.
+enum TargetChoice {
+	NEAREST,  ## 가장 가까운 것
 }
 
 ## **미정이다.** 애니 레인이 둘 다 만들어 사용자에게 보냈고 사용자가 정한다.
@@ -42,38 +49,149 @@ enum AdvanceMode {
 ## 만져 볼 수 있고, 측정 도구는 두 경우를 다 잰다.
 var advance_mode: AdvanceMode = AdvanceMode.RETURN
 
+## **미정이다** (§28.20.34 물음 ②). 값이 하나뿐이라 지금은 고를 것이 없다.
+var target_choice: TargetChoice = TargetChoice.NEAREST
+
 ## 1픽셀 = 1단위. 화면 좌표와 같은 축을 쓴다 (오른쪽이 +).
 var attacker_x: float = 0.0
-var target_x: float = 0.0
+
+var _enemies: Array[SparringEnemy] = []
 
 
 func _init(p_attacker_x: float = 0.0, p_target_x: float = 240.0) -> void:
 	attacker_x = p_attacker_x
-	target_x = p_target_x
+	_enemies = [SparringEnemy.new(p_target_x)]
 
 
-## 둘 사이의 거리. 항상 0 이상이다.
+# ---------------------------------------------------------------- 누가 서 있나
+
+
+func enemy_count() -> int:
+	return _enemies.size()
+
+
+## 그 번호의 적. 범위를 벗어나면 `null`.
+func enemy_at(index: int) -> SparringEnemy:
+	if index < 0 or index >= _enemies.size():
+		return null
+	return _enemies[index]
+
+
+func enemies() -> Array[SparringEnemy]:
+	return _enemies
+
+
+func add_enemy(x: float, weapon: BackpackItem = null) -> SparringEnemy:
+	var enemy := SparringEnemy.new(x, weapon)
+	_enemies.append(enemy)
+	return enemy
+
+
+func clear_enemies() -> void:
+	_enemies.clear()
+
+
+# ---------------------------------------------------------------- 거리
+
+
+## 그 적까지의 거리. 항상 0 이상이다.
+func gap_to(index: int) -> float:
+	var enemy := enemy_at(index)
+	if enemy == null:
+		return INF
+	return absf(enemy.x - attacker_x)
+
+
+## 고른 적까지의 거리. 적이 없으면 `INF`.
 func gap() -> float:
-	return absf(target_x - attacker_x)
+	return gap_to(target_index())
+
+
+## **누구를 때리나** (§28.20.34 물음 ②). 없으면 -1.
+##
+## 지금 규칙은 `TargetChoice.NEAREST` 하나뿐이다.
+func target_index() -> int:
+	if _enemies.is_empty():
+		return -1
+	var best := 0
+	var best_gap := gap_to(0)
+	for index in range(1, _enemies.size()):
+		var candidate := gap_to(index)
+		if candidate < best_gap:
+			best_gap = candidate
+			best = index
+	return best
+
+
+## 고른 적의 자리. 적이 없으면 대원의 자리를 돌려준다 (그리는 쪽이 안 터지게).
+func target_x() -> float:
+	var enemy := enemy_at(target_index())
+	return enemy.x if enemy != null else attacker_x
 
 
 ## 대원이 적을 바라보는 방향 (+1 오른쪽 / -1 왼쪽).
 func facing() -> float:
-	return 1.0 if target_x >= attacker_x else -1.0
+	return 1.0 if target_x() >= attacker_x else -1.0
 
 
-## 대원을 그만큼 앞으로 민다. **적을 지나치지는 않는다.**
+## **이 리치 안에 드는 적들.** 가까운 것부터, 최대 `limit` 명.
+##
+## §28.20.34 물음 ①. **닿는 범위가 곧 걸치는 범위다** — 리치가 무기마다 다르므로
+## 걸침에 쓸 새 자료가 필요 없다. 몇 명까지 걸치는지만 `limit` 로 받는다.
+##
+## **등 뒤는 안 맞는다.** 바라보는 쪽의 적만 고른다. 그렇게 안 하면 지나쳐 온 적이
+## 계속 맞아서 전진이 곧 후방 공격이 된다.
+##
+## 순서가 `target_index()` 와 같은 규칙(가까운 것부터)인 것이 중요하다.
+## 「누구를」과 「몇에게」가 서로 다른 규칙이면 첫째로 맞는 적이 고른 적이 아니게 된다.
+func targets_within(reach: float, limit: int = 1) -> PackedInt32Array:
+	var found := PackedInt32Array()
+	if limit <= 0 or _enemies.is_empty():
+		return found
+	var ahead := facing()
+	var ordered: Array[Vector2] = []
+	for index in _enemies.size():
+		var offset := _enemies[index].x - attacker_x
+		if offset * ahead < 0.0:
+			continue
+		var distance := absf(offset)
+		if distance > reach:
+			continue
+		ordered.append(Vector2(distance, float(index)))
+	ordered.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
+	for entry in ordered:
+		if found.size() >= limit:
+			break
+		found.append(int(entry.y))
+	return found
+
+
+# ---------------------------------------------------------------- 움직임
+
+
+## 대원을 그만큼 앞으로 민다. **고른 적을 지나치지는 않는다.**
 ##
 ## 지나치게 두면 전진이 쌓였을 때 대원이 적 뒤로 빠져 방향이 뒤집힌다.
-## 값이 오기 전이라 아직 아무도 안 부르지만, 부를 때 이 성질이 있어야 한다.
+##
+## ## 다른 적에 막히나 — **미정이다** (§28.20.34 물음 ③)
+##
+## **전투가 혼자 정할 물음이 아니다.** `docs/design/11-decisions.md` 가 2026-08-07 에
+## **「유닛이 다른 유닛을 밀 수 없다」**를 확정했다
+## (`src/proto/unit_move/` — 밀치기가 지터의 원인이었다).
+##
+## 막으면 §28.20.30 의 **파고들기가 죽는다** — 앞의 적이 뒤의 적을 지켜 준다.
+## 지나가게 두면 몸이 겹친다. 미는 것은 확정을 뒤집는 것이다.
+##
+## **여기서는 아무에게도 안 막힌다.** 자리만 적어 둔다.
 func advance(distance: float) -> void:
 	if distance <= 0.0:
 		return
+	var goal := target_x()
 	var moved := attacker_x + facing() * distance
 	if facing() > 0.0:
-		attacker_x = minf(moved, target_x)
+		attacker_x = minf(moved, goal)
 	else:
-		attacker_x = maxf(moved, target_x)
+		attacker_x = maxf(moved, goal)
 
 
 ## 한 번 휘두른 결과로 몸이 움직인다.
@@ -85,6 +203,15 @@ func swing_advance(distance: float) -> void:
 		advance(distance)
 
 
+## 적 하나짜리로 되돌린다.
 func reset(p_attacker_x: float, p_target_x: float) -> void:
 	attacker_x = p_attacker_x
-	target_x = p_target_x
+	_enemies = [SparringEnemy.new(p_target_x)]
+
+
+## 적 여럿으로 세운다. **무기는 아직 안 쥐여 준다** — 판이 쥐여 준다.
+func reset_with(p_attacker_x: float, xs: PackedFloat32Array) -> void:
+	attacker_x = p_attacker_x
+	_enemies.clear()
+	for x in xs:
+		_enemies.append(SparringEnemy.new(x))
