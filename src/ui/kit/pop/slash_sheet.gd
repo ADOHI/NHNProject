@@ -182,9 +182,21 @@ func _rip_through() -> Vector2:
 ##
 ## 판을 칠하는 모든 자리가 이 함수를 지나간다 — 한 군데라도 빠지면 그 판만
 ## 자국을 안 맞은 것이 되고, 그러면 자국이 **한 줄로 안 이어져** 그냥 깨진 판이 된다.
+## 다각형 하나를 칠한다. **꼭짓점이 셋 미만이거나 넓이가 없으면 안 그린다.**
+##
+## 자르는 것을 세 겹(찢어 열기 → 베기 → 초승달 파내기) 쌓으면 중간에 반드시
+## **넓이 0 짜리 조각**이 나온다 — 팝업이 열리기 시작하는 한두 편이 그렇다.
+## 그것을 그대로 넘기면 `canvas_item_add_polygon` 이 *"triangulation failed"* 로 운다.
+## 이 저장소는 경고를 오류로 치므로 **거르는 자리가 하나 있어야 한다.**
+func _paint(shape: PackedVector2Array, tint: Color) -> void:
+	if shape.size() < 3 or GraphicCut.area_of(shape) < 0.05:
+		return
+	draw_colored_polygon(shape, tint)
+
+
 func _plate(shape: PackedVector2Array, tint: Color, least: float = RIP_LEAST) -> void:
 	for piece in GraphicCut.severed(shape, _rip_angle(), _rip_through(), _rip(), least):
-		draw_colored_polygon(piece, tint)
+		_paint(piece, tint)
 
 
 ## 판 **안에** 깔리는 것 — 무늬 한 줄 · 뒤판 초승달 — 은 **판의 판정을 따라간다.**
@@ -199,7 +211,7 @@ func _follow(panel: PackedVector2Array, piece: PackedVector2Array, tint: Color) 
 	if push == Vector2.ZERO:
 		_plate(piece, tint, 0.0)
 		return
-	draw_colored_polygon(GraphicCut.swelled(piece, 0.0, push), tint)
+	_paint(GraphicCut.swelled(piece, 0.0, push), tint)
 
 
 ## 어긋난 **뒤판.** 앞판이 덮을 자리를 **잘라 내고** 초승달만 남긴다.
