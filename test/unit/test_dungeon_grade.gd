@@ -102,3 +102,30 @@ func test_an_empty_board_does_not_crash() -> void:
 	var grade := GradeScript.of(DungeonBlueprint.new())
 	assert_eq(int(grade["rooms"]), 0, "빈 판의 방 개수가 0 이 아니다")
 	assert_between(int(grade["complexity"]), 1, GradeScript.COMPLEXITY_MAX, "빈 판의 복잡이 범위 밖")
+
+
+## **사다리와 등급 경계는 같이 움직여야 한다.**
+##
+## 크기 N 의 판은 규모 N 으로 읽혀야 한다. 안 그러면 슬라이더를 끝까지 밀어도 화면이
+## 안 바뀌고, 그 순간 수치가 뜻을 잃는다.
+##
+## **한 번 어긋난 적이 있다.** §17.25 가 사다리를 12/22/32/42/52 로 올렸는데 경계는
+## 옛 사다리에 맞춰 잘린 채로 남아 크기 3 • 4 • 5 가 전부 「규모 5/5」였다
+## (docs/design/17-dungeon-generation.md §17.29). **이 테스트가 그것을 다시 못 잡게 한다.**
+func test_each_size_step_reads_as_its_own_scale_grade() -> void:
+	for size in range(SampleDungeons.SIZE_MIN, SampleDungeons.SIZE_MAX + 1):
+		var hits := 0
+		var boards := 0
+		for character in DungeonCatalog.count():
+			for seed_value in _SEEDS:
+				var params := SampleDungeons.params_for_size(size, character)
+				var plan := GeneratorScript.new(seed_value * 977 + character, params).generate()
+				boards += 1
+				if int(GradeScript.of(plan)["scale"]) == size:
+					hits += 1
+		# 시드 편차로 이웃 등급이 몇 판 섞이는 것은 정상이다. 붙어 버린 것만 잡는다.
+		assert_gt(
+			float(hits) / float(boards),
+			0.85,
+			"크기 %d 가 규모 %d 로 안 읽힌다 (%d/%d)" % [size, size, hits, boards]
+		)
