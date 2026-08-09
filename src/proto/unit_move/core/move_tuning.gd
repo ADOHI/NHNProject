@@ -86,6 +86,15 @@ const DEFS: Array[Dictionary] = [
 		"hint": "막힌 곳을 기억해 흐름장을 다시 굽는다. 0 이면 처음 길만 쓴다",
 	},
 	{
+		"key": "jam_cost",
+		"label": "막힘 비용",
+		"min": 0.0,
+		"max": 6.0,
+		"step": 0.1,
+		"value": 4.0,
+		"hint": "막힌 칸이 무는 값. 크면 멀리 돌아가고 0 이면 기억이 없는 것과 같다",
+	},
+	{
 		"key": "formation_spacing",
 		"label": "대형 간격",
 		"min": 1.0,

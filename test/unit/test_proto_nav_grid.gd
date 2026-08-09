@@ -127,3 +127,52 @@ func test_goal_on_a_wall_moves_to_the_nearest_free_cell() -> void:
 	var grid := _grid_with_gate()
 	var field := grid.build_flow_field(grid.cell_to_world(Vector2i(10, 2)))
 	assert_true(grid.is_walkable(field.goal_cell), "목적지 칸이 벽이면 명령이 통째로 죽는다")
+
+
+## **막힘 표를 읽는 쪽과 쓰는 쪽이 같은 뜻으로 읽는가.**
+##
+## `unit_jam.gd` 는 막힌 칸에 `_JAM_FORGET`(3)을 적고 비면 하나씩 깎는데, 읽는 쪽이
+## `== 1` 로 물어서 **지금 막힌 칸은 값을 안 물고 비운 지 오래된 칸만 값을 물었다.**
+## 기억이 정확히 뒤집혀 있었고 지표로는 안 잡혔다 - 뒤집힌 기억도 값은 내기 때문이다.
+## README §25. 여기서 못 박는다.
+func test_jam_cost_applies_while_the_cell_is_still_marked() -> void:
+	var grid := _open_grid()
+	var goal := grid.cell_to_world(Vector2i(18, 6))
+	var plain := grid.build_flow_field(goal)
+	var jam := PackedByteArray()
+	jam.resize(grid.cols * grid.rows)
+	# 목적지로 가는 길 한복판을 세로로 막는다. 쓰는 쪽이 적는 값 그대로 3 이다.
+	for row in grid.rows:
+		jam[grid.cell_index(Vector2i(10, row))] = 3
+	var jammed := grid.build_flow_field(goal, jam, 3.0)
+	assert_gt(
+		jammed.cost_at(Vector2i(2, 6)),
+		plain.cost_at(Vector2i(2, 6)),
+		"지금 막힌 칸(3)이 값을 물어야 한다. `== 1` 로 물으면 이 줄이 무너진다"
+	)
+
+
+## 잊어 가는 중인 칸도 0 이 되기 전까지는 막힘이다. 확인 횟수는 **얼마나 오래 믿을지**이지
+## 어느 한 값에서만 막힘이라는 뜻이 아니다.
+func test_jam_cost_applies_for_every_countdown_value() -> void:
+	var plain := _lane_cost(0)
+	for remaining in [1, 2, 3]:
+		assert_gt(_lane_cost(remaining), plain, "남은 확인 횟수 %d 에서도 막힘이어야 한다" % remaining)
+
+
+## 0 이면 기억이 없는 것과 같다.
+func test_jam_cost_of_zero_changes_nothing() -> void:
+	assert_almost_eq(_lane_cost(3, 0.0), _lane_cost(0), 0.0001)
+
+
+## 길 한복판을 세로로 막아 두고 반대편 끝 칸의 비용을 잰다. `remaining` 이 막힘 표에 적히는
+## 값이고, 0 이면 안 막힌 것이다.
+func _lane_cost(remaining: int, cost: float = 3.0) -> float:
+	var grid := _open_grid()
+	var goal := grid.cell_to_world(Vector2i(18, 6))
+	var jam := PackedByteArray()
+	jam.resize(grid.cols * grid.rows)
+	if remaining > 0:
+		for row in grid.rows:
+			jam[grid.cell_index(Vector2i(10, row))] = remaining
+	return grid.build_flow_field(goal, jam, cost).cost_at(Vector2i(2, 6))

@@ -3,9 +3,29 @@ extends SceneTree
 ##
 ##     godot --headless --path . -s res://tools/measure_unit_move.gd
 ##     godot --headless --path . -s res://tools/measure_unit_move.gd -- probe
+##     godot --headless --path . -s res://tools/measure_unit_move.gd -- jam 3 4 5
 ##
 ## 눈으로 "좋아졌다"고 말하는 것은 증거가 아니다. 고치기 전과 후에 같은 숫자를 뽑아
 ## 나란히 놓아야 무엇이 나아졌고 무엇이 나빠졌는지 갈린다.
+##
+## # **이 표에서 믿을 수 있는 칸과 못 믿는 칸**
+##
+## | | 칸 |
+## | --- | --- |
+## | **믿는다** | 초, 픽셀, 인원 - 정지, 90%, 통과, 뒤진동, 막힘, 꺾임, 반전, 겹침 |
+## | **못 믿는다** | `흐름장`, `step 평균`, `step 최악` 세 칸 |
+##
+## **왜 갈리는가.** 시뮬레이션은 고정 간격(1/60 초)으로 돌고 난수를 안 쓴다. 그래서 위칸은
+## **결정론**이다 - 같은 판을 다시 굴리면 소수점까지 같은 값이 나오고, 실제로 그것을 확인했다
+## (`probe_open40.gd` 5 회, 그리고 리팩토링 전후 지표 열두 칸 동일).
+##
+## 반면 밀리초는 **이 기계가 그 순간 무엇을 하고 있었는가**를 잰다. 같은 코드로 같은 판을
+## 두 번 돌려 `열린 곳 40` 의 step 최악이 11.99 와 28.82 밀리초로 나온 적이 있다 - **2.4 배다.**
+## 통합자가 GPU 로 다른 일을 돌리고 있으면 더 흔들린다.
+##
+## > **그러므로 밀리초로 채택 여부를 가르지 마라.** 성능을 판정하려면 이 도구가 아니라
+## > 조용한 기계에서 `bench_frame_budget.gd` 같은 전용 측정으로 따로 재야 한다.
+## > 여기 밀리초 칸은 "자릿수가 갑자기 열 배로 뛰었나"를 보는 눈금일 뿐이다.
 ##
 ## `probe` 를 붙이면 항을 하나씩 꺼 보며 **어느 항이 지터를 만드는지**를 가른다.
 ## 원인을 짚지 않고 고치면 증상만 옮겨 다닌다.
@@ -75,9 +95,69 @@ func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0 and args[0] == "probe":
 		_run_probe()
+	elif args.size() > 0 and args[0] == "jam":
+		var costs: Array[float] = []
+		for index in range(1, args.size()):
+			costs.append(float(args[index]))
+		_run_jam_sweep(costs)
 	else:
 		_run_cases()
 	quit()
+
+
+## **막힘 비용을 훑는다.** 값 하나를 고르려면 이웃한 값들을 나란히 놓아야 한다.
+##
+## 이 훑기가 필요한 이유가 있다. 지금까지 이 값을 3.0 과 1.2 로 견준 측정이 **전부 무효**였다 -
+## 막힘 표를 읽는 쪽이 뒤집혀 있어서 값이 실제로 안 걸렸다(README §25). 고친 표 위에서
+## 처음부터 다시 고른다.
+##
+## **판정에 쓰는 것은 초와 인원뿐이다.** `step` 밀리초는 이 기계에서 같은 코드로도 두 배씩
+## 흔들려(README §25) 값을 가르지 못한다. 초는 고정 시간 간격으로 도는 결정론이라 쓸 수 있다.
+func _run_jam_sweep(wanted: Array[float]) -> void:
+	var target := Vector2(1500, 545)
+	var gate := 30 * _CELL
+	var costs: Array[float] = wanted
+	if costs.is_empty():
+		costs = [0.0, 1.0, 1.5, 2.0, 3.0, 4.0]
+	print("| 막힘 비용 | 상황 | 통과 | 정지 | 막힘 | 뒤진동 |")
+	print("| --- | --- | --- | --- | --- | --- |")
+	for cost in costs:
+		var rows: Array[Dictionary] = []
+		for count in [4, 8, 12, 24, 40, 100]:
+			var field := _tuned(_choke_field(count, 2), "jam_cost", cost)
+			rows.append(_measure("좁은 통로 %d" % count, field, target, gate))
+		for count in [4, 8, 12, 24, 40, 100]:
+			var field := _tuned(_open_field(count), "jam_cost", cost)
+			rows.append(_measure("열린 곳 %d" % count, field, target, -1.0))
+		rows.append(
+			_measure("한 칸 문 40", _tuned(_choke_field(40, 1), "jam_cost", cost), target, gate)
+		)
+		rows.append(
+			_measure("구석 24", _tuned(_open_field(24), "jam_cost", cost), Vector2(60, 60), -1.0)
+		)
+		rows.append(
+			_measure(
+				"맞교차 40",
+				_tuned(_facing_field(40), "jam_cost", cost),
+				target,
+				-1.0,
+				Vector2(200, 545)
+			)
+		)
+		for row in rows:
+			print(
+				(
+					"| %.1f | %s | %s | %s | %d | %.1f px |"
+					% [
+						cost,
+						row["label"],
+						_crossing(row["cross"], row["stranded"]),
+						_seconds(row["settle"]),
+						row["blocked"],
+						row["after"],
+					]
+				)
+			)
 
 
 ## **흔한 규모부터 잰다.** 40 과 100 만 재던 것을 4 · 8 · 12 · 24 로 넓혔다.

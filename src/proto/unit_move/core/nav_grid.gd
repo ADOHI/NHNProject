@@ -38,12 +38,16 @@ const _WALL_CLEAR_TARGET := 3
 ## 값이 아니다. 0.6 이면 벽에 붙은 칸이 한 칸 반의 값을 치른다.
 const _WALL_PENALTY := 0.6
 
-## 막힌 칸이 무는 추가 비용의 비율.
+## 막힌 칸이 무는 추가 비용의 비율. **기본값이고, 부르는 쪽이 돌린다.**
 ##
 ## **이 값이 곧 "얼마나 멀면 돌아갈 만한가"다.** 3.0 이면 막힌 칸 하나가 네 칸 값을 하므로,
 ## 막힌 곳 세 칸을 피하려고 아홉 칸까지 돌아간다. 무한대로 두면(아예 막으면) 길이 하나뿐일 때
 ## 갈 곳이 없어지고, 0 이면 기억이 없는 것과 같다.
-const _JAM_PENALTY := 3.0
+##
+## **상수에서 슬라이더로 옮긴 이유가 있다.** 이 값을 고른 근거였던 측정이 전부 무효였다
+## (README §25 - 막힘 표를 읽는 쪽이 뒤집혀 있었다). 다시 고르려면 돌려 볼 수 있어야 하고,
+## 돌려 볼 수 있으면 사람이 직접 띄워서도 견줄 수 있다.
+const JAM_COST_DEFAULT := 3.0
 
 ## 벽에서 밀어낼 때 훑는 방향 수와 고리 수. 걸음 크기는 `push_out` 이 몸 크기에서 정한다.
 const _PUSH_OUT_DIRECTIONS := 12
@@ -69,8 +73,9 @@ var _clearance: PackedInt32Array
 ## 위 값이 지금 지형과 맞는가. 벽이 바뀌면 내려간다.
 var _clearance_ready := false
 
-## 흐름장을 만드는 동안만 들고 있는 막힘 표. 만들고 나면 비운다.
+## 흐름장을 만드는 동안만 들고 있는 막힘 표와 그때 쓸 비용. 만들고 나면 비운다.
 var _jam: PackedByteArray = PackedByteArray()
+var _jam_cost := JAM_COST_DEFAULT
 
 
 func _init(grid_cols: int, grid_rows: int, size: float) -> void:
@@ -272,8 +277,11 @@ func _ensure_clearance() -> void:
 ## 칸이 이천 개 수준이라 상수 차이가 의미 없고, 힙보다 코드가 짧아 틀릴 여지가 적어서다.
 ## `jam` 은 칸마다 "여기 막혀 있다"를 담은 표다(칸 수와 같은 길이, **0 보다 크면 막힘**).
 ## 비어 있으면 지형만 보고 만든다.
-func build_flow_field(target: Vector2, jam: PackedByteArray = PackedByteArray()) -> ProtoFlowField:
+func build_flow_field(
+	target: Vector2, jam: PackedByteArray = PackedByteArray(), jam_cost: float = JAM_COST_DEFAULT
+) -> ProtoFlowField:
 	_jam = jam
+	_jam_cost = maxf(jam_cost, 0.0)
 	var field := ProtoFlowField.new(self, target)
 	var count := cols * rows
 	field.costs.resize(count)
@@ -287,6 +295,7 @@ func build_flow_field(target: Vector2, jam: PackedByteArray = PackedByteArray())
 	_integrate(field)
 	_derive_directions(field)
 	_jam = PackedByteArray()
+	_jam_cost = JAM_COST_DEFAULT
 	return field
 
 
@@ -357,7 +366,7 @@ func _cell_step(index: int, step: float) -> float:
 	# 그런데 여기서 `== 1` 로 물어서, **지금 막힌 칸(3)은 값을 안 물고 두 번 확인 동안 비어
 	# 있던 칸(1)만 값을 물었다.** 기억이 정확히 뒤집혀 있었다. README §25.
 	if index < _jam.size() and _jam[index] > 0:
-		step *= 1.0 + _JAM_PENALTY
+		step *= 1.0 + _jam_cost
 	var clear := _clearance[index]
 	if clear >= _WALL_COST_SPAN:
 		return step

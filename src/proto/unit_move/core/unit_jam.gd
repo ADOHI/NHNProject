@@ -119,7 +119,9 @@ static func review(field: ProtoUnitField, frame: int) -> void:
 			continue
 		order.baked_frame = frame
 		var started := Time.get_ticks_usec()
-		order.flow = grid.build_flow_field(order.target, order.jam)
+		order.flow = grid.build_flow_field(
+			order.target, order.jam, field.tuning.get_value("jam_cost")
+		)
 		field.flow_build_usec = Time.get_ticks_usec() - started
 		field.flow_build_peak = maxi(field.flow_build_peak, field.flow_build_usec)
 		field.rebake_count += 1
