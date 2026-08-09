@@ -18,12 +18,12 @@ func test_origin_sits_at_zero() -> void:
 
 func test_x_axis_goes_right_and_down() -> void:
 	var iso := _iso()
-	assert_eq(iso.cell_to_world(Vector2i(1, 0)), Vector2(32.0, 16.0))
+	assert_eq(iso.cell_to_world(Vector2i(1, 0)), Vector2(48.0, 16.0))
 
 
 func test_y_axis_goes_left_and_down() -> void:
 	var iso := _iso()
-	assert_eq(iso.cell_to_world(Vector2i(0, 1)), Vector2(-32.0, 16.0))
+	assert_eq(iso.cell_to_world(Vector2i(0, 1)), Vector2(-48.0, 16.0))
 
 
 func test_round_trip_returns_the_same_cell() -> void:
@@ -40,11 +40,11 @@ func test_points_inside_a_cell_all_map_to_it() -> void:
 	var cell := Vector2i(4, 7)
 	var center := iso.cell_to_world(cell)
 	var nudges := [
-		Vector2(0.0, -14.0),
-		Vector2(30.0, 0.0),
-		Vector2(0.0, 14.0),
-		Vector2(-30.0, 0.0),
-		Vector2(14.0, 7.0),
+		Vector2(0.0, -15.0),
+		Vector2(46.0, 0.0),
+		Vector2(0.0, 15.0),
+		Vector2(-46.0, 0.0),
+		Vector2(20.0, 7.0),
 	]
 	for nudge in nudges:
 		assert_eq(iso.world_to_cell(center + nudge), cell, "칸 안의 %s" % nudge)
@@ -90,7 +90,18 @@ func test_rect_depth_uses_the_front_corner() -> void:
 	assert_gt(big, IsoScript.rect_depth(Vector2i(0, 0), Vector2i(1, 1)))
 
 
-## 시점을 바꾸는 지점은 이 두 값뿐이다 (§30.9 ★1).
+## 시점은 캐릭터 그림에 맞춘 것이지 고른 것이 아니다 (§30.9 ★1 — 확정).
+##
+## 이 비율이 조용히 바뀌면 인물이 바닥과 어긋난 채로 서 있게 되고, 그것은
+## 눈으로 봐야만 잡힌다. 값을 여기서 못 박아 둔다.
+func test_default_view_is_the_quarter_view_matched_to_the_characters() -> void:
+	var iso := _iso()
+	assert_eq(iso.tile_width(), 96.0)
+	assert_eq(iso.tile_height(), 32.0)
+	assert_almost_eq(iso.tile_height() / iso.tile_width(), 1.0 / 3.0, 0.001, "3:1 쿼터뷰")
+
+
+## 시점을 바꾸는 지점은 이 두 값뿐이다.
 func test_tile_size_is_the_only_knob() -> void:
 	var flat := IsoScript.new(80.0, 20.0)
 	assert_eq(flat.cell_to_world(Vector2i(1, 0)), Vector2(40.0, 10.0))
@@ -99,4 +110,4 @@ func test_tile_size_is_the_only_knob() -> void:
 
 func test_board_size_grows_with_both_axes() -> void:
 	var iso := _iso()
-	assert_eq(iso.board_size(20, 20), Vector2(1280.0, 640.0))
+	assert_eq(iso.board_size(20, 20), Vector2(1920.0, 640.0))
