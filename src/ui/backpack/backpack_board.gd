@@ -24,6 +24,9 @@ signal layout_changed
 ## 지금 짜 놓은 체인을 실제로 쏴 보라는 요청 (§28.4).
 signal fire_requested
 
+## 전진이 남을지 돌아올지를 바꿔 보라는 요청. **미정이라 만져 볼 수 있게 둔다** (§28.20.30).
+signal advance_mode_toggled
+
 const GRID_ORIGIN := Vector2(40.0, 110.0)
 const CELL := 72.0
 
@@ -52,7 +55,7 @@ const _TAG_TOP_MARGIN := 96.0
 
 ## 대련장 자리. 글자판 아래의 빈 곳이다.
 const ARENA_LEFT := 1052.0
-const ARENA_GROUND := 655.0
+const ARENA_GROUND := 640.0
 
 ## 대련장 거리를 화면에 줄여 그리는 비율. 기본 간격 240 이 화면 밖으로 나갔다.
 const ARENA_SCALE := 0.78
@@ -180,6 +183,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_restore_sample()
 		KEY_F:
 			fire_requested.emit()
+		KEY_T:
+			advance_mode_toggled.emit()
 		_:
 			return
 	get_viewport().set_input_as_handled()
@@ -767,27 +772,72 @@ func _draw_arena() -> void:
 	var left := _arena_x(minf(_field.attacker_x, _field.target_x))
 	var right := _arena_x(maxf(_field.attacker_x, _field.target_x))
 	draw_line(Vector2(left, ground + 12.0), Vector2(right, ground + 12.0), _DIM_TEXT, 1.0)
+	_draw_reach(ground)
 
 	# 글자는 **바닥선 아래 한 줄**로 모은다. 위에 두었더니 체인 목록과 겹쳤다 —
 	# 18타짜리를 쐈을 때 캡처에서 드러났다.
 	draw_string(
 		font,
 		Vector2(ARENA_LEFT - 24.0, ground + 32.0),
-		"대련장 (F)   간격 %.0f" % _field.gap(),
+		(
+			"대련장 (F)   간격 %.0f   전진 %s (T)"
+			% [
+				_field.gap(),
+				"남는다" if _field.advance_mode == SparringField.AdvanceMode.STAY else "돌아온다",
+			]
+		),
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1.0,
 		14,
 		_DIM_TEXT
 	)
+	# 단계는 **둘째 줄**에 둔다. 간격·전진까지 한 줄에 넣었더니 글자가 겹쳤다.
 	draw_string(
 		font,
-		Vector2(ARENA_LEFT + 150.0, ground + 32.0),
+		Vector2(ARENA_LEFT - 24.0, ground + 52.0),
 		BreakState.label(state),
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1.0,
 		16,
 		_state_color(state)
 	)
+
+
+## 다음에 나갈 무기가 **어디까지 닿는지**를 눈금으로 세운다.
+##
+## 닿지 않으면 체인이 거기서 끊긴다 — 백팩에서는 이어져 있는데도.
+## **격자 이유와 다른 층이라** 격자 쪽 가위표와 다르게 보여야 한다.
+func _draw_reach(ground: float) -> void:
+	if _bout == null or _bout.total_hits() == 0:
+		return
+	var index := mini(_bout.landed(), _bout.total_hits() - 1)
+	var item := _bout.item_at(index)
+	if item == null:
+		return
+	var reach := WeaponMotion.reach_px(item)
+	var edge := _arena_x(_field.attacker_x + _field.facing() * reach)
+	var in_range := _field.gap() <= reach
+	var color := _DIM_TEXT if in_range else _BREAK_LINE
+	draw_line(Vector2(edge, ground - 92.0), Vector2(edge, ground + 6.0), color, 2.0)
+	draw_string(
+		get_theme_default_font(),
+		Vector2(edge - 26.0, ground - 98.0),
+		"리치 %.0f" % reach,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1.0,
+		13,
+		color
+	)
+	if _bout.was_out_of_reach():
+		draw_string(
+			get_theme_default_font(),
+			Vector2(ARENA_LEFT - 24.0, ground - 120.0),
+			"닿지 않는다",
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1.0,
+			16,
+			_BREAK_LINE
+		)
 
 
 func _arena_x(field_x: float) -> float:

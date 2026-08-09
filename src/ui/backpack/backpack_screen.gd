@@ -16,6 +16,9 @@ extends Control
 ## 글자판에 한 줄씩 적을 최대 타 수. 넘으면 줄여 적는다.
 const _MAX_LISTED_STEPS := 8
 
+## 대련을 시작하는 간격. 1x1 리치(104)보다 조금 좁아 어떤 무기로도 열 수 있다.
+const DEFAULT_GAP := 96.0
+
 var _grid: BackpackGrid
 
 ## 무너짐 수치들. **확정이 아니다** (§28.8). 여기서 갈아 끼우면 화면이 따라온다.
@@ -39,6 +42,7 @@ func _ready() -> void:
 	_board.layout_changed.connect(_refresh)
 	_board.fire_requested.connect(_fire)
 	_board.set_field(_field)
+	_board.advance_mode_toggled.connect(_toggle_advance_mode)
 	_help_label.text = _help_text()
 	_refresh()
 
@@ -59,7 +63,8 @@ func _fire() -> void:
 	var chains := ChainResolver.resolve_all(_grid)
 	if chains.is_empty() or chains[0].length() == 0:
 		return
-	_bout = SparringBout.from_chain(chains[0], _break_tuning)
+	_field.reset(0.0, DEFAULT_GAP)
+	_bout = SparringBout.from_chain(chains[0], _break_tuning, _field)
 	_board.set_bout(_bout)
 	_bout.start()
 
@@ -78,11 +83,20 @@ func _refresh() -> void:
 	_chain_label.text = _chain_text(chains, outcomes)
 
 
+## **전진이 남나 돌아오나는 미정이다** (§28.20.30). 만져 보고 정하라고 열어 둔다.
+func _toggle_advance_mode() -> void:
+	if _field.advance_mode == SparringField.AdvanceMode.STAY:
+		_field.advance_mode = SparringField.AdvanceMode.RETURN
+	else:
+		_field.advance_mode = SparringField.AdvanceMode.STAY
+	_board.queue_redraw()
+
+
 func _help_text() -> String:
 	return (
 		"백팩 배치가 콤보 루트를 정한다. 아이템을 옮기면 체인이 그 자리에서 다시 풀린다.\n"
 		+ "왼쪽 끌기: 옮기기    오른쪽 클릭: 대기줄로 빼기    R: 회전    "
-		+ "C: 격자 비우기    Space: 표본 배치로 되돌리기    F: 체인 발사"
+		+ "C: 격자 비우기    Space: 표본 배치로    F: 체인 발사    T: 전진 남기기/돌아오기"
 	)
 
 

@@ -210,3 +210,78 @@ func test_restarting_clears_the_previous_run() -> void:
 	assert_eq(bout.gauge_value(), 0.0)
 	assert_eq(bout.peak(), 0.0, "최고 기록도 초기화된다")
 	assert_true(first_peak > 0.0, "전제 확인")
+
+
+# ---------------------------------------------------------------- 닿지 않는다
+
+
+func _reaching_field(gap: float) -> SparringField:
+	return SparringField.new(0.0, gap)
+
+
+func test_a_chain_stops_when_the_weapon_cannot_reach() -> void:
+	# **백팩에서는 이어지는데 필드에서 못 나간다.** 격자 이유와 다른 층이다.
+	var far := _reaching_field(400.0)
+	var bout := BoutScript.new(_items(5), _tuning(), far)
+	bout.start()
+	_run_to_end(bout)
+	assert_eq(bout.landed(), 0, "한 대도 못 닿는다")
+	assert_true(bout.was_out_of_reach())
+	assert_eq(bout.stop_reason(), SparringBout.Stop.OUT_OF_REACH)
+
+
+func test_a_chain_completes_when_in_range() -> void:
+	var close := _reaching_field(60.0)
+	var bout := BoutScript.new(_items(5), _tuning(), close)
+	bout.start()
+	_run_to_end(bout)
+	assert_eq(bout.landed(), 5)
+	assert_eq(bout.stop_reason(), SparringBout.Stop.COMPLETED)
+	assert_false(bout.was_out_of_reach())
+
+
+func test_without_a_field_there_is_no_distance_judgement() -> void:
+	# 눈금만 보던 옛 사용처가 그대로 돌아야 한다.
+	var bout := BoutScript.new(_items(4), _tuning())
+	bout.start()
+	_run_to_end(bout)
+	assert_eq(bout.landed(), 4)
+	assert_false(bout.was_out_of_reach())
+
+
+func test_staying_forward_closes_the_gap_while_it_lands() -> void:
+	# 닿는 거리 안에서 시작하면 때릴 때마다 파고든다.
+	var field := _reaching_field(100.0)
+	field.advance_mode = SparringField.AdvanceMode.STAY
+	var bout := BoutScript.new(_items(6), _tuning(), field)
+	bout.start()
+	_run_to_end(bout)
+	assert_eq(bout.landed(), 6, "닿는 데서 시작하면 계속 닿는다")
+	assert_true(field.gap() < 100.0, "간격이 줄어 있어야 한다")
+
+
+func test_out_of_reach_can_never_close_by_itself() -> void:
+	# **전진은 때려야 생긴다.** 그래서 못 닿으면 영영 못 붙는다 —
+	# 붙는 것은 이 대련장 밖(§28.4 의 RTS 자동 이동)의 일이다.
+	var field := _reaching_field(140.0)
+	field.advance_mode = SparringField.AdvanceMode.STAY
+	var bout := BoutScript.new(_items(12), _tuning(), field)
+	bout.start()
+	_run_to_end(bout)
+	assert_eq(bout.landed(), 0)
+	assert_eq(field.gap(), 140.0, "한 발짝도 못 나간다")
+	assert_true(bout.was_out_of_reach())
+
+
+func test_a_long_weapon_opens_where_a_short_one_cannot() -> void:
+	# **큰 무기가 받는 값은 「멀리서 시작할 수 있다」다.**
+	var gap := 112.0
+	var dagger := BoutScript.new(_items(3), _tuning(), _reaching_field(gap))
+	var long_blade: Array[BackpackItem] = [_sized(4), _sized(4), _sized(4)]
+	var reaching := BoutScript.new(long_blade, _tuning(), _reaching_field(gap))
+	dagger.start()
+	reaching.start()
+	_run_to_end(dagger)
+	_run_to_end(reaching)
+	assert_eq(dagger.landed(), 0, "단검은 이 거리에서 못 연다")
+	assert_true(reaching.landed() > 0, "대검은 같은 거리에서 연다")

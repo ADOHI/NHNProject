@@ -52,3 +52,31 @@ func test_reset_puts_them_back() -> void:
 	field.reset(0.0, 240.0)
 	assert_eq(field.attacker_x, 0.0)
 	assert_eq(field.gap(), 240.0)
+
+
+# ---------------------------------------------------------------- 전진 뒤 남나 돌아오나
+
+
+func test_returning_is_the_default_and_leaves_no_ground_gained() -> void:
+	# **미정이다.** 어느 쪽이 옳다는 것이 아니라 둘 다 되어야 한다는 것이 요점이다.
+	var field := FieldScript.new(0.0, 240.0)
+	field.advance_mode = SparringField.AdvanceMode.RETURN
+	field.swing_advance(25.0)
+	assert_eq(field.attacker_x, 0.0, "돌아오면 제자리다")
+
+
+func test_staying_accumulates_across_swings() -> void:
+	var field := FieldScript.new(0.0, 240.0)
+	field.advance_mode = SparringField.AdvanceMode.STAY
+	for _swing in 5:
+		field.swing_advance(25.0)
+	assert_eq(field.attacker_x, 125.0, "5타가 다섯 번 밀고 들어간다")
+	assert_eq(field.gap(), 115.0)
+
+
+func test_staying_still_never_passes_the_target() -> void:
+	var field := FieldScript.new(0.0, 100.0)
+	field.advance_mode = SparringField.AdvanceMode.STAY
+	for _swing in 20:
+		field.swing_advance(25.0)
+	assert_eq(field.attacker_x, 100.0)

@@ -31,6 +31,17 @@ extends RefCounted
 ## 사용자가 정한다. **남으면 5타 체인이 다섯 번 밀고 들어간다.**
 ## 그래서 `advance` 를 여기서 처리하지 않고 자리만 비워 둔다.
 
+enum AdvanceMode {
+	RETURN,  ## 휘두른 뒤 제자리로 돌아온다
+	STAY,  ## 나간 자리에 남는다 — 5타 체인이 다섯 번 밀고 들어간다
+}
+
+## **미정이다.** 애니 레인이 둘 다 만들어 사용자에게 보냈고 사용자가 정한다.
+##
+## 그래서 **둘 다 되게 해 두고 값은 박지 않는다.** 확인 화면에서 T 로 바꿔 가며
+## 만져 볼 수 있고, 측정 도구는 두 경우를 다 잰다.
+var advance_mode: AdvanceMode = AdvanceMode.RETURN
+
 ## 1픽셀 = 1단위. 화면 좌표와 같은 축을 쓴다 (오른쪽이 +).
 var attacker_x: float = 0.0
 var target_x: float = 0.0
@@ -63,6 +74,15 @@ func advance(distance: float) -> void:
 		attacker_x = minf(moved, target_x)
 	else:
 		attacker_x = maxf(moved, target_x)
+
+
+## 한 번 휘두른 결과로 몸이 움직인다.
+##
+## **남을지 돌아올지는 미정이라 여기서 갈린다.** 규칙을 고르는 것이 아니라
+## 고를 수 있게 두는 것이다.
+func swing_advance(distance: float) -> void:
+	if advance_mode == AdvanceMode.STAY:
+		advance(distance)
 
 
 func reset(p_attacker_x: float, p_target_x: float) -> void:

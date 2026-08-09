@@ -27,6 +27,14 @@ extends RefCounted
 signal hit_landed(index: int, item: BackpackItem)
 signal finished
 
+## 왜 멈췄나. **격자 이유(ChainResult.StopReason)와 다른 층이다** —
+## 저쪽은 백팩을 볼 때 이미 정해지고, 이쪽은 **필드에서 그 순간에만** 정해진다.
+enum Stop {
+	NONE,  ## 아직 안 끝났다
+	COMPLETED,  ## 체인을 끝까지 냈다
+	OUT_OF_REACH,  ## **닿지 않는다** — 백팩에서는 이어지는데 필드에서 못 나갔다
+}
+
 enum Phase {
 	READY,  ## 아직 안 시작했다
 	SWINGING,  ## 체인이 나가는 중
@@ -47,6 +55,10 @@ var _phase: Phase = Phase.READY
 var _elapsed := 0.0
 var _next_index := 0
 var _settle_left := 0.0
+var _stop: Stop = Stop.NONE
+
+## 거리. `null` 이면 거리 판정을 하지 않는다 (눈금만 보는 옛 사용처).
+var _field: SparringField = null
 
 ## 히트스톱으로 멈춰 있는 남은 시간. **이 동안 눈금도 일정도 멈춘다.**
 var _hitstop_left := 0.0
@@ -58,8 +70,11 @@ var _wall_elapsed := 0.0
 var _due_times: PackedFloat32Array = PackedFloat32Array()
 
 
-func _init(items: Array[BackpackItem], tuning: BreakTuning = null) -> void:
+func _init(
+	items: Array[BackpackItem], tuning: BreakTuning = null, field: SparringField = null
+) -> void:
 	_items = items.duplicate()
+	_field = field
 	_tuning = tuning if tuning != null else BreakTuning.new()
 	_gauge = BreakGauge.new(_tuning)
 	var running := 0.0
@@ -69,14 +84,17 @@ func _init(items: Array[BackpackItem], tuning: BreakTuning = null) -> void:
 
 
 ## 체인 하나를 그대로 받아 판을 만든다.
-static func from_chain(chain: ChainResult, tuning: BreakTuning = null) -> SparringBout:
+static func from_chain(
+	chain: ChainResult, tuning: BreakTuning = null, field: SparringField = null
+) -> SparringBout:
 	var items: Array[BackpackItem] = []
 	for placement in chain.steps:
 		items.append(placement.item)
-	return SparringBout.new(items, tuning)
+	return SparringBout.new(items, tuning, field)
 
 
 func start() -> void:
+	_stop = Stop.NONE
 	_phase = Phase.SWINGING if not _items.is_empty() else Phase.DONE
 	_elapsed = 0.0
 	_wall_elapsed = 0.0
@@ -130,9 +148,19 @@ func _advance_swings(delta: float) -> void:
 		_elapsed += step
 		remaining -= step
 		var item := _items[_next_index]
+
+		# **닿지 않으면 거기서 끝난다.** 백팩에서는 이어져 있어도 필드에서 못 나간다.
+		if _field != null and _field.gap() > WeaponMotion.reach_px(item):
+			_stop = Stop.OUT_OF_REACH
+			_phase = Phase.SETTLING
+			return
+
 		_gauge.hit_with(item)
 		hit_landed.emit(_next_index, item)
 		_next_index += 1
+		# 맞은 만큼 몸이 나간다. 남을지 돌아올지는 미정이라 field 가 고른다.
+		if _field != null:
+			_field.swing_advance(WeaponMotion.advance_px(item))
 		# 맞은 순간 멈춘다. 남은 delta 는 다음 tick 에서 히트스톱이 먼저 먹는다.
 		_hitstop_left = _tuning.hitstop_seconds_for(item)
 		if _hitstop_left > 0.0:
@@ -145,6 +173,7 @@ func _advance_swings(delta: float) -> void:
 		_elapsed += remaining
 
 	if _next_index >= _items.size():
+		_stop = Stop.COMPLETED
 		_phase = Phase.SETTLING
 
 
@@ -173,6 +202,22 @@ func state() -> BreakState.Kind:
 
 func peak_state() -> BreakState.Kind:
 	return _gauge.peak_state()
+
+
+func stop_reason() -> Stop:
+	return _stop
+
+
+## 닿지 않아서 못 나간 타가 있는가.
+func was_out_of_reach() -> bool:
+	return _stop == Stop.OUT_OF_REACH
+
+
+## 그 순서의 아이템. 범위를 벗어나면 `null`.
+func item_at(index: int) -> BackpackItem:
+	if index < 0 or index >= _items.size():
+		return null
+	return _items[index]
 
 
 func landed() -> int:
