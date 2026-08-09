@@ -2,6 +2,25 @@
 
     python tools/make_plate_normal.py <방 폴더> [--out .renders-lighting/plate_normal] [--api http://127.0.0.1:8000]
 
+# 화풍이 정해지는 날 — **이 한 줄이다**
+
+방 레인이 `style_probe.py --apply <후보>` 로 여덟 칸을 갈아 끼우고 방 판을 다시
+뽑으면, 이 레인이 할 일은 **다시 굽기뿐**이다 (후보 일곱을 미리 구워 확인했다 —
+`26-2d-lighting.md` §26.4.13.4. **문턱은 어느 후보에서도 안 건드린다**):
+
+    python tools/make_plate_normal.py <던전 폴더>
+
+**방 폴더가 아니라 던전 폴더를 줘도 된다** — 안에서 판이 있는 방을 다 찾아 굽고
+**끝에 표를 하나 낸다.** 방이 27개면 27 줄을 훑는 대신 표의 마지막 칸만 보면 된다.
+방 하나에 4~6 초니 27 방이 3 분쯤이다.
+
+종료 코드는 **셋을 구분한다** (§26.12.0 이 `gdlint` 에서 본 「신호 하나에 사건 둘」을
+안 만들려고):
+
+    0   다 구웠고 볼 것 없다
+    1   **못 구웠다** — 판이 없거나 ComfyUI 가 안 뜬다
+    2   구웠는데 **눈으로 볼 판이 있다** (빛 못 받는 화소가 1% 를 넘었다)
+
 # 왜 DSINE 인가 — **BAE 는 구운 빛을 요철로 읽는다**
 
 같은 판에 둘을 돌려 재 봤다. 램프가 구워 놓은 밝은 바닥과 어두운 바닥
@@ -180,30 +199,47 @@ def _stand_floor_up(normal: np.ndarray) -> np.ndarray:
     return mixed / (np.linalg.norm(mixed, axis=2, keepdims=True) + 1e-8)
 
 
-def main() -> int:
-    # **한국어 윈도우 콘솔은 cp949 다.** 줄표(U+2014)가 cp949 에 없어서 이 설명문을
-    # 그냥 찍으면 `--help` 가 `UnicodeEncodeError` 로 죽는다 — 실제로 죽었다.
-    # 같은 위험이 도구 다섯 군데에 더 있어서 `tools/console_utf8.py` 로 뽑아냈다.
-    fix_console_encoding()
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("room_dir", help="방 폴더 (…/out/<던전>/<방>)")
-    parser.add_argument("--out", default=".renders-lighting/plate_normal")
-    parser.add_argument("--api", default="http://127.0.0.1:8000")
-    parser.add_argument("--resolution", type=int, default=1088, help="DSINE 짧은 변 (64 의 배수)")
-    args = parser.parse_args()
+## 「봐야 한다」로 넘기는 문턱. §26.4.13.4 의 아홉 판이 0.00~0.85% 였다.
+_DARK_LOOK_FROM = 1.0
 
-    room = pathlib.Path(args.room_dir)
+## 굽기는 됐는데 **어떤 판이 눈을 요구한다**는 뜻. `1`(판이 없다 · 굽기 실패)과
+## **일부러 다른 수**다 — §26.12.0 에서 `gdlint` 의 `exit=1` 이 「죽었다」와
+## 「문제를 찾았다」를 겹쳐 싣는 것을 보고 같은 실수를 안 하기로 했다.
+_EXIT_LOOK = 2
+
+
+def _find_rooms(paths: list[str]) -> list[pathlib.Path]:
+    """방 폴더든 던전 폴더든 받아서 **판이 실제로 있는 방 폴더**만 돌려준다.
+
+    화풍이 정해지는 날 굽는 것은 한 방이 아니라 **던전 하나(방 27개)**다.
+    그날 27 줄을 치게 두지 않는다 — 던전 폴더를 주면 안에서 찾는다.
+    """
+    rooms: list[pathlib.Path] = []
+    for raw in paths:
+        path = pathlib.Path(raw)
+        if (path / f"{path.name}.panorama.jpg").exists():
+            rooms.append(path)
+            continue
+        # 던전 폴더로 본다. `shared` 처럼 판이 없는 폴더는 저절로 빠진다.
+        found = sorted(
+            child for child in path.iterdir()
+            if child.is_dir() and (child / f"{child.name}.panorama.jpg").exists()
+        ) if path.is_dir() else []
+        if not found:
+            print(f"판이 없다: {path}  (방 폴더면 {path.name}.panorama.jpg, 던전 폴더면 그런 방)")
+            return []
+        print(f"던전 {path.name}: 방 {len(found)}개")
+        rooms.extend(found)
+    return rooms
+
+
+def _bake(room: pathlib.Path, out: pathlib.Path, api: str, resolution: int) -> dict | None:
+    """방 하나를 굽고 **읽을 값을 돌려준다.** 화면에 찍는 것은 예전 그대로다."""
     plate = room / f"{room.name}.panorama.jpg"
-    if not plate.exists():
-        print(f"판이 없다: {plate}")
-        return 1
-    out = pathlib.Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-
     size = Image.open(plate).size
     print(f"판: {plate.name} {size[0]}x{size[1]}")
     started = time.time()
-    raw = _run_dsine(args.api, _upload(args.api, plate), args.resolution)
+    raw = _run_dsine(api, _upload(api, plate), resolution)
     print(f"DSINE {time.time() - started:.1f}초")
 
     estimated = Image.open(io.BytesIO(raw)).convert("RGB").resize(size, Image.LANCZOS)
@@ -256,7 +292,52 @@ def main() -> int:
     # 붙어 있었다 (§26.4.13.4).
     dark = 100.0 * (fixed[..., 2] < 0.5).mean()
     print(f"  빛 못 받는 화소 {dark:.2f}%  (고친 뒤 N.z < 0.5. 판 아홉에서 0.00~0.85%)")
-    print("실험대에서 `7` 로 돌려 보면 된다.")
+    return {"room": room.name, "floor_share": floor_share, "dark": dark}
+
+
+def main() -> int:
+    # **한국어 윈도우 콘솔은 cp949 다.** 줄표(U+2014)가 cp949 에 없어서 이 설명문을
+    # 그냥 찍으면 `--help` 가 `UnicodeEncodeError` 로 죽는다 — 실제로 죽었다.
+    # 같은 위험이 도구 다섯 군데에 더 있어서 `tools/console_utf8.py` 로 뽑아냈다.
+    fix_console_encoding()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("room_dirs", nargs="+",
+                        help="방 폴더 (…/out/<던전>/<방>) 또는 **던전 폴더** (안의 방을 다 굽는다)")
+    parser.add_argument("--out", default=".renders-lighting/plate_normal")
+    parser.add_argument("--api", default="http://127.0.0.1:8000")
+    parser.add_argument("--resolution", type=int, default=1088, help="DSINE 짧은 변 (64 의 배수)")
+    args = parser.parse_args()
+
+    rooms = _find_rooms(args.room_dirs)
+    if not rooms:
+        return 1
+    out = pathlib.Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+
+    started = time.time()
+    baked = []
+    for index, room in enumerate(rooms, 1):
+        print(f"\n[{index}/{len(rooms)}] {room.name}")
+        baked.append(_bake(room, out, args.api, args.resolution))
+
+    # **한 방만 구우면 위에 이미 다 찍혔다.** 표는 여러 방을 구울 때만 낸다 —
+    # 27 줄을 훑어 눈으로 이상한 것을 찾으라고 하면 아무도 안 찾는다.
+    if len(baked) > 1:
+        print(f"\n방 {len(baked)}개 · {time.time() - started:.1f}초")
+        print(f"  {'방':32s} {'바닥%':>7s} {'빛 못 받는 화소':>14s}")
+        for row in baked:
+            mark = "  <- 본다" if row["dark"] >= _DARK_LOOK_FROM else ""
+            print(f"  {row['room']:32s} {row['floor_share']:6.1f}% {row['dark']:13.2f}%{mark}")
+
+    # **판정은 `바닥%` 가 아니라 이 줄이다** (모듈 설명문). 바닥 비율은 재질을 타므로
+    # 띠 밖이어도 그 자체로는 탈이 아니다 — 그래서 여기서 안 본다.
+    look = [row for row in baked if row["dark"] >= _DARK_LOOK_FROM]
+    if look:
+        print(f"\n**{len(look)}개가 빛 못 받는 화소 {_DARK_LOOK_FROM}% 를 넘었다** — "
+              f"{', '.join(row['room'] for row in look)}")
+        print("굽기는 됐다. 그 판을 실험대에서 눈으로 봐라 (§26.4.13.4).")
+        return _EXIT_LOOK
+    print("\n실험대에서 `7` 로 돌려 보면 된다.")
     return 0
 
 
