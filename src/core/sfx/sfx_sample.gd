@@ -11,6 +11,9 @@ extends RefCounted
 ## 리샘플 비율이 이 아래로 내려가면 계산할 것이 없다.
 const MIN_RATIO := 0.01
 
+## 어택과 늘인 꼬리를 이어 붙일 때 섞는 길이.
+const BLEND_SECONDS := 0.002
+
 ## 꼬리를 깎기 전에 원래 소리를 이만큼 그대로 둔다 (목표 길이 대비).
 ##
 ## 실제 녹음의 어택과 몸통은 건드리지 않는다는 뜻이다. 여기까지 합성 엔벨로프로
@@ -79,6 +82,47 @@ static func resample(samples: PackedFloat32Array, ratio: float) -> PackedFloat32
 			continue
 		# 선형 보간. 이보다 좋은 방법도 있지만 타격음 길이에서는 차이가 안 들린다.
 		out[index] = lerpf(samples[whole], samples[whole + 1], source - whole)
+	return out
+
+
+## **어택은 그대로 두고 뒤만 늘인다** (§29.4.1). 2판 실패의 직접 원인을 고치는 함수다.
+##
+## 리샘플은 파형 전체를 늘이므로 **부딪히는 순간까지 같이 느려진다.**
+## 그런데 실제로는 그렇지 않다 —
+##
+##     작은 타격:  어택 빠름 · 감쇠 짧음
+##     큰 타격:    어택 **똑같이 빠름** · 감쇠 김
+##
+## 큰 물체가 부딪혀도 **부딪히는 순간 자체는 순간이다.** 어택을 늘이면
+## 무거워지는 대신 느려지고, 그게 "느리게 튼 소리" 로 들린다.
+##
+## 그래서 앞 `attack_seconds` 는 손대지 않고 뒤만 늘인 뒤 이어 붙인다.
+static func stretch_keeping_attack(
+	samples: PackedFloat32Array, ratio: float, rate: int, attack_seconds: float
+) -> PackedFloat32Array:
+	if samples.is_empty() or is_equal_approx(ratio, 1.0) or ratio <= MIN_RATIO:
+		return samples
+	# 어택이 소리의 절반을 넘으면 나눌 것이 없다. 그냥 전체를 늘인다.
+	var attack := mini(int(attack_seconds * rate), samples.size() / 2)
+	if attack <= 0:
+		return resample(samples, ratio)
+
+	var head := samples.slice(0, attack)
+	var tail := resample(samples.slice(attack), ratio)
+	var out := PackedFloat32Array()
+	out.resize(head.size() + tail.size())
+	for index in head.size():
+		out[index] = head[index]
+	for index in tail.size():
+		out[head.size() + index] = tail[index]
+
+	# 이어 붙인 자리를 짧게 섞는다. 그냥 붙이면 파형이 끊겨 "틱" 이 난다.
+	var blend := mini(int(BLEND_SECONDS * rate), mini(head.size(), tail.size()))
+	for index in blend:
+		var mix := float(index) / blend
+		var at := attack - blend + index
+		if at >= 0 and at < out.size():
+			out[at] = lerpf(out[at], tail[index], mix * 0.5)
 	return out
 
 

@@ -8,71 +8,73 @@
 
 | 파일 | 원본 | 출처 | 라이선스 |
 | --- | --- | --- | --- |
-| `metal/metal_00.wav` | `impactMetal_heavy_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `metal/metal_01.wav` | `impactMetal_heavy_001.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `metal/metal_02.wav` | `impactMetal_medium_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `metal/metal_03.wav` | `impactMetal_medium_001.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `metal/metal_04.wav` | `impactMetal_light_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `metal/metal_05.wav` | `impactPlate_heavy_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `metal/metal_06.wav` | `sfx100v2_metal_hit_01.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
-| `metal/metal_07.wav` | `sfx100v2_metal_hit_02.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
-| `wood/wood_00.wav` | `impactWood_heavy_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `wood/wood_01.wav` | `impactWood_heavy_001.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `wood/wood_02.wav` | `impactWood_medium_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `wood/wood_03.wav` | `impactWood_medium_001.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `wood/wood_04.wav` | `impactWood_light_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `wood/wood_05.wav` | `impactPlank_medium_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `wood/wood_06.wav` | `sfx100v2_wood_hit_01.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
-| `wood/wood_07.wav` | `sfx100v2_wood_hit_03.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
-| `flesh/flesh_00.wav` | `impactPunch_heavy_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `flesh/flesh_01.wav` | `impactPunch_heavy_001.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `flesh/flesh_02.wav` | `impactPunch_medium_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `flesh/flesh_03.wav` | `impactPunch_medium_001.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `flesh/flesh_04.wav` | `impactSoft_heavy_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `flesh/flesh_05.wav` | `impactSoft_medium_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `flesh/flesh_06.wav` | `sfx100v2_hit_01.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
-| `flesh/flesh_07.wav` | `sfx100v2_hit_03.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
-| `stone/stone_00.wav` | `impactMining_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `stone/stone_01.wav` | `impactMining_001.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `stone/stone_02.wav` | `impactMining_003.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `stone/stone_03.wav` | `sfx100v2_stones_01.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
-| `stone/stone_04.wav` | `sfx100v2_stones_03.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
-| `stone/stone_05.wav` | `stones_01.ogg` | [OpenGameArt 80 CC0 RPG SFX (rubberduck)](https://opengameart.org/content/80-cc0-rpg-sfx) | CC0 |
-| `stone/stone_06.wav` | `stones_02.ogg` | [OpenGameArt 80 CC0 RPG SFX (rubberduck)](https://opengameart.org/content/80-cc0-rpg-sfx) | CC0 |
-| `stone/stone_07.wav` | `item_stone_01.ogg` | [OpenGameArt 80 CC0 RPG SFX (rubberduck)](https://opengameart.org/content/80-cc0-rpg-sfx) | CC0 |
-| `cloth/cloth_00.wav` | `cloth1.ogg` | [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 |
-| `cloth/cloth_01.wav` | `cloth2.ogg` | [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 |
-| `cloth/cloth_02.wav` | `cloth3.ogg` | [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 |
-| `cloth/cloth_03.wav` | `cloth4.ogg` | [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 |
-| `cloth/cloth_04.wav` | `clothBelt.ogg` | [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 |
-| `cloth/cloth_05.wav` | `dropLeather.ogg` | [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 |
-| `cloth/cloth_06.wav` | `handleSmallLeather.ogg` | [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 |
-| `dirt/dirt_00.wav` | `footstep_grass_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `dirt/dirt_01.wav` | `footstep_grass_001.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `dirt/dirt_02.wav` | `footstep_grass_002.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `dirt/dirt_03.wav` | `footstep_concrete_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
-| `dirt/dirt_04.wav` | `sfx100v2_footstep_01.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
-| `dirt/dirt_05.wav` | `gravel.ogg` | [OpenGameArt Different steps (kddekadenz)](https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud) | CC0 |
-| `dirt/dirt_06.wav` | `mud02.ogg` | [OpenGameArt Different steps (kddekadenz)](https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud) | CC0 |
-| `dirt/dirt_07.wav` | `stone01.ogg` | [OpenGameArt Different steps (kddekadenz)](https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud) | CC0 |
-| `air/air_00.wav` | `sfx100v2_air_01.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
-| `air/air_01.wav` | `sfx100v2_air_02.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
-| `air/air_02.wav` | `sfx100v2_air_03.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
-| `click/click_00.wav` | `click1.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
-| `click/click_01.wav` | `click3.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
-| `click/click_02.wav` | `click5.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
-| `click/click_03.wav` | `rollover1.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
-| `click/click_04.wav` | `rollover3.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
-| `click/click_05.wav` | `mouseclick1.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
-| `click/click_06.wav` | `switch2.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
-| `tone_up/tone_up_00.wav` | `confirmation_001.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
-| `tone_up/tone_up_01.wav` | `confirmation_002.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
-| `tone_up/tone_up_02.wav` | `confirmation_003.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
-| `tone_up/tone_up_03.wav` | `confirmation_004.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
-| `tone_down/tone_down_00.wav` | `error_002.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
-| `tone_down/tone_down_01.wav` | `error_003.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
-| `tone_down/tone_down_02.wav` | `back_001.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
-| `tone_down/tone_down_03.wav` | `close_001.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
+| `metal/light_00.wav` | `impactMetal_light_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `metal/light_01.wav` | `impactMetal_light_002.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `metal/light_02.wav` | `impactPlate_light_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `metal/medium_00.wav` | `impactMetal_medium_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `metal/medium_01.wav` | `impactMetal_medium_002.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `metal/medium_02.wav` | `impactTin_medium_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `metal/heavy_00.wav` | `impactMetal_heavy_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `metal/heavy_01.wav` | `impactMetal_heavy_002.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `metal/heavy_02.wav` | `impactPlate_heavy_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `wood/light_00.wav` | `impactWood_light_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `wood/light_01.wav` | `impactWood_light_002.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `wood/light_02.wav` | `impactWood_light_004.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `wood/medium_00.wav` | `impactWood_medium_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `wood/medium_01.wav` | `impactWood_medium_002.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `wood/medium_02.wav` | `impactPlank_medium_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `wood/heavy_00.wav` | `impactWood_heavy_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `wood/heavy_01.wav` | `impactWood_heavy_002.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `wood/heavy_02.wav` | `sfx100v2_wood_hit_01.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
+| `flesh/light_00.wav` | `impactSoft_medium_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `flesh/light_01.wav` | `impactSoft_medium_002.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `flesh/light_02.wav` | `sfx100v2_hit_03.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
+| `flesh/medium_00.wav` | `impactPunch_medium_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `flesh/medium_01.wav` | `impactPunch_medium_002.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `flesh/medium_02.wav` | `impactPunch_medium_004.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `flesh/heavy_00.wav` | `impactPunch_heavy_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `flesh/heavy_01.wav` | `impactPunch_heavy_002.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `flesh/heavy_02.wav` | `impactSoft_heavy_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `stone/light_00.wav` | `sfx100v2_stones_01.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
+| `stone/light_01.wav` | `sfx100v2_stones_03.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
+| `stone/medium_00.wav` | `impactMining_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `stone/medium_01.wav` | `impactMining_001.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `stone/medium_02.wav` | `stones_01.ogg` | [OpenGameArt 80 CC0 RPG SFX (rubberduck)](https://opengameart.org/content/80-cc0-rpg-sfx) | CC0 |
+| `stone/heavy_00.wav` | `bfh1_rock_hit_01.ogg` | [OpenGameArt 75 CC0 breaking/falling/hit (rubberduck)](https://opengameart.org/content/75-cc0-breaking-falling-hit-sfx) | CC0 |
+| `stone/heavy_01.wav` | `bfh1_rock_breaking_01.ogg` | [OpenGameArt 75 CC0 breaking/falling/hit (rubberduck)](https://opengameart.org/content/75-cc0-breaking-falling-hit-sfx) | CC0 |
+| `stone/heavy_02.wav` | `impactMining_003.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `cloth/medium_00.wav` | `cloth1.ogg` | [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 |
+| `cloth/medium_01.wav` | `cloth2.ogg` | [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 |
+| `cloth/medium_02.wav` | `cloth3.ogg` | [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 |
+| `cloth/medium_03.wav` | `clothBelt.ogg` | [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 |
+| `cloth/medium_04.wav` | `dropLeather.ogg` | [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio) | CC0 |
+| `dirt/medium_00.wav` | `footstep_grass_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `dirt/medium_01.wav` | `footstep_grass_002.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `dirt/medium_02.wav` | `footstep_concrete_000.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `dirt/medium_03.wav` | `gravel.ogg` | [OpenGameArt Different steps (kddekadenz)](https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud) | CC0 |
+| `dirt/medium_04.wav` | `mud02.ogg` | [OpenGameArt Different steps (kddekadenz)](https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud) | CC0 |
+| `low/medium_00.wav` | `bfh1_hit_01.ogg` | [OpenGameArt 75 CC0 breaking/falling/hit (rubberduck)](https://opengameart.org/content/75-cc0-breaking-falling-hit-sfx) | CC0 |
+| `low/medium_01.wav` | `bfh1_hit_05.ogg` | [OpenGameArt 75 CC0 breaking/falling/hit (rubberduck)](https://opengameart.org/content/75-cc0-breaking-falling-hit-sfx) | CC0 |
+| `low/medium_02.wav` | `bfh1_rock_falling_01.ogg` | [OpenGameArt 75 CC0 breaking/falling/hit (rubberduck)](https://opengameart.org/content/75-cc0-breaking-falling-hit-sfx) | CC0 |
+| `low/medium_03.wav` | `impactSoft_heavy_002.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `low/medium_04.wav` | `impactSoft_heavy_004.ogg` | [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 |
+| `air/medium_00.wav` | `sfx100v2_air_01.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
+| `air/medium_01.wav` | `sfx100v2_air_02.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
+| `air/medium_02.wav` | `sfx100v2_air_03.ogg` | [OpenGameArt 100 CC0 SFX #2 (rubberduck)](https://opengameart.org/content/100-cc0-sfx-2) | CC0 |
+| `click/medium_00.wav` | `click1.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
+| `click/medium_01.wav` | `click3.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
+| `click/medium_02.wav` | `click5.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
+| `click/medium_03.wav` | `rollover1.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
+| `click/medium_04.wav` | `rollover3.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
+| `click/medium_05.wav` | `mouseclick1.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
+| `click/medium_06.wav` | `switch2.ogg` | [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | CC0 |
+| `tone_up/medium_00.wav` | `confirmation_003.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
+| `tone_up/medium_01.wav` | `confirmation_002.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
+| `tone_up/medium_02.wav` | `confirmation_004.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
+| `tone_down/medium_00.wav` | `error_002.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
+| `tone_down/medium_01.wav` | `error_003.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
+| `tone_down/medium_02.wav` | `back_001.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
+| `tone_down/medium_03.wav` | `close_001.ogg` | [Kenney Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 |
 
 ## 원본 묶음
 

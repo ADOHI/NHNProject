@@ -39,10 +39,22 @@ const DECAY_JITTER := 0.12
 ## 안전 상한. 어떤 파라미터 조합도 이보다 긴 소리를 만들지 않는다.
 const MAX_SECONDS := 2.0
 
+## **어택으로 지킬 앞부분** (§29.4.1). 이 구간은 리샘플하지 않는다.
+##
+## 큰 물체가 부딪혀도 부딪히는 순간 자체는 순간이다. 여기를 늘이면
+## 무거워지는 대신 느려지고, 그게 2판이 물린 "느리게 튼 소리" 다.
+const KEEP_ATTACK_SECONDS := 0.025
+
+## 리샘플 잔여분 한계. 강도 계단이 셋이라 그 사이만 메우면 된다.
+##
+## 2판은 최대 3.03배를 썼고 그게 실패의 원인이었다. 늘이는 것으로 무게를 만들지 않는다.
+const RESIDUAL_MIN := 0.80
+const RESIDUAL_MAX := 1.25
+
 ## UI 를 전투 위로 밀어 올리는 문턱 (§29.7.6). 실측으로 정한 값이다 —
-## 전투 중심이 40~470 Hz 라 그 위에 자리를 만들려면 이만큼 깎아야 했다.
+## 3판에서 트랜지언트 층이 붙어 전투 중심이 757 Hz 까지 올라갔다. 그래서 UI 도 같이 올렸다.
 const TICK_HIGHPASS := 900.0
-const TONE_HIGHPASS := 550.0
+const TONE_HIGHPASS := 950.0
 
 var kind: SfxRequest.Kind
 var hz: float

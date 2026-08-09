@@ -11,19 +11,40 @@ extends GutTest
 
 func test_every_declared_file_exists() -> void:
 	for folder in SfxLibrary.COUNTS:
-		for index in int(SfxLibrary.COUNTS[folder]):
-			var path := "%s/%s/%s_%02d.wav" % [SfxLibrary.ROOT, folder, folder, index]
-			assert_true(ResourceLoader.exists(path), "선언한 파일이 없다: %s" % path)
+		for tier in SfxLibrary.COUNTS[folder]:
+			var declared: int = SfxLibrary.COUNTS[folder][tier]
+			var found := SfxLibrary.paths_in(folder, tier)
+			assert_eq(found.size(), declared, "%s/%s 파일 수가 선언과 다르다" % [folder, tier])
 
 
 func test_every_file_actually_yields_samples() -> void:
 	# QOA 로 임포트되면 여기서 걸린다. 존재 여부만 보면 못 잡는다.
 	for folder in SfxLibrary.COUNTS:
-		for index in int(SfxLibrary.COUNTS[folder]):
-			var path := "%s/%s/%s_%02d.wav" % [SfxLibrary.ROOT, folder, folder, index]
-			var clip := SfxSample.load_clip(path)
-			assert_false(clip.is_empty(), "샘플을 못 읽었다 (QOA 임포트?): %s" % path)
-			assert_gt(SfxSynth.peak(clip.samples), 0.1, "%s 가 사실상 무음이다" % path)
+		for tier in SfxLibrary.COUNTS[folder]:
+			for path in SfxLibrary.paths_in(folder, tier):
+				var clip := SfxSample.load_clip(path)
+				assert_false(clip.is_empty(), "샘플을 못 읽었다 (QOA 임포트?): %s" % path)
+				assert_gt(SfxSynth.peak(clip.samples), 0.1, "%s 가 사실상 무음이다" % path)
+
+
+func test_percussive_material_starts_immediately() -> void:
+	# 타격음에 지연이 붙으면 "늦게 난다" 로 느껴진다. 체인 간격이 350 ms 라 여유가 없다.
+	# 2판에서는 천이 64.7 ms 늦게 시작했다 (§29.12.2).
+	for folder in ["metal", "wood", "flesh", "stone", "dirt"]:
+		for tier in SfxLibrary.COUNTS[folder]:
+			for path in SfxLibrary.paths_in(folder, tier):
+				var clip := SfxSample.load_clip(path)
+				assert_lt(_onset_ms(clip), 10.0, "%s 가 늦게 시작한다" % path)
+
+
+func _onset_ms(clip: SfxClip) -> float:
+	var peak := SfxSynth.peak(clip.samples)
+	if peak <= 0.0:
+		return 0.0
+	for index in clip.samples.size():
+		if absf(clip.samples[index]) > peak * 0.10:
+			return 1000.0 * index / clip.rate
+	return 0.0
 
 
 func test_the_wav_importer_stays_on_pcm() -> void:
@@ -34,7 +55,7 @@ func test_the_wav_importer_stays_on_pcm() -> void:
 
 
 func test_the_stream_is_sixteen_bit_mono() -> void:
-	var stream := load("%s/metal/metal_00.wav" % SfxLibrary.ROOT) as AudioStreamWAV
+	var stream := load("%s/metal/light_00.wav" % SfxLibrary.ROOT) as AudioStreamWAV
 	assert_not_null(stream)
 	assert_eq(stream.format, AudioStreamWAV.FORMAT_16_BITS, "16비트가 아니면 샘플을 못 꺼낸다")
 	assert_false(stream.stereo, "효과음은 모노다. 스테레오면 용량이 두 배다")
@@ -43,8 +64,8 @@ func test_the_stream_is_sixteen_bit_mono() -> void:
 func test_cloth_keeps_the_higher_rate() -> void:
 	# 대부분의 재질은 11 kHz 위에 에너지가 1 % 도 없는데 천만 9.65 % 다.
 	# 천 소리의 정체가 그 고역이라 거기만 44100 을 준다 (§29.7.9).
-	var cloth := SfxSample.load_clip("%s/cloth/cloth_00.wav" % SfxLibrary.ROOT)
-	var metal := SfxSample.load_clip("%s/metal/metal_00.wav" % SfxLibrary.ROOT)
+	var cloth := SfxSample.load_clip("%s/cloth/medium_00.wav" % SfxLibrary.ROOT)
+	var metal := SfxSample.load_clip("%s/metal/light_00.wav" % SfxLibrary.ROOT)
 	assert_eq(cloth.rate, 44100, "천은 44100 이어야 한다")
 	assert_eq(metal.rate, 22050, "나머지는 22050 이면 충분하다")
 

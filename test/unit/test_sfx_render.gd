@@ -24,13 +24,37 @@ func test_weight_stretches_recorded_impacts() -> void:
 	assert_gt(heavy.seconds(), light.seconds() * 2.0, "4칸이 1칸보다 한참 길어야 한다")
 
 
-func test_the_stretch_ratio_follows_the_axis() -> void:
-	# 길이가 c^0.80 을 따라가야 한다. 애니메이션 레인의 time_scale() 과 같은 지수다.
-	var base := SfxRender.render(SfxRequest.impact(SfxMaterial.Kind.METAL, 1.0)).seconds()
-	for cells in [2, 3, 4]:
+func test_length_grows_with_weight() -> void:
+	# 3판에서는 길이가 **저역 몸통 레이어**에서 나온다. 늘여서 만드는 것이 아니므로
+	# 정확한 배수가 아니라 **단조 증가**를 지킨다 (§29.4.1).
+	var previous := 0.0
+	for cells in [1, 2, 3, 4]:
 		var clip := SfxRender.render(SfxRequest.impact(SfxMaterial.Kind.METAL, float(cells)))
-		var expected := base * SfxVoice.weight_scale(float(cells))
-		assert_almost_eq(clip.seconds(), expected, expected * 0.05, "무게 %d 의 길이가 축에서 벗어났다" % cells)
+		assert_gte(clip.seconds(), previous, "무게 %d 에서 길이가 줄었다" % cells)
+		previous = clip.seconds()
+
+
+func test_attack_does_not_slow_down_with_weight() -> void:
+	# **2판이 물린 지점이다.** 큰 물체가 부딪혀도 부딪히는 순간은 순간이다.
+	# 어택이 무게에 비례해 길어지면 그게 "느리게 튼 소리" 다.
+	var light := _attack_ms(SfxRender.render(SfxRequest.impact(SfxMaterial.Kind.METAL, 1.0)))
+	var heavy := _attack_ms(SfxRender.render(SfxRequest.impact(SfxMaterial.Kind.METAL, 4.0)))
+	assert_lt(heavy, maxf(light, 1.0) * 2.5, "무거울수록 어택이 느려지고 있다")
+	assert_lt(heavy, 8.0, "타격 어택이 8 ms 를 넘으면 타격으로 안 들린다")
+
+
+func _attack_ms(clip: SfxClip) -> float:
+	var peak := SfxSynth.peak(clip.samples)
+	if peak <= 0.0:
+		return 0.0
+	var onset := -1
+	for index in clip.samples.size():
+		var level := absf(clip.samples[index])
+		if onset < 0 and level > peak * 0.10:
+			onset = index
+		if level >= peak * 0.999:
+			return 1000.0 * maxi(index - maxi(onset, 0), 0) / clip.rate
+	return 0.0
 
 
 func test_ui_keeps_its_designed_pitch() -> void:

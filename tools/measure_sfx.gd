@@ -22,6 +22,7 @@ func _init() -> void:
 	print("")
 	print("=== 효과음 실측 (원천: CC0 파일) ===")
 	_sources()
+	_attack()
 	_bake_cost()
 	_axis()
 	_overlap()
@@ -41,6 +42,16 @@ func _sources() -> void:
 		if SfxRender.source_for(SfxCatalog.request_for(event)) == SfxRender.Source.FILE:
 			from_file += 1
 	print("CC0 파일        %d 개" % from_file)
+	print(
+		(
+			"강도 계단        metal=%s wood=%s stone=%s"
+			% [
+				SfxLibrary.COUNTS["metal"].keys(),
+				SfxLibrary.COUNTS["wood"].keys(),
+				SfxLibrary.COUNTS["stone"].keys(),
+			]
+		)
+	)
 	print("합성으로 메움    %d 개" % (SfxEvent.all().size() - from_file))
 	for event in SfxRender.gap_events():
 		print("   구멍: %s" % SfxEvent.label(event))
@@ -49,12 +60,62 @@ func _sources() -> void:
 	# 실제로 샘플이 읽히는지. 앞서 QOA 로 임포트돼 조용히 합성으로 떨어진 적이 있다.
 	var empty := 0
 	for folder in SfxLibrary.COUNTS:
-		for index in int(SfxLibrary.COUNTS[folder]):
-			var path := "%s/%s/%s_%02d.wav" % [SfxLibrary.ROOT, folder, folder, index]
-			if SfxSample.load_clip(path).is_empty():
-				empty += 1
-				print("   못 읽음: %s" % path)
+		for tier in SfxLibrary.COUNTS[folder]:
+			for path in SfxLibrary.paths_in(folder, tier):
+				if SfxSample.load_clip(path).is_empty():
+					empty += 1
+					print("   못 읽음: %s" % path)
 	print("못 읽은 파일     %d 개" % empty)
+
+
+## **3판의 핵심 지표.** 2판이 물린 이유가 여기 숫자로 나온다.
+##
+## 큰 물체가 부딪혀도 부딪히는 순간 자체는 순간이다. 어택이 무게에 따라 길어지면
+## 그게 "느리게 튼 소리" 다.
+func _attack() -> void:
+	print("")
+	print("--- 어택 시간 (온셋에서 피크까지) ---")
+	print("무게   고른 단     3판 어택   2판 방식(전체 리샘플)   차이")
+	for cells in [1, 2, 3, 4]:
+		var request := SfxRequest.impact(SfxMaterial.Kind.METAL, float(cells))
+		var tier := SfxLibrary.tier_for("metal", float(cells))
+		var now := _attack_ms(SfxRender.render(request))
+
+		# 2판 방식을 그대로 재현한다: light 파일 하나를 전체 리샘플로 늘인다.
+		var base := SfxSample.load_clip(SfxLibrary.paths_in("metal", "light")[0])
+		var scale := SfxVoice.weight_scale(float(cells))
+		var stretched := SfxClip.new(SfxSample.resample(base.samples, scale), base.rate)
+		var before := _attack_ms(stretched)
+
+		print(
+			(
+				"  %d   %-8s   %7.2f ms   %14.2f ms   %+6.2f ms"
+				% [cells, tier, now, before, now - before]
+			)
+		)
+	print("2판은 무게에 비례해 어택이 늘어난다. 3판은 거의 일정해야 한다")
+
+
+## 온셋(피크의 10 %)에서 피크까지 걸린 시간.
+func _attack_ms(clip: SfxClip) -> float:
+	var samples := clip.samples
+	if samples.is_empty():
+		return 0.0
+	var peak := SfxSynth.peak(samples)
+	if peak <= 0.0:
+		return 0.0
+	var onset := -1
+	var top := 0
+	for index in samples.size():
+		var level := absf(samples[index])
+		if onset < 0 and level > peak * 0.10:
+			onset = index
+		if level >= peak * 0.999:
+			top = index
+			break
+	if onset < 0:
+		onset = 0
+	return 1000.0 * maxi(top - onset, 0) / clip.rate
 
 
 func _bake_cost() -> void:
@@ -89,24 +150,31 @@ func _bake_cost() -> void:
 func _axis() -> void:
 	print("")
 	print("--- 무게 축이 녹음물에도 먹히는가 ---")
-	print("무게   배수    차단 Hz   길이 ms   휘두르기 대비")
+	print("무게   고른 단    잔여 리샘플   차단 Hz   길이 ms   휘두르기 대비")
 	for cells in [1, 2, 3, 4]:
 		var request := SfxRequest.impact(SfxMaterial.Kind.METAL, float(cells))
 		var voice := SfxVoice.resolve(request)
 		var clip := SfxRender.render(request)
+		var nominal := SfxLibrary.tier_weight_for("metal", float(cells))
+		var residual: float = clampf(
+			SfxVoice.weight_scale(float(cells)) / SfxVoice.weight_scale(nominal),
+			SfxVoice.RESIDUAL_MIN,
+			SfxVoice.RESIDUAL_MAX
+		)
 		print(
 			(
-				"  %d   %5.3f   %7.1f   %7.1f   %11.1f %%"
+				"  %d   %-8s   %9.3f   %7.1f   %7.1f   %11.1f %%"
 				% [
 					cells,
-					SfxVoice.weight_scale(float(cells)),
+					SfxLibrary.tier_for("metal", float(cells)),
+					residual,
 					voice.cutoff_hz,
 					clip.seconds() * 1000.0,
 					100.0 * clip.seconds() / SWING_SECONDS[cells - 1],
 				]
 			)
 		)
-	print("리샘플이 길이를 scale 배로, 주파수를 1/scale 로 동시에 민다 (§29.4)")
+	print("무게는 다른 녹음이 만든다. 리샘플은 계단 사이만 메운다 (2판은 최대 3.031배였다)")
 
 	print("")
 	print("--- 재질별 레이트와 길이 (무게 2) ---")

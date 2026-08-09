@@ -24,8 +24,11 @@ const REPEATING: Array = [
 	SfxEvent.Kind.UI_PIECE_OUT,
 ]
 
-## 반복 사건 한 개당 굽는 벌 수. 넷이면 5타에서 같은 것이 두 번 이상 안 나온다.
-const VARIATION_COUNT := 4
+## 반복 사건 한 개당 굽는 벌 수.
+##
+## **강도 단 하나에 파일이 셋이라 셋이다.** 5타면 한 벌이 두 번 나오지만,
+## 재생 때 pitch_scale 이 ±6 % 로 다시 흔들어 주므로 같은 소리로 안 들린다.
+const VARIATION_COUNT := 3
 
 var _cache: Dictionary = {}
 var _baked_bytes := 0

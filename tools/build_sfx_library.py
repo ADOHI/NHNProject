@@ -30,9 +30,25 @@ DEFAULT_RATE = 22050
 CLOTH_RATE = 44100
 
 # 이 값 아래는 무음으로 본다 (피크 대비).
-SILENCE_FLOOR = 0.02
+#
+# **0.02 는 너무 느슨했다.** 65개 중 19개가 다듬은 뒤에도 10 ms 넘게 늦게 시작했고
+# 최악은 84.8 ms 였다. 신호가 2 % 를 넘긴 뒤에도 실제로 들리는 지점까지 한참 걸리는 것 —
+# 타격음에서 그건 그대로 "늦게 난다" 로 느껴진다.
+#
+# 타악기적인 재질은 15 % 에서 자르고, 원래 부드럽게 차오르는 것(천 · 바람 · 음정 신호)은
+# 5 % 에서 자른다. 후자에 15 % 를 쓰면 실제 소리의 앞부분을 잘라 먹는다.
+PERCUSSIVE_FLOOR = 0.15
+SMOOTH_FLOOR = 0.05
+SMOOTH_GROUPS = ("cloth", "air", "tone_up", "tone_down")
+
+# **끝은 완전히 다른 문턱으로 자른다.**
+#
+# 시작과 같은 15 % 를 쓰면 감쇠 꼬리를 통째로 잘라 먹는다 — 실제로 그렇게 당했다.
+# 금속 타격이 18.6 ms 로 줄어 무게 4가 무게 1보다 짧아졌다.
+# **앞은 "언제 시작하나"(높은 문턱), 뒤는 "언제 안 들리나"(낮은 문턱) 라 서로 다른 질문이다.**
+TAIL_FLOOR = 0.004
 # 어택을 자르지 않도록 이만큼 앞을 남긴다.
-PRE_ROLL_MS = 1.5
+PRE_ROLL_MS = 3.0
 # 꼬리를 이만큼 선형으로 죽인다. 자른 자리에 계단이 남으면 "틱" 이 난다.
 FADE_OUT_MS = 4.0
 # 이보다 긴 것은 자른다. 타격음에 1.3초짜리 꼬리는 필요 없다.
@@ -42,51 +58,61 @@ MAX_SECONDS = 1.5
 #
 # 무게 1~4 와 변주는 엔진이 계산하므로 (§29.4), 재질당 예닐곱이면 충분하다.
 # 더 넣으면 웹 다운로드만 늘고 들리는 것은 안 늘어난다.
-CURATION: dict[str, list[str]] = {
-    "metal": [
-        "impactMetal_heavy_000", "impactMetal_heavy_001", "impactMetal_medium_000",
-        "impactMetal_medium_001", "impactMetal_light_000", "impactPlate_heavy_000",
-        "sfx100v2_metal_hit_01", "sfx100v2_metal_hit_02",
-    ],
-    "wood": [
-        "impactWood_heavy_000", "impactWood_heavy_001", "impactWood_medium_000",
-        "impactWood_medium_001", "impactWood_light_000", "impactPlank_medium_000",
-        "sfx100v2_wood_hit_01", "sfx100v2_wood_hit_03",
-    ],
-    "flesh": [
-        "impactPunch_heavy_000", "impactPunch_heavy_001", "impactPunch_medium_000",
-        "impactPunch_medium_001", "impactSoft_heavy_000", "impactSoft_medium_000",
-        "sfx100v2_hit_01", "sfx100v2_hit_03",
-    ],
-    "stone": [
-        "impactMining_000", "impactMining_001", "impactMining_003",
-        "sfx100v2_stones_01", "sfx100v2_stones_03",
-        "stones_01", "stones_02", "item_stone_01",
-    ],
-    "cloth": [
-        "cloth1", "cloth2", "cloth3", "cloth4", "clothBelt", "dropLeather",
-        "handleSmallLeather",
-    ],
-    "dirt": [
-        "footstep_grass_000", "footstep_grass_001", "footstep_grass_002",
-        "footstep_concrete_000", "sfx100v2_footstep_01",
-        # 흙·자갈이 Kenney 에 아예 없어서 OGA 에서 메웠다 (§29.9.1 의 최대 구멍이었다).
-        "gravel", "mud02", "stone01",
-    ],
-    # 휘두르기용 바람. 원본이 1.3초라 대부분 잘려 나간다.
-    "air": ["sfx100v2_air_01", "sfx100v2_air_02", "sfx100v2_air_03"],
-    # UI 딸깍. 전투와 자리를 나누기 위해 밝고 짧은 것만 고른다.
-    "click": [
-        "click1", "click3", "click5", "rollover1", "rollover3",
-        "mouseclick1", "switch2",
-    ],
-    # 음정이 있는 UI 신호. **앞 판에서 구멍이었던 자리다** — 녹음물에는 원래 없는 종류라
-    # 합성으로 메우고 있었는데, Kenney Interface Sounds 에 정확히 이 용도의 것이 있었다.
-    #
-    # 올라감/내려감을 피치 조작으로 만들지 않고 **원래 그렇게 녹음된 것**을 쓴다.
-    # 확인음과 오류음은 사람이 그렇게 들으라고 만든 소리다.
-    "tone_up": ["confirmation_001", "confirmation_002", "confirmation_003", "confirmation_004"],
-    "tone_down": ["error_002", "error_003", "back_001", "close_001"],
+# 재질별 · **강도별** 원본. `<재질>/<강도>_NN.wav` 로 나온다.
+#
+# **2판의 실패가 여기서 나왔다.** 파일 하나를 리샘플로 3배까지 늘여 무게 4를 만들었더니
+# "무거운 소리" 가 아니라 **"느리게 튼 소리"** 로 들렸다. 큰 물체가 부딪혀도
+# **부딪히는 순간 자체는 순간이다** — 어택은 안 길어지고 감쇠만 길어진다.
+#
+# 그래서 무게마다 **원래 그 강도로 녹음된 다른 파일**을 쓴다. 리샘플은 계단 사이를
+# 메우는 데만 쓴다 (SfxVoice.RESIDUAL_* 로 ±25 % 안쪽).
+#
+# Kenney Impact 가 light/medium/heavy 로 이미 갈려 있어서 그대로 쓴다.
+CURATION: dict[str, dict[str, list[str]]] = {
+    "metal": {
+        "light": ["impactMetal_light_000", "impactMetal_light_002", "impactPlate_light_000"],
+        "medium": ["impactMetal_medium_000", "impactMetal_medium_002", "impactTin_medium_000"],
+        "heavy": ["impactMetal_heavy_000", "impactMetal_heavy_002", "impactPlate_heavy_000"],
+    },
+    "wood": {
+        "light": ["impactWood_light_000", "impactWood_light_002", "impactWood_light_004"],
+        "medium": ["impactWood_medium_000", "impactWood_medium_002", "impactPlank_medium_000"],
+        "heavy": ["impactWood_heavy_000", "impactWood_heavy_002", "sfx100v2_wood_hit_01"],
+    },
+    "flesh": {
+        "light": ["impactSoft_medium_000", "impactSoft_medium_002", "sfx100v2_hit_03"],
+        "medium": ["impactPunch_medium_000", "impactPunch_medium_002", "impactPunch_medium_004"],
+        "heavy": ["impactPunch_heavy_000", "impactPunch_heavy_002", "impactSoft_heavy_000"],
+    },
+    "stone": {
+        "light": ["sfx100v2_stones_01", "sfx100v2_stones_03"],
+        "medium": ["impactMining_000", "impactMining_001", "stones_01"],
+        "heavy": ["bfh1_rock_hit_01", "bfh1_rock_breaking_01", "impactMining_003"],
+    },
+    # 강도별 녹음이 없는 재질은 한 단만 둔다. 나머지는 리샘플과 층 쌓기가 메운다.
+    "cloth": {"medium": ["cloth1", "cloth2", "cloth3", "clothBelt", "dropLeather"]},
+    "dirt": {
+        "medium": [
+            "footstep_grass_000", "footstep_grass_002", "footstep_concrete_000",
+            "gravel", "mud02",
+        ]
+    },
+    # **저역 몸통 레이어.** 무거울 때 얹는다 — 늘이는 게 아니라 더한다.
+    # 무게가 여기 있고, 위의 재질 파일이 어택과 음색을 맡는다.
+    "low": {
+        "medium": [
+            "bfh1_hit_01", "bfh1_hit_05", "bfh1_rock_falling_01",
+            "impactSoft_heavy_002", "impactSoft_heavy_004",
+        ]
+    },
+    "air": {"medium": ["sfx100v2_air_01", "sfx100v2_air_02", "sfx100v2_air_03"]},
+    "click": {
+        "medium": ["click1", "click3", "click5", "rollover1", "rollover3", "mouseclick1", "switch2"]
+    },
+    # confirmation_001 은 뺐다. 원본 중심이 808 Hz 라 혼자 어둡고, 처리 후 536 Hz 로
+    # 전투음(757 Hz) 아래로 깔렸다. **UI 는 전투 위에 있어야 한다** (§29.7.6).
+    "tone_up": {"medium": ["confirmation_003", "confirmation_002", "confirmation_004"]},
+    "tone_down": {"medium": ["error_002", "error_003", "back_001", "close_001"]},
 }
 
 # 어느 묶음에서 왔는지. CREDITS.md 와 §29.9.2 표의 근거가 된다.
@@ -135,16 +161,19 @@ def load_mono(path: pathlib.Path) -> tuple[np.ndarray, int]:
     return data.mean(axis=1).astype(np.float64), rate
 
 
-def trim(samples: np.ndarray, rate: int) -> tuple[np.ndarray, float]:
+def trim(samples: np.ndarray, rate: int, floor: float) -> tuple[np.ndarray, float]:
     """앞뒤 무음을 자른다. 잘라 낸 앞 무음의 길이(ms)를 함께 돌려준다."""
     peak = np.abs(samples).max()
     if peak <= 0.0:
         return samples, 0.0
-    loud = np.abs(samples) > peak * SILENCE_FLOOR
+    loud = np.abs(samples) > peak * floor
     if not loud.any():
         return samples, 0.0
     first = int(np.argmax(loud))
-    last = len(samples) - int(np.argmax(loud[::-1]))
+    # 끝은 훨씬 낮은 문턱으로 찾는다. 안 그러면 감쇠가 통째로 잘린다.
+    audible = np.abs(samples) > peak * TAIL_FLOOR
+    last = len(samples) - int(np.argmax(audible[::-1]))
+    last = max(last, first + 1)
     removed_ms = 1000.0 * first / rate
     start = max(0, first - int(PRE_ROLL_MS * rate / 1000.0))
     return samples[start:last], removed_ms
@@ -159,10 +188,12 @@ def fade_tail(samples: np.ndarray, rate: int) -> np.ndarray:
     return samples
 
 
-def build_one(path: pathlib.Path, target_rate: int, root: pathlib.Path) -> tuple[np.ndarray, dict]:
+def build_one(
+    path: pathlib.Path, target_rate: int, root: pathlib.Path, floor: float
+) -> tuple[np.ndarray, dict]:
     samples, rate = load_mono(path)
     source_peak = float(np.abs(samples).max())
-    samples, removed_ms = trim(samples, rate)
+    samples, removed_ms = trim(samples, rate, floor)
 
     if rate != target_rate:
         gcd = np.gcd(int(rate), int(target_rate))
@@ -205,36 +236,45 @@ def main() -> int:
     missing: list[str] = []
     total_bytes = 0
 
-    for group, names in CURATION.items():
+    for group, tiers in CURATION.items():
         rate = CLOTH_RATE if group in ("cloth", "air") else DEFAULT_RATE
-        index = 0
-        for name in names:
-            path = sources.get(name)
-            if path is None:
-                missing.append(name)
-                continue
-            samples, info = build_one(path, rate, args.src)
-            info["group"] = group
-            info["name"] = "%s_%02d" % (group, index)
-            rows.append(info)
-            index += 1
+        floor = SMOOTH_FLOOR if group in SMOOTH_GROUPS else PERCUSSIVE_FLOOR
+        for tier, names in tiers.items():
+            index = 0
+            for name in names:
+                path = sources.get(name)
+                if path is None:
+                    missing.append(name)
+                    continue
+                samples, info = build_one(path, rate, args.src, floor)
+                info["group"] = group
+                info["tier"] = tier
+                info["name"] = "%s_%02d" % (tier, index)
+                rows.append(info)
+                index += 1
 
-            if not args.analyze:
-                out_dir = args.out / group
-                out_dir.mkdir(parents=True, exist_ok=True)
-                out_path = out_dir / ("%s.wav" % info["name"])
-                sf.write(str(out_path), samples, rate, subtype="PCM_16")
-                total_bytes += out_path.stat().st_size
+                if not args.analyze:
+                    out_dir = args.out / group
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    out_path = out_dir / ("%s.wav" % info["name"])
+                    sf.write(str(out_path), samples, rate, subtype="PCM_16")
+                    total_bytes += out_path.stat().st_size
 
-    print("%-12s %-26s %8s %8s %9s %9s" % ("이름", "원본", "원본SR", "원본피크", "잘라낸ms", "길이ms"))
+    print("%-10s %-12s %-24s %9s %9s" % ("재질", "이름", "원본", "잘라낸ms", "길이ms"))
     for row in rows:
-        print("%-12s %-26s %8d %8.3f %9.1f %9.0f" % (
-            row["name"], row["source"][:26], row["source_rate"],
-            row["source_peak"], row["trimmed_ms"], row["seconds"] * 1000.0,
+        print("%-10s %-12s %-24s %9.1f %9.0f" % (
+            row["group"], row["name"], row["source"][:24],
+            row["trimmed_ms"], row["seconds"] * 1000.0,
         ))
 
     print("")
-    print("파일 %d 개 / %d 재질" % (len(rows), len(CURATION)))
+    print("파일 %d 개 / %d 묶음" % (len(rows), len(CURATION)))
+    print("GDScript 용 COUNTS:")
+    for group, tiers in CURATION.items():
+        made = {t: sum(1 for r in rows if r["group"] == group and r["tier"] == t) for t in tiers}
+        print('	"%s": {%s},' % (
+            group, ", ".join('"%s": %d' % (t, n) for t, n in made.items() if n)
+        ))
     if missing:
         print("원본에서 못 찾은 것 %d 개: %s" % (len(missing), ", ".join(missing)))
     if not args.analyze:
