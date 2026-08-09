@@ -66,6 +66,13 @@ var target_choice: TargetChoice = TargetChoice.NEAREST
 ## 1픽셀 = 1단위. 화면 좌표와 같은 축을 쓴다 (오른쪽이 +).
 var attacker_x: float = 0.0
 
+## 켜 하나가 얼마나 뒤인가 (§28.20.38). **표본 값이지 확정이 아니다.**
+##
+## 리치가 1칸 104 · 4칸 118 이다 (§28.20.30). 앞 켜를 96 에 두면 이 값이 16 일 때
+## **뒤 켜(112)는 작은 무기가 못 닿고 큰 무기는 닿는다** — 그래야 「뒷줄에 닿나」가
+## 물음이 된다. 0 에 가까우면 두 켜가 한 켜가 되고, 크면 뒷줄이 영영 무의미해진다.
+var rank_depth: float = 16.0
+
 var _enemies: Array[SparringEnemy] = []
 
 
@@ -92,8 +99,8 @@ func enemies() -> Array[SparringEnemy]:
 	return _enemies
 
 
-func add_enemy(x: float, weapon: BackpackItem = null) -> SparringEnemy:
-	var enemy := SparringEnemy.new(x, weapon)
+func add_enemy(x: float, weapon: BackpackItem = null, rank: int = 0) -> SparringEnemy:
+	var enemy := SparringEnemy.new(x, weapon, rank)
 	_enemies.append(enemy)
 	return enemy
 
@@ -173,7 +180,11 @@ func targets_within(reach: float, limit: int = 1) -> PackedInt32Array:
 		if distance > reach:
 			continue
 		ordered.append(Vector2(distance, float(index)))
-	ordered.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
+	# **같은 켜는 거리가 같다.** 그때 순서가 판마다 달라지면 안 되므로 번호로 가른다 —
+	# `sort_custom` 은 안정 정렬이 아니다.
+	ordered.sort_custom(
+		func(a: Vector2, b: Vector2) -> bool: return a.x < b.x if a.x != b.x else a.y < b.y
+	)
 	for entry in ordered:
 		if found.size() >= limit:
 			break
@@ -230,3 +241,16 @@ func reset_with(p_attacker_x: float, xs: PackedFloat32Array) -> void:
 	_enemies.clear()
 	for x in xs:
 		_enemies.append(SparringEnemy.new(x))
+
+
+## **적을 켜로 세운다** (§28.20.38). `counts[r]` 이 r 번째 켜에 선 인원이다.
+##
+## 같은 켜는 **거리가 같다** — 가로로 나란히 선 것이라 이 판에서는 구분할 것이 없다.
+## 뒤 켜는 `rank_depth` 만큼씩 물러선다.
+func stand_in_ranks(p_attacker_x: float, front_gap: float, counts: Array[int]) -> void:
+	attacker_x = p_attacker_x
+	_enemies.clear()
+	for rank in counts.size():
+		var at := front_gap + float(rank) * rank_depth
+		for _slot in counts[rank]:
+			_enemies.append(SparringEnemy.new(at, null, rank))

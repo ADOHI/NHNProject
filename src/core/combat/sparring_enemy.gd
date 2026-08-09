@@ -18,7 +18,22 @@ var x: float = 0.0
 ## 이 적이 들고 있는 것. `null` 이면 반격하지 않는다.
 var weapon: BackpackItem = null
 
+## **몇 째 켜인가** (0 이 앞줄). `docs/design/28-combat.md` §28.20.38.
+##
+## ## 왜 좌표가 아니라 켜인가
+##
+## 지금까지 적은 **한 줄**로 섰다 — 저마다 다른 거리에. 그래서 「뒷줄」이라는 것이 없었고
+## 걸침도 표적 고르기도 **전부 닿는 판**에서만 재였다.
+##
+## 좌표(가로세로)를 넣으면 **이동 · 충돌 · 자리 다툼이 딸려 온다.** 그건 §28.4 의 몫이다.
+## 켜 번호만으로도 물을 것은 다 물을 수 있다 — 뒷줄에 닿나, 걸침이 앞뒤로도 걸리나,
+## 못 닿는 놈을 고르면 어떻게 되나.
+##
+## **같은 켜에 선 적은 거리가 같다.** 가로 축이 아예 없는 셈이다.
+var rank: int = 0
 
-func _init(p_x: float = 0.0, p_weapon: BackpackItem = null) -> void:
+
+func _init(p_x: float = 0.0, p_weapon: BackpackItem = null, p_rank: int = 0) -> void:
 	x = p_x
 	weapon = p_weapon
+	rank = p_rank

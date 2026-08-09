@@ -331,6 +331,10 @@ func _swing_ally(ally: int) -> BackpackItem:
 ## 섞어 두면 「안 맞은 놈부터」 같은 규칙이 필드로 새어 들어간다.
 ## 걸침 인원(`splash_targets_for`)은 **고른 뒤에** 자른다 — 인원이 범위를 늘리지 않는다.
 ##
+## **못 닿는 적은 2단계에 아예 안 올라온다.** 그래서 `FINISH_OFF` 는
+## 「제일 상한 놈」이 아니라 **「닿는 것 중 제일 상한 놈」**이다 (§28.20.38).
+## 뒤 켜가 반쯤 무너져 있어도 못 닿으면 안 고른다.
+##
 ## 거리가 없던 옛 사용처(`field == null`)에서는 **0번 적 하나**다.
 func _reachable_targets(item: BackpackItem, ally: int) -> PackedInt32Array:
 	if _field == null:
@@ -342,9 +346,23 @@ func _reachable_targets(item: BackpackItem, ally: int) -> PackedInt32Array:
 		return candidates
 	var ordered := _order_targets(candidates, ally)
 	var picked := PackedInt32Array()
-	for slot in mini(limit, ordered.size()):
-		picked.append(ordered[slot])
+	for index in ordered:
+		if picked.size() >= limit:
+			break
+		# **걸침이 켜를 넘나** (§28.20.38). 안 넘으면 고른 적과 같은 켜만 함께 맞는다.
+		if not picked.is_empty() and not _tuning.splash_spans_ranks:
+			if _rank_of(index) != _rank_of(picked[0]):
+				continue
+		picked.append(index)
 	return picked
+
+
+## 그 적이 몇 째 켜인가. 켜를 안 쓰는 판에서는 전부 0 이다.
+func _rank_of(enemy: int) -> int:
+	if _field == null:
+		return 0
+	var stood := _field.enemy_at(enemy)
+	return stood.rank if stood != null else 0
 
 
 ## 닿는 적들을 **규칙대로 줄 세운다.** 들어오는 것은 거리순이다.
