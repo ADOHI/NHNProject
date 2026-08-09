@@ -31,7 +31,38 @@ func _initialize() -> void:
 	_survey("한 칸 문", _gate_grid(1), 1)
 	_survey("두 칸 문", _gate_grid(2), 2)
 	_survey("열린 곳", _bordered_grid(), 0)
+	print("")
+	_slots_check()
 	quit()
+
+
+## **좁은 목을 피하는 자리 배정이 실제로 무엇을 바꾸는가.**
+##
+## 지표 판 열다섯에서는 한 칸도 안 바뀌었다 - 목적지가 전부 문에서 먼 열린 곳이라
+## 자리가 애초에 좁은 목에 안 놓인다. **그러면 이 장치는 언제 일하는가**를 여기서 본다.
+## 목적지를 문 한가운데로 찍는다 - 사람이 실제로 하는 짓이다.
+func _slots_check() -> void:
+	var grid := _gate_grid(1)
+	var gate_center := grid.cell_to_world(Vector2i(30, _ROWS / 2))
+	var walkable := func(point: Vector2) -> bool: return grid.is_circle_free(point, 12.0)
+	var spacious := func(point: Vector2) -> bool:
+		return grid.is_circle_free(point, 12.0) and not grid.is_choke_at(point)
+	print("## 목적지를 문 한가운데로 찍었을 때")
+	print("")
+	print("| 인원 | 좁은 목에 놓인 자리 (지금) | 좁은 목에 놓인 자리 (피하게) |")
+	print("| --- | --- | --- |")
+	for count in [4, 12, 40]:
+		var plain := ProtoFormation.build_slots(count, gate_center, 30.0, walkable)
+		var avoid := ProtoFormation.build_slots(count, gate_center, 30.0, walkable, spacious)
+		print("| %d | %d | %d |" % [count, _on_choke(grid, plain), _on_choke(grid, avoid)])
+
+
+func _on_choke(grid: ProtoNavGrid, slots: PackedVector2Array) -> int:
+	var hits := 0
+	for slot in slots:
+		if grid.is_choke_at(slot):
+			hits += 1
+	return hits
 
 
 func _bordered_grid() -> ProtoNavGrid:

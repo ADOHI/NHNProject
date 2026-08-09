@@ -316,7 +316,13 @@ func issue_move(ids: PackedInt32Array, target: Vector2) -> MoveOrder:
 	var clearance := _largest_radius(members)
 	var spacing := tuning.get_value("formation_spacing") * clearance * 2.0
 	var walkable := func(point: Vector2) -> bool: return grid.is_circle_free(point, clearance)
-	order.slots = ProtoFormation.build_slots(members.size(), safe_target, spacing, walkable)
+	# **좁은 목에는 자리를 안 놓는다.** 좁은 목 표는 지형당 한 번 구워 둔 값이라
+	# 여기서는 배열 조회 한 번이다(`nav_grid.gd` `is_choke_at`). README §29.
+	var spacious := func(point: Vector2) -> bool:
+		return grid.is_circle_free(point, clearance) and not grid.is_choke_at(point)
+	order.slots = ProtoFormation.build_slots(
+		members.size(), safe_target, spacing, walkable, spacious
+	)
 
 	var positions := PackedVector2Array()
 	for agent in members:

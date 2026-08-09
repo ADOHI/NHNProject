@@ -70,6 +70,14 @@ var _blocked: PackedByteArray
 ## 벽은 안 움직이므로 여기 담아 두고 계속 쓴다. 명령당 추가 비용은 배열 조회 한 번이다.
 var _clearance: PackedInt32Array
 
+## 칸마다 **좁은 목인가**. 벽 거리와 같이 굽는다.
+##
+## **「벽에 붙어 있다」와 「좁다」는 다른 말이다.** 벽 거리로 물었더니 벽 하나로 둘러싼
+## 열린 방에서도 176 칸이 잡혔다 - 방 둘레가 전부 벽에 붙어 있기 때문이다(README §28).
+## 좁다는 것은 **마주 보는 두 쪽이 다 막혔다**는 뜻이고, 그것만 고르면 한 칸 문에서
+## 정확히 문 한 칸, 두 칸 문과 열린 곳에서 0 칸이다.
+var _corridor: PackedByteArray
+
 ## 위 값이 지금 지형과 맞는가. 벽이 바뀌면 내려간다.
 var _clearance_ready := false
 
@@ -224,6 +232,23 @@ func clearance_at(cell: Vector2i) -> int:
 	return _clearance[cell_index(cell)]
 
 
+## 이 칸이 **좁은 목**인가. 마주 보는 두 이웃만 트여 있으면 복도다.
+##
+## **벽 거리와 같이 굽는다.** 지형이 바뀔 때 한 번이고, 그 뒤로는 배열 조회 한 번이다 -
+## 자리 배정은 명령마다 도는데 굽는 것은 지형마다 한 번이어야 한다. 2040 칸을 훑는 데
+## 13 밀리초쯤 드는 계산이라 **명령마다 부르면 안 된다.**
+func is_choke(cell: Vector2i) -> bool:
+	if not is_inside(cell):
+		return false
+	_ensure_clearance()
+	return _corridor[cell_index(cell)] == 1
+
+
+## 이 지점이 좁은 목 위인가. 자리 배정이 쓰는 얼굴이다.
+func is_choke_at(point: Vector2) -> bool:
+	return is_choke(world_to_cell(point))
+
+
 ## 벽에서 바깥으로 퍼지는 너비 우선 탐색. 모든 벽 칸에서 동시에 출발한다.
 ##
 ## 벽마다 따로 재면 칸 수 곱하기 벽 수가 되는데, 전부 한 큐에 넣고 한 번만 퍼뜨리면
@@ -264,6 +289,30 @@ func _ensure_clearance() -> void:
 	for index in count:
 		if _clearance[index] < 0:
 			_clearance[index] = _WALL_CLEAR_TARGET
+	_bake_corridors()
+
+
+## 좁은 목을 굽는다. **마주 보는 두 이웃만 트인 칸이 복도다.**
+##
+## `_blocked` 를 직접 읽는다 - `is_walkable` 은 칸마다 범위 검사를 다시 하므로 2040 칸에서
+## 그 값이 그대로 쌓인다. 격자 밖은 벽으로 친다(둘레가 이미 벽이라 뜻이 같다).
+func _bake_corridors() -> void:
+	var count := cols * rows
+	_corridor = PackedByteArray()
+	_corridor.resize(count)
+	for row in rows:
+		for column in cols:
+			var index := row * cols + column
+			if _blocked[index] == 1:
+				continue
+			var west := column > 0 and _blocked[index - 1] == 0
+			var east := column < cols - 1 and _blocked[index + 1] == 0
+			var north := row > 0 and _blocked[index - cols] == 0
+			var south := row < rows - 1 and _blocked[index + cols] == 0
+			var horizontal := west and east and not north and not south
+			var vertical := north and south and not west and not east
+			if horizontal or vertical:
+				_corridor[index] = 1
 
 
 ## 벽을 피하는 것이 곧 지터를 피하는 것이다.
