@@ -136,3 +136,43 @@ func test_every_form_has_a_name_without_missing_glyphs() -> void:
 		assert_false(text.is_empty(), "이름 없는 형태가 있으면 화면에 빈칸이 찍힌다")
 		assert_false(text.contains("·"), "SongMyung 에 없는 글자다")
 		assert_false(text.contains("→"), "SongMyung 에 없는 글자다")
+
+
+## **재는 자가 놓친 축이 또 나왔다.** 「층진 띠」의 실루엣은 층마다 **왼쪽 변**이
+## 다른데 처음 만든 자는 오른쪽 변만 봤다. 그래서 스크롤로 층이 통째로 밀려도
+## 흔들림이 0 으로 나왔다 — §20.13.1 과 같은 병이 새 자에 그대로 있었다.
+func test_the_ruler_sees_the_side_that_actually_moves() -> void:
+	var form := LedgerForm.Kind.STRATA
+	# 두 이음매 묶음에서 **층 번호가 서로 다른** 높이를 골라야 한다. 같은 층이면
+	# 밀린 거리가 같아서 자가 멀쩡해도 값이 안 갈린다.
+	var at_y := 240.0
+	var one := LedgerForm.edge_at(form, SIZE, _cuts(), _reach(), Vector3.ZERO, at_y)
+	var other := LedgerForm.edge_at(
+		form, SIZE, PackedFloat32Array([90.0, 260.0, 350.0]), _reach(), Vector3.ZERO, at_y
+	)
+	assert_ne(one.x, other.x, "층 경계가 움직였으면 왼쪽 변도 움직여야 하고 자가 그것을 봐야 한다")
+	assert_almost_eq(
+		LedgerForm.right_at(form, SIZE, _cuts(), _reach(), Vector3.ZERO, at_y),
+		LedgerForm.right_at(
+			form, SIZE, PackedFloat32Array([90.0, 260.0, 350.0]), _reach(), Vector3.ZERO, at_y
+		),
+		0.01,
+		"오른쪽만 재면 이 형태의 움직임은 통째로 안 보인다 — 이 단언이 그 사실이다"
+	)
+
+
+## **스크롤을 견디는 형태와 못 견디는 형태를 가르는 것은 하나뿐이다** —
+## 실루엣이 `cuts` 를 먹는가. 먹으면 글이 흐를 때 판이 춤춘다.
+func test_forms_that_eat_cuts_are_the_ones_that_dance() -> void:
+	var moved := PackedFloat32Array([90.0, 260.0, 350.0])
+	for kind in LedgerForm.count():
+		var form := kind as LedgerForm.Kind
+		var still := true
+		for i in 12:
+			var y := 60.0 + float(i) * 28.0
+			var a := LedgerForm.edge_at(form, SIZE, _cuts(), _reach(), Vector3.ZERO, y)
+			var b := LedgerForm.edge_at(form, SIZE, moved, _reach(), Vector3.ZERO, y)
+			if a.distance_to(b) > 0.5:
+				still = false
+		var eats := form in [LedgerForm.Kind.STRATA, LedgerForm.Kind.TERRACE, LedgerForm.Kind.DOCK]
+		assert_eq(still, not eats, "%s — 흔들림과 「cuts 를 먹는가」가 갈라지면 안 된다" % LedgerForm.label(form))

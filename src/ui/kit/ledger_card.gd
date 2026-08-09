@@ -48,6 +48,19 @@ const LABEL_SHARE: float = 0.42
 
 var sections: Array[SheetSection] = []
 
+## 글이 위로 얼마나 흘러 올라갔나(px). 0 이면 스크롤이 없는 것이다.
+##
+## **스크롤은 「이음매를 자료가 정한다」와 정면으로 싸운다.** 자료가 흐르면 빈틈도
+## 흐르고 이음매도 흐른다 — 형태가 매 프레임 달라진다. 그 싸움을 실제로 보이려고
+## 카드가 스크롤을 직접 받는다.
+var scroll := 0.0
+
+## 창 밖으로 나간 줄을 안 그리는가. 스크롤 화면에서만 켠다.
+##
+## **줄 단위로 자른다.** 픽셀로 자르면 창 끝에서 글자가 반만 남아 「고장난 것」으로
+## 읽힌다. 종이를 읽는 사람은 반 줄을 안 읽는다.
+var paged := false
+
 var _motion := PopupMotion.new()
 var _driven := false
 
@@ -63,6 +76,9 @@ var _overflow := Vector2.ZERO
 
 ## 이음매가 글줄을 가로지른 횟수. **이 형태 묶음이 0 을 목표로 만들어졌다.**
 var _crossed := 0
+
+## 아직 창 아래에 남은 글의 높이(px). 스크롤이 필요한 양이다.
+var _below := 0.0
 
 
 func _ready() -> void:
@@ -110,6 +126,30 @@ func bands() -> int:
 ## 한 장이다. 층은 오른쪽 변의 디딤으로만 드러난다.
 func steps() -> int:
 	return maxi(_edges.size() - 1, 1)
+
+
+## 안 그리고 재기만 한다. 확인 화면이 실루엣을 비교할 때 쓴다.
+func measure() -> void:
+	_plan()
+
+
+## 아직 창 아래에 남은 글의 높이(px).
+func below() -> float:
+	return _below
+
+
+## 지금 실루엣을 스무 자리에서 잰 것. 자리마다 **왼쪽 변과 오른쪽 변 둘 다** 넣는다.
+##
+## 오른쪽만 넣었다가 「층진 띠」의 흔들림을 통째로 놓쳤다 — `LedgerForm.edge_at()`.
+func profile() -> PackedFloat32Array:
+	var box := LedgerForm.text_box(form, size)
+	var out := PackedFloat32Array()
+	for i in 20:
+		var y := box.position.y + box.size.y * (float(i) + 0.5) / 20.0
+		var side := LedgerForm.edge_at(form, size, _cuts, _reach, _event, y)
+		out.append(side.x)
+		out.append(side.y)
+	return out
 
 
 func _draw() -> void:
@@ -225,12 +265,15 @@ func _fly(piece: PackedVector2Array, index: int, count: int) -> PackedVector2Arr
 func _plan() -> void:
 	var box := LedgerForm.text_box(form, size)
 	var column := (box.size.x - 18.0) * 0.5
+	var top := box.position.y - scroll
 	_left = []
 	_right = []
-	var floor_left := _column(PersonSheet.LEFT_TITLES, box.position, column, 1.0, true, _left)
+	var floor_left := _column(
+		PersonSheet.LEFT_TITLES, Vector2(box.position.x, top), column, 1.0, true, _left
+	)
 	var floor_right := _column(
 		PersonSheet.RIGHT_TITLES,
-		Vector2(box.position.x + column + 18.0, box.position.y),
+		Vector2(box.position.x + column + 18.0, top),
 		column,
 		1.0,
 		true,
@@ -260,7 +303,10 @@ func _plan() -> void:
 	var far := box.position.x
 	for line in all_lines:
 		far = maxf(far, line.end.x)
-	_overflow = Vector2(maxf(0.0, far - box.end.x), maxf(0.0, bottom - box.end.y))
+	_below = maxf(0.0, bottom - box.end.y)
+	# 창이 있는 화면에서 아래로 남은 글은 **넘침이 아니라 아직 안 읽은 것**이다.
+	var spill_down := 0.0 if paged else _below
+	_overflow = Vector2(maxf(0.0, far - box.end.x), spill_down)
 
 
 ## 실제로 판이 갈린 자리. `_cuts` 중 형태가 받아들인 것만 남는다.
@@ -283,11 +329,12 @@ func _write_sheet() -> void:
 	draw_rect(Rect2(head.x, head.y + 7.0, 24.0, 2.0), Color(ACCENT, shown))
 
 	var column := (box.size.x - 18.0) * 0.5
+	var top := box.position.y - scroll
 	var spare: Array[Rect2] = []
-	_column(PersonSheet.LEFT_TITLES, box.position, column, shown, false, spare)
+	_column(PersonSheet.LEFT_TITLES, Vector2(box.position.x, top), column, shown, false, spare)
 	_column(
 		PersonSheet.RIGHT_TITLES,
-		Vector2(box.position.x + column + 18.0, box.position.y),
+		Vector2(box.position.x + column + 18.0, top),
 		column,
 		shown,
 		false,
@@ -311,7 +358,9 @@ func _column(
 		if section == null:
 			continue
 		var head_wide := FONT.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, SECTION_SIZE).x
-		if dry:
+		if not _in_view(y - 12.0, 20.0):
+			pass
+		elif dry:
 			into.append(Rect2(at.x, y - 12.0, head_wide, 20.0))
 		else:
 			draw_string(
@@ -335,6 +384,8 @@ func _section(
 ) -> float:
 	if section.shape == SheetSection.Shape.FRAME:
 		var side := minf(wide, 66.0)
+		if not _in_view(at.y, side):
+			return at.y + side + 4.0
 		if dry:
 			into.append(Rect2(at.x, at.y, side, side))
 		else:
@@ -403,11 +454,21 @@ func _field(
 	)
 
 
+## 이 줄이 창 안에 온전히 들어오나. 스크롤이 없으면 늘 참이다.
+func _in_view(top: float, tall: float) -> bool:
+	if not paged:
+		return true
+	var box := LedgerForm.text_box(form, size)
+	return top >= box.position.y - 1.0 and top + tall <= box.end.y + 1.0
+
+
 ## 글줄 하나. 재는 폭과 그리는 폭이 같은 곳이 여기뿐이다.
 func _put(
 	text: String, at: Vector2, points: int, tone: Color, dry: bool, into: Array[Rect2]
 ) -> void:
 	var reach := FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, points).x
+	if not _in_view(at.y - float(points), float(points) + 4.0):
+		return
 	if dry:
 		into.append(Rect2(at.x, at.y - float(points), reach, float(points) + 4.0))
 		return

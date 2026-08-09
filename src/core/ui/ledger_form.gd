@@ -370,6 +370,54 @@ static func step_rights(
 	return out
 
 
+## 높이 `y` 에서 판의 **왼쪽과 오른쪽 변**이 어디인가. `Vector2(왼쪽, 오른쪽)`.
+##
+## **오른쪽만 재면 「층진 띠」의 흔들림이 안 잡힌다.** 처음에 그렇게 만들었더니
+## 층이 좌우로 밀리는 형태가 흔들림 0 으로 나왔다 — 그 형태의 실루엣은 **왼쪽 변**이
+## 층마다 다른 것인데 재는 자가 오른쪽만 보고 있었다.
+##
+## > **§20.13.1 이 세 번째로 나왔다. 새로 만든 자에도 같은 병이 있었다.**
+static func edge_at(
+	kind: Kind,
+	size: Vector2,
+	cuts: PackedFloat32Array,
+	reach: PackedFloat32Array,
+	event: Vector3,
+	y: float
+) -> Vector2:
+	var edge := edges(kind, size, cuts)
+	if kind == Kind.STRATA:
+		for i in edge.size() - 1:
+			if y >= edge[i] and y < edge[i + 1]:
+				var dx := band_shift(kind, i, edge.size() - 1, size, event)
+				return Vector2(dx, size.x + dx)
+		return Vector2(0.0, size.x)
+	return Vector2(0.0, right_at(kind, size, cuts, reach, event, y))
+
+
+## 높이 `y` 에서 판의 오른쪽 변이 어디인가. **실루엣이 흔들리는지 재는 자다.**
+##
+## 스크롤은 「이음매를 자료가 정한다」와 정면으로 싸운다 — 자료가 흐르면 이음매도
+## 흐르고 **실루엣이 매 프레임 달라진다.** 그것을 눈으로 「좀 움직이네」로 넘기지
+## 않으려고 재는 함수를 둔다(§20.13.1 — 재는 축이 모자라면 없는 합격이 나온다).
+static func right_at(
+	kind: Kind,
+	size: Vector2,
+	cuts: PackedFloat32Array,
+	reach: PackedFloat32Array,
+	event: Vector3,
+	y: float
+) -> float:
+	var rights := step_rights(kind, size, cuts, reach, event)
+	if rights.is_empty():
+		return size.x
+	var edge := edges(kind, size, cuts)
+	for i in rights.size():
+		if y >= edge[i] and y < edge[i + 1]:
+			return rights[i]
+	return rights[rights.size() - 1]
+
+
 ## 층마다 오른쪽 변이 다른 **한 장짜리** 실루엣.
 ##
 ## **조각으로 쪼개면 안 된다.** 처음에 층마다 다각형을 하나씩 냈더니 층마다 테두리가
