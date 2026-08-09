@@ -78,12 +78,16 @@ func _process(_delta: float) -> bool:
 		8:
 			_save("hideout_ghost_blocked")
 		9:
-			_stage_occlusion(1)
+			_let_them_walk()
 		10:
-			_save("hideout_occlusion_1f")
+			_save("hideout_crowd")
 		11:
-			_stage_occlusion(2)
+			_stage_occlusion(1)
 		12:
+			_save("hideout_occlusion_1f")
+		13:
+			_stage_occlusion(2)
+		14:
 			_save("hideout_occlusion_2f")
 		_:
 			return true
@@ -131,6 +135,24 @@ func _aim_build_at_a_building() -> void:
 
 ## 판을 비우고 건물 한 채만 세운다. **뒤 칸이 몇 개 사라지는지 세려는 것**이므로
 ## 다른 건물이 있으면 안 된다. 바닥 격자선을 세어서 확인한다.
+## 대원이 흩어질 때까지 굴린 뒤 판 전체를 찍는다. **크기를 재려는 것이다** (§30.12).
+##
+## 시계를 도구가 돌린다 — 화면의 _process 는 실제 delta 로 돌지만 캡처는 몇 프레임뿐이라
+## 그대로 두면 아무도 안 움직인 판이 찍힌다.
+func _let_them_walk() -> void:
+	_screen.call("cancel_placement")
+	var crowd = _screen.call("crowd")
+	for _step in 420:
+		crowd.tick(1.0 / 60.0)
+	var iso = _screen.call("projection")
+	var grid = _screen.call("grid")
+	var camera := _camera()
+	camera.zoom = Vector2(1.0, 1.0)
+	camera.position = iso.board_center(grid.cols, grid.rows)
+	Input.warp_mouse(Vector2(4.0, 4.0))
+	print("[capture] 대원 %d 명을 7초 굴렸다" % crowd.count())
+
+
 func _stage_occlusion(storeys: int) -> void:
 	_screen.call("cancel_placement")
 	var grid = _screen.call("grid")

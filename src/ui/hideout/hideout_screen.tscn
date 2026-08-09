@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://src/ui/hideout/hideout_screen.gd" id="1_root"]
 [ext_resource type="Script" path="res://src/ui/hideout/hideout_floor.gd" id="2_floor"]
-[ext_resource type="Script" path="res://src/ui/hideout/hideout_building_view.gd" id="3_building"]
+[ext_resource type="Script" path="res://src/ui/hideout/hideout_scene_view.gd" id="3_scene"]
 [ext_resource type="Script" path="res://src/ui/hideout/hideout_cursor.gd" id="4_cursor"]
 [ext_resource type="Script" path="res://src/ui/hideout/hideout_ghost.gd" id="5_ghost"]
 
@@ -26,9 +26,9 @@ unique_name_in_owner = true
 unique_name_in_owner = true
 script = ExtResource("2_floor")
 
-[node name="BuildingView" type="Node2D" parent="."]
+[node name="SceneView" type="Node2D" parent="."]
 unique_name_in_owner = true
-script = ExtResource("3_building")
+script = ExtResource("3_scene")
 
 [node name="CursorView" type="Node2D" parent="."]
 unique_name_in_owner = true

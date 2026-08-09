@@ -36,9 +36,17 @@ const _STARTING_LAYOUT: Array[Dictionary] = [
 ## 숫자키로 고르는 시설 순서. Facility.all() 순서를 그대로 쓴다.
 const _BUILD_KEYS := [KEY_1, KEY_2, KEY_3]
 
+## 배회를 되풀이해 볼 수 있게 씨앗을 박아 둔다. 캡처가 판마다 다르면 견줄 수가 없다.
+const _CROWD_SEED := 20260810
+
+## 세워 볼 인원. **잠정이다** — 스쿼드 정원은 3~4 지만(§22.3) 아지트에는 남는 대원이 있고
+## 영입 후보도 온다. 여섯이면 «사람이 지낸다» 로 읽히는지 보려는 숫자다 (§30.12).
+const _CROWD_SIZE := 6
+
 var _grid: HideoutGrid
 var _iso: IsoProjection
 var _plan: HideoutPlacement
+var _crowd: HideoutCrowd
 var _panning := false
 
 ## 마지막으로 알려 줄 말 한 줄 (놓았다 · 못 놓는다 · 옮겼다).
@@ -46,7 +54,7 @@ var _notice := ""
 
 @onready var _camera: Camera2D = %Camera
 @onready var _floor_view: HideoutFloorView = %FloorView
-@onready var _building_view: HideoutBuildingView = %BuildingView
+@onready var _scene_view: HideoutSceneView = %SceneView
 @onready var _cursor_view: HideoutCursorView = %CursorView
 @onready var _ghost_view: HideoutGhostView = %GhostView
 @onready var _status_label: Label = %StatusLabel
@@ -58,8 +66,10 @@ func _ready() -> void:
 	_grid = HideoutGrid.new()
 	_plan = HideoutPlacement.new(_grid)
 	_place_starting_layout()
+	_crowd = HideoutCrowd.new(_grid, _CROWD_SEED)
+	_crowd.spawn_scattered(_member_names())
 	_floor_view.bind(_grid, _iso)
-	_building_view.bind(_grid, _iso)
+	_scene_view.bind(_iso, _grid, _crowd)
 	_cursor_view.bind(_iso)
 	_ghost_view.bind(_iso, _plan)
 	_frame_board()
@@ -70,6 +80,8 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_pan_with_keys(delta)
 	_track_mouse()
+	_crowd.tick(delta)
+	_scene_view.highlight(_crowd.person_at(_cursor_view.cell()))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -129,10 +141,22 @@ func cancel_placement() -> void:
 ##
 ## 판을 밖에서 고친 쪽(도구 · 테스트)도 이것을 불러 준다.
 func refresh_views() -> void:
-	_building_view.refresh()
 	_floor_view.refresh()
 	_ghost_view.refresh()
 	_refresh_status()
+
+
+## 배회하는 대원들. 배선 테스트가 같은 문으로 읽는다.
+func crowd() -> HideoutCrowd:
+	return _crowd
+
+
+## 세워 볼 대원 이름. 관계·사건이 붙으면 GuildMember 에서 온다 (§30.6).
+func _member_names() -> Array[String]:
+	var names: Array[String] = []
+	for index in _CROWD_SIZE:
+		names.append("member_%d" % index)
+	return names
 
 
 ## 이 화면이 들고 있는 판. 배선 테스트와 나중에 붙을 층(배회 · 배치)이 같은 것을 본다.
@@ -296,7 +320,7 @@ func _placement_line() -> String:
 func _help_text() -> String:
 	var lines := PackedStringArray(
 		[
-			"④ 시점 · ③ 배치가 선다. 배회 · 끌어 넣기 · 말풍선 · 메뉴는 아직 없다",
+			"④ 시점 · ③ 배치 · ① 배회가 선다. 끌어 넣기 · 말풍선 · 메뉴는 아직 없다",
 			"docs/design/30-hideout.md",
 			"",
 			"1 2 3           공방 · 정보실 · 접선처 짓기",

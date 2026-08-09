@@ -40,6 +40,12 @@ const FACILITY_ROOFS: Array[Color] = [
 	Color(0.50, 0.44, 0.68),
 ]
 
+## 배회하는 대원. 그림이 오면 스프라이트로 갈린다 (§30.12).
+##
+## 바닥·건물과 **색 계열을 일부러 갈랐다.** 사람은 집는 것이라 배경에서 떨어져야 한다.
+const PERSON := Color(0.86, 0.78, 0.62)
+const PERSON_LIT := Color(1.0, 0.94, 0.72)
+
 const TEXT := Color(0.88, 0.91, 0.96)
 const TEXT_DIM := Color(0.62, 0.66, 0.74)
 
