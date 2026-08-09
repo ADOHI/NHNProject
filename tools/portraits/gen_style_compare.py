@@ -158,7 +158,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("folder")
-    ap.add_argument("people", nargs="+", help="인물 번호들 (예: 2 3). **고정이어야 비교가 된다**")
+    ap.add_argument("people", nargs="+",
+                    help="인물 번호들 (예: 2 3). **고정이어야 비교가 된다**. "
+                         "`2b` 처럼 글자를 붙이면 **시드는 2 그대로 두고 슬롯만 갈아 끼운다** "
+                         "— ③ 칸을 한 낱말 고쳤을 때 그림이 어떻게 바뀌는지 재는 자리다")
     ap.add_argument("--only", default="",
                     help="후보를 쉼표로 골라 돈다. 기본은 아직 안 뽑은 것 전부")
     ap.add_argument("--redo", action="store_true", help="이미 있는 판도 다시 뽑는다")
@@ -201,7 +204,9 @@ def main() -> int:
             skipped += 1
             continue
         prompt = illust.compose_illust(slots[stem], style)
-        seed = seed_of(int(stem), 0, 0)
+        # 숫자만 뽑는다 — `2b` 는 **인물 2 의 시드**를 쓴다. 난수가 같아야 슬롯 한 낱말의
+        # 차이를 슬롯 탓으로 돌릴 수 있다 (`gen_person.py` 와 같은 방식).
+        seed = seed_of(int("".join(c for c in stem if c.isdigit()) or 0), 0, 0)
         try:
             spent = comfy.submit(
                 illust.zitani_graph(prompt, seed, illust.ILLUST_W, illust.ILLUST_H,
