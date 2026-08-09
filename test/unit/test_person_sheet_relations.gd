@@ -16,19 +16,14 @@ const _SEED := 20260808
 const _POPULATION := 200
 
 
-## 인구 · 가족 · 사건까지 세운 세계. 화면이 세우는 순서와 같다.
-func _live_world() -> Array:
-	var registry := PersonGenerator.new(_SEED, _POPULATION).generate()
-	var graph := RelationGraph.new(registry.size())
-	KinSeeder.new(_SEED, registry, graph).seed_all()
-	var ledger := RelationLedger.new()
-	EventSeeder.new(_SEED, registry, graph, ledger).seed_all()
-	return [registry, graph, ledger]
+## 인구 · 가족 · 사건까지 세운 세계. **세우는 순서는 NpcWorld 가 안다.**
+func _live_world() -> NpcWorld:
+	return NpcWorld.create(_SEED, _POPULATION)
 
 
-func _live_sheet(world: Array, person: int) -> Array[SheetSection]:
+func _live_sheet(world: NpcWorld, person: int) -> Array[SheetSection]:
 	return PersonSheet.build(
-		world[0], person, FactionIndex.new(world[0]), SheetDisclosure.Level.DEV, world[1], world[2]
+		world.registry, person, world.factions, SheetDisclosure.Level.DEV, world.graph, world.ledger
 	)
 
 
@@ -36,7 +31,7 @@ func test_relation_section_never_outgrows_its_column() -> void:
 	# **화면 밖으로 밀려 본 적이 있다.** 왼쪽 열은 초상 액자가 340 을 먹어서
 	# 관계 칸에 일곱 줄밖에 안 남는다 (§24.20.4). 자료가 늘어도 이 수를 넘으면 안 된다.
 	var world := _live_world()
-	for person in (world[0] as PersonRegistry).size():
+	for person in world.registry.size():
 		var section := PersonSheet.section_of(_live_sheet(world, person), "관계")
 		assert_lte(section.fields.size(), PersonSheet.RELATION_ROWS, "인물 %d" % person)
 
@@ -45,7 +40,7 @@ func test_earned_relations_show_up_somewhere() -> void:
 	# 사건을 굴렸는데 화면에 우호 · 원수가 하나도 안 나오면 이어진 데가 끊긴 것이다.
 	var world := _live_world()
 	var found := false
-	for person in (world[0] as PersonRegistry).size():
+	for person in world.registry.size():
 		for field in PersonSheet.section_of(_live_sheet(world, person), "관계").fields:
 			if field.label == "가까운 사람" or field.label == "척진 사람":
 				found = true
@@ -56,8 +51,7 @@ func test_earned_relations_show_up_somewhere() -> void:
 func test_one_sided_relations_are_marked() -> void:
 	# **A 가 B 를 아는데 B 는 A 를 모르는 일**이 화면에 드러나야 한다 (§24.21.2).
 	var world := _live_world()
-	var registry: PersonRegistry = world[0]
-	var graph: RelationGraph = world[1]
+	var graph := world.graph
 	var person := -1
 	for slot in graph.size():
 		if not graph.knows(graph.slot_to(slot), graph.slot_from(slot)):
@@ -68,13 +62,13 @@ func test_one_sided_relations_are_marked() -> void:
 	for field in PersonSheet.section_of(_live_sheet(world, person), "관계").fields:
 		if field.label.contains("한쪽만"):
 			marked = true
-	assert_true(marked, "%s 의 화면에 한쪽만 아는 관계가 적혀야 한다" % registry.name_of(person))
+	assert_true(marked, "%s 의 화면에 한쪽만 아는 관계가 적혀야 한다" % world.registry.name_of(person))
 
 
 func test_relation_lines_carry_both_axes() -> void:
 	# 호감과 유대를 같이 내야 "깊이 엮인 채로 증오하는 사이" 가 읽힌다 (§24.2).
 	var world := _live_world()
-	for person in (world[0] as PersonRegistry).size():
+	for person in world.registry.size():
 		for field in PersonSheet.section_of(_live_sheet(world, person), "관계").fields:
 			if not field.is_filled() or field.value.ends_with("명"):
 				continue
@@ -85,8 +79,8 @@ func test_relation_lines_carry_both_axes() -> void:
 func test_chronicle_tells_the_story_behind_the_numbers() -> void:
 	# **왜 그런지가 보여야 한다** (§24.2). 관계 줄의 대괄호 번호가 열전 줄을 가리킨다.
 	var world := _live_world()
-	var ledger: RelationLedger = world[2]
-	var graph: RelationGraph = world[1]
+	var ledger := world.ledger
+	var graph := world.graph
 	var person := -1
 	for slot in graph.size():
 		var from := graph.slot_from(slot)
@@ -113,8 +107,8 @@ func test_chronicle_tells_the_story_behind_the_numbers() -> void:
 
 func test_chronicle_says_what_i_was() -> void:
 	var world := _live_world()
-	var ledger: RelationLedger = world[2]
-	var graph: RelationGraph = world[1]
+	var ledger := world.ledger
+	var graph := world.graph
 	var person := ledger.actor_of(0)
 	assert_gt(ledger.causes_of(graph, person).size(), 0)
 	var found := false

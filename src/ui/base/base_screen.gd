@@ -31,6 +31,10 @@ const _GUILD_WIDTH := 268
 const _MEMBER_WIDTH := 396
 
 var _guild: Guild
+
+## 인물과 관계의 세계. **길드가 여기에 발을 딛어야 영입 판정이 선다** (Guild.bind_world).
+var _world: NpcWorld
+
 var _gates: Array[Gate] = []
 
 ## 지금 고른 게이트의 자리 번호.
@@ -54,7 +58,12 @@ var _expedition_panel: BaseExpeditionPanel
 
 func _ready() -> void:
 	_build_layout()
-	_guild = Guild.create_starting(CAMPAIGN_SEED)
+	# **세계를 한 번에 세운다.** 3000명 + 가족 + 사건이 데스크톱에서 50ms 남짓이고
+	# (docs/design/24-npc-relations.md §24.26.4) 화면을 여는 순간 한 번뿐이다.
+	# 웹에서 이 멈춤이 거슬리면 `NpcWorld.build_chunk()` 로 나눠 돌리면 된다 —
+	# 인물 상세 화면이 그렇게 하고 있고 결과는 같다 (§24.16.2).
+	_world = NpcWorld.create(CAMPAIGN_SEED)
+	_guild = Guild.create_starting(CAMPAIGN_SEED, "새벽 길드", _world)
 	_open_new_board()
 	_refresh()
 

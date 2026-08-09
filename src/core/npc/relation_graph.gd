@@ -161,6 +161,24 @@ func degree_of(from: int) -> int:
 	return targets_of(from).size()
 
 
+## **서로 아는 사람들.** 한쪽만 아는 관계를 걷어낸다.
+##
+## 차수만 세면 「내가 아는 사람」이 나오는데, 그것은 연줄이 아니다 —
+## 사건의 목격자는 유대 0 짜리 한쪽 관계를 남기고(설계 24.21.5) 전멸의 인솔자는
+## **죽은 사람들에게** 한쪽 관계를 남긴다. 그래서 차수가 큰 사람이
+## *"사람을 많이 죽인 사람"* 일 수 있다. 연줄을 묻는 자리에서는 이쪽을 써야 한다.
+func mutuals_of(from: int) -> PackedInt32Array:
+	var found := PackedInt32Array()
+	for other in targets_of(from):
+		if knows(other, from):
+			found.append(other)
+	return found
+
+
+func mutual_degree(from: int) -> int:
+	return mutuals_of(from).size()
+
+
 ## 슬롯 하나를 읽는다. 도구가 전체를 훑을 때 쓴다.
 func slot_from(slot: int) -> int:
 	return _from[slot]

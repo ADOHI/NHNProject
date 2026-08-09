@@ -95,34 +95,34 @@ func _probe(event: RelationEvent, sign: int) -> PackedInt32Array:
 	return traits
 
 
-## 인구 · 태생 관계 · 사건까지 세운 세계 하나. 화면이 세우는 순서와 같다.
+## 인구 · 태생 관계 · 사건까지 세운 세계 하나.
+##
+## **조각으로 돌린다.** 화면이 그렇게 하고 있고, 조각마다 걸린 시간을 재야
+## 프레임 예산 판정이 거짓말을 안 한다 (설계 24.16.2).
 func _build_world() -> Array:
 	print("\n== 세계 (%d명, 시드 %d) ==" % [_POPULATION, _SEED])
-	var registry := PersonGenerator.new(_SEED, _POPULATION).generate()
-	var graph := RelationGraph.new(registry.size())
-	KinSeeder.new(_SEED, registry, graph).seed_all()
-	var inborn := graph.size()
-
-	var ledger := RelationLedger.new()
-	var seeder := EventSeeder.new(_SEED, registry, graph, ledger)
+	var world := NpcWorld.new(_SEED, _POPULATION)
 	var worst := 0.0
 	var total := 0.0
+	var inborn := 0
 	while true:
 		var started := Time.get_ticks_usec()
-		# **화면이 쓰는 조각 크기 그대로 잰다.** 다른 값으로 재면 프레임 예산 판정이 거짓말한다.
-		var done := seeder.seed_chunk(NpcSheetScreen.EVENT_CHUNK)
+		var done := world.build_chunk()
 		var spent := float(Time.get_ticks_usec() - started) / 1000.0
 		total += spent
-		worst = maxf(worst, spent)
+		# 사건 단계로 넘어간 직후가 태생 관계만 있는 상태다.
+		if inborn == 0 and world.stage() == NpcWorld.Stage.EVENTS:
+			inborn = world.graph.size()
+		if world.stage() == NpcWorld.Stage.EVENTS:
+			worst = maxf(worst, spent)
 		if done:
 			break
 
 	print("%-26s %d" % ["태생 관계 (사건 전)", inborn])
-	print("%-26s %d건" % ["굴린 사건", ledger.size()])
-	print(
-		"%-26s %.2f ms (조각 %d건 최대 %.2f ms)" % ["사건 굴리기", total, NpcSheetScreen.EVENT_CHUNK, worst]
-	)
-	return [registry, graph, ledger, inborn]
+	print("%-26s %d건" % ["굴린 사건", world.ledger.size()])
+	print("%-26s %.2f ms" % ["세계 세우기 (전부)", total])
+	print("%-26s %.2f ms" % ["사건 조각 %d건 최대" % NpcWorld.EVENT_CHUNK, worst])
+	return [world.registry, world.graph, world.ledger, inborn]
 
 
 func _report_graph(world: Array) -> void:

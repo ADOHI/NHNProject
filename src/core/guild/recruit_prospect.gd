@@ -11,16 +11,22 @@ extends RefCounted
 ## 이 클래스에는 영입 함수가 없다. Guild 에도 없다.
 ## 그것이 "아직 없다" 를 코드로 말하는 방법이다.
 ##
-## ## 판정은 붙었다 — 관계가 물려 있으면 참이 나온다
+## ## 후보는 세계의 인물이다
 ##
-## 관계도(`RelationGraph`)와 사건(`RelationResolver`)이 서면서
-## **`can_recruit()` 이 더 이상 상수가 아니다.** 판정 자체는 `RecruitStanding` 이 하고
-## 여기는 그 결과만 든다 — 후보가 `PersonRegistry` 를 들고 다니지 않게 하려는 것이다.
+## 예전에는 접선처가 **이름을 지어냈다.** 그러면 그 후보에게는 관계가 없고,
+## 관계가 없으면 `can_recruit()` 이 볼 것이 없어 영원히 거짓이다 —
+## **관계도를 만들어 놓고도 영입이 안 열리는 이유가 그것이었다.**
 ##
-## **아직 안 물린 자리가 하나 남았다.** 접선처(`GuildSettlement`)는 후보를
-## 이름과 계열로만 만들고 세계의 인물 번호를 모른다. 그것을 잇는 것이
-## 설계 24.1 의 2층(인물↔길드)이고, 그때까지 `standing` 은 비어 있다.
-## **빈 채로 두는 것이 임시 판정을 넣는 것보다 낫다** — 그래야 화면이 왜 막혔는지 말한다.
+## 인구 3000명은 동결돼 있고 **인덱스가 곧 그 사람이다** (설계 24.24).
+## 그러므로 후보를 지어내지 않고 인구에서 뽑는다. `person` 이 그 번호다.
+##
+## 이름과 계열을 여기에도 든 이유는 **인물 번호가 없는 후보가 아직 가능하기 때문**이다
+## (세계 없이 정산하는 시험과 옛 저장이 그렇다). 세계가 있으면 둘은 인구에서 온 값이다.
+##
+## ## 판정은 RecruitStanding 이 한다
+##
+## 여기는 결과만 든다 — 후보가 `PersonRegistry` 와 `RelationGraph` 를
+## 들고 다니지 않게 하려는 것이다.
 
 ## 후보를 가리키는 식별자.
 var id: String
@@ -33,6 +39,13 @@ var discipline: MemberDiscipline.Kind
 
 ## 이 후보를 찾아낸 시점의 원정 번호. 명단이 밀릴 때 오래된 것부터 나간다.
 var found_at_expedition: int
+
+## 세계의 인물 번호. **NO_PERSON 이면 세계 없이 만들어진 후보다.**
+var person: int = PersonRegistry.NO_PERSON
+
+## 누구를 통해 닿았나. **접선처는 연줄로 사람을 찾는다** —
+## NO_PERSON 이면 연줄 없이 걸린 낯선 사람이다.
+var introduced_by: int = PersonRegistry.NO_PERSON
 
 ## 관계 판정. **null 이면 아직 세계의 인물과 안 물린 것이다** (설계 24.1 의 2층).
 var standing: RecruitStanding = null
@@ -60,6 +73,11 @@ func blocked_reason() -> String:
 	if standing == null:
 		return "이 후보가 세계의 인물과 아직 안 물려 있다 (인물-길드 층 미구현)"
 	return standing.blocked_reason()
+
+
+## 세계의 인물인가. 아니면 관계를 볼 수 없다.
+func is_in_world() -> bool:
+	return person != PersonRegistry.NO_PERSON
 
 
 func summary() -> String:

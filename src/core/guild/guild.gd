@@ -12,7 +12,18 @@ extends RefCounted
 ##
 ## 영입은 자원이 아니라 던전에서 쌓은 관계를 요구한다
 ## (docs/design/06-progression.md §6.1, docs/design/05-rules.md §5.10).
-## 관계도가 없으므로 영입도 없다. 후보 명단까지만 있다 (RecruitProspect).
+## 후보 명단까지만 있다 (RecruitProspect).
+##
+## ## 길드가 세계에 발을 딛는 자리
+##
+## 관계도(`NpcWorld`)는 인물끼리의 것이고 길드는 아직 그 안에 없다
+## (docs/design/24-npc-relations.md §24.1 의 2층이 미구현이다).
+## 그런데 영입 판정은 **누가 누구를 어떻게 보는가**를 물어야 하고,
+## 그러려면 길드 쪽에도 인물이 하나는 있어야 한다.
+##
+## 그래서 `leader_person` 하나만 세계에 발을 딛는다. **대원 전원을 세계 인물로 잇는 것이
+## 2층이고 그것은 다음 순번이다.** 여기 하나로도 영입이 열리므로 지금은 이것으로 족하다
+## (§24.16.1 — *"두 계층을 잇는 것은 영입 시점의 변환 하나로 족하다"*).
 
 ## 자원이나 아지트가 변했을 때. 화면 갱신의 신호다.
 signal changed
@@ -41,6 +52,12 @@ var prospects: Array[RecruitProspect] = []
 ## 정산까지 끝난 원정 수. 후보 명단의 시간 표시에 쓴다.
 var expeditions_settled: int = 0
 
+## 인물과 관계의 세계. **null 이면 후보가 이름뿐인 사람으로 나온다.**
+var world: NpcWorld = null
+
+## 이 길드를 대표하는 세계의 인물. 영입 판정이 「후보가 이 사람을 어떻게 보는가」를 묻는다.
+var leader_person: int = PersonRegistry.NO_PERSON
+
 ## 이미 정산한 원정 번호 장부.
 ##
 ## 보고서 쪽 플래그로도 막을 수 있지만, 그러면 보고서를 복제해 오면 뚫린다.
@@ -58,7 +75,12 @@ func _init(name: String = "이름 없는 길드") -> void:
 ## 다섯인 이유는 정원(3)이 계열 수(5)보다 작아야 한다는 규칙을
 ## **첫 화면부터** 성립시키기 위해서다 (docs/design/14-squad.md §14.4.3).
 ## 넷 이하로 시작하면 초반에는 전부 데려갈 수 있어 편성이 결정이 아니게 된다.
-static func create_starting(seed_value: int = 0, name: String = "새벽 길드") -> Guild:
+##
+## npc_world 를 주면 **길드가 세계에 발을 딛는다** — 대표 인물이 정해지고
+## 접선처가 그 사람의 연줄로 후보를 찾는다 (GuildSettlement).
+static func create_starting(
+	seed_value: int = 0, name: String = "새벽 길드", npc_world: NpcWorld = null
+) -> Guild:
 	var guild := Guild.new(name)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
@@ -71,7 +93,18 @@ static func create_starting(seed_value: int = 0, name: String = "새벽 길드")
 				discipline as MemberDiscipline.Kind
 			)
 		)
+	guild.bind_world(npc_world, rng)
 	return guild
+
+
+## 세계를 물린다. 대표는 **연줄이 있는 사람**으로 고른다 —
+## 관계가 없는 사람을 세우면 접선처가 아무도 못 찾고, 그것은 세계의 사실이 아니라
+## 뽑기 실패다 (NpcWorld.pick_connected).
+func bind_world(npc_world: NpcWorld, rng: RandomNumberGenerator) -> void:
+	if npc_world == null or not npc_world.is_ready():
+		return
+	world = npc_world
+	leader_person = npc_world.pick_connected(rng)
 
 
 # ---------------------------------------------------------------- 등급과 정원

@@ -49,14 +49,12 @@ func _process(_delta: float) -> bool:
 	if _frames < 3:
 		return false
 
-	# 준비가 **끝났는지**를 본다. registry.size() 나 _generator 만 보면
-	# 인구 뒤에 오는 가족 심기(설계 24.22)를 놓쳐 빈 화면을 찍는다.
-	# **_factions 가 마지막에 서므로 그것 하나가 준비 신호다.**
-	var registry: PersonRegistry = _screen.get("_registry")
-	var ready: Variant = _screen.get("_factions")
-	if registry == null or registry.size() == 0 or ready == null:
+	# 준비가 **끝났는지**를 본다. 인구만 보면 그 뒤에 오는 가족 심기와 사건을 놓쳐
+	# 빈 화면을 찍는다. **NpcWorld.is_ready() 하나가 그 신호다.**
+	var world: NpcWorld = _screen.get("_world")
+	if world == null or not world.is_ready():
 		if _frames > _WAIT_FRAMES:
-			push_error("인구 생성이 %d 프레임 안에 끝나지 않았다" % _WAIT_FRAMES)
+			push_error("세계가 %d 프레임 안에 안 섰다" % _WAIT_FRAMES)
 			return true
 		return false
 
@@ -68,7 +66,7 @@ func _process(_delta: float) -> bool:
 		_shot += 1
 		_armed = false
 		return false
-	_screen.call("_show", _pick(registry, _screen.get("_graph") as RelationGraph, _SHOTS[_shot]))
+	_screen.call("_show", _pick(world.registry, world.graph, _SHOTS[_shot]))
 	_armed = true
 	return false
 
