@@ -106,6 +106,9 @@ var _enemy_weapon: BackpackItem = null
 var _enemy_due := PackedFloat32Array()
 var _enemy_landed := PackedInt32Array()
 
+## 적마다 **몇 대 맞았나.** `TargetChoice.LEAST_TARGETED` 가 이걸 보고 고른다 (§28.20.37).
+var _enemy_taken := PackedInt32Array()
+
 ## 히트스톱으로 멈춰 있는 남은 시간. **이 동안 눈금도 일정도 멈춘다.**
 var _hitstop_left := 0.0
 
@@ -177,8 +180,10 @@ func start() -> void:
 		gauge.reset()
 	_enemy_landed.clear()
 	_enemy_due.clear()
+	_enemy_taken.clear()
 	for index in enemy_count():
 		_enemy_landed.append(0)
+		_enemy_taken.append(0)
 		_enemy_due.append(_enemy_interval(index))
 
 	if _phase == Phase.DONE:
@@ -290,7 +295,7 @@ func _swing_ally(ally: int) -> BackpackItem:
 		_ally_offset[ally] += _tuning.strike_seconds_for(item)
 		return null
 
-	var targets := _reachable_targets(item)
+	var targets := _reachable_targets(item, ally)
 
 	# **닿지 않으면 거기서 끝난다.** 백팩에서는 이어져 있어도 필드에서 못 나간다.
 	if targets.is_empty():
@@ -300,6 +305,7 @@ func _swing_ally(ally: int) -> BackpackItem:
 	for index in targets:
 		if index < _gauges.size():
 			_gauges[index].hit_with(item)
+			_enemy_taken[index] += 1
 	(_ally_spread[ally] as Array).append(targets.size())
 	hit_landed.emit(_ally_next[ally], item)
 	_ally_next[ally] += 1
@@ -315,13 +321,85 @@ func _swing_ally(ally: int) -> BackpackItem:
 	return item
 
 
-## 이 타가 때릴 적들. 가까운 것부터.
+## 이 타가 때릴 적들.
+##
+## **두 단계다** (§28.20.37).
+##
+## 1. **닿는가** — 필드가 리치 안의 적들을 거리순으로 낸다. 이건 기하다
+## 2. **그중 누구를** — `TargetChoice` 가 정한다. 이건 판단이고 눈금을 알아야 한다
+##
+## 섞어 두면 「안 맞은 놈부터」 같은 규칙이 필드로 새어 들어간다.
+## 걸침 인원(`splash_targets_for`)은 **고른 뒤에** 자른다 — 인원이 범위를 늘리지 않는다.
 ##
 ## 거리가 없던 옛 사용처(`field == null`)에서는 **0번 적 하나**다.
-func _reachable_targets(item: BackpackItem) -> PackedInt32Array:
+func _reachable_targets(item: BackpackItem, ally: int) -> PackedInt32Array:
 	if _field == null:
 		return PackedInt32Array([0])
-	return _field.targets_within(WeaponMotion.reach_px(item), _tuning.splash_targets_for(item))
+	var reach := WeaponMotion.reach_px(item)
+	var candidates := _field.targets_within(reach, _field.enemy_count())
+	var limit := _tuning.splash_targets_for(item)
+	if candidates.size() <= 1:
+		return candidates
+	var ordered := _order_targets(candidates, ally)
+	var picked := PackedInt32Array()
+	for slot in mini(limit, ordered.size()):
+		picked.append(ordered[slot])
+	return picked
+
+
+## 닿는 적들을 **규칙대로 줄 세운다.** 들어오는 것은 거리순이다.
+##
+## 순서를 매길 때 **원래 자리(거리 순위)를 같이 넣어** 같은 값끼리는 가까운 쪽이 앞선다.
+## `sort_custom` 은 안정 정렬이 아니라서 그렇게 안 하면 같은 판이 매번 달라진다.
+func _order_targets(candidates: PackedInt32Array, ally: int) -> PackedInt32Array:
+	match _field.target_choice:
+		SparringField.TargetChoice.BY_NUMBER:
+			return _rotated(candidates, ally % candidates.size())
+		SparringField.TargetChoice.LEAST_TARGETED:
+			return _sorted_by(candidates, func(enemy: int) -> float: return float(_taken_by(enemy)))
+		SparringField.TargetChoice.FINISH_OFF:
+			# **거의 눕은 놈을 마저.** 이미 다 누운 적은 뒤로 보낸다 — 더 때려야 소용이 없다.
+			return _sorted_by(
+				candidates,
+				func(enemy: int) -> float:
+					var gauge := enemy_gauge(enemy)
+					if not BreakState.is_worse(BreakState.Kind.KNOCKDOWN, gauge.peak_state()):
+						return 1.0
+					return -gauge.value() / maxf(1.0, _tuning.max_value)
+			)
+		_:
+			return candidates
+
+
+## 그 자리부터 시작하도록 돌린다. 나머지는 거리순 그대로 뒤에 붙는다.
+func _rotated(candidates: PackedInt32Array, start: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for step in candidates.size():
+		out.append(candidates[(start + step) % candidates.size()])
+	return out
+
+
+## 점수가 작은 것부터. 같으면 가까운 쪽이 앞선다.
+func _sorted_by(candidates: PackedInt32Array, score: Callable) -> PackedInt32Array:
+	var keyed: Array[Vector3] = []
+	for slot in candidates.size():
+		keyed.append(
+			Vector3(float(score.call(candidates[slot])), float(slot), float(candidates[slot]))
+		)
+	keyed.sort_custom(
+		func(a: Vector3, b: Vector3) -> bool: return a.x < b.x if a.x != b.x else a.y < b.y
+	)
+	var out := PackedInt32Array()
+	for entry in keyed:
+		out.append(int(entry.z))
+	return out
+
+
+## 그 적이 지금까지 몇 대 맞았나.
+func _taken_by(enemy: int) -> int:
+	if enemy < 0 or enemy >= _enemy_taken.size():
+		return 0
+	return _enemy_taken[enemy]
 
 
 ## 적 하나의 한 타. **그 적이 문 대원의 눈금을 올린다.**

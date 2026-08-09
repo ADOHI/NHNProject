@@ -166,3 +166,50 @@ func test_a_broken_enemy_stops_hitting_us() -> void:
 	assert_true(loose.enemy_landed() > 1, "전제 확인 — 안 끊는 판에서는 적이 여러 대 때린다")
 	assert_true(cut.enemy_landed() < loose.enemy_landed(), "무너뜨린 적은 그동안 못 때린다")
 	assert_eq(cut.ally_landed(), 30, "먼저 무너뜨렸으니 우리 체인은 끝까지 나간다")
+
+
+# ---------------------------------------------------------------- 누구를 때리나
+
+
+func test_nearest_is_still_the_default() -> void:
+	# **§28.20.37 은 규칙을 넷으로 늘렸을 뿐 고르지 않았다.**
+	assert_eq(SparringField.new().target_choice, SparringField.TargetChoice.NEAREST)
+
+
+func test_by_default_everyone_piles_on_the_front_one() -> void:
+	# **이것이 §28.20.36 이 잡은 것이다** — 뒷줄이 영영 안 맞는다.
+	var bout := _crowd_bout(2, 2, SparringField.TargetChoice.NEAREST)
+	Fixtures.run_to_end(bout)
+	assert_true(bout.enemy_gauge(0).peak() > 0.0, "앞의 적은 맞는다")
+	assert_eq(bout.enemy_gauge(1).peak(), 0.0, "뒷줄은 한 대도 안 맞는다")
+
+
+func test_by_number_spreads_the_squad_across_the_line() -> void:
+	var bout := _crowd_bout(2, 2, SparringField.TargetChoice.BY_NUMBER)
+	Fixtures.run_to_end(bout)
+	assert_true(bout.enemy_gauge(0).peak() > 0.0)
+	assert_true(bout.enemy_gauge(1).peak() > 0.0, "1번 대원이 1번 적에게 간다")
+
+
+func test_least_targeted_spreads_even_with_one_ally() -> void:
+	# 대원 하나여도 번갈아 때린다 — 「퍼뜨린다」가 사람 수와 무관한 규칙이다.
+	var bout := _crowd_bout(1, 2, SparringField.TargetChoice.LEAST_TARGETED)
+	Fixtures.run_to_end(bout)
+	assert_true(bout.enemy_gauge(1).peak() > 0.0, "안 맞은 놈에게 넘어간다")
+
+
+func test_finish_off_moves_on_once_one_is_down() -> void:
+	# **지금 규칙의 진짜 문제는 「모은다」가 아니라 「안 넘어간다」였다** (§28.20.37).
+	var bout := _crowd_bout(1, 2, SparringField.TargetChoice.FINISH_OFF)
+	Fixtures.run_to_end(bout)
+	assert_eq(bout.enemy_gauge(0).peak_state(), BreakState.Kind.KNOCKDOWN, "먼저 하나를 끝까지 눕힌다")
+	assert_true(bout.enemy_gauge(1).peak() > 0.0, "다 눕고 나면 다음으로 넘어간다")
+
+
+## 적이 붙어 서 있고 우리가 오래 치는 판. 규칙 말고는 아무것도 안 다르다.
+func _crowd_bout(squad: int, enemies: int, rule: SparringField.TargetChoice) -> SparringBout:
+	var field := Fixtures.crowd(NEAR, TIGHT, enemies)
+	field.target_choice = rule
+	var bout := BoutScript.from_squad(_squad(squad, 60), _tuning(), field)
+	bout.start()
+	return bout
