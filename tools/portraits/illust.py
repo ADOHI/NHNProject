@@ -137,17 +137,94 @@ ILLUST_STYLE = (
     "drying unevenly inside each shape, muted slate blue, ochre and dull red"
 )
 
-#: 검수용 후보. **값 하나를 바꾸는 자리라 갈아 끼우기가 싸다.**
-STYLE_CANDIDATES: dict[str, str] = {
-    "wash": ILLUST_STYLE,
-    "ink": (
+# ---------------------------------------------------------------------------
+# 화풍 후보 — **1차는 내가 지었고, 2차는 기록에서 꺼냈다** (§27.25)
+# ---------------------------------------------------------------------------
+#
+# 1차(`wash`/`ink`/`soft`)는 내가 원본 **형식**에 맞춰 지은 것이다. `soft` 가 배경을
+# 깼다 (§27.24.5). 2차는 짓지 않는다 — `results.jsonl` 의 zitani 기록에 **원본 앵커와
+# 원본 FRAME 을 그대로 달고 실제로 모델에 갔던 화풍 문자열 19개**가 남아 있다.
+# 우리 슬롯 구조와 **글자 하나까지 같은 자리**에서 나온 것이라 형식을 추측할 필요가 없다.
+#
+#     A 2D Japanese anime illustration. {여기}. {인물}. Full body from head to toe ...
+#
+# 그래서 2차 후보는 **전부 그 19개에서 골랐다.** 고른 기준은 예쁨이 아니라 **축**이다 —
+# 한 후보가 여러 축을 동시에 극단으로 가면 무엇이 효과를 냈는지 알 수 없다.
+#
+# 기록의 원문 일부에는 인물 서술(`a woman in her thirties in a plain grey wool coat...`)이
+# **화풍 슬롯 안까지 흘러 들어와 있다.** 그건 그쪽 LLM 이 칸을 넘긴 사고고, 우리는
+# 화풍 부분만 잘라 쓴다. (§27.24.5 가 말한 「칸을 넘어간다」의 또 다른 실례다.)
+
+#: `(밀어 본 축, 화풍 문자열)`. **값 하나를 바꾸는 자리라 갈아 끼우기가 싸다.**
+#: `기록`이라 적힌 것은 `outputs/minimal-char/results.jsonl` 의 실제 zitani 프롬프트다.
+STYLE_CANDIDATES: dict[str, tuple[str, str]] = {
+    # ── 1차 — 내가 지었다. 검수 결과가 §27.24.5 에 있다 ──────────────────────
+    "wash": ("[1차] 물감이 형태 안에서 고인다", ILLUST_STYLE),
+    "ink": ("[1차] 굳은 잉크선 + 가장자리를 비운 평평한 수채", (
         "Firm dark ink contours with dry-brush breaks, flat translucent watercolour fills "
         "left pale at the edges, faded indigo, rust and bone white"
-    ),
-    "soft": (
+    )),
+    "soft": ("[1차] **깨졌다** — 물감이 선 밖으로 번진다", (
         "Soft graphite contours under wet watercolour bleeding past the line, colour "
         "settling into grainy pools, dusty green, warm grey and muted plum"
-    ),
+    )),
+
+    # ── 2차 · 선 축 — 있나 없나, 굵나 가늘나, 고른가 변하나 ──────────────────
+    "hairline": ("선: 가장 가늘다 (머리카락 굵기)", (
+        "Delicate hairline outlines with gradient shading; rich teal, muted orange, and "
+        "crisp white evoke 1980s sci-fi manga illustrations"
+    )),
+    "heavy": ("선: 가장 굵고 거칠다", (
+        "Heavy, jagged outlines contrast with intricate hatching; deep reds and golds, "
+        "evoking traditional ukiyo-e"
+    )),
+    "noline": ("선: 거의 없다 — 형태를 색 덩어리로 읽는다", (
+        "Soft, almost invisible outlines; strong, cell-shaded blocks of color; earthy "
+        "browns and muted greens, echoing a handmade craft"
+    )),
+    "varied": ("선: 굵기가 변하고 끊긴다", (
+        "Varied line weight outlines break up for texture; blocky geometric fills; muted "
+        "sienna, gray, and moss, channeling 1970s gekiga contrasts"
+    )),
+
+    # ── 2차 · 음영 축 — 계단이 몇인가 (평평 ↔ 연속) ─────────────────────────
+    "hatch": ("음영: 선으로 만든다 (크로스해칭)", (
+        "Delicate ink outlines with cross-hatched shading, vibrant coral, teal, and "
+        "mustard colors, late 80s manga vibe"
+    )),
+    "cel": ("음영: 각진 셀 — 계단이 둘", (
+        "Medium grey outlines, streak-like angular cell shading, vivid jewel tones of "
+        "emerald, sapphire, and amethyst indicative of 90s anime aesthetics"
+    )),
+    "gradient": ("음영: 계단이 없다 — 연속 그라데이션", (
+        "Highly thick charcoal-like outlines, with smooth gradients; bright oranges, "
+        "purples, and teal hues, suggestive of pop surrealism"
+    )),
+
+    # ── 2차 · 색 축 — 온도, 채도, 색 수 ─────────────────────────────────────
+    "sepia": ("색: 채도 최저 · 따뜻 · 색 수 적다", (
+        "Fine dotted outlines, rich velvety shading, sepia tones paired with desaturated "
+        "rose and cypress suggest early 1900s manga nostalgia"
+    )),
+    "neon": ("색: 채도 최고 · 차갑다", (
+        "Light pencil outlines, vibrant gradients softly transitioning, neon blues and "
+        "rich burgundies, reminiscent of late 80s cyberpunk anime aesthetics"
+    )),
+
+    # ── 2차 · 가장자리 축 — **`soft` 가 진 자리의 재시험이다** ───────────────
+    # `soft` 는 「물감이 선 밖으로 번진다」로 썼다가 배경을 깼다. 같은 뜻을 **행동이
+    # 아니라 상태**로 쓴 기록이 있다 — `feathered`. 규칙이 맞으면 이건 산다.
+    "feather": ("가장자리: 부드럽다를 **상태**로 (`soft` 재시험)", (
+        "Imprecise watercolor-esque outlines, feathered shading and highlights, vibrant "
+        "yellows and magentas channel vibrant shojo manga"
+    )),
+    # **금지 규칙을 정면으로 시험한다.** 이 문자열은 `bleeding` 을 쓰고도 212건 배치에
+    # 실제로 들어갔다. 배경이 성하면 §27.24.5 의 원인 지목이 틀린 것이고,
+    # 깨지면 **낱말이 아니라 뜻이 넘어간다**는 진단이 두 표본으로 선다.
+    "bleed": ("가장자리: 기록에 남은 `bleeding` — 규칙 자체를 시험한다", (
+        "Wispy grey outlines bleeding into soft chalky layers of sepia, periwinkle, and "
+        "ochre, like 1970s manga"
+    )),
 }
 
 
