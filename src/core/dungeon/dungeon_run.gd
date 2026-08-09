@@ -18,6 +18,16 @@ var graph: DungeonGraph
 var player: Actor
 var event_log: EventLog
 
+## 이 판을 어떻게 걸었나. **판정이 아니라 기록이다**
+## (docs/design/17-dungeon-generation.md §17.28.1).
+##
+## 판에 붙여 두는 이유는 **판이 바뀌면 새 기록**이어야 하기 때문이다. 화면에 두면
+## 교정쇄를 닫았다 열 때 지워지고, 그러면 "걸은 뒤에 확인한다"가 성립하지 않는다.
+##
+## 사건 기록(`event_log`)과 따로 두는 이유는 세는 것이 다르기 때문이다 — 로그는
+## **무슨 일이 있었나**를 남기고, 이쪽은 **어떻게 돌아다녔나**를 센다.
+var walk: WalkRecord
+
 ## 현재 턴. 지금은 플레이어가 움직일 때마다 오른다.
 var turn: int = 1
 
@@ -27,6 +37,9 @@ func _init(dungeon_blueprint: DungeonBlueprint, dungeon_graph: DungeonGraph, squ
 	graph = dungeon_graph
 	player = squad
 	event_log = EventLog.new()
+	walk = WalkRecord.new()
+	# 스쿼드가 아직 안 놓인 판도 있다(테스트 픽스처). 그때는 첫 이동이 시작 방을 메운다.
+	walk.begin_at(player_room_id())
 
 
 func player_room_id() -> String:
@@ -86,6 +99,8 @@ func move_player(room_id: String) -> bool:
 	if not graph.move_actor(player, room_id):
 		return false
 	event_log.record(GameEvent.new(turn, GameEvent.Kind.MOVED, player, graph.get_room(room_id)))
+	# 기록도 이동과 같은 함수에 묶는다. 신호를 듣는 쪽에 맡기면 아무도 안 듣는 판이 생긴다.
+	walk.note_move(from_id, room_id)
 	turn += 1
 	player_moved.emit(from_id, room_id)
 	return true
