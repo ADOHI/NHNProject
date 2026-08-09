@@ -69,6 +69,30 @@ func _run(count: int, round_index: int) -> void:
 	for index in field.agents.size():
 		drift += start[index].distance_to(field.agents[index].position)
 
+	# **왕복하는 둘을 찍는다.** 서로를 지목하면 길이 2 고리이고, 각자 다른 것에 막혀 있으면
+	# 조향에 이력이 없는 것이다. 결정론이라 한 번만 찍으면 된다.
+	if round_index == 1:
+		var moving: Array[ProtoUnitAgent] = []
+		for agent in field.agents:
+			if agent.is_moving():
+				moving.append(agent)
+		for _i in 6:
+			var row := "    "
+			for agent in moving:
+				row += (
+					"[%d 막은놈%d 조향%.0f도 속력%.0f 비켜%s] "
+					% [
+						agent.id,
+						agent.blocker_id,
+						rad_to_deg(agent.steer_dir.angle()),
+						agent.speed,
+						"O" if agent.is_yielding() else "-",
+					]
+				)
+			print(row)
+			for _f in 10:
+				field.step(_STEP)
+
 	var busy := field.moving_count()
 	var waiting := 0
 	var yielding := 0
