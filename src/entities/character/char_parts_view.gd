@@ -27,6 +27,12 @@ const SHADOW_LIFT_RESPONSE := 0.030
 
 var rig: CharRig
 
+## **파츠 여섯 + 무기를 한 캔버스에 그린다.** 노드를 안 만든다 (§25.32).
+##
+## 그림도 자세도 하나도 안 바꾼다 — **찍는 곳만 바뀐다.** 웹에서 캐릭터 하나가
+## 노드 일곱이라는 것이 값을 하는지 재려고 둔 손잡이다.
+var merged := false
+
 ## 든 무기. **칸 수가 길이 · 두께를 정하고 그것이 다시 동작을 정한다** (§25.16).
 var weapon := CharWeapon.new(1)
 
@@ -46,15 +52,17 @@ var _flash := 0.0
 
 func setup(p_rig: CharRig) -> void:
 	rig = p_rig
-	for shape in _shapes:
-		shape.queue_free()
+	_release()
 	_shapes.clear()
 	_shapes.resize(CharPart.COUNT)
 	# 뒤에서 앞으로 붙인다 — 자식 순서가 곧 그리는 순서다.
 	for part in CharPart.DRAW_ORDER:
 		var shape := CharPartShape.new()
 		shape.name = "Part%d" % part
-		add_child(shape)
+		# **합칠 때는 트리에 안 넣는다.** 트리 밖의 `Node2D` 는 스스로 안 그리므로
+		# 트랜스폼만 들고 있는 상자가 되고, 그리는 것은 이 노드 하나가 다 한다.
+		if not merged:
+			add_child(shape)
 		shape.setup(part, rig)
 		_shapes[part] = shape
 	_mount_weapon()
@@ -73,8 +81,39 @@ func _mount_weapon() -> void:
 	var grip := weapon.grip_offset(rig)
 	_weapon.position = Vector2(grip.x, -grip.y)
 	_weapon.rotation = -weapon.rest_angle(rig)
-	_shapes[CharWeapon.HOLDER].add_child(_weapon)
+	if not merged:
+		_shapes[CharWeapon.HOLDER].add_child(_weapon)
 	_weapon.setup(weapon)
+
+
+## 들고 있던 노드를 놓는다. **부모가 있으면 트리가 지우고, 없으면 우리가 지운다.**
+##
+## 합쳐 그릴 때(§25.32) 파츠와 무기는 **부모가 없다** — 트리 밖의 `Node2D` 는 스스로
+## 안 그리기 때문이다. 그래서 아무도 안 지워 주고, 벤치가 인원을 갈아 끼울 때마다 샌다.
+##
+## **무기를 먼저 본다.** 안 합쳤을 때 무기는 든 손의 자식이라, 손을 지우면 같이 간다 —
+## 그때 따로 지우면 두 번 지우는 것이 된다.
+func _release() -> void:
+	if is_instance_valid(_weapon) and _weapon.get_parent() == null:
+		_weapon.free()
+	_weapon = null
+	for shape in _shapes:
+		if not is_instance_valid(shape):
+			continue
+		if shape.get_parent() == null:
+			shape.free()
+		else:
+			shape.queue_free()
+
+
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PREDELETE:
+		return
+	if is_instance_valid(_weapon) and _weapon.get_parent() == null:
+		_weapon.free()
+	for shape in _shapes:
+		if is_instance_valid(shape) and shape.get_parent() == null:
+			shape.free()
 
 
 func apply_pose(pose: CharPose) -> void:
@@ -202,6 +241,21 @@ func _draw() -> void:
 	draw_colored_polygon(points, SHADOW)
 	_draw_arc_sweep()
 	_draw_echoes()
+	_draw_merged()
+
+
+## 합쳐 그릴 때 파츠 여섯과 무기를 여기서 다 찍는다.
+##
+## **그리는 순서가 자식 순서와 같아야 한다** — 겹침이 곧 깊이라서(§25.0.2)
+## 순서가 갈리면 합친 것과 안 합친 것이 다른 그림이 된다.
+func _draw_merged() -> void:
+	if not merged:
+		return
+	for part in CharPart.DRAW_ORDER:
+		var shape := _shapes[part]
+		shape.paint_into(self, shape.transform)
+		if part == CharWeapon.HOLDER and _weapon != null:
+			_weapon.paint_into(self, shape.transform * _weapon.transform)
 
 
 ## 검이 지나간 호를 **면으로** 그린다. 안쪽은 좁고 바깥은 넓다.

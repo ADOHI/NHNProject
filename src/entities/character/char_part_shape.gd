@@ -88,11 +88,31 @@ var flash := 0.0:
 		flash = value
 		queue_redraw()
 
+## **남의 캔버스에 그린다.** 파츠 여섯을 한 노드로 합쳐 볼 때 쓴다 (§25.32).
+##
+## 그림을 두 벌 적지 않으려고 `_draw()` 를 그대로 부르고 **찍는 곳만 바꾼다** —
+## 갈라 적으면 합친 것과 안 합친 것이 다른 그림이 되어 실측이 뜻을 잃는다.
+var _canvas: CanvasItem = null
+
 
 func setup(p_part: CharPart.Id, p_rig: CharRig) -> void:
 	part = p_part
 	rig = p_rig
 	queue_redraw()
+
+
+## 이 파츠를 `target` 위에 `at` 자리로 그린다. 노드를 안 만들고 그리는 길이다.
+func paint_into(target: CanvasItem, at: Transform2D) -> void:
+	_canvas = target
+	target.draw_set_transform_matrix(at)
+	_draw()
+	target.draw_set_transform_matrix(Transform2D.IDENTITY)
+	_canvas = null
+
+
+## 지금 찍는 곳. 자기 노드이거나, 합쳐 그릴 때는 남의 캔버스다.
+func _target() -> CanvasItem:
+	return self if _canvas == null else _canvas
 
 
 ## 파츠의 **바깥 실루엣.** 그리기와 번쩍임이 **같은 폴리곤**을 쓴다.
@@ -290,7 +310,7 @@ func _ink(color: Color) -> Color:
 
 func _fill(points: PackedVector2Array, color: Color) -> void:
 	if points.size() >= 3:
-		draw_colored_polygon(points, color)
+		_target().draw_colored_polygon(points, color)
 
 
 ## 채우고 잉크로 두른다. **모든 덩어리는 두 번 찍힌다** — 셀 그림체의 본체다.
@@ -300,4 +320,4 @@ func _blob(points: PackedVector2Array, color: Color) -> void:
 		return
 	var closed := points.duplicate()
 	closed.append(points[0])
-	draw_polyline(closed, _ink(INK), STROKE, true)
+	_target().draw_polyline(closed, _ink(INK), STROKE, true)

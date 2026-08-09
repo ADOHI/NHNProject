@@ -40,10 +40,25 @@ var flash := 0.0:
 		flash = value
 		queue_redraw()
 
+## **남의 캔버스에 그린다.** 파츠와 같은 이유다 (§25.32).
+var _canvas: CanvasItem = null
+
 
 func setup(p_weapon: CharWeapon) -> void:
 	weapon = p_weapon
 	queue_redraw()
+
+
+func paint_into(target: CanvasItem, at: Transform2D) -> void:
+	_canvas = target
+	target.draw_set_transform_matrix(at)
+	_draw()
+	target.draw_set_transform_matrix(Transform2D.IDENTITY)
+	_canvas = null
+
+
+func _target() -> CanvasItem:
+	return self if _canvas == null else _canvas
 
 
 func _draw() -> void:
@@ -71,11 +86,11 @@ func _thinned(points: PackedVector2Array, ratio: float) -> PackedVector2Array:
 
 func _fill(points: PackedVector2Array, color: Color) -> void:
 	if points.size() >= 3:
-		draw_colored_polygon(points, color)
+		_target().draw_colored_polygon(points, color)
 
 
 func _blob(points: PackedVector2Array, color: Color) -> void:
 	_fill(points, color)
 	var closed := points.duplicate()
 	closed.append(points[0])
-	draw_polyline(closed, INK, STROKE, true)
+	_target().draw_polyline(closed, INK, STROKE, true)

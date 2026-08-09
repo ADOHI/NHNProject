@@ -84,6 +84,11 @@ const DEFAULT_SCALE := 1.0
 ## 폭을 만들지 못한다."* 문턱이 아니라 감쇠가 폭을 만든다.
 @export var stagger_recovery := 10.0
 
+## **파츠 여섯 + 무기를 한 노드로 합쳐 그린다.** 그림은 그대로다 (§25.32).
+##
+## `_build()` 전에 정해야 한다 — 노드를 만들 때 갈리기 때문이다.
+var merged := false
+
 ## 얹는 연출 장치들 (§25.23). 바꾸면 바로 반영된다.
 var flourish := CharFlourish.none():
 	set(value):
@@ -240,6 +245,7 @@ func _build() -> void:
 	}
 	_view = CharPartsView.new()
 	_view.name = "Parts"
+	_view.merged = merged
 	add_child(_view)
 	_home = _view.position
 	_rebuild_weapon()

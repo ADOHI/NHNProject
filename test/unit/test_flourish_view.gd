@@ -76,3 +76,28 @@ func test_turning_the_devices_off_costs_nothing() -> void:
 	var f := AnimFeatures.all_on()
 	assert_eq(view.past_poses(clip, 1.0, f).size(), 0, "껐는데 잔상이 나온다")
 	assert_eq(view.blade_sweep(clip, 1.0, f).size(), 0, "껐는데 호가 나온다")
+
+
+func test_merging_changes_the_nodes_not_the_pose() -> void:
+	# **합침은 그림도 자세도 안 바꾼다 — 찍는 곳만 바꾼다.** 안 그러면 실측이
+	# 두 가지 다른 것을 견주는 것이 되어 「파츠 수가 손잡이인가」에 답을 못 한다 (§25.32).
+	var rig := CharRig.new()
+	var plain := CharPartsView.new()
+	add_child_autofree(plain)
+	plain.setup(rig)
+	var merged := CharPartsView.new()
+	merged.merged = true
+	add_child_autofree(merged)
+	merged.setup(rig)
+	assert_eq(plain.get_child_count(), CharPart.COUNT, "안 합쳤으면 파츠마다 노드가 있어야 한다")
+	assert_eq(merged.get_child_count(), 0, "합쳤는데 노드가 남아 있다")
+	var clip := CharIdleClip.new(rig)
+	for at: float in [0.0, 0.4, 1.7]:
+		plain.show_at(clip, at)
+		merged.show_at(clip, at)
+		for part in CharPart.COUNT:
+			assert_eq(
+				plain.part_node(part).transform,
+				merged.part_node(part).transform,
+				"t = %.2f 에서 %s 의 자리가 갈렸다" % [at, CharPart.part_name(part)]
+			)

@@ -28,7 +28,13 @@ const BUDGET_MS := 16.7
 ##
 ## **몸을 안 남기고 무기만 남긴다** — 장수만 축으로 두려는 것이다. 몸까지 남기면
 ## 한 장이 일곱 배가 되어 「장수」와 「무엇을 남기나」가 한 축에 뭉친다.
-const TRAILS: Array[int] = [0, 3, 6, 12]
+## `x` 는 잔상 장수, `y` 가 1 이면 **파츠를 한 노드로 합쳐** 그린다 (§25.32).
+##
+## **합침은 잔상 없음에서만 잰다.** 묻는 것이 「노드 일곱이 값을 하나」 하나뿐이라,
+## 잔상까지 곱하면 칸이 배로 늘고 답은 안 는다.
+const MODES: Array[Vector2i] = [
+	Vector2i(0, 0), Vector2i(3, 0), Vector2i(6, 0), Vector2i(12, 0), Vector2i(0, 1)
+]
 
 ## 재는 인원. **§28.6 의 물량전 상한(56 · 72 · 100)을 그대로 밟는다** —
 ## 저쪽이 네모로 잰 자리를 캐릭터로 다시 재야 배수가 뜻을 갖는다.
@@ -66,15 +72,15 @@ func _ready() -> void:
 	layer.layer = 100
 	layer.add_child(_label)
 	add_child(layer)
-	_lines.append("| 잔상 | 인원 | 노드 | 중앙 | 95 | 99 | 최악 | 넘침 |")
+	_lines.append("| 그리기 | 인원 | 노드 | 중앙 | 95 | 99 | 최악 | 넘침 |")
 	_lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
-	for trail in TRAILS:
-		_ceiling[trail] = 0
+	for i in MODES.size():
+		_ceiling[i] = 0
 	_next()
 
 
 func _process(delta: float) -> void:
-	if _trail >= TRAILS.size():
+	if _trail >= MODES.size():
 		return
 	if _warmup > 0:
 		_warmup -= 1
@@ -91,13 +97,21 @@ func _next() -> void:
 	if _count >= COUNTS.size():
 		_count = 0
 		_trail += 1
-	if _trail >= TRAILS.size():
+	if _trail >= MODES.size():
 		_finish()
 		return
-	_spawn(COUNTS[_count], TRAILS[_trail])
+	_spawn(COUNTS[_count], MODES[_trail])
 	_frame_ms = PackedFloat32Array()
 	_warmup = WARMUP
-	_label.text = "재는 중… 잔상 %d 장 · %d 명" % [TRAILS[_trail], COUNTS[_count]]
+	_label.text = "재는 중… %s · %d 명" % [_mode_name(_trail), COUNTS[_count]]
+
+
+## 사람이 읽는 이름. 표와 화면이 같은 말을 쓰게 하려는 것이다.
+func _mode_name(index: int) -> String:
+	var mode: Vector2i = MODES[index]
+	if mode.y == 1:
+		return "합침 (잔상 %d)" % mode.x
+	return "잔상 %d 장" % mode.x
 
 
 ## 이 잔상 장수에서 더 큰 인원은 볼 것도 없다. **가장 오래 걸리는 칸을 건너뛴다.**
@@ -114,7 +128,7 @@ func _flourish(trail: int) -> CharFlourish:
 	return it
 
 
-func _spawn(count: int, trail: int) -> void:
+func _spawn(count: int, mode: Vector2i) -> void:
 	for actor in _actors:
 		actor.queue_free()
 	_actors.clear()
@@ -124,7 +138,8 @@ func _spawn(count: int, trail: int) -> void:
 		var actor := CharActor.new()
 		# 무기 칸 수를 섞는다. 한 종류만 쓰면 클립 하나만 도는 셈이라 실제보다 낫게 나온다.
 		actor.weapon_cells = 1 + (i % CharWeapon.MAX_CELLS)
-		actor.flourish = _flourish(trail)
+		actor.merged = mode.y == 1
+		actor.flourish = _flourish(mode.x)
 		actor.scale = Vector2(ACTOR_SCALE, ACTOR_SCALE)
 		actor.position = Vector2(
 			view.x * (float(i % COLUMNS) + 0.5) / float(COLUMNS),
@@ -153,15 +168,14 @@ func _record() -> void:
 		if ms > BUDGET_MS:
 			over += 1
 	var p95 := _at(sorted, 0.95)
-	var trail: int = TRAILS[_trail]
 	var count: int = COUNTS[_count]
 	if p95 <= BUDGET_MS:
-		_ceiling[trail] = maxi(_ceiling[trail], count)
+		_ceiling[_trail] = maxi(_ceiling[_trail], count)
 	_emit(
 		(
-			"| %d | %d | %d | %.2f | %.2f | %.2f | %.2f | %d/%d |"
+			"| %s | %d | %d | %.2f | %.2f | %.2f | %.2f | %d/%d |"
 			% [
-				trail,
+				_mode_name(_trail),
 				count,
 				get_tree().get_node_count(),
 				_at(sorted, 0.50),
@@ -203,10 +217,10 @@ func _finish() -> void:
 		actor.queue_free()
 	_actors.clear()
 	_lines.append("")
-	_lines.append("| 잔상 | 예산 안에 드는 인원 |")
+	_lines.append("| 그리기 | 예산 안에 드는 인원 |")
 	_lines.append("| --- | --- |")
-	for trail in TRAILS:
-		_lines.append("| %d 장 | %d 명 |" % [trail, _ceiling[trail]])
+	for i in MODES.size():
+		_lines.append("| %s | %d 명 |" % [_mode_name(i), _ceiling[i]])
 	_emit("예산 %.1f ms · 프레임 %d · 준비 %d" % [BUDGET_MS, FRAMES, WARMUP])
 	var text := "\n".join(_lines)
 	_label.text = text
