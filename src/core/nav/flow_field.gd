@@ -1,4 +1,4 @@
-class_name ProtoFlowField
+class_name FlowField
 extends RefCounted
 ## 목적지 하나로 향하는 격자 흐름장. 이동 명령 하나당 한 번 계산해 그 명령을 받은 전원이 공유한다.
 ##
@@ -9,6 +9,10 @@ extends RefCounted
 ##    다시 계산하지 않고 **지금 서 있는 칸의 방향**을 그대로 읽으면 된다.
 ##    경로를 들고 다니는 방식은 밀려날 때마다 재탐색이 필요하고, 그 재탐색이
 ##    여럿에게 동시에 걸리면 웹 단일 스레드에서 그대로 프레임 끊김이 된다.
+##
+## ## src/proto/unit_move/core/ 에서 올라왔다 (2026-08-10)
+##
+## NavGrid 와 같은 이유다 — 쓰는 곳이 둘이 되었다. NavGrid 참고.
 
 ## 닿을 수 없는 칸의 비용. 실수 무한대를 쓰면 비교식이 NaN 을 만들 수 있어 큰 유한값을 쓴다.
 const UNREACHABLE := 1.0e18
@@ -25,10 +29,10 @@ var costs: PackedFloat32Array
 ## 칸별 진행 방향(단위 벡터). 도달 불가 칸은 영벡터다.
 var dirs: PackedVector2Array
 
-var _grid: ProtoNavGrid
+var _grid: NavGrid
 
 
-func _init(grid: ProtoNavGrid, target: Vector2) -> void:
+func _init(grid: NavGrid, target: Vector2) -> void:
 	_grid = grid
 	goal = target
 	goal_cell = grid.world_to_cell(grid.nearest_walkable(target))

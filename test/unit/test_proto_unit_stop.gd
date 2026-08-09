@@ -24,7 +24,7 @@ func _run(field: ProtoUnitField, seconds: float) -> void:
 
 ## 한 칸 폭 복도와 그 너머의 방. 복도에서는 옆으로 비켜 지나갈 수 없다.
 func _make_corridor_field() -> ProtoUnitField:
-	var grid := ProtoNavGrid.new(40, 24, 32.0)
+	var grid := NavGrid.new(40, 24, 32.0)
 	for row in grid.rows:
 		for column in grid.cols:
 			grid.set_blocked(Vector2i(column, row), true)
@@ -94,7 +94,7 @@ func test_waiting_never_becomes_giving_up() -> void:
 func test_sealed_goal_stops_everyone() -> void:
 	# 정말 갈 수 없는 곳이다. 흐름장이 내가 선 칸까지 못 닿았다는 것으로 **즉시** 안다 —
 	# 시간을 들여 확인할 일이 아니다.
-	var grid := ProtoNavGrid.new(40, 24, 32.0)
+	var grid := NavGrid.new(40, 24, 32.0)
 	for column in grid.cols:
 		grid.set_blocked(Vector2i(column, 0), true)
 		grid.set_blocked(Vector2i(column, grid.rows - 1), true)
@@ -118,7 +118,7 @@ func test_sealed_goal_stops_everyone() -> void:
 
 func test_nobody_grinds_forever_in_a_crowd() -> void:
 	# 포기 시간이 막고 있던 것이 이것이다. 걷어내되 무한 루프를 만들면 안 된다.
-	var grid := ProtoNavGrid.new(40, 24, 32.0)
+	var grid := NavGrid.new(40, 24, 32.0)
 	for column in grid.cols:
 		grid.set_blocked(Vector2i(column, 0), true)
 		grid.set_blocked(Vector2i(column, grid.rows - 1), true)

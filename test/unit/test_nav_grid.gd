@@ -5,12 +5,12 @@ extends GutTest
 ## "왜 저러지" 밖에 알 수 없어서, 방향이 실제로 목적지로 이어지는지를 여기서 확인한다.
 
 
-func _open_grid() -> ProtoNavGrid:
-	return ProtoNavGrid.new(20, 12, 32.0)
+func _open_grid() -> NavGrid:
+	return NavGrid.new(20, 12, 32.0)
 
 
 ## 가운데에 문 하나 뚫린 세로 벽을 세운다. 좁은 통로가 흐름장의 시험대다.
-func _grid_with_gate() -> ProtoNavGrid:
+func _grid_with_gate() -> NavGrid:
 	var grid := _open_grid()
 	for row in grid.rows:
 		grid.set_blocked(Vector2i(10, row), row != 6)

@@ -1,9 +1,18 @@
-class_name ProtoNavGrid
+class_name NavGrid
 extends RefCounted
 ## 방 하나의 바닥을 칸으로 나눈 통행 격자. 흐름장의 바탕이 되고, 몸통이 벽에 박히는 것을 막는다.
 ##
 ## 노드에 의존하지 않는다. 화면에 무엇으로 그리든(도형이든 나중에 붙을 배경 스프라이트든)
 ## 이동 판정은 이 격자만 본다.
+##
+## ## src/proto/unit_move/core/ 에서 올라왔다 (2026-08-10)
+##
+## 쓰는 곳이 둘이 되었다 — 이동 프로토타입과 아지트의 배회
+## (docs/design/30-hideout.md §30.3). **아래층만 올렸고 위층은 프로토타입에 그대로 둔다.**
+## unit_field · jam · yield · push 는 좁은 목에 40~100명일 때의 기계라 거점이 안 쓴다.
+##
+## 그래서 Proto 접두사도 아래층에서만 뗐다. 위층은 ProtoUnitField 그대로다 —
+## 접두사가 "아직 프로토타입 전용" 이라는 뜻을 지고 있고, 그 뜻이 아직 참이다.
 
 const _DIAGONAL_COST := 1.41421356
 
@@ -272,14 +281,14 @@ func _ensure_clearance() -> void:
 ## 칸이 이천 개 수준이라 상수 차이가 의미 없고, 힙보다 코드가 짧아 틀릴 여지가 적어서다.
 ## `jam` 은 칸마다 "여기 막혀 있다"를 담은 표다(칸 수와 같은 길이, 1 이면 막힘).
 ## 비어 있으면 지형만 보고 만든다.
-func build_flow_field(target: Vector2, jam: PackedByteArray = PackedByteArray()) -> ProtoFlowField:
+func build_flow_field(target: Vector2, jam: PackedByteArray = PackedByteArray()) -> FlowField:
 	_jam = jam
-	var field := ProtoFlowField.new(self, target)
+	var field := FlowField.new(self, target)
 	var count := cols * rows
 	field.costs.resize(count)
 	field.dirs.resize(count)
 	for i in count:
-		field.costs[i] = ProtoFlowField.UNREACHABLE
+		field.costs[i] = FlowField.UNREACHABLE
 		field.dirs[i] = Vector2.ZERO
 	if not is_walkable(field.goal_cell):
 		return field
@@ -299,7 +308,7 @@ func build_flow_field(target: Vector2, jam: PackedByteArray = PackedByteArray())
 ##
 ## 알고리즘은 그대로다. 이웃을 좌표가 아니라 **평평한 번호의 덧셈**으로 짚고, 벽 판정을
 ## 배열에서 바로 읽는다. 경계 검사는 x · y 를 지역 변수로 들고 직접 한다.
-func _integrate(field: ProtoFlowField) -> void:
+func _integrate(field: FlowField) -> void:
 	var start := cell_index(field.goal_cell)
 	var costs := field.costs
 	costs[start] = 0.0
@@ -361,11 +370,7 @@ func _cell_step(index: int, step: float) -> float:
 
 ## 더 싼 길을 찾았으면 갈아 끼우고 다시 퍼뜨릴 목록에 넣는다.
 func _relax(
-	field: ProtoFlowField,
-	queue: PackedInt32Array,
-	queued: PackedByteArray,
-	index: int,
-	value: float
+	field: FlowField, queue: PackedInt32Array, queued: PackedByteArray, index: int, value: float
 ) -> void:
 	if value >= field.costs[index] - 0.0001:
 		return
@@ -381,13 +386,13 @@ func _relax(
 ## 아니라 호출 횟수다 - 칸마다 이웃 여덟을 보면서 `is_walkable` · `cell_index` ·
 ## `_diagonal_open` 을 불렀고, 그것만 오만 번이 넘었다. `_integrate` 와 같은 방식으로
 ## 평평한 번호와 배열 직접 읽기로 바꿨다. 나오는 값은 한 글자도 다르지 않다.
-func _derive_directions(field: ProtoFlowField) -> void:
+func _derive_directions(field: FlowField) -> void:
 	var costs := field.costs
 	var dirs := field.dirs
 	var count := cols * rows
 	for index in count:
 		var best := costs[index]
-		if best >= ProtoFlowField.UNREACHABLE:
+		if best >= FlowField.UNREACHABLE:
 			continue
 		var x := index % cols
 		var y := index / cols

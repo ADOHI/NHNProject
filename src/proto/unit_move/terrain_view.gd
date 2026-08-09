@@ -11,10 +11,10 @@ const _GRID_COLOR := Color(0.18, 0.19, 0.24)
 const _WALL_COLOR := Color(0.30, 0.26, 0.30)
 const _WALL_EDGE := Color(0.42, 0.37, 0.42)
 
-var grid: ProtoNavGrid
+var grid: NavGrid
 
 
-func bind(nav_grid: ProtoNavGrid) -> void:
+func bind(nav_grid: NavGrid) -> void:
 	grid = nav_grid
 	queue_redraw()
 
