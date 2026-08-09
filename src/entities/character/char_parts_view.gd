@@ -109,11 +109,15 @@ func set_motion(echoes: Array[CharPose], arc: PackedVector2Array, flash: float) 
 ##
 ## 액터와 캡처 도구가 같은 길을 쓰게 하려는 것이다 — 둘이 갈리면 벤치에서 본 것과
 ## 게임에서 나오는 것이 달라진다.
-func show_at(clip: CharClip, at: float, impact := -1.0) -> void:
+func show_at(clip: CharClip, at: float, impact := -1.0, reaction: CharReaction = null) -> void:
 	var f := AnimFeatures.all_on()
-	# **보간을 끈다.** 표본점으로 내려 딱딱 넘어가게 만든다 (§25.26.1).
+	# **보간을 끈다.** 기본은 연속이다 — 사용자가 끊는 쪽을 뺐다 (§25.26.45).
 	at = held(at)
-	apply_pose(clip.sample(at, f))
+	var pose := clip.sample(at, f)
+	# **반응 층을 자세 위에 더한다.** 자세가 무엇이든 상관없다 (§25.27).
+	if reaction != null:
+		reaction.apply(pose, at, rig)
+	apply_pose(pose)
 	_stretch_blade(clip, at, f)
 	set_motion(_past_poses(clip, at, f), _blade_sweep(clip, at, f), _flash_left(at, impact))
 

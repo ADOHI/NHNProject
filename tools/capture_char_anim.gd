@@ -81,6 +81,9 @@ var _cells := 1
 var _span := 1
 var _flourish := "none"
 
+## **때리는 중에 맞는 것**을 보여 주려고 미리 충격을 심어 둔다 (`hitat0.35` 처럼).
+var _reaction: CharReaction = null
+
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -90,6 +93,12 @@ func _initialize() -> void:
 	for token: String in args.slice(1):
 		if token in CLIPS:
 			clip_name = token
+		elif token.begins_with("hitat"):
+			# `hitat0.35,0.5` 처럼 「그 시각에 세기 얼마로 맞는다」를 심는다.
+			var when := token.substr(5).split(",")
+			if _reaction == null:
+				_reaction = CharReaction.new()
+			_reaction.strike(float(when[0]), float(when[1]) if when.size() > 1 else 0.9)
 		elif token in CharFlourish.preset_names():
 			# `arc_hard` 처럼 연출 장치를 고른다. 장치마다 약/세/과 셋이 있다 (§25.23).
 			_flourish = token
@@ -169,7 +178,7 @@ func _process(_delta: float) -> bool:
 	var t := _clip.loop_seconds() * float(_next_frame) / float(_frames)
 	var swing := _clip as CharSwingClip
 	var impact := -1.0 if swing == null else swing.anticipate + swing.still + swing.strike
-	_view.show_at(_clip, t, impact)
+	_view.show_at(_clip, t, impact, _reaction)
 	_pending = _next_frame
 	_next_frame += 1
 	return false

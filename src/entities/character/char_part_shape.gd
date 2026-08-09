@@ -148,13 +148,23 @@ func _draw_torso() -> void:
 ## 음영은 **어두운 판을 먼저 깔고 밝은 쪽을 위에 얹어** 만든다. 반대로 하면 그늘이
 ## 실루엣 밖으로 새어 나간다 — `draw_colored_polygon` 은 잘라 주지 않기 때문이다.
 ## 이 순서가 곧 자체 클리핑이고, 그늘이 실루엣의 바깥 테두리에 닿아 셀 음영으로 읽힌다.
+## **뒷손은 좌우로 뒤집어 그린다.** 왼손과 오른손은 서로 거울이라, 같은 그림을 두 손에
+## 쓰면 **오른손이 둘**이 된다 — 엄지가 같은 쪽에 붙어 있어 그렇게 보인다.
+##
+## **발은 안 뒤집는다.** 발은 좌우 거울이 아니라 **둘 다 앞(`+x`)을 본다** — 옆에서 본
+## 두 발은 발끝이 같은 방향이다. 뒤집으면 뒷발의 발끝이 뒤를 향해 정면 자세가 된다
+## (§25.0.1 이 정한 것이고, 지금도 유효하다).
 func _draw_hand() -> void:
+	if CharPart.is_far(part):
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(-1.0, 1.0))
 	var r := _half().x
 	# 두 손이 **같은 쪽**을 본다. 옆에서 보면 앞손과 뒷손이 같은 각도로 보이기 때문이다.
 	_blob(_ellipse(Vector2(-r * 0.52, -r * 0.46), r * 0.36, r * 0.42), _ink(MITTEN_SHADE))
 	_blob(_ellipse(Vector2(0.0, r * 0.06), r * 0.82, r), _ink(MITTEN_SHADE))
 	_fill(_ellipse(Vector2(-r * 0.12, -r * 0.18), r * 0.62, r * 0.72), _ink(MITTEN))
 	_blob(_ellipse(Vector2(0.0, -r * 0.86), r * 0.50, r * 0.20), _ink(BOOT))
+	if CharPart.is_far(part):
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_foot() -> void:

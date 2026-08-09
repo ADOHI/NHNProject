@@ -34,6 +34,9 @@ signal finished(action: Action)
 ## 있을 때 적이 날아간다** (§25.18.1).
 signal struck
 
+## **무너졌다.** 눈금이 문턱을 넘어 상태가 바뀌었다 — 이때 비로소 경직·띄우기·쓰러짐이다.
+signal broke_down
+
 enum Action { IDLE, WALK, RUN, JUMP, SWING, SWING_UP, HIT, DIE }
 
 ## 화면에서 캐릭터 키(141)를 몇 배로 볼 것인가. 쓰는 쪽이 정한다.
@@ -68,6 +71,14 @@ const DEFAULT_SCALE := 1.0
 ## 재생 속도. 0 이면 멈춘다.
 @export var speed := 1.0
 
+## **무너짐 문턱.** 반응 층의 누적이 이걸 넘으면 상태가 바뀐다 (§28.5 의 눈금).
+##
+## 넘기 전까지는 **때리던 동작이 계속 돈다** — 맞아도 안 멈춘다.
+@export var breakdown_at := 1.1
+
+## 눈금이 잦아드는 빠르기(초당). 안 맞으면 서서히 회복된다.
+@export var stagger_recovery := 0.9
+
 ## 얹는 연출 장치들 (§25.23). 바꾸면 바로 반영된다.
 var flourish := CharFlourish.none():
 	set(value):
@@ -83,6 +94,10 @@ var _action := Action.IDLE
 var _time := 0.0
 var _done := false
 var _struck := false
+
+## **반응 층.** 맞은 것을 클립이 아니라 힘으로 들고 있다 (§25.27).
+var _reaction := CharReaction.new()
+var _stagger := 0.0
 
 
 func _ready() -> void:
@@ -100,6 +115,21 @@ func play(action: Action) -> void:
 	_done = false
 	_struck = false
 	_refresh()
+
+
+## **맞았다.** 동작을 안 바꾼다 — 지금 하던 것 위에 충격을 얹을 뿐이다.
+##
+## 눈금이 문턱을 넘어야 비로소 상태가 바뀐다. 그래서 **때리다 맞으면 스윙이 계속 돌고
+## 그 위에 흔들림이 얹힌다** — 전환이 없다.
+func take_hit(power: float, direction := -1.0) -> void:
+	_reaction.strike(_time, power, direction)
+	_stagger += power
+	_refresh()
+
+
+## 지금 쌓인 무너짐. `0` … `breakdown_at` 을 넘으면 무너진다.
+func stagger() -> float:
+	return _stagger
 
 
 func current_action() -> Action:
@@ -160,6 +190,22 @@ func _process(delta: float) -> void:
 		_time = clip.wrap_time(_time)
 	_refresh()
 	_report_strike(was)
+	_settle_stagger(delta)
+
+
+## 눈금은 안 맞으면 잦아든다. 넘으면 **그때 비로소** 상태가 바뀐다.
+##
+## 상태가 바뀔 때 **진동을 지운다** — `hit` 클립이 이미 큰 반응을 갖고 있어서
+## 진동까지 남기면 같은 사건을 두 번 세는 것이 된다 (§25.27.3).
+func _settle_stagger(delta: float) -> void:
+	_reaction.forget_spent(_time)
+	if _stagger >= breakdown_at and _action != Action.HIT and _action != Action.DIE:
+		_stagger = 0.0
+		_reaction.clear()
+		play(Action.HIT)
+		broke_down.emit()
+		return
+	_stagger = maxf(0.0, _stagger - stagger_recovery * delta)
 
 
 func _build() -> void:
@@ -204,7 +250,7 @@ func _refresh() -> void:
 	if _view == null:
 		return
 	# **뷰가 자기 장식을 스스로 만든다.** 클립과 시각만 주면 되므로 캡처 도구도 같은 길을 쓴다.
-	_view.show_at(_clip(), _time, impact_seconds())
+	_view.show_at(_clip(), _time, impact_seconds(), _reaction)
 
 
 ## 검이 닿는 시각을 **지나쳤는지**로 낸다. 정확히 그 프레임을 밟기를 기다리면
