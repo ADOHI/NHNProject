@@ -62,6 +62,7 @@ func _initialize() -> void:
 		_report_table(rule[0], false, "%s (걸침 끔)" % rule[1])
 	_report_diagonal()
 	_report_with_splash()
+	_report_stall()
 	quit()
 
 
@@ -131,10 +132,107 @@ func _report_with_splash() -> void:
 	print("  **둘 다 필요하면 그것도 결론이다.** 값은 안 박았다 (§28.8 · §28.20.34 미정).")
 
 
+## **3대3 에서 모으는 규칙이 왜 느린가** (§28.20.41).
+##
+## 총합만 보면 「모으는 게 느리다」로만 읽힌다. 그런데 **판이 끝나는 시점은
+## 제일 늦게 눕는 하나가 정한다.** 그 하나가 누구인지를 봐야 답이 나온다.
+func _report_stall() -> void:
+	print("== 3대3 에서 모으는 규칙이 왜 느린가 (4칸, 걸침 켬) ==")
+	print("  적이 셋이면 **한 줄에 다 선다** — 켜가 갈리는 자리가 아니다.")
+	print("  %-24s %-11s %-11s %-11s %s" % ["규칙", "적1", "적2", "적3", "판정"])
+	for rule in _rules():
+		var times := _knockdown_times(3, 3, rule[0], true, 4)
+		var shown := PackedStringArray()
+		for at in times:
+			shown.append("안 눕음" if at == INF else "%.1f초" % at)
+		print(
+			(
+				"  %-24s %-11s %-11s %-11s %s"
+				% [rule[1], shown[0], shown[1], shown[2], _cell(3, 3, rule[0], true, 4)]
+			)
+		)
+	print("")
+	print("  **판정이 「전원」이라 제일 늦은 하나가 전부를 정한다.**")
+	print("  모으는 쪽은 둘을 빨리 눕히고 셋째를 뒤에 남긴다. 퍼뜨리는 쪽은 셋이 같이 눕는다.")
+	print("")
+	_report_cut_flip()
+
+
+## **눕히는 것이 이득이면 답이 뒤집히나** (§28.20.41).
+##
+## 「모으는 쪽이 손해인 건 눕혀도 아무 일이 안 일어나서일 것」이라는 짐작을 재 봤다.
+## **아니었다.** 끊는 판에서도 거의 그대로다 — 짐작을 적기 전에 재서 다행이었다.
+func _report_cut_flip() -> void:
+	print("== 눕히는 것이 이득이면 답이 뒤집히나 (3대3, 4칸, 걸침 켬) ==")
+	print("  %-24s %-16s %s" % ["규칙", "안 끊는다", "쓰러지면 못 친다"])
+	for rule in _rules():
+		print(
+			(
+				"  %-24s %-16s %s"
+				% [
+					rule[1],
+					_cell(3, 3, rule[0], true, 4),
+					_cell(3, 3, rule[0], true, 4, BreakState.Kind.KNOCKDOWN),
+				]
+			)
+		)
+	print("")
+	print("  **뒤집히지 않는다.** 끊어도 모으는 쪽이 여전히 느리다.")
+	print("  그러니 모으는 쪽의 손해는 「눕혀도 소용없어서」가 아니라")
+	print("  **순전히 판정이 「전원」이기 때문**이다. 제일 늦은 하나가 전부를 정한다.")
+	print("")
+	print("  가장 가까운 것만 오히려 더 나빠진다 (패가 더 늦게 온다) —")
+	print("  우리가 먼저 굳는 동안 아무도 안 때리는 셋째가 그대로 남아서다.")
+
+
+## 적마다 쓰러짐 문턱을 넘은 시각. 안 넘었으면 INF.
+func _knockdown_times(
+	squad: int, enemies: int, rule: SparringField.TargetChoice, splash: bool, cells: int
+) -> PackedFloat32Array:
+	var tuning := BreakTuning.new()
+	if splash:
+		tuning.splash_base = BreakTuning.VOLUME_SPLASH_BASE
+		tuning.splash_per_cell = BreakTuning.VOLUME_SPLASH_PER_CELL
+
+	var xs := PackedFloat32Array()
+	for index in enemies:
+		xs.append(_NEAR + float(index) * _SPACING)
+	var field := SparringField.new()
+	field.reset_with(0.0, xs)
+	field.target_choice = rule
+
+	var chains: Array = []
+	for _index in squad:
+		chains.append(_uniform_chain(cells))
+	var bout := SparringBout.from_squad(chains, tuning, field, _sized(cells))
+	bout.start()
+
+	var times := PackedFloat32Array()
+	for _index in enemies:
+		times.append(INF)
+	var clock := 0.0
+	while clock < _MAX_SECONDS and bout.is_running():
+		bout.tick(_STEP)
+		clock += _STEP
+		for index in enemies:
+			if times[index] < INF:
+				continue
+			if not BreakState.is_worse(
+				BreakState.Kind.KNOCKDOWN, bout.enemy_gauge(index).peak_state()
+			):
+				times[index] = clock
+	return times
+
+
 func _cell(
-	squad: int, enemies: int, rule: SparringField.TargetChoice, splash: bool, cells: int = 1
+	squad: int,
+	enemies: int,
+	rule: SparringField.TargetChoice,
+	splash: bool,
+	cells: int = 1,
+	cut: BreakState.Kind = BreakState.Kind.NONE
 ) -> String:
-	var outcome := _fight(squad, enemies, rule, splash, cells)
+	var outcome := _fight(squad, enemies, rule, splash, cells, cut)
 	var ours := outcome.x
 	var theirs := outcome.y
 	if theirs < INF and (ours == INF or theirs < ours):
@@ -146,9 +244,15 @@ func _cell(
 
 ## 한 판. [우리 전원이 쓰러진 시각, 적 전원이 쓰러진 시각]. 안 났으면 INF.
 func _fight(
-	squad: int, enemies: int, rule: SparringField.TargetChoice, splash: bool, cells: int = 1
+	squad: int,
+	enemies: int,
+	rule: SparringField.TargetChoice,
+	splash: bool,
+	cells: int = 1,
+	cut: BreakState.Kind = BreakState.Kind.NONE
 ) -> Vector2:
 	var tuning := BreakTuning.new()
+	tuning.chain_cut_at = cut
 	if splash:
 		tuning.splash_base = BreakTuning.VOLUME_SPLASH_BASE
 		tuning.splash_per_cell = BreakTuning.VOLUME_SPLASH_PER_CELL
