@@ -21,6 +21,12 @@ const _CELL := 32.0
 ## 마지막에 이 시간 동안 움직인 거리를 재서 "무엇을 하고 있는지"를 가른다.
 const _WATCH := 2.0
 
+## 굴리는 시간(초). 인자로 늘릴 수 있다.
+##
+## **「안 끝난다」와 「늦게 끝난다」는 다른 병이다**(§27 의 33, §31 의 49). 창을 늘려 보면
+## 갈린다 - 늘려서 끝나면 고칠 결함이 아니라 그 판이 느린 것이다.
+var _seconds_limit := _SECONDS
+
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -30,6 +36,9 @@ func _initialize() -> void:
 		count = int(args[0])
 	if args.size() > 1:
 		gate_cells = int(args[1])
+	if args.size() > 2:
+		# **창을 늘려 본다.** 「안 끝난다」와 「늦게 끝난다」는 다른 병이다(§27 의 33).
+		_seconds_limit = float(args[2])
 	_run(count, gate_cells)
 	quit()
 
@@ -62,13 +71,18 @@ func _run(count: int, gate_cells: int) -> void:
 	# 초마다 넘은 인원을 적는다. **언제 멈췄는지**가 보이면 원인이 절반 갈린다.
 	var per_second := PackedInt32Array()
 	var next_mark := 1.0
-	while elapsed < _SECONDS - _WATCH:
+	var settle_at := -1.0
+	var done_at := -1.0
+	while elapsed < _seconds_limit - _WATCH:
 		field.step(_STEP)
 		elapsed += _STEP
 		if elapsed >= next_mark:
 			next_mark += 1.0
 			per_second.append(_crossed(field, cross_x))
-		if field.moving_count() == 0:
+		if settle_at < 0.0 and field.moving_count() == 0:
+			settle_at = elapsed
+		if field.moving_count() == 0 and _waiting(field) == 0:
+			done_at = elapsed
 			break
 
 	var start := PackedVector2Array()
@@ -87,6 +101,16 @@ func _run(count: int, gate_cells: int) -> void:
 	print("인원 %d, 문 폭 %d 칸" % [count, gate_cells])
 	print("")
 	print("초마다 넘은 인원: %s" % str(per_second))
+	print("")
+	print(
+		(
+			"정지 %s, 전원끝 %s"
+			% [
+				"못함" if settle_at < 0.0 else "%.2f s" % settle_at,
+				"못함" if done_at < 0.0 else "%.2f s" % done_at,
+			]
+		)
+	)
 	print("")
 	print(
 		(
@@ -146,6 +170,14 @@ func _run(count: int, gate_cells: int) -> void:
 				]
 			)
 		)
+
+
+func _waiting(field: ProtoUnitField) -> int:
+	var waiting := 0
+	for agent in field.agents:
+		if agent.state == ProtoUnitAgent.State.HOLDING:
+			waiting += 1
+	return waiting
 
 
 func _crossed(field: ProtoUnitField, cross_x: float) -> int:
