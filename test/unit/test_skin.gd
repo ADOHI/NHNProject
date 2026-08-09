@@ -13,6 +13,12 @@ extends GutTest
 
 const DIR := "res://test/fixtures/skin"
 
+## 같은 여섯 장에 `scales.json` 만 다르게 얹은 것. **덮어쓰기가 실제로 먹는지**를 본다.
+const TUNED_DIR := "res://test/fixtures/skin_tuned"
+
+## 틀린 덮어쓰기 — 음수 하나와 모르는 이름 하나.
+const BAD_DIR := "res://test/fixtures/skin_bad"
+
 ## 배치 규칙 (§25.41.5). **검사와 배치가 같은 표를 쓴다** — 갈리면 조용히 틀린다.
 const NECK := 0.035
 const FEET_APART := 0.149
@@ -30,26 +36,60 @@ func _skin() -> CharSkin:
 
 func test_the_padding_is_ignored() -> void:
 	# **규약이 「여백은 무의미하다」고 적었다.** 자리표시자에 37 px 을 넣어 뒀으므로,
-	# 그 말이 참이면 머리 반크기가 여백과 무관하게 나온다.
-	var skin := _skin()
-	var head := skin.rig.half_sizes[CharPart.Id.HEAD]
-	assert_almost_eq(head.y * 2.0, CharSkin.HEAD_UNITS, 0.001, "머리 세로가 기준값이 아니다")
-	# 391 : 344 가 그대로 유지돼야 한다. 여백이 섞이면 이 비가 깨진다.
+	# 그 말이 참이면 391 : 344 가 그대로 유지된다. 여백이 섞이면 이 비가 깨진다.
+	var head := _skin().rig.half_sizes[CharPart.Id.HEAD]
 	assert_almost_eq(head.x / head.y, 391.0 / 344.0, 0.01, "머리의 가로세로비가 여백에 오염됐다")
 
 
-func test_the_scale_comes_from_the_head_alone() -> void:
-	# **배율을 안 받는다.** 머리 하나로 여섯이 정해진다 (§25.41.4).
+func test_each_part_is_scaled_to_its_own_box() -> void:
+	# **배율이 여섯 벌이다** (§25.41.8). 파츠마다 **넓이**를 리그 상자에 맞춘다 —
+	# 한 배율로 여섯을 맞추면 부츠 굽 때문에 발이 66 % 커진 채로 들어온다.
 	var skin := _skin()
-	var per_pixel := CharSkin.HEAD_UNITS / 344.0
+	var target := CharRig.new()
+	for part in CharPart.COUNT:
+		var got: Vector2 = skin.rig.half_sizes[part]
+		var want: Vector2 = target.half_sizes[part]
+		assert_almost_eq(
+			got.x * got.y, want.x * want.y, want.x * want.y * 0.001, "넓이가 리그 상자와 다르다"
+		)
+
+
+func test_the_aspect_ratio_of_the_art_survives() -> void:
+	# **넓이만 맞추고 가로세로비는 안 건드린다.** 늘리면 그림이 찌그러진다.
+	var skin := _skin()
 	for pair: Array in [
+		[CharPart.Id.HEAD, 391.0, 344.0],
 		[CharPart.Id.TORSO, 233.0, 259.0],
 		[CharPart.Id.HAND_NEAR, 67.0, 94.0],
 		[CharPart.Id.FOOT_NEAR, 136.0, 181.0],
 	]:
 		var half: Vector2 = skin.rig.half_sizes[pair[0]]
-		assert_almost_eq(half.x * 2.0, float(pair[1]) * per_pixel, 0.01, "가로가 같은 배율이 아니다")
-		assert_almost_eq(half.y * 2.0, float(pair[2]) * per_pixel, 0.01, "세로가 같은 배율이 아니다")
+		assert_almost_eq(
+			half.x / half.y, float(pair[1]) / float(pair[2]), 0.01, "가로세로비가 찌그러졌다"
+		)
+
+
+func test_a_hand_written_scale_overrides_and_shows_itself() -> void:
+	# **자동으로 뽑되 손으로 덮을 수 있다. 그리고 덮으면 보인다** (§25.41.8).
+	var plain := _skin()
+	var tuned := CharSkin.load_dir(TUNED_DIR)
+	assert_true(tuned.is_whole(), "덮어쓰기 판을 못 읽었다: %s" % str(tuned.problems))
+	assert_eq(tuned.overrides.size(), 1, "덮어쓴 것이 드러나지 않는다")
+	assert_almost_eq(
+		tuned.scales[CharPart.Id.FOOT_NEAR],
+		plain.scales[CharPart.Id.FOOT_NEAR] * 0.5,
+		0.0001,
+		"덮어쓴 값이 자동 배율에 안 곱해졌다"
+	)
+	assert_eq(tuned.scales[CharPart.Id.HEAD], plain.scales[CharPart.Id.HEAD], "안 덮은 것이 변했다")
+
+
+func test_a_bad_override_says_so_instead_of_being_ignored() -> void:
+	# **도구가 요청을 조용히 무시하는 것이 이 저장소에서 두 번 났다** (§25.13.5).
+	var skin := CharSkin.load_dir(BAD_DIR)
+	assert_false(skin.is_whole(), "틀린 덮어쓰기인데 성공했다고 한다")
+	assert_gt(skin.problems.size(), 0, "무엇이 틀렸는지를 안 알려 준다")
+	assert_not_null(skin.rig, "덮어쓰기가 틀려도 리그는 자동 배율로 서야 한다")
 
 
 func test_the_layout_is_solved_not_copied() -> void:

@@ -7,6 +7,8 @@ extends SceneTree
 ##
 ## 첫 인자가 저장 접두사이고, 나머지는 **순서에 상관없는 낱말**이다.
 ##
+## * **`skin=<폴더>`** — 자리표시자 도형 대신 **진짜 파츠 그림**으로 찍는다.
+##   리그 치수도 그 그림에서 나온다 (§25.41). 안 주면 지금까지와 같다
 ## * 클립: `idle`(기본) · `walk` · `front`(정면 문법 대조군)
 ## * 조절판: `off`(다 끔) · `on`(다 켬) · 축 이름 하나면 **그 축만 켠** 상태 ·
 ##   `no<축>` 이면 **그 축만 끈** 상태 (`noplant` 처럼)
@@ -81,6 +83,9 @@ var _cells := 1
 var _span := 1
 var _flourish := "none"
 
+## 파츠 그림이 있는 폴더. 비어 있으면 자리표시자 도형이다 (§25.41).
+var _skin_dir := ""
+
 ## **무너짐 눈금.** `hit` 이 어디까지 갈지를 정한다 (§25.12.6).
 var _stagger := CharHitClip.FALL_AT
 
@@ -141,6 +146,10 @@ func _initialize() -> void:
 			# `stagger45` 처럼 **무너짐 눈금**을 준다 — 경직 30 · 띄우기 60 · 쓰러짐 100 (§28.5).
 			# 눈금이 구간을 정하므로 셋을 나란히 놓으려면 이 낱말 하나면 된다.
 			_stagger = float(token.substr(7))
+		elif token.begins_with("skin="):
+			# `skin=<폴더>` — **자리표시자 도형 대신 진짜 파츠 그림으로 찍는다** (§25.41).
+			# 리그도 그 그림에서 나온다. 안 주면 지금까지처럼 도형이다.
+			_skin_dir = token.substr(5)
 		elif token.begins_with("cells"):
 			# `cells3` 은 3 칸 곧은 것, `cells4x2` 는 총 4 칸에 긴 쪽 2 칸(철퇴).
 			# 길이와 무게를 따로 줘야 창과 철퇴가 갈린다 (§25.20).
@@ -159,7 +168,18 @@ func _initialize() -> void:
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	get_root().add_child(_viewport)
 
+	# **파츠 그림이 있으면 리그가 거기서 나온다.** 없으면 자리표시자 치수다.
+	var skin: CharSkin = null
 	var rig := CharRig.new()
+	if not _skin_dir.is_empty():
+		skin = CharSkin.load_dir(_skin_dir)
+		if skin.rig == null:
+			push_error("파츠를 못 읽었다: %s" % str(skin.problems))
+			quit(1)
+			return
+		for problem in skin.problems:
+			print("파츠 경고: %s" % problem)
+		rig = skin.rig
 	_clip = _make_clip(clip_name, rig)
 
 	var stage := _make_stage()
@@ -167,6 +187,8 @@ func _initialize() -> void:
 	_stage = stage
 
 	_view = CharPartsView.new()
+	# **`setup()` 전에 넣어야 한다.** `_make_part()` 가 이 값을 보고 도형이냐 그림이냐를 가른다.
+	_view.skin = skin
 	_view.weapon = CharWeapon.new(_cells, _span)
 	_view.flourish = CharFlourish.preset(_flourish)
 	# **가운데가 아니라 왼쪽에 세운다.** 내려치기에서 머리와 검이 앞으로 크게 나가는데

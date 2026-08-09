@@ -25,16 +25,6 @@ extends SceneTree
 ##
 ## 나가는 값(exit code)은 **판정 셋**만 본다.
 
-## 지금 리그(자리표시자)의 파츠 세로. 새 그림이 여기서 얼마나 벗어나는지를 찍는다.
-const REFERENCE_HEIGHT: Dictionary[CharPart.Id, float] = {
-	CharPart.Id.HEAD: 60.0,
-	CharPart.Id.TORSO: 42.0,
-	CharPart.Id.HAND_NEAR: 22.0,
-	CharPart.Id.HAND_FAR: 19.0,
-	CharPart.Id.FOOT_NEAR: 22.0,
-	CharPart.Id.FOOT_FAR: 19.0,
-}
-
 ## 이보다 벗어나면 「배치를 리그가 다시 풀어야 한다」고 알린다. 비율이다.
 const DRIFT_WARN := 0.30
 
@@ -67,6 +57,7 @@ func _check(dir: String) -> void:
 	for problem in skin.problems:
 		print("  못 읽음: %s" % problem)
 	var rig := skin.rig
+	_print_scales(skin)
 	_print_sizes(rig)
 	_print_layout(rig)
 	_judge_depth(rig)
@@ -76,19 +67,42 @@ func _check(dir: String) -> void:
 	print("")
 
 
-## 읽기 — 머리 60 유닛으로 맞춘 뒤의 크기.
-func _print_sizes(rig: CharRig) -> void:
-	print("  [크기] 키 %.1f" % rig.total_height())
+## 읽기 — **파츠마다의 배율.** 한 벌이던 것이 여섯 벌이 됐다 (§25.41.8).
+##
+## 「머리 하나로 맞춘 옛 배율」에 대한 배수로 찍는다 — 그래야 **무엇이 얼마나 줄고
+## 늘었는지**가 한눈에 보인다. 덮어쓴 것은 별표로 드러낸다.
+func _print_scales(skin: CharSkin) -> void:
+	var head := skin.scales[CharPart.Id.HEAD]
+	print("  [배율] 파츠마다 제 배율. 옛 균일 배율(머리 기준) 대비 배수")
 	for part in CharPart.COUNT:
-		var half := rig.half_sizes[part]
+		var ratio := skin.scales[part] / head
+		var mark := ""
+		if skin.overrides.has(part):
+			mark = "  ★ 손으로 %.3f 곱함" % skin.overrides[part]
 		print(
 			(
-				"    %-10s %6.1f x %6.1f   (지금 리그 세로 %.0f)"
+				"    %-10s %8.5f 유닛/px   x%.3f%s"
+				% [CharPart.part_name(part), skin.scales[part], ratio, mark]
+			)
+		)
+
+
+## 읽기 — 배율을 건 뒤의 크기. **목표는 리그가 안다** — 여기에 숫자를 다시 안 적는다.
+func _print_sizes(rig: CharRig) -> void:
+	var target := CharRig.new()
+	print("  [크기] 키 %.1f  (리그 %.1f)" % [rig.total_height(), target.total_height()])
+	for part in CharPart.COUNT:
+		var half := rig.half_sizes[part]
+		var want := target.half_sizes[part]
+		print(
+			(
+				"    %-10s %6.1f x %6.1f   (리그 %.0f x %.0f)"
 				% [
 					CharPart.part_name(part),
 					half.x * 2.0,
 					half.y * 2.0,
-					REFERENCE_HEIGHT[part],
+					want.x * 2.0,
+					want.y * 2.0,
 				]
 			)
 		)
@@ -158,23 +172,26 @@ func _judge_depth(rig: CharRig) -> void:
 			)
 
 
-## 판정 — 비례가 리그에서 얼마나 벗어났나.
+## 판정 — **넓이는 맞췄으니 남는 것은 가로세로비다.**
+##
+## 배율이 파츠마다 붙은 뒤로 넓이는 정의상 맞는다. 그래서 이 자가 이제 묻는 것은
+## **「그림의 가로세로비가 리그 상자와 얼마나 다른가」** 하나다 — **배율로는 못 고치는
+## 유일한 어긋남**이고, 크면 그림 쪽에 넘길 것이다 (§25.41.8).
 func _judge_drift(rig: CharRig) -> void:
-	print("  [비례] 지금 리그 대비 — 크게 벗어나면 자세 수식을 다시 봐야 한다")
+	var target := CharRig.new()
+	print("  [비례] 넓이는 맞췄다. 남는 것은 가로세로비 — 배율로는 못 고친다")
 	for part in CharPart.COUNT:
-		var got := rig.half_sizes[part].y * 2.0
-		var want: float = REFERENCE_HEIGHT[part]
-		var drift := got / want - 1.0
-		if absf(drift) > DRIFT_WARN:
+		var got := rig.half_sizes[part]
+		var want := target.half_sizes[part]
+		var wide := got.x / want.x - 1.0
+		var tall := got.y / want.y - 1.0
+		var bad := absf(wide) > DRIFT_WARN or absf(tall) > DRIFT_WARN
+		if bad:
 			_failed = true
 		print(
 			(
-				"    %-10s %+6.1f %%   %s"
-				% [
-					CharPart.part_name(part),
-					drift * 100.0,
-					"** 벗어남" if absf(drift) > DRIFT_WARN else "ok"
-				]
+				"    %-10s 가로 %+6.1f %%  세로 %+6.1f %%   %s"
+				% [CharPart.part_name(part), wide * 100.0, tall * 100.0, "** 벗어남" if bad else "ok"]
 			)
 		)
 
