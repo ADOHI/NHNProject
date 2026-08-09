@@ -102,6 +102,10 @@ func _init(
 ##
 ## witnesses 는 **그 자리에 있던 사람들**이다. 행위자와 대상은 빼고 세며,
 ## 전멸처럼 `sweeps_bonded` 인 사건은 여기에 **죽은 자와 유대 높은 사람들**이 더해진다.
+##
+## **대상이 비어도 되는 사건이 있다** (`RelationEvent.needs_target`). 길드 이탈은
+## 누구에게 한 일이 아니라 한 일 그 자체이고, 그때는 행위자와 목격자만 남는다 —
+## 관여도가 행위자와의 유대 하나로 계산되고 대상 쌍 처리를 통째로 건너뛴다.
 func resolve(
 	kind: RelationEvent.Kind, actor: int, targets: PackedInt32Array, witnesses: PackedInt32Array
 ) -> int:
@@ -111,10 +115,10 @@ func resolve(
 	for target in targets:
 		if _registry.has(target) and target != actor:
 			kept.append(target)
-	if kept.is_empty():
-		return RelationLedger.NO_CAUSE
 
 	var event := RelationEvent.of(kind)
+	if kept.is_empty() and event.needs_target:
+		return RelationLedger.NO_CAUSE
 	var cause := _ledger.record(kind, actor, kept)
 	for target in kept:
 		_apply_pair(event, actor, target, cause)

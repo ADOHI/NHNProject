@@ -185,6 +185,57 @@ func test_wipeout_takes_several_dead() -> void:
 	assert_eq(_ledger.targets_of(cause).size(), 3)
 
 
+# ------------------------------------------------- 대상이 없거나 죽어 있는 사건 (§24.36.1)
+
+
+func test_looting_a_corpse_only_reaches_the_bereaved() -> void:
+	# **관계를 오직 훑기로만 만드는 사건이다.** 대상은 죽었고 시체와 맺을 관계는 없다.
+	_world_with([_blank(), _blank(), _axis(NpcAxis.Kind.GOOD, 95)])
+	_entangle(2, 1, RelationResolver.SWEEP_BOND_MIN + 10, 60)
+	_resolver.resolve(RelationEvent.Kind.LOOT_BODY, 0, PackedInt32Array([1]), PackedInt32Array())
+	assert_false(_graph.knows(1, 0), "죽은 사람은 안 움직인다")
+	assert_false(_graph.knows(0, 1), "시체와는 관계가 안 생긴다")
+	assert_true(_graph.knows(2, 0), "유족만 반응한다")
+	assert_lt(_graph.affinity(2, 0), 0, "선한 유족은 등을 돌린다")
+
+
+func test_defection_needs_no_target() -> void:
+	# 설계 24.5 D — 누구에게 한 일이 아니라 한 일 그 자체다.
+	_world_with([_blank(), _axis(NpcAxis.Kind.HIERARCHY, 95)])
+	_entangle(1, 0, RelationGraph.BOND_MAX)
+	var cause := _resolver.resolve(
+		RelationEvent.Kind.DEFECT, 0, PackedInt32Array(), PackedInt32Array([1])
+	)
+	assert_true(_ledger.has(cause), "대상이 없어도 사건은 기록된다")
+	assert_eq(_ledger.targets_of(cause).size(), 0)
+	assert_lt(_graph.affinity(1, 0), 0, "위계형은 이탈을 미워한다")
+
+
+func test_defection_splits_the_hierarchy_axis() -> void:
+	# **위계 축을 밟는 첫 사건이다** (§24.36.2). 자유형과 위계형이 반대로 갈려야
+	# 그 축이 세계에서 값을 하기 시작한 것이다.
+	_world_with(
+		[_blank(), _axis(NpcAxis.Kind.HIERARCHY, 95), _axis(NpcAxis.Kind.HIERARCHY, -95)], false
+	)
+	_entangle(1, 0, RelationGraph.BOND_MAX)
+	_entangle(2, 0, RelationGraph.BOND_MAX)
+	_resolver.resolve(RelationEvent.Kind.DEFECT, 0, PackedInt32Array(), PackedInt32Array([1, 2]))
+	assert_lt(_graph.affinity(1, 0), 0)
+	assert_gt(_graph.affinity(2, 0), 0, "자유형은 반긴다")
+
+
+func test_an_event_that_needs_a_target_does_nothing_without_one() -> void:
+	# 대상이 필요한 사건에 대상이 안 잡히면 **아무 일도 없어야 한다** — 기록도 안 남는다.
+	assert_eq(
+		_resolver.resolve(
+			RelationEvent.Kind.BETRAYAL, 0, PackedInt32Array(), PackedInt32Array([1])
+		),
+		RelationLedger.NO_CAUSE
+	)
+	assert_eq(_ledger.size(), 0)
+	assert_eq(_graph.size(), 0)
+
+
 # ---------------------------------------------------------------- 근거 사건
 
 

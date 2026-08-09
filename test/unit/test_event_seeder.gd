@@ -12,15 +12,23 @@ extends GutTest
 const _SEED := 20260808
 const _POPULATION := 300
 
+## 「가중치 있는 사건이 다 굴려졌나」만 큰 세계를 쓴다.
+##
+## **표본이 가장 드문 사건보다 커야 한다.** 300명이면 사건이 50건이고 가중치 2% 짜리는
+## 기댓값이 1 이라 **사건을 하나 붙일 때마다 이 시험이 동전 던지기가 된다.**
+## 실제로 사건이 열다섯이 되자 전멸과 선제공격이 안 나와서 떨어졌다.
+## 1500명이면 250건이고 2% 가 기댓값 5 다.
+const _ROLL_POPULATION := 1500
 
-func _world() -> Array:
-	var registry := PersonGenerator.new(_SEED, _POPULATION).generate()
+
+func _world(population: int = _POPULATION) -> Array:
+	var registry := PersonGenerator.new(_SEED, population).generate()
 	var graph := RelationGraph.new(registry.size())
 	KinSeeder.new(_SEED, registry, graph).seed_all()
 	return [registry, graph, RelationLedger.new()]
 
 
-func _seed_all(world: Array, chunk: int = _POPULATION) -> EventSeeder:
+func _seed_all(world: Array, chunk: int = _ROLL_POPULATION) -> EventSeeder:
 	var seeder := EventSeeder.new(_SEED, world[0], world[1], world[2])
 	while not seeder.seed_chunk(chunk):
 		pass
@@ -66,7 +74,7 @@ func test_every_weighted_kind_is_rolled() -> void:
 	#
 	# **가중치 0 은 세지 않는다.** 후유증이 그렇다 — 세계가 굴리는 사건이 아니라
 	# 내 원정이 남기는 것이라 `ExpeditionAftermath` 가 적는다.
-	var world := _world()
+	var world := _world(_ROLL_POPULATION)
 	_seed_all(world)
 	var ledger: RelationLedger = world[2]
 	var seen := {}
@@ -81,6 +89,28 @@ func test_every_weighted_kind_is_rolled() -> void:
 		wanted += 1
 		assert_true(seen.has(slot), RelationEvent.label(slot as RelationEvent.Kind))
 	assert_eq(seen.size(), wanted)
+
+
+func test_weights_line_up_with_the_kinds() -> void:
+	# **가중치 배열이 enum 과 나란하다.** 짧으면 뒤의 사건이 영영 안 굴려지고,
+	# 가운데에 끼워 넣으면 모든 가중치가 조용히 다른 사건으로 옮겨 간다 —
+	# 둘 다 화면에서는 안 보이고 세계가 달라진 것으로만 나타난다.
+	assert_eq(EventSeeder.KIND_WEIGHTS.size(), RelationEvent.count())
+
+
+func test_an_event_without_a_target_still_gets_rolled() -> void:
+	# 길드 이탈은 대상이 없다 (§24.36.1). `_pick_targets` 가 빈 배열을 내는데
+	# 그것을 「대상을 못 구했다」로 읽으면 이 사건은 한 번도 안 일어난다.
+	var world := _world(_ROLL_POPULATION)
+	_seed_all(world)
+	var ledger: RelationLedger = world[2]
+	var solo := 0
+	for cause in ledger.size():
+		if ledger.kind_of(cause) != RelationEvent.Kind.DEFECT:
+			continue
+		solo += 1
+		assert_eq(ledger.targets_of(cause).size(), 0, "대상이 붙으면 안 된다")
+	assert_gt(solo, 0, "길드 이탈이 한 번은 나야 한다")
 
 
 func test_someone_ends_up_knowing_a_stranger() -> void:

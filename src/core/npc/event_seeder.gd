@@ -47,7 +47,13 @@ const PEOPLE_PER_EVENT := 6
 ##
 ## 구조와 정보는 **호감을 되돌리는 쪽**이다. 올리는 길이 협력 하나뿐이면
 ## 세계가 400판에 걸쳐 한 방향으로만 어두워진다 (설계 24.31).
-const KIND_WEIGHTS := [29, 10, 5, 0, 15, 21, 8, 3, 2, 2, 5]
+##
+## **이 값들은 실측으로 고른 것이고 베끼면 안 된다** — 사건을 붙일 때마다 400판 곡선을
+## 다시 재고 되맞춘다 (설계 24.36.4). 지금 값이 400판 세계 호감 16.4 를 낸다.
+##
+## **거짓 정보와 밀고가 가장 낮은 축에 있는 이유**는 둘이 세계를 가장 빨리 어둡게
+## 만들기 때문이다 — 각각 20% 로 올리면 400판 호감이 8.6 · 10.2 로 떨어진다 (§24.36.3).
+const KIND_WEIGHTS := [21, 7, 3, 0, 15, 20, 5, 2, 2, 4, 4, 2, 6, 2, 3, 4]
 
 ## 그 자리에 있던 사람 수.
 const WITNESS_MIN := 2
@@ -140,7 +146,9 @@ func _roll_one() -> void:
 	var actor := _rng.randi() % _registry.size()
 	var kind := _pick_kind()
 	var targets := _pick_targets(actor, kind)
-	if targets.is_empty():
+	# **대상이 없어도 되는 사건이 있다** (RelationEvent.needs_target) — 길드 이탈이다.
+	# 대상을 못 구한 것과 애초에 안 구하는 것을 여기서 가른다.
+	if targets.is_empty() and RelationEvent.of(kind).needs_target:
 		return
 	_resolver.resolve(kind, actor, targets, _pick_witnesses(actor, targets))
 
@@ -164,6 +172,8 @@ func _pick_targets(actor: int, kind: RelationEvent.Kind) -> PackedInt32Array:
 	var wanted := 1
 	if kind == RelationEvent.Kind.WIPEOUT:
 		wanted = _rng.randi_range(FALLEN_MIN, FALLEN_MAX)
+	elif not RelationEvent.of(kind).needs_target:
+		wanted = 0
 
 	var found := PackedInt32Array()
 	var taken := {actor: true}
@@ -189,7 +199,9 @@ func _pick_witnesses(actor: int, targets: PackedInt32Array) -> PackedInt32Array:
 
 	var found := PackedInt32Array()
 	for _slot in _rng.randi_range(WITNESS_MIN, WITNESS_MAX):
-		var anchor: int = targets[_rng.randi() % targets.size()] if _rng.randf() < 0.5 else actor
+		# **대상이 없으면 행위자가 유일한 닻이다** (길드 이탈). 나누기 전에 갈라야 한다.
+		var pick_target := not targets.is_empty() and _rng.randf() < 0.5
+		var anchor: int = targets[_rng.randi() % targets.size()] if pick_target else actor
 		var other := _known_of(anchor, taken)
 		if other < 0:
 			other = _from_faction(anchor, taken)

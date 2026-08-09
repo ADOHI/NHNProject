@@ -130,8 +130,18 @@ func describe(cause: int, registry: PersonRegistry) -> String:
 	var actor := _name(registry, _actors[cause])
 	var targets := targets_of(cause)
 	if targets.is_empty():
-		return "%s • %s" % [RelationEvent.label(kind), actor]
+		return _solo_sentence(kind, actor)
 	return _sentence(kind, actor, _name(registry, targets[0]), targets.size())
+
+
+## 대상이 없는 사건 한 줄 (`RelationEvent.needs_target`).
+##
+## **길드 이탈이 그렇다** — 누구에게 한 일이 아니라 한 일 그 자체라 목적어가 없다.
+## 설계 24.5 D 의 사건 대부분이 이 모양이므로 자리를 열어 둔다.
+func _solo_sentence(kind: RelationEvent.Kind, actor: String) -> String:
+	if kind == RelationEvent.Kind.DEFECT:
+		return "길드이탈 • %s%s 소속을 버렸다" % [actor, KoreanParticle.subject(actor)]
+	return "%s • %s" % [RelationEvent.label(kind), actor]
 
 
 ## 사건 종류마다 한 문장. **표가 아니라 match 인 이유**는 조사가 이름마다 달라
@@ -139,7 +149,10 @@ func describe(cause: int, registry: PersonRegistry) -> String:
 func _sentence(kind: RelationEvent.Kind, actor: String, first: String, count: int) -> String:
 	var subject := KoreanParticle.subject(actor)
 	var object_of := KoreanParticle.object_of(first)
-	var text := "협력 • %s%s %s" % [actor, KoreanParticle.conjunction(actor), first]
+	# **기본값이 「협력」이 아니라 라벨이다.** 이름을 박아 두면 새 사건이 arm 을 안 받았을 때
+	# 조용히 협력으로 적히고, 화면에서는 그것이 진짜 협력과 구별되지 않는다.
+	var label := RelationEvent.label(kind)
+	var text := "%s • %s%s %s" % [label, actor, KoreanParticle.conjunction(actor), first]
 	match kind:
 		RelationEvent.Kind.BETRAYAL:
 			text = "배신 • %s%s %s%s" % [actor, subject, first, object_of]
@@ -161,6 +174,14 @@ func _sentence(kind: RelationEvent.Kind, actor: String, first: String, count: in
 			text = "후유증 • %s%s 제거되고 돌아왔다" % [actor, subject]
 		RelationEvent.Kind.WIPEOUT:
 			text = "전멸 • %s%s 이끈 원정에서 %d명" % [actor, subject, count]
+		RelationEvent.Kind.FALSE_LEAD:
+			text = "거짓정보 • %s%s %s%s 함정으로 보냈다" % [actor, subject, first, object_of]
+		RelationEvent.Kind.SELL_INFO:
+			text = "정보판매 • %s%s %s에게 팔았다" % [actor, subject, first]
+		RelationEvent.Kind.SNITCH:
+			text = "밀고 • %s%s %s의 위치를 흘렸다" % [actor, subject, first]
+		RelationEvent.Kind.LOOT_BODY:
+			text = "시체털이 • %s%s %s의 주검을 뒤졌다" % [actor, subject, first]
 	return text
 
 

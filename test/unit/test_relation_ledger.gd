@@ -77,6 +77,27 @@ func test_description_names_the_event() -> void:
 		)
 
 
+func test_a_targetless_event_has_no_object() -> void:
+	# 길드 이탈은 대상이 없다 (§24.36.1). 목적어 없는 문장이 나와야 한다.
+	var cause := _ledger.record(RelationEvent.Kind.DEFECT, 0, PackedInt32Array())
+	var text := _ledger.describe(cause, _registry)
+	assert_string_contains(text, "소속을 버렸다")
+	assert_false(text.contains("양은담"), "대상 이름이 들어가면 안 된다")
+
+
+func test_a_new_event_never_gets_written_as_cooperation() -> void:
+	# **arm 을 안 받은 사건이 조용히 협력으로 적히던 자리다.** 화면에서 진짜 협력과
+	# 구별되지 않으므로 기본값이 라벨이어야 한다.
+	for kind in RelationEvent.count():
+		if kind == int(RelationEvent.Kind.COOPERATION):
+			continue
+		var cause := _ledger.record(kind as RelationEvent.Kind, 0, PackedInt32Array([1]))
+		assert_false(
+			_ledger.describe(cause, _registry).begins_with("협력"),
+			RelationEvent.label(kind as RelationEvent.Kind)
+		)
+
+
 func test_wipeout_description_counts_the_dead() -> void:
 	var cause := _ledger.record(RelationEvent.Kind.WIPEOUT, 0, PackedInt32Array([1, 2]))
 	assert_string_contains(_ledger.describe(cause, _registry), "2명")

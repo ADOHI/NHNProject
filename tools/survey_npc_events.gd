@@ -24,6 +24,7 @@ func _initialize() -> void:
 	_report_probe()
 	var world := _build_world()
 	_report_graph(world)
+	_report_labels(world)
 	_report_rumors(world)
 	_report_asymmetry(world)
 	_report_recruit(world)
@@ -47,6 +48,39 @@ func _report_vectors() -> void:
 					event.target_affinity,
 					event.bond_gain,
 				]
+			)
+		)
+	_report_axis_use()
+
+
+## **성향 6축 중 실제로 밟히는 것은 몇인가** (설계 24.36.2).
+##
+## 축이 인물 화면에 나오는데 아무 사건도 안 건드리면 **그 축은 세계에서 아무 일도 안 한다** —
+## 인물마다 값이 있고 LLM 입력에도 실려 가는데 관계는 한 번도 안 움직인다.
+## **사건 표만 읽어서는 안 보인다.** 없는 것을 세는 일이라 여기서 세어 준다.
+func _report_axis_use() -> void:
+	var kinds := PackedInt32Array()
+	var share := PackedFloat32Array()
+	kinds.resize(NpcAxis.count())
+	share.resize(NpcAxis.count())
+	var total := 0
+	for weight in EventSeeder.KIND_WEIGHTS:
+		total += int(weight)
+
+	for kind in RelationEvent.count():
+		var event := RelationEvent.of(kind as RelationEvent.Kind)
+		for axis in NpcAxis.count():
+			if event.axis(axis as NpcAxis.Kind) == 0:
+				continue
+			kinds[axis] += 1
+			share[axis] += float(EventSeeder.KIND_WEIGHTS[kind]) / float(maxi(total, 1))
+
+	print("\n%-12s %8s %10s" % ["축", "밟는 사건", "사건의 비율"])
+	for axis in NpcAxis.count():
+		print(
+			(
+				"%-12s %8d %9.0f%%"
+				% [NpcAxis.label(axis as NpcAxis.Kind), kinds[axis], 100.0 * share[axis]]
 			)
 		)
 
@@ -172,6 +206,55 @@ func _report_graph(world: Array) -> void:
 	for kind in RelationEvent.count():
 		mix.append("%s %d" % [RelationEvent.label(kind as RelationEvent.Kind), rolled[kind]])
 	print("%-26s %s" % ["사건 종류", " ".join(mix)])
+
+
+## **사건 수와 화면에 뜨는 딱지 수가 왜 다른가** (설계 24.36.5).
+##
+## 「동료 유기가 너무 드물다」를 가중치 탓으로 읽으면 가중치를 올려도 딱지가 안 는다.
+## 진짜 원인은 **태생 관계는 유형이 안 바뀌는 것**이다 (설계 24.18) —
+## 사건이 가족을 대상으로 고르면 「유기당함」이 아니라 「형제」로 남는다.
+##
+## 그러므로 **사건마다 「굴린 수」와 「딱지가 남은 수」를 같이 내야** 어느 쪽인지 갈린다.
+func _report_labels(world: Array) -> void:
+	var graph: RelationGraph = world[1]
+	var ledger: RelationLedger = world[2]
+
+	print("\n== 사건이 남긴 딱지 (설계 24.36.5) ==")
+	print("%-10s %8s %10s %10s" % ["사건", "굴린 수", "태생에 떨어짐", "딱지가 남음"])
+	var rolled := PackedInt32Array()
+	var onto_inborn := PackedInt32Array()
+	var kept := PackedInt32Array()
+	rolled.resize(RelationEvent.count())
+	onto_inborn.resize(RelationEvent.count())
+	kept.resize(RelationEvent.count())
+
+	for cause in ledger.size():
+		var kind := ledger.kind_of(cause)
+		rolled[int(kind)] += 1
+		var wanted := RelationEvent.of(kind).target_kind
+		if wanted == RelationKind.Kind.NONE:
+			continue
+		for target in ledger.targets_of(cause):
+			var got := graph.kind_of(target, ledger.actor_of(cause))
+			if RelationKind.is_inborn(got):
+				onto_inborn[int(kind)] += 1
+			elif got == wanted:
+				kept[int(kind)] += 1
+
+	for kind in RelationEvent.count():
+		if rolled[kind] == 0:
+			continue
+		print(
+			(
+				"%-10s %8d %10d %10d"
+				% [
+					RelationEvent.label(kind as RelationEvent.Kind),
+					rolled[kind],
+					onto_inborn[kind],
+					kept[kind],
+				]
+			)
+		)
 
 
 ## **전파가 성김을 죽이지 않았는가** (설계 24.10 · 24.28.3).
