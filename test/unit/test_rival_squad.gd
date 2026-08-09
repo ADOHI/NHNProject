@@ -168,3 +168,42 @@ func test_the_threshold_has_one_source() -> void:
 	assert_true(squad.famous_faces().is_empty())
 	world.registry.gain_fame(0, 1)
 	assert_eq(Array(squad.famous_faces()), [0])
+
+
+func test_the_tier_is_a_pure_function() -> void:
+	# **화면이 프레임마다 묻는다** (UI 킷). 난수도 시간도 안 쓰므로 답이 안 흔들려야 한다 —
+	# 흔들리면 부품이 맑아졌다 흐려졌다 하고, 그건 노이즈가 아니라 고장이다.
+	var world := NpcWorld.create(_SEED, _POPULATION)
+	world.registry.gain_fame(1, PersonGenerator.FAME_MAX)
+	var first := SocialReach.tier_of(world, 0, 1)
+	for _try in 20:
+		assert_eq(SocialReach.tier_of(world, 0, 1), first)
+	assert_eq(first, SocialReach.Tier.HEARD_OF)
+
+
+func test_being_known_beats_being_famous() -> void:
+	# **부를 말이 있는 쪽이 이긴다.** *"이름은 들어 봤다"* 는 그 말이 없을 때 쓰는 말이다.
+	var world := NpcWorld.create(_SEED, _POPULATION)
+	world.registry.gain_fame(1, PersonGenerator.FAME_MAX)
+	world.graph.link(0, 1, RelationKind.Kind.COMRADESHIP, 40, 40)
+	assert_eq(SocialReach.tier_of(world, 0, 1), SocialReach.Tier.KNOWN)
+
+
+func test_a_nobody_is_a_stranger() -> void:
+	var world := NpcWorld.create(_SEED, _POPULATION)
+	var quiet := -1
+	for person in world.registry.size():
+		if (
+			world.graph.degree_of(person) == 0
+			and not SocialReach.is_heard_of(world.registry, person)
+		):
+			quiet = person
+			break
+	assert_gt(quiet, -1, "관계도 이름값도 없는 사람이 있어야 하는 시험이다")
+	assert_eq(SocialReach.tier_of(world, 0, quiet), SocialReach.Tier.STRANGER)
+
+
+func test_nobody_sees_themselves() -> void:
+	var world := NpcWorld.create(_SEED, _POPULATION)
+	world.registry.gain_fame(0, PersonGenerator.FAME_MAX)
+	assert_eq(SocialReach.tier_of(world, 0, 0), SocialReach.Tier.STRANGER)

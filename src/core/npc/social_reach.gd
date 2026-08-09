@@ -27,6 +27,26 @@ extends RefCounted
 ## 마지막 차례(아무나)는 몇 번만 찔러 본다. 인구가 늘 때 비용이 따라 늘면 안 된다
 ## (§24.16.1 과 같은 규율).
 
+## **한 사람이 다른 사람을 아는 정도.** 세 단이고 그 사이는 없다 (설계 24.42.3).
+##
+## | 단 | 무엇 | 화면에 쓸 수 있는 말 |
+## | --- | --- | --- |
+## | `STRANGER` | 모르는 사람 | 없다 |
+## | `HEARD_OF` | **이름을 들어 봤다** — 관계가 없는데 유명하다 | *"이름은 들어 봤다"* — 그게 전부다 |
+## | `KNOWN` | **겪어서 안다** | *"당신 대원 차소경의 아들"* · *"그 판에서 배신한 자"* |
+##
+## **둘을 합치면 안 된다.** §24.32.2 가 재인을 재면서 *"조우 화면이 필요한 것은
+## 얼굴이 아니라 아는 얼굴에만 붙는 한 줄"* 이라고 했는데 **그 한 줄이 둘은 서로 다르다.**
+##
+## **그리고 하나는 쌓이고 하나는 안 쌓인다** (§24.42.3) —
+## `KNOWN` 은 판을 돌수록 늘고(10.9% → 12.4%) `HEARD_OF` 는 27.8% 에서 안 움직인다.
+## 앞의 것은 플레이어가 쌓은 것이고 뒤의 것은 **세계의 유명세 분포**다.
+enum Tier {
+	STRANGER,
+	HEARD_OF,
+	KNOWN,
+}
+
 ## 계열을 안 가린다는 뜻.
 const ANY_DISCIPLINE := -1
 
@@ -103,6 +123,38 @@ static func pick_faction(
 ## 그 자리에 정보가 생긴다 (§24.8).
 static func familiar(graph: RelationGraph, one: int, other: int) -> bool:
 	return graph.knows(one, other) or graph.knows(other, one)
+
+
+## **한 쌍의 아는 정도.** 화면이 부품 하나마다 이것을 묻는다 (설계 24.42.3).
+##
+## ## 순수 함수다 — 같은 쌍은 언제 물어도 같은 답이다
+##
+## 난수도 시간도 안 쓴다. 읽는 것은 관계 그래프와 유명세 둘뿐이고 **둘 다 사건이
+## 일어날 때만 바뀐다.** 화면이 프레임마다 물어도 답이 안 흔들린다 —
+## **흔들리면 그건 노이즈가 아니라 고장이다.**
+##
+## ## 겪어서 아는 것이 이긴다
+##
+## 유명하면서 아는 사이일 수 있다. 그때는 `KNOWN` 이다 —
+## **부를 말이 있는 쪽이 이긴다.** *"이름은 들어 봤다"* 는 그 말이 없을 때 쓰는 말이다.
+static func tier_of(world: NpcWorld, viewer: int, seen: int) -> Tier:
+	if world == null or not world.is_ready() or viewer == seen:
+		return Tier.STRANGER
+	if not world.registry.has(viewer) or not world.registry.has(seen):
+		return Tier.STRANGER
+	if familiar(world.graph, viewer, seen):
+		return Tier.KNOWN
+	if is_heard_of(world.registry, seen):
+		return Tier.HEARD_OF
+	return Tier.STRANGER
+
+
+## **이름값이 있는가.** 보는 사람을 안 받는다 —
+## 유명한 것은 누구에 대해서가 아니라 **세계에 대해** 유명한 것이다 (설계 24.7).
+##
+## 문턱의 원본은 `PersonGenerator.FAME_KNOWN` 이고, 그것을 읽는 곳은 **이 함수 하나**다.
+static func is_heard_of(registry: PersonRegistry, person: int) -> bool:
+	return registry.has(person) and registry.fame_of(person) >= PersonGenerator.FAME_KNOWN
 
 
 ## 후보 목록에서 아직 안 쓴 사람 하나. 순서가 결정론적이라 같은 시드면 같은 결과다.

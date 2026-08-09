@@ -125,8 +125,10 @@ func famous_faces() -> PackedInt32Array:
 	var found := PackedInt32Array()
 	if _world == null:
 		return found
+	# **문턱의 원본은 `SocialReach.is_heard_of` 하나다.** 여기서 유명세를 또 읽으면
+	# 같은 수가 두 군데에 박히고, 그것이 §24.42.3 에서 고친 병이다.
 	for member in members:
-		if _world.registry.fame_of(member) >= PersonGenerator.FAME_KNOWN:
+		if SocialReach.is_heard_of(_world.registry, member):
 			found.append(member)
 	return found
 
