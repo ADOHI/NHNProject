@@ -43,20 +43,23 @@ def build_palette(frames: list[Image.Image]) -> Image.Image:
     return strip.quantize(colors=PALETTE_COLORS, method=Image.Quantize.MEDIANCUT)
 
 
-def beside(left: list[Image.Image], right: list[Image.Image]) -> list[Image.Image]:
-    """두 묶음을 나란히 붙인다. 조절판 축을 끈 것과 켠 것을 **같은 화면에서** 보려는 것.
+def beside(columns: list[list[Image.Image]]) -> list[Image.Image]:
+    """여러 묶음을 나란히 붙인다. 축을 끈 것과 켠 것을 **같은 화면에서** 보려는 것.
 
-    따로 두 개의 GIF 로 보면 사람은 차이를 기억으로 비교해야 하고, 그러면 미세한
-    지연과 비대칭은 그냥 안 보인다. 나란히 놓는 순간 보인다.
+    따로 GIF 로 보면 사람은 차이를 기억으로 비교해야 하고, 그러면 미세한 지연과
+    비대칭은 그냥 안 보인다. 나란히 놓는 순간 보인다.
+
+    **길이가 다르면 짧은 쪽이 마지막 장에서 기다린다.** 무기 무게처럼 길이 자체가
+    비교 대상일 때 잘라 맞추면 그 차이가 통째로 사라진다 — 가벼운 것이 먼저 끝나고
+    서서 기다리는 것이 곧 「빠르다」의 표현이다.
     """
-    if len(left) != len(right):
-        sys.exit(f"프레임 수가 다르다: {len(left)} vs {len(right)}")
-    width, height = left[0].size
+    span = max(len(c) for c in columns)
+    width, height = columns[0][0].size
     joined = []
-    for a, b in zip(left, right):
-        canvas = Image.new("RGB", (width * 2, height))
-        canvas.paste(a, (0, 0))
-        canvas.paste(b, (width, 0))
+    for i in range(span):
+        canvas = Image.new("RGB", (width * len(columns), height))
+        for column, frames in enumerate(columns):
+            canvas.paste(frames[min(i, len(frames) - 1)], (column * width, 0))
         joined.append(canvas)
     return joined
 
@@ -66,7 +69,9 @@ def main() -> None:
     parser.add_argument("prefix", help="캡처 접두사. 예: .renders-char-anim/idle")
     parser.add_argument("--fps", type=int, default=25)
     parser.add_argument("--out", default=None, help="기본값은 <prefix>.gif")
-    parser.add_argument("--beside", default=None, help="나란히 붙일 다른 접두사")
+    parser.add_argument(
+        "--beside", action="append", default=[], help="나란히 붙일 다른 접두사 (여러 번 줄 수 있다)"
+    )
     args = parser.parse_args()
 
     prefix = pathlib.Path(args.prefix)
@@ -78,7 +83,8 @@ def main() -> None:
 
     frames = load_frames(prefix)
     if args.beside:
-        frames = beside(frames, load_frames(pathlib.Path(args.beside)))
+        columns = [frames] + [load_frames(pathlib.Path(p)) for p in args.beside]
+        frames = beside(columns)
     palette = build_palette(frames)
     quantized = [f.quantize(palette=palette, dither=Image.Dither.NONE) for f in frames]
 

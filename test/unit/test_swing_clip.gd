@@ -11,8 +11,10 @@ extends GutTest
 const SCAN_STEP := 0.004
 
 
-func _clip(from_guard := WeaponGuard.Id.HIGH, to_guard := WeaponGuard.Id.LOW) -> CharSwingClip:
-	return CharSwingClip.new(CharRig.new(), from_guard, to_guard)
+func _clip(
+	from_guard := WeaponGuard.Id.HIGH, to_guard := WeaponGuard.Id.LOW, cells := 1
+) -> CharSwingClip:
+	return CharSwingClip.new(CharRig.new(), from_guard, to_guard, CharWeapon.new(cells))
 
 
 func _times(clip: CharSwingClip) -> Array[float]:
@@ -34,7 +36,7 @@ func test_it_starts_at_the_opening_guard_and_ends_at_the_closing_one() -> void:
 	var last := clip.sample(clip.loop_seconds(), f)
 	assert_almost_eq(
 		last.rotations[CharWeapon.HOLDER],
-		WeaponGuard.hand_rotation(clip.to_guard),
+		WeaponGuard.hand_rotation(clip.to_guard, clip.rig, clip.weapon),
 		0.001,
 		"마무리 자세가 to_guard 와 달라지면 체인 조건이 거짓말한다"
 	)
@@ -76,25 +78,25 @@ func test_the_strike_is_the_fastest_part() -> void:
 		if speed > fastest:
 			fastest = speed
 			fastest_at = times[i]
-	assert_gt(fastest_at, CharSwingClip.ANTICIPATE - 0.01, "가장 빠른 순간이 예비 안에 있다")
-	assert_lt(
-		fastest_at, CharSwingClip.ANTICIPATE + CharSwingClip.STRIKE + 0.01, "가장 빠른 순간이 타격 뒤에 있다"
-	)
+	assert_gt(fastest_at, clip.anticipate - 0.01, "가장 빠른 순간이 예비 안에 있다")
+	assert_lt(fastest_at, clip.anticipate + clip.strike + 0.01, "가장 빠른 순간이 타격 뒤에 있다")
 
 
 func test_the_blade_never_goes_through_the_floor() -> void:
 	# **파츠의 접지 검사가 검을 못 본다** — 검은 파츠가 아니라 손의 자식이다.
 	# 처음에 마무리 자세가 너무 가팔라 검끝이 y = -17 까지 내려갔는데 아무도 안 잡았다.
+	# **네 칸 전부** 본다. 무기가 길어지면 같은 자세라도 검끝이 더 내려간다.
 	var f := AnimFeatures.all_on()
 	for pair: Array in [
 		[WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW],
 		[WeaponGuard.Id.LOW, WeaponGuard.Id.HIGH],
 		[WeaponGuard.Id.NEUTRAL, WeaponGuard.Id.THRUST],
 	]:
-		var clip := _clip(pair[0], pair[1])
-		for t in _times(clip):
-			var tip := CharWeapon.tip_position(clip.sample(t, f), clip.rig)
-			assert_gt(tip.y, 0.0, "%s 의 t = %.3f 에서 검끝이 땅을 뚫는다" % [clip.clip_name(), t])
+		for cells in range(CharWeapon.MIN_CELLS, CharWeapon.MAX_CELLS + 1):
+			var clip := _clip(pair[0], pair[1], cells)
+			for t in _times(clip):
+				var tip := clip.weapon.tip_position(clip.sample(t, f), clip.rig)
+				assert_gt(tip.y, 0.0, "%s 의 t = %.3f 에서 검끝이 땅을 뚫는다" % [clip.clip_name(), t])
 
 
 func test_no_part_ever_sinks_into_its_ground() -> void:
@@ -130,7 +132,53 @@ func test_the_weapon_rides_the_hand() -> void:
 	# 무기가 손의 자식이라는 것이 값으로도 성립해야 한다 — 손이 돌면 검끝이 따라 돈다.
 	var clip := _clip()
 	var f := AnimFeatures.all_on()
-	var early := CharWeapon.tip_position(clip.sample(0.0, f), clip.rig)
-	var late := CharWeapon.tip_position(clip.sample(clip.loop_seconds(), f), clip.rig)
+	var early := clip.weapon.tip_position(clip.sample(0.0, f), clip.rig)
+	var late := clip.weapon.tip_position(clip.sample(clip.loop_seconds(), f), clip.rig)
 	assert_gt(early.distance_to(late), 30.0, "검끝이 거의 안 움직이면 손을 안 타고 있다")
 	assert_gt(early.y, late.y, "위에서 아래로 내려친 것이므로 검끝이 내려가야 한다")
+
+
+func test_a_heavier_weapon_swings_slower_in_every_phase() -> void:
+	# **넷을 손으로 따로 만들지 않았다는 주장.** 칸 수만 넣으면 셋이 같이 늘어야 한다.
+	var light := _clip(WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW, CharWeapon.MIN_CELLS)
+	var heavy := _clip(WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW, CharWeapon.MAX_CELLS)
+	assert_gt(heavy.anticipate, light.anticipate * 1.5, "무거우면 예비가 길어야 한다")
+	assert_gt(heavy.strike, light.strike * 1.5, "무거우면 타격이 느려야 한다")
+	assert_gt(heavy.recover, light.recover * 1.5, "무거우면 자세를 되찾는 데 오래 걸려야 한다")
+	assert_gt(heavy.hold, light.hold, "무거우면 멈춤이 길어야 한다")
+	assert_gt(heavy.loop_seconds(), light.loop_seconds() * 1.5, "한 방이 통째로 느려야 한다")
+
+
+func test_a_heavier_weapon_drags_the_body_further() -> void:
+	var f := AnimFeatures.all_on()
+	var light := _clip(WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW, CharWeapon.MIN_CELLS)
+	var heavy := _clip(WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW, CharWeapon.MAX_CELLS)
+	var rest := light.rig.rest_positions[CharPart.Id.TORSO].x
+	var light_end := light.sample(light.loop_seconds(), f).positions[CharPart.Id.TORSO].x - rest
+	var heavy_end := heavy.sample(heavy.loop_seconds(), f).positions[CharPart.Id.TORSO].x - rest
+	assert_gt(heavy_end, light_end + 2.0, "무거우면 상체가 더 끌려가야 한다")
+
+
+func test_weight_comes_from_volume_not_from_a_hand_written_table() -> void:
+	# 값이 표에 박혀 있으면 칸 수를 늘릴 때마다 사람이 네 줄을 더 적어야 한다.
+	# **관성에서 나오면 그냥 나온다.** 단조성만 확인한다.
+	var previous := 0.0
+	for cells in range(CharWeapon.MIN_CELLS, CharWeapon.MAX_CELLS + 1):
+		var weapon := CharWeapon.new(cells)
+		assert_gt(weapon.inertia_ratio(), previous, "칸이 늘면 관성이 늘어야 한다")
+		previous = weapon.inertia_ratio()
+	assert_almost_eq(CharWeapon.new(1).time_scale(), 1.0, 0.0001, "1 칸이 기준이라 배수가 1 이다")
+
+
+func test_a_long_weapon_cannot_be_lowered_as_far() -> void:
+	# **길이가 자세를 정한다.** 손으로 네 번 맞추는 것이 아니라 기하로 풀린다.
+	var rig := CharRig.new()
+	var light := CharWeapon.new(CharWeapon.MIN_CELLS)
+	var heavy := CharWeapon.new(CharWeapon.MAX_CELLS)
+	assert_gt(heavy.length(), light.length(), "무거우면 길어야 한다")
+	var low := WeaponGuard.Id.LOW
+	assert_gte(
+		WeaponGuard.weapon_angle(low, rig, heavy),
+		WeaponGuard.weapon_angle(low, rig, light),
+		"긴 무기는 덜 가파르게 내려야 바닥에 안 박힌다"
+	)

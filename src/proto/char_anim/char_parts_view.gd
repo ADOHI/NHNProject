@@ -17,6 +17,9 @@ const SHADOW_LIFT_RESPONSE := 0.030
 
 var rig: CharRig
 
+## 든 무기. **칸 수가 길이 · 두께를 정하고 그것이 다시 동작을 정한다** (§25.16).
+var weapon := CharWeapon.new(1)
+
 var _shapes: Array[CharPartShape] = []
 var _weapon: CharWeaponShape
 var _shadow_scale := 1.0
@@ -49,10 +52,11 @@ func _mount_weapon() -> void:
 	_weapon = CharWeaponShape.new()
 	_weapon.name = "Weapon"
 	# 손 지역 좌표는 `+y` 가 아래다. 코어(`+y` 위)에서 잡은 자리를 뒤집어 넣는다.
-	var grip := CharWeapon.grip_offset(rig)
+	var grip := weapon.grip_offset(rig)
 	_weapon.position = Vector2(grip.x, -grip.y)
-	_weapon.rotation = -CharWeapon.REST_ANGLE
+	_weapon.rotation = -weapon.rest_angle(rig)
 	_shapes[CharWeapon.HOLDER].add_child(_weapon)
+	_weapon.setup(weapon)
 
 
 func apply_pose(pose: CharPose) -> void:

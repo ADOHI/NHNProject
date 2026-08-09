@@ -69,13 +69,27 @@ const HAND_TILT := 0.09
 const FAR_MOTION := 0.72
 const FAR_DELAY := 0.11
 
+## 걸음새 수치. **상수를 그대로 베끼되 하위 클래스가 갈아 끼울 수 있게 변수로 둔다.**
+##
+## `run` 이 바꾸는 것은 결국 이 몇 개뿐이다 — 특히 `stance` 가 `0.5` 아래로 내려가면
+## 두 발이 동시에 떠 있는 **체공**이 생기고, 그 순간 걷기가 달리기가 된다.
+var stride := STRIDE
+var stance := STANCE
+var step_length := STEP_LENGTH
+var swing_lift := SWING_LIFT
+var torso_bob := TORSO_BOB
+var torso_lean := TORSO_LEAN
+var hand_swing := HAND_SWING
+var heel_strike := HEEL_STRIKE
+var toe_off := TOE_OFF
+
 
 func clip_name() -> String:
 	return "walk (사이드 사선)"
 
 
 func loop_seconds() -> float:
-	return STRIDE
+	return stride
 
 
 func sample(t: float, features: AnimFeatures) -> CharPose:
@@ -95,12 +109,12 @@ func sample(t: float, features: AnimFeatures) -> CharPose:
 ## 같이 뛰는 토끼가 된다.
 func foot_phase(t: float, part: CharPart.Id) -> float:
 	var offset := 0.5 if CharPart.is_far(part) else 0.0
-	return fposmod(t / STRIDE + offset, 1.0)
+	return fposmod(t / stride + offset, 1.0)
 
 
 ## 디딘 발인가. 나는 발과 규칙이 갈리는 지점이라 밖에서도 물어볼 수 있게 열어 둔다.
 func is_planted(t: float, part: CharPart.Id, f: AnimFeatures) -> bool:
-	var span := lerpf(0.5, STANCE, f.plant)
+	var span := lerpf(0.5, stance, f.plant)
 	return foot_phase(t, part) < span
 
 
@@ -132,19 +146,19 @@ func _apply_foot(pose: CharPose, t: float, f: AnimFeatures, part: CharPart.Id) -
 ##
 ## 디딤은 `u` 에 대해 **선형**이다 — 그것이 곧 등속이고, 등속이 곧 접지다.
 func _planted_foot(phase: float) -> Vector3:
-	var half := STEP_LENGTH * 0.5
-	if phase < STANCE:
-		var u := phase / STANCE
+	var half := step_length * 0.5
+	if phase < stance:
+		var u := phase / stance
 		# 뒤꿈치가 닿았다가(발끝 들림) 평평해지고 발끝으로 민다(뒤꿈치 들림).
 		return Vector3(
-			half - STEP_LENGTH * u, 0.0, lerpf(HEEL_STRIKE, -TOE_OFF, smoothstep(0.0, 1.0, u))
+			half - step_length * u, 0.0, lerpf(heel_strike, -toe_off, smoothstep(0.0, 1.0, u))
 		)
 	# 나는 발은 지면보다 빨리 돌아와야 한다 — 디딤에 쓴 시간을 만회해야 하기 때문이다.
-	var v := (phase - STANCE) / (1.0 - STANCE)
+	var v := (phase - stance) / (1.0 - stance)
 	return Vector3(
-		-half + STEP_LENGTH * smoothstep(0.0, 1.0, v),
-		SWING_LIFT * sin(PI * v),
-		lerpf(-TOE_OFF, HEEL_STRIKE, smoothstep(0.0, 1.0, v))
+		-half + step_length * smoothstep(0.0, 1.0, v),
+		swing_lift * sin(PI * v),
+		lerpf(-toe_off, heel_strike, smoothstep(0.0, 1.0, v))
 	)
 
 
@@ -164,8 +178,8 @@ func _sliding_foot(phase: float) -> Vector3:
 func _apply_torso(pose: CharPose, t: float, f: AnimFeatures) -> void:
 	var part := CharPart.Id.TORSO
 	var drop := _footfall(t, TORSO_BOB_DELAY, f)
-	pose.positions[part] += Vector2(TORSO_SURGE * _surge(t, 0.0, f) * f.arc, -TORSO_BOB * drop)
-	pose.rotations[part] = -TORSO_LEAN * f.arc
+	pose.positions[part] += Vector2(TORSO_SURGE * _surge(t, 0.0, f) * f.arc, -torso_bob * drop)
+	pose.rotations[part] = -torso_lean * f.arc
 	# 가장 낮을 때 눌린다. 위로 갈 때는 안 늘린다 — 걸음은 흡수가 본체다.
 	pose.scales[part] = CharClip.volume_scale(-TORSO_SQUASH * maxf(drop, 0.0) * f.squash)
 
@@ -194,7 +208,7 @@ func _apply_hand(pose: CharPose, t: float, f: AnimFeatures, part: CharPart.Id) -
 	var mate := CharPart.Id.FOOT_FAR if far > 0.0 else CharPart.Id.FOOT_NEAR
 	var swing := -cos(TAU * (foot_phase(t, mate) - (HAND_SWING_DELAY + delay) * f.delay))
 	pose.positions[part] += Vector2(
-		HAND_SWING * motion * swing * f.arc,
+		hand_swing * motion * swing * f.arc,
 		-HAND_BOB * motion * _footfall(t, HAND_BOB_DELAY + delay, f)
 	)
 	pose.rotations[part] = HAND_TILT * motion * swing * f.arc
@@ -204,9 +218,9 @@ func _apply_hand(pose: CharPose, t: float, f: AnimFeatures, part: CharPart.Id) -
 ##
 ## `+1` 이 가장 낮은 순간이다. 몸과 머리가 이것을 서로 다른 지연으로 받는다.
 func _footfall(t: float, delay: float, f: AnimFeatures) -> float:
-	return cos(2.0 * TAU * (t / STRIDE - delay * f.delay))
+	return cos(2.0 * TAU * (t / stride - delay * f.delay))
 
 
 ## 앞뒤로 밀리는 신호. 한 걸음에 2 회 — 발을 디딜 때마다 몸이 조금 밀린다.
 func _surge(t: float, delay: float, f: AnimFeatures) -> float:
-	return sin(2.0 * TAU * (t / STRIDE - delay * f.delay))
+	return sin(2.0 * TAU * (t / stride - delay * f.delay))

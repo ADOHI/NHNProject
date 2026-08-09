@@ -53,7 +53,7 @@ const WARMUP_FRAMES := 8
 const MIN_SUBJECT_RATIO := 0.03
 
 ## 낱말로 고를 수 있는 클립과 조절판 축.
-const CLIPS: Array[String] = ["idle", "walk", "front", "swing", "swingup", "hit"]
+const CLIPS: Array[String] = ["idle", "walk", "front", "swing", "swingup", "hit", "run", "jump"]
 const AXES: Array[String] = ["delay", "arc", "squash", "asymmetry", "depth", "plant"]
 
 var _out_prefix := ".renders-char-anim/idle"
@@ -66,6 +66,7 @@ var _next_frame := 0
 var _pending := -1
 var _verified := false
 var _frames := 0
+var _cells := 1
 
 
 func _initialize() -> void:
@@ -76,6 +77,9 @@ func _initialize() -> void:
 	for token: String in args.slice(1):
 		if token in CLIPS:
 			clip_name = token
+		elif token.begins_with("cells"):
+			# `cells3` 처럼 무기 칸 수를 준다. 무게가 동작을 어떻게 바꾸는지 나란히 보려는 것.
+			_cells = int(token.substr(5))
 		else:
 			_features = _parse_features(token)
 
@@ -95,6 +99,7 @@ func _initialize() -> void:
 	_viewport.add_child(stage)
 
 	_view = CharPartsView.new()
+	_view.weapon = CharWeapon.new(_cells)
 	_view.position = Vector2(float(VIEW_SIZE.x) * 0.5, GROUND_Y)
 	_view.scale = Vector2(VIEW_SCALE, VIEW_SCALE)
 	stage.add_child(_view)
@@ -151,20 +156,26 @@ static func frame_count(loop_seconds: float) -> int:
 	return maxi(1, int(roundf(loop_seconds * float(FPS))))
 
 
+## 낱말에서 클립을 만든다. **표로 두면 클립이 늘어도 분기가 안 늘어난다.**
 func _make_clip(name: String, rig: CharRig) -> CharClip:
-	match name:
-		"walk":
-			return CharWalkClip.new(rig)
-		"hit":
-			return CharHitClip.new(rig)
-		"swing":
-			return CharSwingClip.new(rig, WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW)
-		"swingup":
-			return CharSwingClip.new(rig, WeaponGuard.Id.LOW, WeaponGuard.Id.HIGH)
-		"front":
-			return CharFrontIdleClip.new(rig)
-		_:
-			return CharIdleClip.new(rig)
+	var weapon := CharWeapon.new(_cells)
+	var swings: Dictionary[String, Array] = {
+		"swing": [WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW],
+		"swingup": [WeaponGuard.Id.LOW, WeaponGuard.Id.HIGH],
+	}
+	if name in swings:
+		var pair: Array = swings[name]
+		return CharSwingClip.new(rig, pair[0], pair[1], weapon)
+	var makers: Dictionary[String, Callable] = {
+		"walk": func() -> CharClip: return CharWalkClip.new(rig),
+		"run": func() -> CharClip: return CharRunClip.new(rig),
+		"jump": func() -> CharClip: return CharJumpClip.new(rig),
+		"hit": func() -> CharClip: return CharHitClip.new(rig),
+		"front": func() -> CharClip: return CharFrontIdleClip.new(rig),
+	}
+	if name in makers:
+		return (makers[name] as Callable).call()
+	return CharIdleClip.new(rig)
 
 
 func _parse_features(spec: String) -> AnimFeatures:

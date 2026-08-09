@@ -92,7 +92,7 @@ func test_the_blade_never_goes_through_the_floor() -> void:
 	var clip := _clip()
 	var f := AnimFeatures.all_on()
 	for t in _times(clip):
-		var tip := CharWeapon.tip_position(clip.sample(t, f), clip.rig)
+		var tip := CharWeapon.new(1).tip_position(clip.sample(t, f), clip.rig)
 		assert_gt(tip.y, 0.0, "t = %.3f 에서 검끝이 땅을 뚫는다" % t)
 
 

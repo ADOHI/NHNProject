@@ -49,16 +49,27 @@ static func hand_offset(id: Id) -> Vector2:
 	return Vector2(p.x, p.y)
 
 
-## 무기가 화면에서 향하는 각도.
-static func weapon_angle(id: Id) -> float:
-	return POSES[id].z
+## 손이 그 자세에 있을 때의 높이 (캐릭터 공간).
+static func hand_height(id: Id, rig: CharRig) -> float:
+	return rig.rest_positions[CharWeapon.HOLDER].y + POSES[id].y
+
+
+## 무기가 화면에서 향하는 각도. **무기 길이가 이 값을 깎는다.**
+##
+## 표에 적힌 것은 **희망값**이다. 긴 무기를 그 각도로 내리면 검끝이 바닥에 박히므로,
+## 기하로 푼 안전한 각도와 견주어 **덜 가파른 쪽**을 쓴다.
+##
+## **그래서 4 칸 무기는 아래로 못 내린다** — 값을 손으로 네 번 맞추는 것이 아니라
+## 길이에서 나온다. §25.11.2 가 적은 *"길이가 자세를 정한다"* 가 이것이다.
+static func weapon_angle(id: Id, rig: CharRig, weapon: CharWeapon) -> float:
+	return maxf(POSES[id].z, weapon.safe_angle(hand_height(id, rig)))
 
 
 ## 그 자세를 만들려면 손을 얼마나 돌려야 하는가.
 ##
 ## 무기가 손의 자식이라 **화면 각도 = 손 회전 + 무기의 쉬는 각도**다. 뒤집어 푼다.
-static func hand_rotation(id: Id) -> float:
-	return weapon_angle(id) - CharWeapon.REST_ANGLE
+static func hand_rotation(id: Id, rig: CharRig, weapon: CharWeapon) -> float:
+	return weapon_angle(id, rig, weapon) - weapon.rest_angle(rig)
 
 
 static func guard_name(id: Id) -> String:

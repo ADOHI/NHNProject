@@ -14,14 +14,18 @@ extends CharClip
 ##
 ## 무기는 든 손의 자식이라 이 클립도 **무기를 모른다.** 손을 돌리면 검이 따라 돈다.
 
-## 예비 — 치기 전에 **반대로** 물러나는 시간. 이것이 없으면 타격이 갑자기 튀어나온다.
+## 1 칸짜리 기준의 예비 — 치기 전에 **반대로** 물러나는 시간.
 const ANTICIPATE := 0.16
 
-## 타격 — 실제로 지나가는 시간. **짧을수록 세게 보인다.**
+## 1 칸짜리 기준의 타격 — 실제로 지나가는 시간. **짧을수록 세게 보인다.**
 const STRIKE := 0.11
 
-## 후속 — 지나친 것이 되돌아와 앉는 시간.
+## 1 칸짜리 기준의 후속 — 지나친 것이 되돌아와 앉는 시간.
 const RECOVER := 0.42
+
+## 무거울수록 몸이 무기에 끌려간다. `drag` 가 0 이면 손만 움직인다.
+const DRAG_SHIFT := 5.0
+const DRAG_TWIST := 0.09
 
 ## 예비에서 시작 자세의 **반대쪽으로** 얼마나 더 가는가 (진행도 기준).
 const ANTICIPATE_DEPTH := 0.14
@@ -52,19 +56,90 @@ const FOOT_SQUASH := 0.045
 var from_guard: WeaponGuard.Id = WeaponGuard.Id.HIGH
 var to_guard: WeaponGuard.Id = WeaponGuard.Id.LOW
 
+## 든 무기. **칸 수 하나가 아래 넷을 전부 정한다** (§25.16).
+var weapon := CharWeapon.new(1)
 
-func _init(p_rig: CharRig, p_from := WeaponGuard.Id.HIGH, p_to := WeaponGuard.Id.LOW) -> void:
+## 무기의 관성에서 나온 구간 길이. **손으로 적은 값이 아니다.**
+var anticipate := ANTICIPATE
+var strike := STRIKE
+var recover := RECOVER
+
+## 맞는 순간 멈춰 있는 시간. **무거운 것은 멈춤이 길다** — `get hit` 의 경직과 짝이다.
+var hold := 0.0
+
+## 양 끝 자세를 미리 푼 값. **검끝이 바닥을 안 뚫도록 손본 뒤의 각도**가 들어 있다.
+var _start_offset: Vector2
+var _end_offset: Vector2
+var _start_rotation: float
+var _end_rotation: float
+
+
+func _init(
+	p_rig: CharRig,
+	p_from := WeaponGuard.Id.HIGH,
+	p_to := WeaponGuard.Id.LOW,
+	p_weapon: CharWeapon = null
+) -> void:
 	super(p_rig)
 	from_guard = p_from
 	to_guard = p_to
+	weapon = p_weapon if p_weapon != null else CharWeapon.new(1)
+	# **넷이 한 값에서 나온다.** 칸을 늘리면 예비도 타격도 회복도 멈춤도 같이 늘어난다.
+	var pace := weapon.time_scale()
+	anticipate = ANTICIPATE * pace
+	strike = STRIKE * pace
+	recover = RECOVER * pace
+	hold = weapon.hold_seconds()
+	_start_offset = WeaponGuard.hand_offset(from_guard)
+	_end_offset = WeaponGuard.hand_offset(to_guard)
+	_start_rotation = WeaponGuard.hand_rotation(from_guard, rig, weapon)
+	_end_rotation = WeaponGuard.hand_rotation(to_guard, rig, weapon)
+	_keep_the_blade_off_the_floor()
+
+
+## 자세를 **지나치는 자리까지 포함해서** 안전하게 만든다.
+##
+## **마무리 자세가 안전한 것만으로는 부족하다.** 진행도가 `1 + OVERSHOOT` 까지 가고
+## 예비가 `−ANTICIPATE_DEPTH` 까지 가므로, 검끝이 바닥을 뚫는 것은 **자세 사이가 아니라
+## 자세 밖**에서다. 3 칸 무기에서 실제로 2.5 px 뚫었다 (§25.16.2).
+##
+## **한 번에 푼다.** 표본마다 잘라 내면 그 경계에서 각도가 튄다 (§25.12.3 — 조건을
+## 다는 것 자체가 불연속을 만든다). 보간이 선형이라 양 끝만 맞추면 사이는 저절로 안전하다.
+func _keep_the_blade_off_the_floor() -> void:
+	# 타격은 마무리 자세를 `OVERSHOOT` 만큼 지나치고, 예비는 시작 자세를 그만큼 물러난다.
+	_end_rotation = _lifted_to_clear(
+		_start_offset, _start_rotation, _end_offset, _end_rotation, 1.0 + OVERSHOOT
+	)
+	_start_rotation = _lifted_to_clear(
+		_end_offset, _end_rotation, _start_offset, _start_rotation, 1.0 + ANTICIPATE_DEPTH
+	)
+
+
+## `far` 쪽 각도를, 진행도 `beyond` 까지 밀고 나가도 검끝이 뜨도록 들어 올린다.
+##
+## 이미 안전하면 그대로 돌려준다 — **필요할 때만 손댄다.**
+func _lifted_to_clear(
+	near_offset: Vector2, near_angle: float, far_offset: Vector2, far_angle: float, beyond: float
+) -> float:
+	var hand_y := (
+		rig.rest_positions[CharWeapon.HOLDER].y + lerpf(near_offset.y, far_offset.y, beyond)
+	)
+	var floor_angle := weapon.safe_angle(hand_y) - weapon.rest_angle(rig)
+	if lerpf(near_angle, far_angle, beyond) >= floor_angle:
+		return far_angle
+	# 도달점을 바닥 각도에 맞추려면 끝점을 얼마나 들어야 하는가 — 선형이라 나눗셈 하나다.
+	return near_angle + (floor_angle - near_angle) / beyond
 
 
 func clip_name() -> String:
-	return "swing %s에서 %s로" % [WeaponGuard.guard_name(from_guard), WeaponGuard.guard_name(to_guard)]
+	return (
+		"swing %d칸 %s에서 %s로"
+		% [weapon.cells, WeaponGuard.guard_name(from_guard), WeaponGuard.guard_name(to_guard)]
+	)
 
 
 func loop_seconds() -> float:
-	return ANTICIPATE + STRIKE + RECOVER
+	return anticipate + strike + hold + recover
 
 
 ## **루프가 아니다.** 끝나면 마무리 자세에 멈춰 선다 — 그래야 다음 동작이 거기서 잇는다.
@@ -79,17 +154,21 @@ func is_looping() -> bool:
 func progress(t: float) -> float:
 	if t <= 0.0:
 		return 0.0
-	if t < ANTICIPATE:
+	if t < anticipate:
 		# 뒤로 물러난다. 끝에서 속도가 0 이 되어야 타격으로 매끄럽게 넘어간다.
-		return -ANTICIPATE_DEPTH * sin(PI * (t / ANTICIPATE))
-	var struck := t - ANTICIPATE
-	if struck < STRIKE:
-		var u := struck / STRIKE
+		return -ANTICIPATE_DEPTH * sin(PI * (t / anticipate))
+	var struck := t - anticipate
+	if struck < strike:
+		var u := struck / strike
 		# 뒤로 물러난 자리에서 목표를 지나친 자리까지. 끝이 완만해야 「닿았다」로 읽힌다.
 		return lerpf(-ANTICIPATE_DEPTH, 1.0 + OVERSHOOT, smoothstep(0.0, 1.0, u))
+	# **멈춤.** 지나친 자리에 그대로 서 있는다 — 무거울수록 길다.
+	# `get hit` 의 경직과 같은 것이고, 이 정지가 한 방의 무게를 만든다.
+	if struck < strike + hold:
+		return 1.0 + OVERSHOOT
 	# 감쇠 진동으로 마무리에 앉는다. **오버슛이 그냥 진폭이 1 을 넘는 진동이다.**
-	var settling := struck - STRIKE
-	var u := clampf(settling / RECOVER, 0.0, 1.0)
+	var settling := struck - strike - hold
+	var u := clampf(settling / recover, 0.0, 1.0)
 	# `(1 - u)` 를 곱해 **끝에서 정확히 1** 이 되게 한다. 감쇠만으로는 0.992 에서 멈추는데,
 	# 마무리 자세가 값과 어긋나면 다음 동작이 그 차이만큼 튄다 (체인의 바탕이다).
 	var decay := exp(-SETTLE_DECAY * settling) * (1.0 - u)
@@ -109,22 +188,23 @@ func sample(t: float, features: AnimFeatures) -> CharPose:
 ## 든 손 — 자세에서 자세로. **무기는 이 손의 자식이라 저절로 따라 돈다.**
 func _apply_hand(pose: CharPose, at: float, f: AnimFeatures) -> void:
 	var part := CharWeapon.HOLDER
-	var start := WeaponGuard.hand_offset(from_guard)
-	var finish := WeaponGuard.hand_offset(to_guard)
-	pose.positions[part] += start.lerp(finish, at) * f.arc
-	pose.rotations[part] = lerpf(
-		WeaponGuard.hand_rotation(from_guard), WeaponGuard.hand_rotation(to_guard), at
-	)
+	pose.positions[part] += _start_offset.lerp(_end_offset, at) * f.arc
+	pose.rotations[part] = lerpf(_start_rotation, _end_rotation, at)
 	# 빈손은 반대로 뻗어 균형을 잡는다. 가만히 있으면 한쪽만 사는 인형이 된다.
 	var idle_hand := CharPart.Id.HAND_FAR
-	pose.positions[idle_hand] += Vector2(-start.lerp(finish, at).x * 0.35, 0.0) * f.arc
+	pose.positions[idle_hand] += (
+		Vector2(-_start_offset.lerp(_end_offset, at).x * 0.35, 0.0) * f.arc
+	)
 	pose.rotations[idle_hand] = -0.30 * at * f.arc
 
 
+## 몸 — **무거울수록 끌려간다.** 가벼운 무기는 손만 움직이고 무거운 것은 상체가 따라간다.
 func _apply_torso(pose: CharPose, at: float, f: AnimFeatures) -> void:
 	var part := CharPart.Id.TORSO
-	pose.positions[part] += Vector2(TORSO_SHIFT * at, -TORSO_DROP * at) * f.arc
-	pose.rotations[part] = -TORSO_TWIST * at * f.arc
+	var drag := weapon.drag()
+	var shift := TORSO_SHIFT + DRAG_SHIFT * drag
+	pose.positions[part] += Vector2(shift * at, -TORSO_DROP * at) * f.arc
+	pose.rotations[part] = -(TORSO_TWIST + DRAG_TWIST * drag) * at * f.arc
 	pose.scales[part] = CharClip.volume_scale(-0.030 * maxf(at, 0.0) * f.squash)
 
 

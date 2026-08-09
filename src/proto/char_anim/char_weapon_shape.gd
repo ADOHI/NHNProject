@@ -18,11 +18,21 @@ const GRIP := Color(0.290, 0.216, 0.204)
 
 const STROKE := 1.3
 
+## 그릴 무기. **길이도 두께도 여기서 나온다** — 칸 수만 다르면 그림이 따라 바뀐다.
+var weapon: CharWeapon
+
+
+func setup(p_weapon: CharWeapon) -> void:
+	weapon = p_weapon
+	queue_redraw()
+
 
 func _draw() -> void:
-	var tip := CharWeapon.tip_offset().x
-	var butt := CharWeapon.butt_offset().x
-	var half := CharWeapon.BLADE_HALF_WIDTH
+	if weapon == null:
+		return
+	var tip := weapon.tip_offset().x
+	var butt := weapon.butt_offset().x
+	var half := weapon.blade_half_width()
 
 	# 자루. 잡은 자리에서 뒤로 나간다.
 	_blob(_rect(butt, 0.0, half * 0.55), GRIP)
