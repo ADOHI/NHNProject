@@ -10,8 +10,11 @@ extends RefCounted
 ## **이 자가 있어야 「더 크게」가 판정된다.** 없으면 「크게 했다」와 「충분히 크다」를
 ## 못 가른다 (`docs/design/25-character-animation.md` §25.22.1).
 ##
-## 그림을 안 그린다 — **파츠 여섯의 회전·배율된 상자**를 격자에 찍어서 겹침을 센다.
-## 순수 계산이라 GPU 도 뷰포트도 안 쓰고, `sample()` 이 순수 함수라 그냥 된다.
+## 그림을 안 그린다 — **파츠 여섯의 회전·배율된 상자**와 **무기의 윤곽**을 격자에 찍어
+## 겹침을 센다. 순수 계산이라 GPU 도 뷰포트도 안 쓰고, `sample()` 이 순수 함수라 그냥 된다.
+##
+## **무기만 상자가 아니다.** 검은 실루엣의 절반을 차지하는 데다 끝이 뾰족하고 코등이가
+## 넓어서, 상자로 재면 자와 그림이 다른 것을 본다 (`CharWeapon.OUTLINE`).
 
 ## 격자 칸의 크기(px). 캐릭터가 141 이므로 2 면 70 칸 남짓이라 충분히 곱다.
 const CELL := 2.0
@@ -37,14 +40,13 @@ static func mask(pose: CharPose, rig: CharRig, weapon: CharWeapon = null) -> Pac
 	for part in CharPart.COUNT:
 		inverses.append(pose.core_transform(part).affine_inverse())
 	# 무기는 든 손의 자식이라 손의 트랜스폼에 자루 오프셋과 쉬는 각을 얹으면 나온다.
+	#
+	# **폭을 `CharWeapon.half_width_at()` 에게 묻는다.** 여기서 상자로 재면 그림은
+	# 끝이 뾰족한 검인데 자는 네모를 재게 되어, 「실루엣이 읽히나」가 거짓말한다 (§25.13.1).
 	var blade := Transform2D()
-	var blade_half := Vector2.ZERO
-	var blade_span := Vector2.ZERO
 	if weapon != null:
 		var mount := Transform2D(weapon.rest_angle(rig), weapon.grip_offset(rig))
 		blade = (pose.core_transform(CharWeapon.HOLDER) * mount).affine_inverse()
-		blade_half = Vector2(0.0, weapon.blade_half_width())
-		blade_span = Vector2(weapon.butt_offset().x, weapon.tip_offset().x)
 	for row in rows:
 		var y := MIN_Y + (float(row) + 0.5) * CELL
 		for column in columns:
@@ -58,11 +60,7 @@ static func mask(pose: CharPose, rig: CharRig, weapon: CharWeapon = null) -> Pac
 					break
 			if not filled and weapon != null:
 				var on_blade: Vector2 = blade * at
-				filled = (
-					on_blade.x >= blade_span.x
-					and on_blade.x <= blade_span.y
-					and absf(on_blade.y) <= blade_half.y
-				)
+				filled = absf(on_blade.y) <= weapon.half_width_at(on_blade.x)
 			if filled:
 				bits[row * columns + column] = 1
 	return bits

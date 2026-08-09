@@ -158,3 +158,30 @@ func test_clearing_drops_everything() -> void:
 	reaction.clear()
 	assert_true(reaction.is_quiet(), "지웠는데 남아 있다")
 	assert_almost_eq(reaction.load_at(0.05), 0.0, 0.0001, "지웠는데 값이 남아 있다")
+
+
+func test_being_hit_lights_the_flash_for_a_whole_frame() -> void:
+	# **때린 쪽과 맞은 쪽이 같은 장치를 나눠 쓴다.** 여기가 없으면 때리는 쪽만 번쩍이고
+	# 맞은 쪽은 아무 표시가 없다 — 「때리다 맞는」 판에서 무엇이 났는지 안 보인다.
+	var reaction := CharReaction.new()
+	reaction.strike(0.40, 1.0)
+	assert_eq(reaction.flash_left(0.39, 0.09), 0.0, "맞기 전에 번쩍이면 안 된다")
+	assert_eq(reaction.flash_left(0.40, 0.09), 1.0, "맞는 순간 켜져야 한다")
+	# **켜져 있는 동안 일정하다.** 줄어들면 표본이 늦게 걸릴 때 아무것도 안 보인다.
+	assert_eq(reaction.flash_left(0.48, 0.09), 1.0, "켜져 있는 동안 짙기가 변하면 안 된다")
+	assert_eq(reaction.flash_left(0.50, 0.09), 0.0, "지나면 꺼져야 한다")
+	assert_eq(reaction.flash_left(0.42, 0.0), 0.0, "장치를 껐으면 안 켜져야 한다")
+
+
+func test_the_flash_survives_the_frame_grid_at_every_phase() -> void:
+	# 25 fps 로 표본해도 **어느 위상에서 맞든** 한 프레임은 켜져 있어야 한다.
+	# 화면 임팩트 프레임이 정확히 여기서 빠져나갔다 (§25.28.3).
+	const FRAME := 1.0 / 25.0
+	for hold: float in [0.05, 0.09, 0.20]:
+		for phase in 16:
+			var reaction := CharReaction.new()
+			reaction.strike(0.5 + FRAME * float(phase) / 16.0, 1.0)
+			var seen := false
+			for i in 40:
+				seen = seen or reaction.flash_left(FRAME * float(i), hold) > 0.0
+			assert_true(seen, "번쩍임 %.3f 초가 위상 %d 에서 표본 사이로 빠져나간다" % [hold, phase])

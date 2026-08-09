@@ -129,3 +129,64 @@ func test_every_block_shape_keeps_the_blade_off_the_floor() -> void:
 			for t in _times(clip):
 				var tip := weapon.tip_position(clip.sample(t, f), clip.rig)
 				assert_gt(tip.y, 0.0, "%dx%d 의 t = %.3f 에서 검끝이 뚫는다" % [block[0], block[1], t])
+
+
+func test_the_blade_is_pointed_not_a_box() -> void:
+	# **검이 실루엣에서 그냥 네모였다.** 끝이 뾰족하고 코등이가 넓어야 「검」으로 읽힌다.
+	#
+	# 이 자가 막는 것은 모양이 아니라 **자리**다 — 윤곽이 그림 파일로 돌아가면
+	# 실루엣 자와 잔상이 다시 상자를 재게 되고, 그러면 조용히 틀린다 (§25.13.1).
+	var weapon := CharWeapon.new(2)
+	var tip := weapon.tip_offset().x
+	var butt := weapon.butt_offset().x
+	assert_almost_eq(weapon.half_width_at(tip), 0.0, 0.0001, "날 끝이 안 뾰족하면 막대다")
+	assert_gt(weapon.half_width_at(tip * 0.5), weapon.half_width_at(tip * 0.97), "끝으로 갈수록 좁아야 한다")
+	assert_eq(weapon.half_width_at(tip + 1.0), 0.0, "무기 밖인데 폭이 있다")
+	assert_eq(weapon.half_width_at(butt - 1.0), 0.0, "자루 뒤인데 폭이 있다")
+
+
+func test_the_guard_is_wider_than_the_blade_and_the_grip_is_thinner() -> void:
+	# 자루 · 코등이 · 날이 **실루엣만으로** 갈려야 한다. 색으로만 갈리면 검게 칠했을 때 막대다.
+	var weapon := CharWeapon.new(2)
+	var length := weapon.length()
+	var butt := weapon.butt_offset().x
+	var at_grip := weapon.half_width_at(butt + length * 0.10)
+	var at_guard := weapon.half_width_at(butt + length * 0.185)
+	var at_blade := weapon.half_width_at(butt + length * 0.50)
+	assert_gt(at_guard, at_blade, "코등이가 날보다 좁으면 코등이가 아니다")
+	assert_gt(at_blade, at_grip, "자루가 날보다 굵으면 거꾸로 잡은 것이다")
+
+
+func test_the_outline_is_one_table_that_drawing_and_the_ruler_share() -> void:
+	# **폴리곤이 표에서 나온다.** 그림이 따로 적으면 자와 갈린다.
+	var weapon := CharWeapon.new(3, 2)
+	var whole := weapon.outline_span(0.0, 1.0)
+	assert_gt(whole.size(), 6, "윤곽이 상자 넉 점이면 표를 안 쓴 것이다")
+	# 겹친 점은 삼각분할을 깨뜨린다 — 날 끝처럼 반너비가 0 인 자리에서 실제로 난다.
+	for i in whole.size():
+		var next: Vector2 = whole[(i + 1) % whole.size()]
+		assert_gt(whole[i].distance_to(next), 0.0001, "윤곽에 겹친 점이 있으면 폴리곤이 깨진다")
+	# 구간을 잘라도 그 구간의 폭이 나와야 한다.
+	var guard := weapon.outline_span(CharWeapon.GUARD_FROM, CharWeapon.GUARD_TO)
+	assert_gte(guard.size(), 4, "코등이 구간이 폴리곤이 안 된다")
+
+
+func test_the_silhouette_ruler_sees_the_point_not_the_box() -> void:
+	# **자가 그림을 따라왔는지**를 잰다. 상자로 재면 날 끝 옆의 빈자리가 채워진 것으로 세어진다.
+	var rig := CharRig.new()
+	var weapon := CharWeapon.new(2)
+	var pose := CharPose.from_rig(rig)
+	var boxed := CharSilhouette.mask(pose, rig, weapon)
+	var bare := CharSilhouette.mask(pose, rig)
+	var with_blade := 0
+	var without := 0
+	for i in boxed.size():
+		with_blade += boxed[i]
+		without += bare[i]
+	assert_gt(with_blade, without, "무기를 넣었는데 실루엣이 안 커졌다")
+	# 상자였다면 날 끝까지 두께가 그대로다 — 뾰족해졌으니 상자보다 반드시 작아야 한다.
+	var span := weapon.tip_offset().x - weapon.butt_offset().x
+	var as_box := (
+		span * weapon.blade_half_width() * 2.0 / (CharSilhouette.CELL * CharSilhouette.CELL)
+	)
+	assert_lt(float(with_blade - without), as_box, "실루엣이 아직 상자만 하다")

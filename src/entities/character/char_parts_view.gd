@@ -98,10 +98,19 @@ func held(at: float) -> float:
 
 
 ## 과거 자세와 호를 넣는다. **뷰는 이것을 그리기만 한다** — 어디서 왔는지 모른다.
+##
+## 번쩍임은 **파츠와 무기가 각자 자기 실루엣을 덮어** 만든다. 여기서 상자로 덮으면
+## 그림과 어긋난 자리가 하얘진다 — 잔상은 상자여도 되지만 번쩍임은 안 된다.
+## 잔상은 「지나간 것」이라 뭉뚱그려도 읽히고, 번쩍임은 **지금 그 자리**를 덮기 때문이다.
 func set_motion(echoes: Array[CharPose], arc: PackedVector2Array, flash: float) -> void:
 	_echoes = echoes
 	_arc = arc
-	_flash = flash
+	if not is_equal_approx(flash, _flash):
+		_flash = flash
+		for shape in _shapes:
+			shape.flash = flash
+		if _weapon != null:
+			_weapon.flash = flash
 	queue_redraw()
 
 
@@ -124,7 +133,9 @@ func show_at(
 		reaction.apply(pose, at if wall < 0.0 else wall, rig)
 	apply_pose(pose)
 	_stretch_blade(clip, at, f)
-	set_motion(_past_poses(clip, at, f), _blade_sweep(clip, at, f), _flash_left(at, impact))
+	set_motion(
+		_past_poses(clip, at, f), _blade_sweep(clip, at, f), _flash_left(at, impact, reaction, wall)
+	)
 
 
 ## **스트레치와 스미어.** 빠를수록 검이 진행 방향으로 늘어난다.
@@ -234,22 +245,19 @@ func _draw_ghost(pose: CharPose, part: CharPart.Id, tint: Color) -> void:
 
 
 ## 무기 잔상. 몸을 안 남길 때도 **검은 남겨야** 궤적이 읽힌다.
+##
+## 윤곽을 `CharWeapon.OUTLINE` 에서 받는다 — 여기서 상자를 그리면 **잔상만 뭉툭한 막대**가
+## 되어 지나간 것이 검으로 안 읽힌다.
 func _draw_ghost_blade(pose: CharPose, tint: Color) -> void:
 	var grip := weapon.grip_offset(rig)
 	var mount := (
 		pose.canvas_transform(CharWeapon.HOLDER)
 		* Transform2D(-weapon.rest_angle(rig), Vector2(grip.x, -grip.y))
 	)
-	var half := weapon.blade_half_width()
-	var box := PackedVector2Array(
-		[
-			mount * Vector2(weapon.butt_offset().x, -half),
-			mount * Vector2(weapon.tip_offset().x, -half),
-			mount * Vector2(weapon.tip_offset().x, half),
-			mount * Vector2(weapon.butt_offset().x, half),
-		]
-	)
-	draw_colored_polygon(box, tint)
+	var ghost := PackedVector2Array()
+	for point in weapon.outline_span(0.0, 1.0):
+		ghost.append(mount * point)
+	draw_colored_polygon(ghost, tint)
 
 
 ## 과거 자세들. **기록이 아니라 `sample(t - Δ)` 다** — 클립이 시각의 순수 함수라
@@ -313,10 +321,23 @@ func _blade_sweep(clip: CharClip, at: float, f: AnimFeatures) -> PackedVector2Ar
 	return sweep
 
 
-## 닿고 나서 얼마나 지났나 — 번쩍임이 남아 있으면 양수.
-func _flash_left(at: float, impact: float) -> float:
-	if flourish.flash <= 0.0:
+## 지금 번쩍이고 있나 — 켜져 있으면 `1`, 아니면 `0`.
+##
+## **때린 쪽과 맞은 쪽이 같은 장치를 나눠 쓴다.** 때린 쪽은 **검이 닿는 시각**으로 켜고,
+## 맞은 쪽은 **충격이 들어온 시각**으로 켠다. 때리다 맞으면 둘이 겹칠 뿐 싸우지 않는다.
+##
+## **밝기가 시간에 따라 줄지 않는다.** 켜져 있는 동안 일정하고 그다음 꺼진다 —
+## 줄게 두면 하나뿐인 표본이 꺼지기 직전에 걸려 **눈금이 있는데 아무 일도 안 난다**
+## (§25.28.3 에서 화면 임팩트 프레임이 정확히 그랬다).
+##
+## **충격은 실제 시각(`wall`)으로 잰다.** 히트스톱 동안 동작 시각은 멈춰 있는데
+## 번쩍임까지 멈추면 맞은 순간이 얼어붙어 번쩍임이 안 끝난다.
+func _flash_left(at: float, impact: float, reaction: CharReaction, wall: float) -> float:
+	var hold := flourish.flash
+	if hold <= 0.0:
 		return 0.0
-	if impact < 0.0 or at < impact:
-		return 0.0
-	return maxf(0.0, 1.0 - (at - impact) / flourish.flash)
+	if impact >= 0.0 and at >= impact and at - impact < hold:
+		return 1.0
+	if reaction != null and reaction.flash_left(at if wall < 0.0 else wall, hold) > 0.0:
+		return 1.0
+	return 0.0

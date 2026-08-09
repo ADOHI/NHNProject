@@ -90,6 +90,15 @@ const MAX_LOAD := 1.6
 ## 이 값 아래로 잦아들면 버린다. 안 버리면 목록이 무한히 는다.
 const SPENT := 0.004
 
+## **시각을 견주는 데 봐주는 만큼.**
+##
+## 충격을 `Vector3` 로 들고 있어서 **시각이 `float32` 로 깎인다** — `0.40` 을 넣으면
+## `0.400000006` 이 되어 돌아온다. 맞는 순간을 **정확히** 표본하면 `age` 가 음수가 되어
+## 「아직 안 맞았다」가 되는데, **그 프레임이 바로 번쩍이고 밀려야 하는 프레임**이다.
+##
+## 캡처는 `t` 를 직접 넣으므로(§25.3) 격자가 딱 맞아떨어질 때 실제로 이 자리를 밟는다.
+const CLOCK_EPS := 1e-5
+
 ## 쌓인 충격들. 각각 `(시각, 세기, 방향)`.
 var _impacts: Array[Vector3] = []
 
@@ -102,8 +111,9 @@ func strike(at: float, power: float, direction := -1.0) -> void:
 ## **밀림의 세기.** `1` 에서 시작해 부드럽게 `0` 으로 돌아온다. **음수로 안 넘어간다.**
 func _push(t: float, impact: Vector3, back: float) -> float:
 	var age := t - impact.x
-	if age < 0.0:
+	if age < -CLOCK_EPS:
 		return 0.0
+	age = maxf(age, 0.0)
 	var fall := exp(-back * age)
 	var tail := 0.0
 	if age > WOBBLE_AFTER:
@@ -128,6 +138,23 @@ func stalled(t: float) -> float:
 	for impact in _impacts:
 		held += clampf(t - impact.x, 0.0, STOP_SECONDS * minf(impact.y, MAX_LOAD))
 	return held
+
+
+## **맞아서 번쩍이고 있나.** 켜져 있으면 `1`, 아니면 `0`.
+##
+## 때린 쪽은 검이 닿는 시각으로 켜고 **맞은 쪽은 이것으로 켠다** — 같은 장치를 둘이
+## 나눠 쓴다. 여기가 없으면 때리는 쪽만 번쩍이고 **맞은 쪽은 아무 표시가 없다.**
+##
+## `hold` 는 켜져 있는 시간(초)이고, **한 프레임보다는 길어야 한다** — 짧으면
+## 표본 사이로 빠져나가 아예 안 보인다 (§25.28.3).
+func flash_left(t: float, hold: float) -> float:
+	if hold <= 0.0:
+		return 0.0
+	for impact in _impacts:
+		var age := t - impact.x
+		if age >= -CLOCK_EPS and age < hold:
+			return 1.0
+	return 0.0
 
 
 ## 지금 얹혀 있는 충격의 총량. **상태 층이 이걸 보고 문턱을 판단한다.**

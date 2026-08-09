@@ -46,7 +46,13 @@ var stretch := 0.0
 ## 가장 빠른 한두 프레임을 **줄무늬로** 뭉갠다. 2D 액션의 고전 기법이다.
 var smear := 0.0
 
-## 닿는 순간 몇 초 동안 하얗게 번쩍인다. `0` 이면 끈다.
+## 닿는 순간 몇 초 동안 **실루엣이 하얗게 번쩍인다.** `0` 이면 끈다.
+##
+## **켜져 있는 시간이지 밝기가 아니다.** 그동안 짙기는 일정하고 그다음 꺼진다 —
+## 줄어들게 두면 하나뿐인 표본이 꺼지기 직전에 걸려 아무것도 안 보인다.
+##
+## **한 프레임(25 fps 에서 0.04 초)보다 길어야 한다.** 짧으면 표본 사이로 빠져나가
+## 눈금에 있는데 화면에서 아무 일도 안 난다 (§25.28.3).
 var flash := 0.0
 
 ## **초당 몇 장으로 끊어 보여 주나.** `0` 이면 안 끊는다(연속).
@@ -113,8 +119,12 @@ static func preset(name: String) -> CharFlourish:
 			it.smear = 1.2
 		"smear_over":
 			it.smear = 2.6
-		"flash":
-			it.flash = 0.06
+		"flash_soft":
+			it.flash = 0.05
+		"flash_hard":
+			it.flash = 0.09
+		"flash_over":
+			it.flash = 0.20
 		"all":
 			it.trail_count = 5
 			it.trail_alpha = 0.28
@@ -158,7 +168,9 @@ static func preset_names() -> PackedStringArray:
 			"smear_soft",
 			"smear_hard",
 			"smear_over",
-			"flash",
+			"flash_soft",
+			"flash_hard",
+			"flash_over",
 			"all",
 			"all_over",
 		]

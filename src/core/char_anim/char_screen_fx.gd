@@ -39,13 +39,22 @@ const LINE_INK: Array[float] = [0.0, 0.30, 0.55, 0.85]
 const LINE_CLEAR: Array[float] = [0.0, 120.0, 96.0, 72.0]
 
 ## 임팩트 프레임이 몇 초 가는가. **1~2 프레임이다** — 길면 정지로 읽힌다.
-const FLASH_HOLD: Array[float] = [0.0, 0.033, 0.066, 0.15]
+##
+## **가장 낮은 눈금도 한 프레임보다는 길다.** 처음에 `0.033` 을 넣었는데 25 fps 는
+## 한 프레임이 `0.040` 초라 **표본 사이로 빠져나갔다** — 「약」이 눈금에 있는데
+## 화면에서 아무 일도 안 일어났다. §25.19.2 에서 히트스톱이 반 프레임도 안 되어
+## 아무 일도 안 했던 것과 **같은 실패**다.
+const FLASH_HOLD: Array[float] = [0.0, 0.048, 0.088, 0.18]
 
 ## 임팩트 프레임의 짙기. `1` 이면 **화면이 완전히 하얗다.**
+##
+## **켜져 있는 동안 일정하다.** 처음에 시간에 따라 줄게 했더니, 하나뿐인 표본이 꺼지기
+## 직전에 걸려 짙기가 `0.03` 으로 잡혔다 — **번쩍임은 「몇 프레임 켜져 있는 것」이지
+## 「밝기가 줄어드는 것」이 아니다.** 격투게임의 임팩트 프레임도 꽉 찬 한두 장이다.
 const FLASH_INK: Array[float] = [0.0, 0.55, 0.9, 1.0]
 
-## 흑백 반전이 몇 초 가는가. 백색 다음에 온다.
-const INVERT_HOLD: Array[float] = [0.0, 0.0, 0.033, 0.066]
+## 흑백 반전이 몇 초 가는가. 백색 다음에 온다. **여기도 한 프레임보다 길어야 한다.**
+const INVERT_HOLD: Array[float] = [0.0, 0.0, 0.045, 0.085]
 
 ## 닿을 때 얼마나 밀고 들어가는가.
 const ZOOM_IN: Array[float] = [0.0, 0.06, 0.16, 0.34]
@@ -143,7 +152,7 @@ func flash_alpha(at: float, impact_at: float) -> float:
 	var hold := FLASH_HOLD[impact]
 	if age >= hold or hold <= 0.0:
 		return 0.0
-	return FLASH_INK[impact] * (1.0 - age / hold)
+	return FLASH_INK[impact]
 
 
 ## **흑백 반전이 걸렸나.** 백색이 끝난 바로 다음 한두 프레임이다.

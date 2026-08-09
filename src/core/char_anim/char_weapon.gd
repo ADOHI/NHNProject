@@ -58,6 +58,32 @@ const GRIP_ALONG := 0.18
 ## 날 두께의 기준. 무거울수록 두꺼워진다 — **길이보다 두께가 무게를 말한다.**
 const BASE_HALF_WIDTH := 3.4
 
+## **무기의 윤곽.** 자루 끝(`u = 0`)에서 날 끝(`u = 1`)까지, 그 자리의 **반너비 배수**다.
+##
+## **검이 실루엣에서 그냥 네모였다.** 그림 쪽은 끝을 뾰족하게 그리고 코등이를 얹었는데
+## 실루엣 자와 잔상은 **상자**로 쟀다 — 한 값이 두 곳에 있고 그중 하나만 진짜인 것,
+## 이 저장소에서 열 번 넘게 밟은 모양이다 (§25.13.1).
+##
+## 그래서 원피스(`CharRig.TORSO_PROFILE`)·부츠(`CharRig.FOOT_PROFILE`)와 **같은 자리**에 둔다.
+## **접지 · 겹침 · 실루엣에 쓰이는 값은 그림이 아니라 코어의 것이다.**
+##
+## 모양이 셋을 말한다 — **가는 자루**(손이 있을 자리) · **넓은 코등이**(자루와 날의 경계) ·
+## **0 으로 끝나는 날 끝**(뾰족함). 셋 다 실루엣에서만 「검」으로 읽히게 하는 것들이다.
+const OUTLINE: Array[Vector2] = [
+	Vector2(0.000, 0.66),
+	Vector2(0.045, 0.34),
+	Vector2(0.150, 0.34),
+	Vector2(0.168, 1.45),
+	Vector2(0.205, 1.45),
+	Vector2(0.222, 1.00),
+	Vector2(0.820, 0.94),
+	Vector2(1.000, 0.00),
+]
+
+## 코등이가 차지하는 구간(`u`). 그림이 자루 · 코등이 · 날을 이 경계로 칠한다.
+const GUARD_FROM := 0.150
+const GUARD_TO := 0.222
+
 ## 쉬는 자세에서 무기가 손에 대해 기울어 있는 각도의 **희망값**.
 ##
 ## 실제 각도는 `rest_angle()` 이 정한다 — 긴 무기는 이 각도로 내리면 바닥에 박힌다.
@@ -195,6 +221,59 @@ func tip_offset() -> Vector2:
 
 func butt_offset() -> Vector2:
 	return Vector2(-length() * GRIP_ALONG, 0.0)
+
+
+## 그 자리(무기 지역 `x`)의 **반너비**(px). 표 밖이면 `0` — 그것이 곧 「무기가 없다」이다.
+##
+## 원피스의 `torso_half_width_at(y)` 와 같은 꼴이다. **폭은 스칼라가 아니라 위치의 함수**라
+## 하나로 뭉뚱그리면 실루엣 판정이 조용히 틀린다 (§25.2.2).
+func half_width_at(x: float) -> float:
+	var span_px := length()
+	if span_px <= 0.0:
+		return 0.0
+	return blade_half_width() * outline_at((x - butt_offset().x) / span_px)
+
+
+## 윤곽표를 선형 보간한다. `u` 는 자루 끝 `0`, 날 끝 `1`.
+func outline_at(u: float) -> float:
+	if u < OUTLINE[0].x or u > OUTLINE[OUTLINE.size() - 1].x:
+		return 0.0
+	for i in range(1, OUTLINE.size()):
+		var to_point := OUTLINE[i]
+		if u > to_point.x:
+			continue
+		var from_point := OUTLINE[i - 1]
+		var span_u := to_point.x - from_point.x
+		if span_u <= 0.0:
+			return maxf(from_point.y, to_point.y)
+		return lerpf(from_point.y, to_point.y, (u - from_point.x) / span_u)
+	return 0.0
+
+
+## 윤곽의 한 구간을 폴리곤으로 편다 (무기 지역 좌표).
+##
+## **그림 · 잔상 · 실루엣이 전부 이 하나에서 나온다.** 따로 적으면 갈린다.
+func outline_span(from_u: float, to_u: float) -> PackedVector2Array:
+	var low := clampf(minf(from_u, to_u), 0.0, 1.0)
+	var high := clampf(maxf(from_u, to_u), 0.0, 1.0)
+	var cuts: Array[float] = [low]
+	for point in OUTLINE:
+		if point.x > low and point.x < high:
+			cuts.append(point.x)
+	cuts.append(high)
+	var butt := butt_offset().x
+	var span_px := length()
+	var points := PackedVector2Array()
+	for u in cuts:
+		points.append(Vector2(butt + u * span_px, -blade_half_width() * outline_at(u)))
+	# **중심선 위의 점은 되돌아올 때 건너뛴다.** 날 끝은 반너비가 0 이라 위아래가 같은
+	# 점이 되고, 겹친 점은 삼각분할을 깨뜨린다 (원피스 윤곽에서 한 번 밟은 것과 같다).
+	for i in range(cuts.size() - 1, -1, -1):
+		var half := blade_half_width() * outline_at(cuts[i])
+		if is_zero_approx(half):
+			continue
+		points.append(Vector2(butt + cuts[i] * span_px, half))
+	return points
 
 
 ## 쉬는 자세에서 무기가 실제로 기우는 각도. **길이가 자세를 정한다.**

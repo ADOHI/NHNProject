@@ -46,6 +46,12 @@ const BOOT_LIGHT := Color(0.337, 0.325, 0.357)
 const FAR_TINT := Color(0.353, 0.396, 0.439)
 const FAR_TINT_AMOUNT := 0.32
 
+## **닿는 순간의 번쩍임 색.** 실루엣을 통째로 덮는다 — 격투게임의 히트 스파크와 같은 자리다.
+const FLASH := Color(1.0, 0.988, 0.941)
+
+## 번쩍임이 가장 셀 때의 불투명도. `1` 이면 자세가 통째로 사라져 무슨 일이 났는지 안 보인다.
+const FLASH_ALPHA := 0.85
+
 ## 잉크 굵기. 캐릭터 키 146 에 대해 1.3 — 시트의 선 굵기와 같은 비율이다.
 const STROKE := 1.3
 
@@ -68,6 +74,20 @@ const ARC_STEPS := 32
 var part := CharPart.Id.HEAD
 var rig: CharRig
 
+## **닿는 순간의 번쩍임** (`0` … `1`).
+##
+## **켜져 있는 동안 일정하다.** 시간에 따라 줄게 두면 하나뿐인 표본이 꺼지기 직전에
+## 걸려 아무것도 안 보인다 (§25.28.3).
+##
+## **값이 안 바뀌면 다시 안 그린다.** 파츠는 트랜스폼만 바뀌므로 평소에는 한 번 그리고
+## 마는데, 매 프레임 `queue_redraw()` 를 부르면 그 절약이 사라진다 (§25.8).
+var flash := 0.0:
+	set(value):
+		if is_equal_approx(value, flash):
+			return
+		flash = value
+		queue_redraw()
+
 
 func setup(p_part: CharPart.Id, p_rig: CharRig) -> void:
 	part = p_part
@@ -75,18 +95,46 @@ func setup(p_part: CharPart.Id, p_rig: CharRig) -> void:
 	queue_redraw()
 
 
+## 파츠의 **바깥 실루엣.** 그리기와 번쩍임이 **같은 폴리곤**을 쓴다.
+##
+## 두 곳에 따로 적으면 번쩍임이 그림과 어긋난 자리에서 난다 — 이 저장소에서
+## 열 번 넘게 밟은 모양이다 (§25.13.1).
+func silhouette() -> Array[PackedVector2Array]:
+	var half := _half()
+	match part:
+		CharPart.Id.HEAD:
+			return [_ellipse(_center(), half.x, half.x)]
+		CharPart.Id.TORSO:
+			return [_mirrored_profile(CharRig.TORSO_PROFILE, half)]
+		CharPart.Id.HAND_FAR, CharPart.Id.HAND_NEAR:
+			var r := half.x
+			return [
+				_face(_ellipse(Vector2(-r * 0.52, -r * 0.46), r * 0.36, r * 0.42)),
+				_face(_ellipse(Vector2(0.0, r * 0.06), r * 0.82, r)),
+			]
+		_:
+			return [_loop_profile(CharRig.FOOT_PROFILE, half, 1.0)]
+
+
 func _draw() -> void:
 	if rig == null:
 		return
+	var outline := silhouette()
 	match part:
 		CharPart.Id.HEAD:
-			_draw_head()
+			_draw_head(outline[0])
 		CharPart.Id.TORSO:
-			_draw_torso()
+			_draw_torso(outline[0])
 		CharPart.Id.HAND_FAR, CharPart.Id.HAND_NEAR:
-			_draw_hand()
+			_draw_hand(outline)
 		_:
-			_draw_foot()
+			_draw_foot(outline[0])
+	if flash <= 0.001:
+		return
+	# **실루엣이 통째로 하얘진다.** 먼 파츠는 잉크선과 같은 비율로 흐려야 한다 —
+	# 번쩍임만 새하야면 뒷손이 앞으로 튀어나온다.
+	for polygon in outline:
+		_fill(polygon, Color(_ink(FLASH), flash * FLASH_ALPHA))
 
 
 ## 지역 공간에서 그려지는 덩어리의 중심. 코어는 `+y` 가 위이므로 `y` 를 뒤집는다.
@@ -103,11 +151,10 @@ func _half() -> Vector2:
 ##
 ## 얼굴 윤곽에 잉크를 두르지 않는다. 머리카락과 살의 **색 경계가 곧 헤어라인**이고,
 ## 거기에 선을 한 번 더 그으면 얼굴이 머리에 붙인 가면으로 보인다.
-func _draw_head() -> void:
+func _draw_head(outline: PackedVector2Array) -> void:
 	var r := _half().x
-	var top := _center()
 
-	_blob(_ellipse(top, r, r), _ink(HAIR))
+	_blob(outline, _ink(HAIR))
 	_fill(_ellipse(Vector2(0.0, -r * 0.77), r * 0.77, r * 0.77), _ink(SKIN))
 	# 앞머리 — 이마를 덮어 남은 아래쪽만 얼굴로 만든다. 이것이 단발머리로 읽히게 하는 부분이다.
 	_fill(_ellipse(Vector2(0.0, -r * 1.33), r * 0.83, r * 0.50), _ink(HAIR))
@@ -130,9 +177,8 @@ func _draw_head() -> void:
 
 
 ## 몸 — 둥근 어깨에서 잘록한 허리로, 다시 벌어지는 밑단으로.
-func _draw_torso() -> void:
+func _draw_torso(points: PackedVector2Array) -> void:
 	var half := _half()
-	var points := _mirrored_profile(CharRig.TORSO_PROFILE, half)
 	_blob(points, _ink(DRESS_SHADE))
 	# 손과 같은 두 판 방식. 직선으로 자르면 음영이 아니라 접힌 자국으로 보였다 —
 	# 밝은 판을 **실루엣 자체를 줄여** 얹으면 그늘이 치맛단의 곡선을 따라 흐른다.
@@ -154,23 +200,18 @@ func _draw_torso() -> void:
 ## **발은 안 뒤집는다.** 발은 좌우 거울이 아니라 **둘 다 앞(`+x`)을 본다** — 옆에서 본
 ## 두 발은 발끝이 같은 방향이다. 뒤집으면 뒷발의 발끝이 뒤를 향해 정면 자세가 된다
 ## (§25.0.1 이 정한 것이고, 지금도 유효하다).
-func _draw_hand() -> void:
-	if CharPart.is_far(part):
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2(-1.0, 1.0))
+func _draw_hand(outline: Array[PackedVector2Array]) -> void:
 	var r := _half().x
 	# 두 손이 **같은 쪽**을 본다. 옆에서 보면 앞손과 뒷손이 같은 각도로 보이기 때문이다.
-	_blob(_ellipse(Vector2(-r * 0.52, -r * 0.46), r * 0.36, r * 0.42), _ink(MITTEN_SHADE))
-	_blob(_ellipse(Vector2(0.0, r * 0.06), r * 0.82, r), _ink(MITTEN_SHADE))
-	_fill(_ellipse(Vector2(-r * 0.12, -r * 0.18), r * 0.62, r * 0.72), _ink(MITTEN))
-	_blob(_ellipse(Vector2(0.0, -r * 0.86), r * 0.50, r * 0.20), _ink(BOOT))
-	if CharPart.is_far(part):
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_blob(outline[0], _ink(MITTEN_SHADE))
+	_blob(outline[1], _ink(MITTEN_SHADE))
+	_fill(_face(_ellipse(Vector2(-r * 0.12, -r * 0.18), r * 0.62, r * 0.72)), _ink(MITTEN))
+	_blob(_face(_ellipse(Vector2(0.0, -r * 0.86), r * 0.50, r * 0.20)), _ink(BOOT))
 
 
-func _draw_foot() -> void:
+func _draw_foot(points: PackedVector2Array) -> void:
 	var half := _half()
 	# 발끝이 **둘 다 앞(`+x`)** 을 본다. 거울로 뒤집으면 그 순간 정면 자세가 된다.
-	var points := _loop_profile(CharRig.FOOT_PROFILE, half, 1.0)
 	_blob(points, _ink(BOOT))
 	# 목 안쪽. 좁은 목이 있어야 이것이 통 뚜껑이 아니라 부츠 입구로 읽힌다.
 	_fill(_ellipse(Vector2(0.0, -half.y * 1.86), half.x * 0.40, half.y * 0.11), _ink(BOOT_LIGHT))
@@ -199,6 +240,22 @@ func _loop_profile(profile: Array[Vector2], half: Vector2, outward: float) -> Pa
 	for p in profile:
 		points.append(Vector2(p.x * half.x * outward, -p.y * half.y * 2.0))
 	return points
+
+
+## 뒷손은 좌우가 뒤집힌다 — 왼손과 오른손은 서로 거울이라 같은 그림을 두 손에 쓰면
+## **오른손이 둘**이 된다.
+##
+## **`draw_set_transform` 이 아니라 점을 뒤집는다.** 번쩍임은 그리기 밖에서 같은
+## 폴리곤을 받아 쓰므로, 뒤집기가 그리기 안에만 있으면 **번쩍임만 반대쪽에서 난다.**
+##
+## **발은 안 뒤집는다.** 옆에서 본 두 발은 발끝이 같은 방향이다 (§25.0.1).
+func _face(points: PackedVector2Array) -> PackedVector2Array:
+	if part != CharPart.Id.HAND_FAR:
+		return points
+	var flipped := PackedVector2Array()
+	for p in points:
+		flipped.append(Vector2(-p.x, p.y))
+	return flipped
 
 
 func _ellipse(center: Vector2, rx: float, ry: float, tilt := 0.0) -> PackedVector2Array:
