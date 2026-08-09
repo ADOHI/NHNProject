@@ -18,6 +18,9 @@ var _grid: BackpackGrid
 ## 무너짐 수치들. **확정이 아니다** (§28.8). 여기서 갈아 끼우면 화면이 따라온다.
 var _break_tuning := BreakTuning.new()
 
+## 지금 굴러가는 대련 판. `null` 이면 아직 안 쐈다.
+var _bout: SparringBout = null
+
 @onready var _board: BackpackBoard = %Board
 @onready var _help_label: Label = %HelpLabel
 @onready var _chain_label: Label = %ChainLabel
@@ -28,12 +31,37 @@ func _ready() -> void:
 	var leftover := SampleBackpack.fill(_grid, SampleBackpack.create_items())
 	_board.bind(_grid, leftover)
 	_board.layout_changed.connect(_refresh)
+	_board.fire_requested.connect(_fire)
 	_help_label.text = _help_text()
 	_refresh()
 
 
+## **여기서 시간이 흐른다** (§28.4 실시간).
+##
+## 그 전까지 체인은 계산만 됐다. 이 한 줄이 「10타가 왜 좋은가」를
+## 수치가 아니라 눈으로 보게 만든다.
+func _process(delta: float) -> void:
+	if _bout == null or not _bout.is_running():
+		return
+	_bout.tick(delta)
+	_board.queue_redraw()
+
+
+## 지금 짜 놓은 체인을 쏜다. 이미 돌고 있으면 처음부터 다시 쏜다.
+func _fire() -> void:
+	var chains := ChainResolver.resolve_all(_grid)
+	if chains.is_empty() or chains[0].length() == 0:
+		return
+	_bout = SparringBout.from_chain(chains[0], _break_tuning)
+	_board.set_bout(_bout)
+	_bout.start()
+
+
 ## 배치가 바뀌었다. 체인을 다시 풀어 화면과 글자에 함께 반영한다.
 func _refresh() -> void:
+	# 배치가 바뀌면 돌던 판은 옛 체인의 것이라 버린다.
+	_bout = null
+	_board.set_bout(null)
 	var chains := ChainResolver.resolve_all(_grid)
 	var outcomes: Array[ChainBreakOutcome] = []
 	for chain in chains:
@@ -47,7 +75,7 @@ func _help_text() -> String:
 	return (
 		"백팩 배치가 콤보 루트를 정한다. 아이템을 옮기면 체인이 그 자리에서 다시 풀린다.\n"
 		+ "왼쪽 끌기: 옮기기    오른쪽 클릭: 대기줄로 빼기    R: 회전    "
-		+ "C: 격자 비우기    Space: 표본 배치로 되돌리기"
+		+ "C: 격자 비우기    Space: 표본 배치로 되돌리기    F: 체인 발사"
 	)
 
 

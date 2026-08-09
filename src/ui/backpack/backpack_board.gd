@@ -21,6 +21,9 @@ extends Control
 ## 배치가 바뀌었다. 화면이 체인을 다시 풀어야 한다.
 signal layout_changed
 
+## 지금 짜 놓은 체인을 실제로 쏴 보라는 요청 (§28.4).
+signal fire_requested
+
 const GRID_ORIGIN := Vector2(40.0, 110.0)
 const CELL := 72.0
 
@@ -46,6 +49,10 @@ const _DONE_LINE := Color(0.52, 0.86, 0.56)
 
 ## 말표가 올라가면 안 되는 위쪽 여백. 머리글 Label 이 이 위에 그려진다.
 const _TAG_TOP_MARGIN := 96.0
+
+## 대련장 자리. 글자판 아래의 빈 곳이다.
+const ARENA_CENTER_X := 1000.0
+const ARENA_GROUND := 640.0
 const _LOOT_FILL := Color(0.33, 0.33, 0.31)
 const _TEXT := Color(0.93, 0.95, 0.98)
 const _DIM_TEXT := Color(0.62, 0.66, 0.72)
@@ -71,6 +78,7 @@ var _tray: Array[BackpackItem] = []
 var _chains: Array[ChainResult] = []
 var _outcomes: Array[ChainBreakOutcome] = []
 var _break_tuning: BreakTuning = null
+var _bout: SparringBout = null
 
 var _drag_item: BackpackItem = null
 var _drag_grab: Vector2i = Vector2i.ZERO
@@ -108,6 +116,12 @@ func set_chains(chains: Array[ChainResult]) -> void:
 func set_break(outcomes: Array[ChainBreakOutcome], tuning: BreakTuning) -> void:
 	_outcomes = outcomes
 	_break_tuning = tuning
+	queue_redraw()
+
+
+## 지금 굴러가고 있는 대련 판. `null` 이면 아직 안 쐈다.
+func set_bout(bout: SparringBout) -> void:
+	_bout = bout
 	queue_redraw()
 
 
@@ -154,6 +168,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_clear_grid()
 		KEY_SPACE:
 			_restore_sample()
+		KEY_F:
+			fire_requested.emit()
 		_:
 			return
 	get_viewport().set_input_as_handled()
@@ -333,6 +349,7 @@ func _draw() -> void:
 	for chain in _chains:
 		_draw_chain(chain)
 	_draw_break_gauge()
+	_draw_arena()
 	_draw_tray()
 	_draw_dragged()
 
@@ -625,12 +642,20 @@ func _draw_break_gauge() -> void:
 	var width := float(_grid.width) * CELL
 	var font := get_theme_default_font()
 
+	# 판이 돌고 있으면 **지금 눈금**을, 아니면 계산해 둔 최고치를 보여 준다.
+	# 실시간에 최고치만 그리면 눈금이 빠지는 것이 안 보인다.
 	var peak := 0.0
 	var highest := BreakState.Kind.NONE
-	for outcome in _outcomes:
-		peak = maxf(peak, outcome.peak)
-		if BreakState.is_worse(outcome.highest, highest):
-			highest = outcome.highest
+	var live := -1.0
+	if _bout != null and _bout.phase() != SparringBout.Phase.READY:
+		peak = _bout.peak()
+		highest = _bout.peak_state()
+		live = _bout.gauge_value()
+	else:
+		for outcome in _outcomes:
+			peak = maxf(peak, outcome.peak)
+			if BreakState.is_worse(outcome.highest, highest):
+				highest = outcome.highest
 
 	draw_string(
 		font,
@@ -646,9 +671,19 @@ func _draw_break_gauge() -> void:
 	draw_rect(bar, _CELL_FILL)
 	draw_rect(bar, _CELL_LINE, false, 1.0)
 
-	var ratio := clampf(peak / maxf(1.0, _break_tuning.max_value), 0.0, 1.0)
+	var shown := live if live >= 0.0 else peak
+	var ratio := clampf(shown / maxf(1.0, _break_tuning.max_value), 0.0, 1.0)
 	var filled := Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y))
-	draw_rect(filled, _state_color(highest))
+	draw_rect(filled, _state_color(_break_tuning.state_for(shown)))
+	if live >= 0.0 and peak > shown:
+		# 최고 기록 자국. 눈금이 빠져도 어디까지 갔었는지 남는다.
+		var mark := (
+			bar.position.x
+			+ bar.size.x * clampf(peak / maxf(1.0, _break_tuning.max_value), 0.0, 1.0)
+		)
+		draw_line(
+			Vector2(mark, bar.position.y), Vector2(mark, bar.end.y), _state_color(highest), 3.0
+		)
 
 	var thresholds: Array[float] = [
 		_break_tuning.stagger_at, _break_tuning.launch_at, _break_tuning.knockdown_at
@@ -660,7 +695,7 @@ func _draw_break_gauge() -> void:
 	draw_string(
 		font,
 		Vector2(bar.position.x + 6.0, bar.end.y + 16.0),
-		"%.0f / %.0f    %s" % [peak, _break_tuning.max_value, BreakState.label(highest)],
+		_gauge_caption(shown, peak, highest),
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1.0,
 		14,
@@ -677,3 +712,87 @@ func _state_color(kind: BreakState.Kind) -> Color:
 	if kind == BreakState.Kind.STAGGER:
 		return Color(0.60, 0.78, 0.45)
 	return Color(0.36, 0.40, 0.48)
+
+
+## **지금 값 옆에는 지금 단계를 적는다.**
+##
+## 처음에 최고 단계를 적었더니 눈금이 32(경직)로 빠진 뒤에도 "띄우기" 라고 적혀 있었다.
+## 캡처에서 걸렸다 — 막대 색은 초록인데 글자는 띄우기였다.
+func _gauge_caption(shown: float, peak_value: float, highest: BreakState.Kind) -> String:
+	var now := (
+		"%.0f / %.0f    %s"
+		% [shown, _break_tuning.max_value, BreakState.label(_break_tuning.state_for(shown))]
+	)
+	if _bout == null or _bout.phase() == SparringBout.Phase.READY:
+		return now
+	return (
+		"%s    (%d / %d 타, 최고 %.0f %s)"
+		% [now, _bout.landed(), _bout.total_hits(), peak_value, BreakState.label(highest)]
+	)
+
+
+## 대련장. **적은 네모 하나다** (§28.4 최소 대련장).
+##
+## 캐릭터 애니 레인이 `hit` 을 따로 만들었고 이름이 겹치지만 **지금 붙이지 않는다** —
+## 양쪽이 굳은 다음에 붙인다. 여기서는 네모가 무너짐 단계를 그대로 비춘다.
+##
+## **이동 · 회전 · 배율만 쓴다** (§28.7). 프레임 교체도 변형도 없다.
+func _draw_arena() -> void:
+	var font := get_theme_default_font()
+	var ground := ARENA_GROUND
+	draw_string(
+		font,
+		Vector2(ARENA_CENTER_X - 110.0, ground - 190.0),
+		"대련장    F: 체인 발사",
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1.0,
+		15,
+		_TEXT
+	)
+	draw_line(
+		Vector2(ARENA_CENTER_X - 130.0, ground),
+		Vector2(ARENA_CENTER_X + 130.0, ground),
+		_CELL_LINE,
+		2.0
+	)
+
+	var state := BreakState.Kind.NONE
+	if _bout != null and _bout.phase() != SparringBout.Phase.READY:
+		state = _bout.state()
+
+	# 단계마다 자세가 다르다. 값은 연출이지 규칙이 아니다.
+	var lift := 0.0
+	var tilt := 0.0
+	var squash := 1.0
+	if state == BreakState.Kind.STAGGER:
+		tilt = 0.16
+	elif state == BreakState.Kind.LAUNCH:
+		lift = 78.0
+		tilt = 0.42
+	elif state == BreakState.Kind.KNOCKDOWN:
+		squash = 0.32
+		tilt = 1.35
+
+	var half := Vector2(38.0, 46.0 * squash)
+	var center := Vector2(ARENA_CENTER_X, ground - half.y - lift)
+	var corners := [
+		Vector2(-half.x, -half.y),
+		Vector2(half.x, -half.y),
+		Vector2(half.x, half.y),
+		Vector2(-half.x, half.y)
+	]
+	var points := PackedVector2Array()
+	for corner: Vector2 in corners:
+		points.append(center + corner.rotated(tilt))
+	draw_colored_polygon(points, _state_color(state))
+	draw_polyline(points + PackedVector2Array([points[0]]), _TEXT, 2.0)
+
+	draw_string(
+		font,
+		Vector2(ARENA_CENTER_X - 110.0, ground + 26.0),
+		BreakState.label(state),
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1.0,
+		16,
+		_state_color(state)
+	)

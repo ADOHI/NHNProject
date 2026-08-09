@@ -33,6 +33,7 @@ func _initialize() -> void:
 	_report_sample_items()
 	_report_cliff()
 	_report_gap()
+	_report_duration()
 	quit()
 
 
@@ -149,6 +150,32 @@ func _report_gap() -> void:
 	print("")
 	print("  이 시간이 길면 교전 중에 몇 번이고 나눠 쳐서 쌓을 수 있다.")
 	print("  짧으면 한 번의 체인 안에서 끝내야 한다 — 그때 배치가 진짜로 값을 한다.")
+
+
+## **타 간격이 이제 진짜 값이다.** 계산 안의 수였는데 실시간이 되면 사람이 느끼는 속도다.
+## 너무 빠르면 무너짐이 안 보이고 느리면 지루하다.
+func _report_duration() -> void:
+	var tuning := BreakTuning.new()
+	print("")
+	print("== 체인이 몇 초짜리인가 (타 간격 %.2f초) ==" % tuning.seconds_per_hit)
+	for hits: int in [2, 3, 5, 8, 10, 12]:
+		var items: Array[BackpackItem] = []
+		for _index in hits:
+			items.append(_uniform_item(1))
+		var bout := SparringBout.new(items, tuning)
+		print(
+			(
+				"  %2d타   %.2f초   (마무리 관찰 %.1f초 포함하면 %.2f초)"
+				% [
+					hits,
+					bout.swing_seconds(),
+					SparringBout.SETTLE_SECONDS,
+					bout.swing_seconds() + SparringBout.SETTLE_SECONDS
+				]
+			)
+		)
+	print("")
+	print("  타 간격을 바꾸면 이 표 전체가 움직인다. 무너짐 문턱과 함께 봐야 한다.")
 
 
 func _uniform_item(cells: int) -> BackpackItem:

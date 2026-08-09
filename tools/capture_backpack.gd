@@ -22,19 +22,30 @@ var _index := 0
 var _settle := 0
 var _shots: Array = []
 
+## 발사한 뒤 흐른 시간(초). **프레임이 아니라 시간으로 기다린다** —
+## 창의 주사율에 따라 같은 프레임 수가 전혀 다른 길이가 된다
+## (tools/capture_scene.gd 가 같은 함정에 걸렸던 자리다).
+var _since_fire := 0.0
+var _wait_until := -1.0
+
 
 func _initialize() -> void:
 	_screen = load("res://src/ui/backpack/backpack_screen.tscn").instantiate()
 	root.add_child(_screen)
 
 
-func _process(_delta: float) -> bool:
+func _process(delta: float) -> bool:
 	_frames += 1
+	_since_fire += delta
 	if _frames < _WARMUP:
 		return false
 	if _board == null:
 		_board = _screen.get_node("%Board")
 		_shots = _build_shots()
+	if _wait_until >= 0.0:
+		if _since_fire < _wait_until:
+			return false
+		_wait_until = -1.0
 	if _settle > 0:
 		_settle -= 1
 		return false
@@ -45,7 +56,12 @@ func _process(_delta: float) -> bool:
 	if _settle == 0 and not bool(shot[2]):
 		(shot[1] as Callable).call()
 		shot[2] = true
-		_settle = _SETTLE
+		# 대련 장면은 시간이 흘러야 볼 수 있다. 장면마다 **발사 뒤 몇 초인지**를 준다.
+		if shot.size() > 3:
+			_wait_until = float(shot[3])
+			_settle = 0
+		else:
+			_settle = _SETTLE
 		return false
 
 	_save(shot[0] as String)
@@ -65,7 +81,39 @@ func _build_shots() -> Array:
 		["06_start_empty", _right_click_cell(Vector2i(0, 0)), false],
 		["07_out_of_bounds", _stage_out_of_bounds, false],
 		["08_loop", _stage_loop, false],
+		["09_heavy_ready", _stage_heavy_chain, false],
+		["10_bout_early", _fire, false, 0.15],
+		["11_bout_mid", _wait, false, 0.80],
+		["12_bout_launch", _wait, false, 1.50],
+		["13_bout_settled", _wait, false, 4.20],
 	]
+
+
+## 2x2 무거운 무기를 뱀처럼 이어 붙인다. 표본 5타는 경직까지밖에 안 가서
+## **띄우기가 화면에서 어떻게 보이는지**를 못 본다.
+func _stage_heavy_chain() -> void:
+	var grid: BackpackGrid = _screen._grid
+	grid.clear()
+	grid.place(_square("망치1", ChainDirection.Kind.RIGHT, Vector2i(1, 0)), Vector2i(0, 0))
+	grid.place(_square("망치2", ChainDirection.Kind.RIGHT, Vector2i(1, 0)), Vector2i(2, 0))
+	grid.place(_square("망치3", ChainDirection.Kind.DOWN, Vector2i(1, 1)), Vector2i(4, 0))
+	grid.place(_square("망치4", ChainDirection.Kind.DOWN, Vector2i(1, 1)), Vector2i(4, 2))
+	grid.place(_square("망치5", ChainDirection.Kind.DOWN, Vector2i(1, 1)), Vector2i(4, 4))
+	_screen._refresh()
+
+
+func _fire() -> void:
+	_since_fire = 0.0
+	_screen._fire()
+
+
+func _wait() -> void:
+	pass
+
+
+func _square(name: String, direction: ChainDirection.Kind, out_cell: Vector2i) -> BackpackItem:
+	var shape: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]
+	return BackpackItem.new(name, name, BackpackItem.Kind.WEAPON, shape, out_cell, direction)
 
 
 ## 시작 아이템이 격자 밖을 가리키는 상황. 「빈 칸」과 다르게 보여야 한다.
