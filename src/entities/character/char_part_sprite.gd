@@ -29,6 +29,12 @@ var rig: CharRig
 ## 그릴 그림. 알파 경계상자로 **이미 잘려 있어야 한다** (§25.41.2).
 var texture: Texture2D
 
+## **이 그림을 좌우로 뒤집어 그리나.** 짝의 그림을 빌려 쓸 때만 참이다 (§25.41.1).
+##
+## **파츠 이름으로 정하면 안 된다.** 뒷손이 제 그림을 갖고 오는 판에서도 뒤집게 되고,
+## 뿌리가 이미 왼쪽 보기로 뒤집혀 있으므로(§25.41.9) **두 번 뒤집혀 제자리로 돌아온다.**
+var mirror := false
+
 ## **닿는 순간의 번쩍임** (`0` … `1`). 도형판과 같은 규약이다.
 var flash := 0.0:
 	set(value):
@@ -40,10 +46,11 @@ var flash := 0.0:
 var _canvas: CanvasItem = null
 
 
-func setup(p_part: CharPart.Id, p_rig: CharRig, p_texture: Texture2D) -> void:
+func setup(p_part: CharPart.Id, p_rig: CharRig, p_texture: Texture2D, p_mirror := false) -> void:
 	part = p_part
 	rig = p_rig
 	texture = p_texture
+	mirror = p_mirror
 	queue_redraw()
 
 
@@ -78,13 +85,14 @@ func _draw() -> void:
 		return
 	var box := draw_rect_local()
 	var canvas := _target()
-	# **뒷손만 좌우로 뒤집는다.** 왼손과 오른손은 거울이라 같은 그림을 두 손에 쓰면
-	# 오른손이 둘이 된다. **발은 안 뒤집는다** — 옆에서 본 두 발은 둘 다 앞을 본다.
-	if part == CharPart.Id.HAND_FAR:
+	# **빌려 쓴 손만 좌우로 뒤집는다.** 왼손과 오른손은 거울이라 앞손 그림을 뒷손에도
+	# 쓰면 오른손이 둘이 된다. **제 그림이 있으면 안 뒤집는다** — 뿌리가 이미
+	# 뒤집혀 있어서 두 번 뒤집히면 제자리로 돌아온다 (§25.41.9).
+	if mirror:
 		box = Rect2(Vector2(-box.position.x - box.size.x, box.position.y), box.size)
 		canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2(-1.0, 1.0))
 	canvas.draw_texture_rect(texture, box, false, _tint())
-	if part == CharPart.Id.HAND_FAR:
+	if mirror:
 		canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if flash > 0.001:
 		canvas.draw_texture_rect(texture, box, false, Color(FLASH, flash * FLASH_ALPHA))

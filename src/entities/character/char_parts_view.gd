@@ -50,6 +50,14 @@ var _shadow_scale := 1.0
 var _shadow_offset := 0.0
 
 ## 과거 자세들. **기록이 아니라 `sample(t - Δ)` 로 받은 것**이다 (§25.3).
+## **그림이 왼쪽을 보므로 뿌리를 뒤집는다** (§25.41.9).
+##
+## 리그는 `+x` 를 보고 서 있고 클립 수식 전부가 그 전제 위에 있다. 그림만 반대이므로
+## **그림 쪽을 뒤집는 것이 맞다** — 리그를 뒤집으면 수식 스무 개가 따라 뒤집힌다.
+##
+## `CharActor.facing` 과 **싸우지 않는다.** 저쪽은 「이 인물이 어느 쪽을 보나」를
+## 뿌리의 `scale.x` 로 말하고, 이것은 「그림이 리그와 반대로 그려져 있다」를 말한다.
+## 둘이 곱해져서 `facing = 1` 이면 오른쪽을 본다 — 뜻이 안 변한다.
 var _echoes: Array[CharPose] = []
 var _arc: PackedVector2Array = PackedVector2Array()
 var _flash := 0.0
@@ -127,20 +135,31 @@ func _notification(what: int) -> void:
 func _make_part(part: CharPart.Id) -> Node2D:
 	if skin != null and skin.textures.has(part):
 		var sprite := CharPartSprite.new()
-		sprite.setup(part, rig, skin.textures[part])
+		sprite.setup(part, rig, skin.textures[part], skin.borrowed.get(part, false))
 		return sprite
 	var shape := CharPartShape.new()
 	shape.setup(part, rig)
 	return shape
 
 
+## 그림을 리그 방향에 맞추는 뒤집기. 그림이 없으면 항등이다.
+##
+## **한 곳에서만 나온다.** 자세 · 잔상 · 호가 각자 뒤집으면 하나를 빠뜨리는 순간
+## 몸과 잔상이 서로 반대를 본다.
+func art_flip() -> Transform2D:
+	if skin == null or not CharSkin.FACES_LEFT:
+		return Transform2D.IDENTITY
+	return Transform2D(Vector2(-1.0, 0.0), Vector2(0.0, 1.0), Vector2.ZERO)
+
+
 func apply_pose(pose: CharPose) -> void:
+	var flip := art_flip()
 	for part in CharPart.COUNT:
-		_shapes[part].transform = pose.canvas_transform(part)
+		_shapes[part].transform = flip * pose.canvas_transform(part)
 	var torso := CharPart.Id.TORSO
 	var lift := pose.positions[torso].y - rig.rest_positions[torso].y
 	_shadow_scale = 1.0 - lift * SHADOW_LIFT_RESPONSE
-	_shadow_offset = pose.positions[torso].x * 0.5
+	_shadow_offset = pose.positions[torso].x * 0.5 * flip.x.x
 	queue_redraw()
 
 
@@ -239,7 +258,9 @@ func blade_heading(clip: CharClip, at: float) -> Vector2:
 		return Vector2.ZERO
 	var was := weapon.tip_position(clip.sample(before, f), rig)
 	var now := weapon.tip_position(clip.sample(at, f), rig)
-	return now - was
+	# **속도선도 뒤집는다.** 그림이 왼쪽을 보면 검도 반대로 지나가는데, 선만 안 뒤집으면
+	# 선이 검을 거슬러 흐른다 (§25.41.9).
+	return art_flip() * (now - was)
 
 
 ## 파츠 노드. 나중에 `Sprite2D` 로 갈아 끼울 때의 접점이다.
@@ -306,7 +327,7 @@ func _draw_echoes() -> void:
 
 ## 파츠 하나를 옅은 상자로 찍는다.
 func _draw_ghost(pose: CharPose, part: CharPart.Id, tint: Color) -> void:
-	var at := pose.canvas_transform(part)
+	var at := art_flip() * pose.canvas_transform(part)
 	var half := rig.half_sizes[part]
 	var centre := rig.local_centers[part]
 	var box := PackedVector2Array()
@@ -323,7 +344,8 @@ func _draw_ghost(pose: CharPose, part: CharPart.Id, tint: Color) -> void:
 func _draw_ghost_blade(pose: CharPose, tint: Color) -> void:
 	var grip := weapon.grip_offset(rig)
 	var mount := (
-		pose.canvas_transform(CharWeapon.HOLDER)
+		art_flip()
+		* pose.canvas_transform(CharWeapon.HOLDER)
 		* Transform2D(-weapon.rest_angle(rig), Vector2(grip.x, -grip.y))
 	)
 	var ghost := PackedVector2Array()
@@ -363,7 +385,8 @@ func blade_sweep(clip: CharClip, at: float, f: AnimFeatures) -> PackedVector2Arr
 				break
 			back = clip.wrap_time(back)
 		var mount := (
-			clip.sample(back, f).canvas_transform(CharWeapon.HOLDER)
+			art_flip()
+			* clip.sample(back, f).canvas_transform(CharWeapon.HOLDER)
 			* Transform2D(-weapon.rest_angle(rig), Vector2(grip.x, -grip.y))
 		)
 		# 뒤로 갈수록 얇아진다 — 그래야 「지나갔다」로 읽힌다.

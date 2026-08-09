@@ -191,9 +191,13 @@ func _initialize() -> void:
 	_view.skin = skin
 	_view.weapon = CharWeapon.new(_cells, _span)
 	_view.flourish = CharFlourish.preset(_flourish)
-	# **가운데가 아니라 왼쪽에 세운다.** 내려치기에서 머리와 검이 앞으로 크게 나가는데
-	# 가운데에 두면 오른쪽 변에 잘린다 — 실제로 머리가 잘려 나갔다.
-	_home = Vector2(float(VIEW_SIZE.x) * 0.34, GROUND_Y)
+	# **앞쪽에 여백을 둔다.** 내려치기에서 머리와 검이 앞으로 크게 나가는데 가운데에
+	# 두면 앞 변에 잘린다 — 실제로 머리가 잘려 나갔다.
+	#
+	# **어느 쪽이 앞인지는 그림이 정한다.** 파츠 그림은 왼쪽을 보므로(§25.41.9) 여백도
+	# 왼쪽에 있어야 한다. 이걸 안 뒤집었더니 검이 왼쪽 변으로 나갔다.
+	var ahead := 0.34 if skin == null else 0.66
+	_home = Vector2(float(VIEW_SIZE.x) * ahead, GROUND_Y)
 	_view.position = _home
 	_view.scale = Vector2(VIEW_SCALE, VIEW_SCALE)
 	stage.add_child(_view)

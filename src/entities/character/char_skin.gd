@@ -48,6 +48,12 @@ extends RefCounted
 ## 굽은 노인과 5 두신 아이가 같은 값을 쓸 리가 없다. 덮은 것은 `overrides` 에 남고
 ## `tools/check_skin_dir.gd` 가 그것을 찍는다. **조용히 덮이면 나중에 아무도 못 찾는다.**
 
+## **파츠 그림은 왼쪽을 본다** (§25.41.9). 리그는 `+x`(오른쪽)를 보므로 뿌리를 뒤집는다.
+##
+## 규약이지 자료가 아니다 — 제작 레인의 SD 변환 프롬프트에 `The character heads left`
+## 가 박혀 있고 레이맨이 그 원본에서 나온다. **한쪽으로 못박아야 이번 같은 사고가 안 난다.**
+const FACES_LEFT := true
+
 ## 덮어쓰기 파일 이름. 없어도 된다.
 const OVERRIDE_FILE := "scales.json"
 
@@ -76,6 +82,12 @@ var scales: Dictionary[CharPart.Id, float] = {}
 ## 사람이 덮어쓴 파츠와 그 곱. **비어 있으면 전부 자동이다.**
 var overrides: Dictionary[CharPart.Id, float] = {}
 
+## **짝의 그림을 빌려 쓴 파츠.** 빌린 것만 좌우로 뒤집는다 (§25.41.1).
+##
+## 제 그림이 있는데도 뒤집으면 **그림이 두 번 뒤집혀** 원래대로 돌아온다 —
+## 뿌리가 이미 왼쪽 보기로 뒤집혀 있기 때문이다. 실제로 그렇게 났다.
+var borrowed: Dictionary[CharPart.Id, bool] = {}
+
 ## 그 그림들에서 세운 리그.
 var rig: CharRig
 
@@ -98,6 +110,8 @@ static func load_dir(dir: String) -> CharSkin:
 			continue
 		if FALLBACK.has(part) and cropped.has(FALLBACK[part]):
 			cropped[part] = cropped[FALLBACK[part]]
+			# **손만 뒤집는다.** 옆에서 본 두 발은 둘 다 앞을 보므로 그대로 쓴다.
+			skin.borrowed[part] = part == CharPart.Id.HAND_FAR
 			continue
 		skin.problems.append("%s 를 못 읽었고 대신 쓸 것도 없다" % FILES[part])
 	if cropped.size() < CharPart.COUNT:
