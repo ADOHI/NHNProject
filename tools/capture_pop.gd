@@ -16,6 +16,10 @@ const STILL_AT := 2.45
 
 const SETTLE := 6
 
+## GIF 로 뽑을 팔레트. 정지는 전부 뽑고 **움직이는 그림은 하나만** 뽑는다 —
+## 다섯 편을 다 뽑으면 판정할 것이 다섯 배가 되고 그러면 아무도 안 본다.
+const PICK := 0
+
 var _prefix := "res://.renders/pop"
 var _which := "slash"
 var _stage: SubViewport
@@ -28,6 +32,9 @@ var _still_done := false
 ## 안마다 크기와 한 바퀴가 다르다. **여기서 하나로 정하면 안이 늘 때 조용히 잘린다.**
 var _card := Vector2(660.0, 700.0)
 var _loop := 4.0
+
+## 지금까지 몇 번째 팔레트를 찍었나.
+var _swatch := 0
 
 
 func _initialize() -> void:
@@ -64,21 +71,41 @@ func _pick() -> Control:
 			return null
 
 
+## 팔레트마다 대표 컷을 한 장씩, 그다음 GIF 용 팔레트로 한 장.
+##
+## **창을 한 번만 띄우고 다 뽑는다** (CLAUDE.md — GPU 를 나눠 쓴다).
+## 다 끝났으면 참을 낸다.
+func _stills() -> bool:
+	_sheet.call("set_clock", STILL_AT)
+	if _swatch < HoloPalette.count():
+		_sheet.set("palette", _swatch)
+		if _posed != -2 - _swatch:
+			_posed = -2 - _swatch
+			return false
+		var slug: String = HoloPalette.slug(_swatch)
+		_stage.get_texture().get_image().save_png("%s_%s.png" % [_prefix, slug])
+		print("팔레트 %s: %s_%s.png" % [HoloPalette.name_of(_swatch), _prefix, slug])
+		_swatch += 1
+		return false
+	_sheet.set("palette", PICK)
+	if _posed != -99:
+		_posed = -99
+		return false
+	_stage.get_texture().get_image().save_png("%s_still.png" % _prefix)
+	print("대표 컷: %s_still.png" % _prefix)
+	_posed = -1
+	return true
+
+
 func _process(_delta: float) -> bool:
 	_waited += 1
 	if _waited <= SETTLE:
 		_sheet.call("set_clock", 0.0)
 		return false
 	if not _still_done:
-		_sheet.call("set_clock", STILL_AT)
-		if _posed != -2:
-			_posed = -2
-			return false
-		_stage.get_texture().get_image().save_png("%s_still.png" % _prefix)
-		print("대표 컷: %s_still.png" % _prefix)
-		_still_done = true
-		_posed = -1
+		_still_done = _stills()
 		return false
+
 	if _posed != _saved:
 		_sheet.call("set_clock", float(_saved) / FPS)
 		_posed = _saved

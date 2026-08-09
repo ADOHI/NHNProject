@@ -30,9 +30,9 @@ void fragment() {
 
 	// ── 훑는 띠. **화면이 살아 있다는 유일한 증거다.**
 	float pass_y = fract(clock * 0.21) * (card.y + 300.0) - 150.0;
-	lit += glow * exp(-abs(at.y - pass_y) * 0.016) * 0.20 * sweep_energy;
+	lit += glow * exp(-abs(at.y - pass_y) * 0.016) * 0.10 * sweep_energy;
 	// 띠 앞머리의 밝은 실선 하나.
-	lit += glow * exp(-abs(at.y - pass_y) * 0.30) * 0.34 * sweep_energy;
+	lit += glow * exp(-abs(at.y - pass_y) * 0.30) * 0.16 * sweep_energy;
 
 	// ── 아주 짧은 색 어긋남. 한 프레임짜리고 채도가 낮다.
 	float slip = step(0.988, hash1(vec2(floor(clock * 12.0), 3.0)));

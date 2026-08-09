@@ -23,28 +23,74 @@ extends Control
 ## **입자도 아지랑이도 없다.**
 
 const FONT := preload("res://assets/fonts/song_myung/SongMyung-Regular.ttf")
+const DARK := preload("res://src/ui/kit/cel/phosphor_dark.gdshader")
+const LIT := preload("res://src/ui/kit/cel/phosphor_lit.gdshader")
 
 const CARD := Vector2(660.0, 700.0)
 const LOOP := 4.0
 const PAD := 26.0
 
-## 색 셋. **넷째 색을 들이면 그 순간 이 문법이 아니다.**
-const VOID := Color("#0c0c0f")
-const PAPER := Color("#f2efe6")
-const BLOOD := Color("#e01b2e")
-
 ## 판이 미끄러져 들어오는 거리와 시간.
 const SLIDE := 190.0
 const SNAP := 0.34
 
+## 색은 **`HoloPalette` 한 곳에서만** 정해진다 (§20.31). 화면은 번호만 든다 —
+## 색만 바꿔 여러 장을 찍으려면 바꾸는 자리가 한 줄이어야 한다.
+var palette := 0:
+	set(value):
+		palette = wrapi(value, 0, HoloPalette.count())
+		_tint_screen()
+		queue_redraw()
+
 var _clock := 0.0
 var _driven := false
-var _ink: Control
+var _dark: ColorRect
+var _lit: ColorRect
 
 
 func _ready() -> void:
-	_ink = self
+	# 브라운관 덮개 둘. **곱하기 층과 더하기 층이라 어둡게도 밝게도 한다** (§20.29.2).
+	_dark = _screen_layer(DARK)
+	_lit = _screen_layer(LIT)
+	_tint_screen()
 	set_process(not _driven)
+
+
+## 덮개의 인광색을 팔레트에 맞춘다.
+func _tint_screen() -> void:
+	if _lit == null:
+		return
+	(_lit.material as ShaderMaterial).set_shader_parameter("glow", _accent())
+
+
+func _void() -> Color:
+	return HoloPalette.void_color(palette)
+
+
+func _paper() -> Color:
+	return HoloPalette.paper(palette)
+
+
+func _accent() -> Color:
+	return HoloPalette.accent(palette)
+
+
+## 어긋난 뒤판의 색. **「혼합」 팔레트만 강조색과 다르다.**
+func _back() -> Color:
+	return HoloPalette.back(palette)
+
+
+func _screen_layer(source: Shader) -> ColorRect:
+	var layer := ColorRect.new()
+	layer.color = Color.WHITE
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var stuff := ShaderMaterial.new()
+	stuff.shader = source
+	stuff.set_shader_parameter("card", CARD)
+	layer.material = stuff
+	add_child(layer)
+	layer.size = CARD
+	return layer
 
 
 func drive_externally() -> void:
@@ -58,7 +104,60 @@ func _process(delta: float) -> void:
 
 func set_clock(t: float) -> void:
 	_clock = t
+	for layer in [_dark, _lit]:
+		if layer != null:
+			(layer.material as ShaderMaterial).set_shader_parameter("clock", t)
 	queue_redraw()
+
+
+## 판이 **위에서부터 한 줄씩 그려진다.** 다 그려지면 원래 판 그대로다.
+##
+## 「호박」에서 만든 표시 방법을 그대로 가져왔다 — 형태는 안 건드린다.
+func _reveal(shape: PackedVector2Array, from: float) -> Array[PackedVector2Array]:
+	var since := _clock - from
+	var tall := GraphicCut.span_of(shape).size.y
+	if since >= tall * 0.0026:
+		return [shape] as Array[PackedVector2Array]
+	return GraphicCut.revealed(shape, since / 0.0026)
+
+
+## 채워진 판 위의 **주사선.** 망점이 있던 자리다 — 무늬만 바뀌고 판은 그대로다.
+func _scanlines(shape: PackedVector2Array, tint: Color) -> void:
+	for bar in GraphicCut.stripes(shape, 0.0, 4.0, 1.6, _clock * 9.0):
+		draw_colored_polygon(bar, tint)
+
+
+## 모서리 꺾쇠와 작은 눈금. **큰 판 가장자리에 붙는 장식**이지 판을 대신하지 않는다.
+func _rig(box: Rect2, slot: int) -> void:
+	var reach := 13.0
+	var corners := [
+		[box.position, Vector2(1, 0), Vector2(0, 1)],
+		[Vector2(box.end.x, box.position.y), Vector2(-1, 0), Vector2(0, 1)],
+		[box.end, Vector2(-1, 0), Vector2(0, -1)],
+		[Vector2(box.position.x, box.end.y), Vector2(1, 0), Vector2(0, -1)],
+	]
+	for corner in corners:
+		var at: Vector2 = corner[0]
+		draw_line(at, at + (corner[1] as Vector2) * reach, _accent(), 2.0)
+		draw_line(at, at + (corner[2] as Vector2) * reach, _accent(), 2.0)
+	for i in 9:
+		var x := lerpf(box.position.x + 16.0, box.end.x - 16.0, float(i) / 8.0)
+		var wobble := CelReadout.tick_jitter(slot + i, _clock, 0.6)
+		draw_line(
+			Vector2(x, box.end.y + 4.0),
+			Vector2(x, box.end.y + 8.0 + wobble),
+			Color(_accent(), 0.5),
+			1.0
+		)
+	draw_string(
+		FONT,
+		Vector2(box.position.x + 2.0, box.position.y - 5.0),
+		"%s %s" % [CelReadout.noise_hex(slot, _clock), CelReadout.noise_digits(slot, _clock, 3)],
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		9,
+		Color(_accent(), 0.65)
+	)
 
 
 ## 스냅. **끝에서 살짝 넘겼다가 탁 선다** — 부드럽게 도착하면 P5 가 아니다.
@@ -78,7 +177,7 @@ func _jolt(at: float, span: float = 0.10) -> float:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), VOID, true)
+	draw_rect(Rect2(Vector2.ZERO, size), _void(), true)
 	_backdrop()
 	_title()
 	_buttons()
@@ -96,23 +195,23 @@ func _backdrop() -> void:
 		[Vector2.ZERO, Vector2(size.x, 0.0), size, Vector2(0.0, size.y)]
 	)
 	for bar in GraphicCut.stripes(whole, -PI * 0.28, 46.0, 15.0, _clock * 34.0):
-		draw_colored_polygon(bar, Color(PAPER, 0.045))
+		draw_colored_polygon(bar, Color(_paper(), 0.045))
 	# 굵은 사선 한 줄이 화면을 가로지른다. 이 안의 서명이다.
 	var sweep := fposmod(_clock * 0.34, 1.0)
 	var band := GraphicCut.lean(
 		Rect2(-260.0 + sweep * (size.x + 520.0), -40.0, 90.0, size.y + 80.0), 0.42
 	)
-	draw_colored_polygon(band, Color(BLOOD, 0.10))
+	draw_colored_polygon(band, Color(_accent(), 0.10))
 
 
 ## 제목 — **글자가 도형이다.** 기울고, 검은 판에 잘리고, 판 밖으로 넘친다.
 func _title() -> void:
 	var slab := GraphicCut.lean(Rect2(-30.0, 22.0, 340.0, 62.0), 0.30)
-	draw_colored_polygon(GraphicCut.swelled(slab, 0.012, Vector2(7.0, 7.0)), BLOOD)
-	draw_colored_polygon(slab, PAPER)
+	draw_colored_polygon(GraphicCut.swelled(slab, 0.012, Vector2(7.0, 7.0)), _back())
+	draw_colored_polygon(slab, _paper())
 	# 글자를 판보다 크게 잡아 오른쪽으로 넘긴다.
 	draw_set_transform(Vector2(24.0, 74.0), -0.075, Vector2.ONE)
-	draw_string(FONT, Vector2.ZERO, "참격", HORIZONTAL_ALIGNMENT_LEFT, -1, 54, VOID)
+	draw_string(FONT, Vector2.ZERO, "참격", HORIZONTAL_ALIGNMENT_LEFT, -1, 54, _void())
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	draw_string(
 		FONT,
@@ -121,7 +220,7 @@ func _title() -> void:
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		14,
-		Color(PAPER, 0.66)
+		Color(_paper(), 0.66)
 	)
 
 
@@ -141,22 +240,16 @@ func _buttons() -> void:
 		# 뒤판 — **그림자가 아니라 판 한 겹 더**라서 어긋나 있고 색이 있다.
 		if i != 3:
 			draw_colored_polygon(
-				GraphicCut.swelled(shape, 0.02, Vector2(8.0, 8.0)), BLOOD if not down else PAPER
+				GraphicCut.swelled(shape, 0.02, Vector2(8.0, 8.0)),
+				_back() if not down else _paper()
 			)
-		draw_colored_polygon(shape, PAPER if not hot else BLOOD)
+		draw_colored_polygon(shape, _paper() if not hot else _accent())
 		if i == 3:
 			for bar in GraphicCut.stripes(shape, -PI * 0.25, 9.0, 4.0, 0.0):
-				draw_colored_polygon(bar, Color(VOID, 0.55))
+				draw_colored_polygon(bar, Color(_void(), 0.55))
 		if hot:
-			for dot in GraphicCut.halftone(shape, 7.0, Vector2(_clock * 26.0, 0.0)):
-				draw_circle(dot, 1.7, Color(PAPER, 0.5))
-		_shape_text(
-			labels[i],
-			Rect2(box.position, box.size),
-			18,
-			VOID if not hot else PAPER,
-			0.35 if i == 3 else 1.0
-		)
+			_scanlines(shape, Color(_void(), 0.30))
+		_shape_text(labels[i], Rect2(box.position, box.size), 18, _void(), 0.35 if i == 3 else 1.0)
 
 
 ## 창 — 제목줄 · 테두리 · 닫기 · 배경. **모서리 둘이 잘렸다.**
@@ -164,19 +257,26 @@ func _window() -> void:
 	var enter := _snap(0.24)
 	var box := Rect2(PAD - (1.0 - enter) * SLIDE, 206.0, 336.0, 178.0)
 	var shape := GraphicCut.clipped(box, 26.0, 2 | 8)
-	draw_colored_polygon(GraphicCut.swelled(shape, 0.014, Vector2(9.0, 9.0)), BLOOD)
-	draw_colored_polygon(shape, PAPER)
-	for dot in GraphicCut.halftone(shape, 9.0, Vector2(0.0, _clock * 18.0)):
-		draw_circle(dot, 1.5, Color(VOID, 0.10))
+	# 뒤판이 **반투명해졌다** — 판 뒤에 다른 판이 비친다.
+	draw_colored_polygon(GraphicCut.swelled(shape, 0.014, Vector2(9.0, 9.0)), Color(_back(), 0.55))
+	var drawn := _reveal(shape, 0.24)
+	if drawn.is_empty():
+		return
+	for piece in drawn:
+		draw_colored_polygon(piece, _paper())
+	if drawn.size() == 1 and drawn[0].size() != shape.size():
+		return
+	_scanlines(shape, Color(_void(), 0.12))
+	_rig(box, 2)
 
 	var bar := GraphicCut.lean(Rect2(box.position.x, box.position.y, box.size.x - 26.0, 34.0), 0.0)
-	draw_colored_polygon(bar, VOID)
+	draw_colored_polygon(bar, _void())
 	draw_string(
-		FONT, box.position + Vector2(14.0, 24.0), "창", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, PAPER
+		FONT, box.position + Vector2(14.0, 24.0), "창", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, _paper()
 	)
 	var shut := Vector2(box.end.x - 46.0, box.position.y + 17.0)
-	draw_line(shut + Vector2(-6, -6), shut + Vector2(6, 6), PAPER, 2.4)
-	draw_line(shut + Vector2(-6, 6), shut + Vector2(6, -6), PAPER, 2.4)
+	draw_line(shut + Vector2(-6, -6), shut + Vector2(6, 6), _paper(), 2.4)
+	draw_line(shut + Vector2(-6, 6), shut + Vector2(6, -6), _paper(), 2.4)
 	for row in 3:
 		draw_colored_polygon(
 			GraphicCut.lean(
@@ -188,7 +288,7 @@ func _window() -> void:
 				),
 				0.5
 			),
-			Color(VOID, 0.72 - float(row) * 0.18)
+			Color(_void(), 0.72 - float(row) * 0.18)
 		)
 
 
@@ -198,12 +298,16 @@ func _popup() -> void:
 	var box := Rect2(PAD + 356.0, 206.0, 252.0, 178.0)
 	var shape := GraphicCut.clipped(box, 24.0, 1 | 4)
 	for piece in GraphicCut.torn_open(shape, -PI * 0.22, open, 46.0):
-		draw_colored_polygon(GraphicCut.swelled(piece, 0.012, Vector2(8.0, 8.0)), BLOOD)
-		draw_colored_polygon(piece, PAPER)
+		draw_colored_polygon(
+			GraphicCut.swelled(piece, 0.012, Vector2(8.0, 8.0)), Color(_accent(), 0.55)
+		)
+		draw_colored_polygon(piece, _paper())
+		_scanlines(piece, Color(_void(), 0.12))
 	if open < 0.55:
 		return
+	_rig(box, 5)
 	_shape_text(
-		"버릴까요", Rect2(box.position + Vector2(0.0, 26.0), Vector2(box.size.x, 34.0)), 24, VOID
+		"버릴까요", Rect2(box.position + Vector2(0.0, 26.0), Vector2(box.size.x, 34.0)), 24, _void()
 	)
 	draw_string(
 		FONT,
@@ -212,7 +316,7 @@ func _popup() -> void:
 		HORIZONTAL_ALIGNMENT_CENTER,
 		box.size.x,
 		13,
-		Color(VOID, 0.62)
+		Color(_void(), 0.62)
 	)
 	var wide := (box.size.x - 40.0) * 0.5
 	for i in 2:
@@ -222,9 +326,9 @@ func _popup() -> void:
 		var solid := i == 0
 		var shape_button := GraphicCut.lean(button, 0.22)
 		if solid:
-			draw_colored_polygon(GraphicCut.swelled(shape_button, 0.03, Vector2(5.0, 5.0)), VOID)
-		draw_colored_polygon(shape_button, BLOOD if solid else Color(VOID, 0.10))
-		_shape_text("확인" if solid else "취소", button, 16, PAPER if solid else VOID)
+			draw_colored_polygon(GraphicCut.swelled(shape_button, 0.03, Vector2(5.0, 5.0)), _void())
+		draw_colored_polygon(shape_button, _accent() if solid else Color(_void(), 0.10))
+		_shape_text("확인" if solid else "취소", button, 16, _void())
 
 
 ## 메뉴 — 항목 넷, 하나 선택됨. **「지금 여기」는 여기 하나에서만 흐른다.**
@@ -232,7 +336,7 @@ func _menu() -> void:
 	var enter := _snap(0.42)
 	var box := Rect2(PAD - (1.0 - enter) * SLIDE, 404.0, 292.0, 168.0)
 	var shape := GraphicCut.clipped(box, 22.0, 4)
-	draw_colored_polygon(shape, Color(PAPER, 0.10))
+	draw_colored_polygon(shape, Color(_paper(), 0.10))
 	var items := ["출격", "길드", "인물", "설정"]
 	# 고른 자리가 2 번에서 시작해 2.9 초에 아래로 **슬램**한다.
 	var chosen := 1 if _clock < 2.85 else 2
@@ -245,10 +349,9 @@ func _menu() -> void:
 		if i == chosen:
 			var grow := 1.0 if _clock < 2.85 else slam
 			var lit := GraphicCut.swelled(shape_row, 0.03 * grow, Vector2(6.0, 6.0) * grow)
-			draw_colored_polygon(lit, VOID)
-			draw_colored_polygon(shape_row, BLOOD)
-			for bar in GraphicCut.stripes(shape_row, -PI * 0.25, 11.0, 4.0, -_clock * 40.0):
-				draw_colored_polygon(bar, Color(PAPER, 0.22))
+			draw_colored_polygon(lit, _void())
+			draw_colored_polygon(shape_row, _accent())
+			_scanlines(shape_row, Color(_void(), 0.26))
 		draw_string(
 			FONT,
 			row.position + Vector2(22.0, 23.0),
@@ -256,7 +359,7 @@ func _menu() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT,
 			-1,
 			17,
-			PAPER if i == chosen else Color(PAPER, 0.55)
+			_void() if i == chosen else Color(_paper(), 0.55)
 		)
 
 
@@ -264,7 +367,7 @@ func _menu() -> void:
 func _inputs() -> void:
 	var enter := _snap(0.50)
 	var box := Rect2(PAD + 312.0 + (1.0 - enter) * SLIDE, 404.0, 296.0, 168.0)
-	draw_colored_polygon(GraphicCut.clipped(box, 22.0, 1), Color(PAPER, 0.10))
+	draw_colored_polygon(GraphicCut.clipped(box, 22.0, 1), Color(_paper(), 0.10))
 	draw_string(
 		FONT,
 		box.position + Vector2(20.0, 34.0),
@@ -272,26 +375,27 @@ func _inputs() -> void:
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		14,
-		Color(PAPER, 0.7)
+		Color(_paper(), 0.7)
 	)
 
 	var rail := Rect2(box.position.x + 20.0, box.position.y + 46.0, box.size.x - 40.0, 8.0)
-	draw_colored_polygon(GraphicCut.lean(rail, 0.9), Color(PAPER, 0.18))
+	draw_colored_polygon(GraphicCut.lean(rail, 0.9), Color(_paper(), 0.18))
 	draw_colored_polygon(
-		GraphicCut.lean(Rect2(rail.position, Vector2(rail.size.x * 0.62, rail.size.y)), 0.9), BLOOD
+		GraphicCut.lean(Rect2(rail.position, Vector2(rail.size.x * 0.62, rail.size.y)), 0.9),
+		_accent()
 	)
 	var knob := Rect2(
 		rail.position.x + rail.size.x * 0.62 - 8.0, rail.position.y - 11.0, 18.0, 30.0
 	)
 	draw_colored_polygon(
-		GraphicCut.swelled(GraphicCut.lean(knob, 0.4), 0.04, Vector2(4.0, 4.0)), VOID
+		GraphicCut.swelled(GraphicCut.lean(knob, 0.4), 0.04, Vector2(4.0, 4.0)), _void()
 	)
-	draw_colored_polygon(GraphicCut.lean(knob, 0.4), PAPER)
+	draw_colored_polygon(GraphicCut.lean(knob, 0.4), _paper())
 
 	var tick := Rect2(box.position.x + 20.0, box.position.y + 96.0, 26.0, 26.0)
 	var shape_tick := GraphicCut.lean(tick, 0.22)
-	draw_colored_polygon(GraphicCut.swelled(shape_tick, 0.04, Vector2(5.0, 5.0)), VOID)
-	draw_colored_polygon(shape_tick, BLOOD)
+	draw_colored_polygon(GraphicCut.swelled(shape_tick, 0.04, Vector2(5.0, 5.0)), _void())
+	draw_colored_polygon(shape_tick, _accent())
 	draw_polyline(
 		PackedVector2Array(
 			[
@@ -300,7 +404,7 @@ func _inputs() -> void:
 				tick.position + Vector2(24.0, 5.0)
 			]
 		),
-		PAPER,
+		_paper(),
 		3.2
 	)
 	draw_string(
@@ -310,7 +414,7 @@ func _inputs() -> void:
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		15,
-		PAPER
+		_paper()
 	)
 
 
@@ -319,10 +423,10 @@ func _here() -> void:
 	var enter := _snap(0.60)
 	var box := Rect2(PAD - (1.0 - enter) * SLIDE * 1.6, 596.0, size.x - PAD * 2.0, 58.0)
 	var shape := GraphicCut.fang(Rect2(box.position, box.size - Vector2(26.0, 0.0)), 26.0)
-	draw_colored_polygon(GraphicCut.swelled(shape, 0.012, Vector2(9.0, 9.0)), PAPER)
-	draw_colored_polygon(shape, BLOOD)
-	for bar in GraphicCut.stripes(shape, -PI * 0.25, 16.0, 5.0, _clock * 52.0):
-		draw_colored_polygon(bar, Color(VOID, 0.20))
+	draw_colored_polygon(GraphicCut.swelled(shape, 0.012, Vector2(9.0, 9.0)), _paper())
+	draw_colored_polygon(shape, _accent())
+	_scanlines(shape, Color(_void(), 0.22))
+	_rig(Rect2(box.position, box.size - Vector2(26.0, 0.0)), 8)
 	draw_string(
 		FONT,
 		Vector2(PAD, 588.0),
@@ -330,9 +434,9 @@ func _here() -> void:
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		13,
-		Color(PAPER, 0.5)
+		Color(_paper(), 0.5)
 	)
-	_shape_text("3층 봉인된 문", box, 24, PAPER)
+	_shape_text("3층 봉인된 문", box, 24, _void())
 
 
 func _weak() -> void:
@@ -343,7 +447,7 @@ func _weak() -> void:
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		13,
-		BLOOD
+		_accent()
 	)
 
 
@@ -364,7 +468,7 @@ func _shape_text(text: String, box: Rect2, tall: int, tint: Color, fade: float =
 			HORIZONTAL_ALIGNMENT_CENTER,
 			box.size.x,
 			tall,
-			Color(BLOOD, 0.85 * jolt)
+			Color(_accent(), 0.85 * jolt)
 		)
 	draw_set_transform(seat + Vector2(2.0, 2.0), lean, Vector2.ONE)
 	draw_string(
@@ -374,7 +478,7 @@ func _shape_text(text: String, box: Rect2, tall: int, tint: Color, fade: float =
 		HORIZONTAL_ALIGNMENT_CENTER,
 		box.size.x,
 		tall,
-		Color(VOID, 0.28 * fade)
+		Color(_void(), 0.28 * fade)
 	)
 	draw_set_transform(seat, lean, Vector2.ONE)
 	draw_string(

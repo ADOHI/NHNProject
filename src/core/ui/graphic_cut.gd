@@ -213,6 +213,38 @@ static func torn_open(
 	return out
 
 
+## 판을 **위에서부터 `upto` 픽셀만큼만** 드러낸다. 한 줄씩 그려지는 표시에 쓴다.
+##
+## 잘라 내는 것이라 **판의 형태가 그대로 유지된다** — 사각형으로 가리면
+## 평행사변형의 기울어진 변이 사라져 다른 판처럼 보인다.
+static func revealed(shape: PackedVector2Array, upto: float) -> Array[PackedVector2Array]:
+	var out: Array[PackedVector2Array] = []
+	if shape.is_empty():
+		return out
+	var span := _bounds(shape)
+	if upto >= span.size.y:
+		out.append(shape)
+		return out
+	if upto <= 0.0:
+		return out
+	var lid := PackedVector2Array(
+		[
+			Vector2(span.position.x - 4.0, span.position.y - 4.0),
+			Vector2(span.end.x + 4.0, span.position.y - 4.0),
+			Vector2(span.end.x + 4.0, span.position.y + upto),
+			Vector2(span.position.x - 4.0, span.position.y + upto),
+		]
+	)
+	for piece in Geometry2D.intersect_polygons(shape, lid):
+		out.append(piece)
+	return out
+
+
+## 판의 위끝과 아래끝. 드러나는 높이를 재는 쪽이 쓴다.
+static func span_of(shape: PackedVector2Array) -> Rect2:
+	return _bounds(shape)
+
+
 static func _bounds(shape: PackedVector2Array) -> Rect2:
 	var span := Rect2(shape[0], Vector2.ZERO)
 	for point in shape:
