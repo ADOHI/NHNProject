@@ -68,6 +68,8 @@ func _initialize() -> void:
 	print("")
 	_print_identifiable(samples)
 	print("")
+	_print_pairs(samples)
+	print("")
 	_print_complexity()
 	quit()
 
@@ -171,20 +173,99 @@ func _overlaps(a: Array, b: Array) -> bool:
 ## 그 지표 하나로 그 성격을 짚어낼 수 있다. 하나도 없으면 **이름표뿐이다.**
 func _print_identifiable(samples: Dictionary) -> void:
 	print("== 한 판만 보고 성격을 짚어낼 수 있나 ==")
-	print("%-11s%s" % ["성격", "그 성격만 홀로 떨어지는 지표"])
+	print("%-11s%-9s%-13s%s" % ["성격", "티나는판", "가장 센 지표", "홀로 떨어지는 지표"])
 	for character in DungeonCatalog.count():
 		var solo: Array[String] = []
 		for entry in _METRICS:
-			var bands := _bands(samples[entry[0]])
-			if _is_alone(bands, character):
+			if _is_alone(_bands(samples[entry[0]]), character):
 				solo.append(String(entry[1]))
-		var text := "  ".join(solo) if not solo.is_empty() else "(없다 - 이름표뿐이다)"
-		print("%-11s%s" % [DungeonCatalog.name_of(character), text])
+		var best := _loudest(samples, character)
+		var text := "  ".join(solo) if not solo.is_empty() else "(없다)"
+		print(
+			(
+				"%-11s%-9s%-13s%s"
+				% [DungeonCatalog.name_of(character), "%d%%" % int(best[1]), best[0], text]
+			)
+		)
+
+
+## **그 성격의 판 중 몇 %가 한눈에 티가 나나** — 그리고 어느 지표에서.
+##
+## 띠 겹침(±2 표준편차)은 **「거의 모든 판이 갈리나」** 를 묻는 엄격한 자다.
+## 그것만 보면 "안 갈린다"로 끝나는데, 실제로는 **판의 절반이 티가 날 수도** 있다.
+## 그 둘은 다른 물음이고, 고를 때 쓰이는 것은 뒤쪽이다.
+##
+## 여기서는 그 성격의 판 하나하나를 놓고 **다른 넷의 띠 밖에 있나**를 센다.
+## 밖에 있으면 그 판은 보는 순간 그 성격임이 드러난다.
+func _loudest(samples: Dictionary, character: int) -> Array:
+	var best_name := "-"
+	var best_share := 0.0
+	for entry in _METRICS:
+		var bands := _bands(samples[entry[0]])
+		var mine: Array = (samples[entry[0]] as Array)[character]
+		var outside := 0.0
+		for value in mine:
+			if _outside_all_others(bands, character, float(value)):
+				outside += 1.0
+		var share := 100.0 * outside / maxf(float(mine.size()), 1.0)
+		if share > best_share:
+			best_share = share
+			best_name = String(entry[1])
+	return [best_name, best_share]
+
+
+## 그 값이 **다른 성격 넷의 띠 전부**의 밖에 있는가.
+func _outside_all_others(bands: Array, character: int, value: float) -> bool:
+	for other in bands.size():
+		if other == character:
+			continue
+		var low: float = bands[other][0] - 2.0 * bands[other][1]
+		var high: float = bands[other][0] + 2.0 * bands[other][1]
+		if value >= low and value <= high:
+			return false
+	return true
 
 
 func _is_alone(bands: Array, character: int) -> bool:
 	for other in bands.size():
 		if other != character and _overlaps(bands[character], bands[other]):
+			return false
+	return true
+
+
+## **지표 둘을 함께 보면 갈리나.**
+##
+## 지표 하나로는 아무도 못 짚는 성격이라도, **둘을 함께 보면** 갈릴 수 있다 —
+## 다른 성격과 첫째에서 겹쳐도 둘째에서 안 겹치면 그 성격은 구분된다.
+##
+## 화면이 이미 수치를 셋(규모·복잡·험난) 띄우므로 **사람도 하나만 보지 않는다.**
+## 그래서 「짚어낼 수 있나」의 진짜 물음은 조합 쪽이다.
+func _print_pairs(samples: Dictionary) -> void:
+	print("== 지표를 둘씩 묶으면 갈리나 ==")
+	print("%-11s%s" % ["성격", "그 성격을 홀로 떼어 놓는 지표 짝"])
+	for character in DungeonCatalog.count():
+		var found: Array[String] = []
+		for i in _METRICS.size():
+			for j in range(i + 1, _METRICS.size()):
+				var first := _bands(samples[_METRICS[i][0]])
+				var second := _bands(samples[_METRICS[j][0]])
+				if _alone_on_pair(first, second, character):
+					found.append("%s+%s" % [_METRICS[i][1], _METRICS[j][1]])
+		var text := "  ".join(found.slice(0, 3)) if not found.is_empty() else "(없다)"
+		if found.size() > 3:
+			text += "  ... 모두 %d 짝" % found.size()
+		print("%-11s%s" % [DungeonCatalog.name_of(character), text])
+
+
+## 그 짝에서 홀로인가 — **다른 성격마다 둘 중 하나에서라도 안 겹치면** 갈린다.
+func _alone_on_pair(first: Array, second: Array, character: int) -> bool:
+	for other in first.size():
+		if other == character:
+			continue
+		if (
+			_overlaps(first[character], first[other])
+			and _overlaps(second[character], second[other])
+		):
 			return false
 	return true
 
