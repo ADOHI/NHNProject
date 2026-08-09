@@ -192,20 +192,23 @@ static func torn_open(
 	var reach := span.size.length()
 	# 갈라진 틈. 덜 열렸을수록 틈이 넓고 조각이 멀리 물러나 있다.
 	var gap := (1.0 - open) * apart
-	for sign in [1.0, -1.0]:
-		var edge := middle + side * gap * sign
+	# `sign` 은 GDScript 내장 함수 이름이다 — 지역 변수로 쓰면 가려지고,
+	# 이 저장소는 경고를 오류로 취급하므로 **컴파일이 통째로 죽는다.**
+	var ways: Array[float] = [-1.0, 1.0]
+	for way in ways:
+		var edge := middle + side * gap * way
 		var half := PackedVector2Array(
 			[
 				edge - dir * reach,
 				edge + dir * reach,
-				edge + dir * reach + side * reach * sign,
-				edge - dir * reach + side * reach * sign,
+				edge + dir * reach + side * reach * way,
+				edge - dir * reach + side * reach * way,
 			]
 		)
 		for piece in Geometry2D.intersect_polygons(shape, half):
 			var moved := PackedVector2Array()
 			for point in piece:
-				moved.append(point + side * gap * sign * 1.6)
+				moved.append(point + side * gap * way * 1.6)
 			out.append(moved)
 	return out
 
