@@ -55,10 +55,42 @@ func _settle(guild: Guild, times: int) -> Array[RecruitProspect]:
 
 
 func test_guild_gets_a_leader_in_the_world() -> void:
+	# **대표는 대원 중 하나다** (설계 24.29.2). 길드 밖에 세우면 "우리 대표" 가
+	# 화면 어디에도 안 나온다.
 	var world := _world()
 	var guild := _guild(world)
 	assert_ne(guild.leader_person, PersonRegistry.NO_PERSON)
-	assert_gte(world.graph.degree_of(guild.leader_person), 2, "대표는 연줄이 있어야 한다")
+	var ids := PackedInt32Array()
+	for member in guild.members:
+		ids.append(member.person)
+	assert_true(Array(ids).has(guild.leader_person))
+
+
+func test_members_are_real_people_of_one_discipline_each() -> void:
+	# 계열 하나씩이라는 규칙은 그대로다 (docs/design/14-squad.md §14.4.3).
+	var world := _world()
+	var guild := _guild(world)
+	assert_eq(guild.members.size(), MemberDiscipline.count())
+	var seen := {}
+	for member in guild.members:
+		assert_true(member.is_in_world(), member.display_name)
+		assert_eq(member.display_name, world.registry.name_of(member.person))
+		assert_false(seen.has(int(member.discipline)))
+		seen[int(member.discipline)] = true
+
+
+func test_members_without_a_world_say_so() -> void:
+	var guild := Guild.create_starting(_SEED)
+	for member in guild.members:
+		assert_false(member.is_in_world())
+		assert_string_contains(guild.member_note(member), "미구현")
+
+
+func test_member_note_reads_as_a_person() -> void:
+	var guild := _guild(_world())
+	for member in guild.members:
+		assert_string_contains(guild.member_note(member), "세")
+		assert_string_contains(guild.member_note(member), "아는 사람")
 
 
 func test_guild_without_a_world_has_no_leader() -> void:

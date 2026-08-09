@@ -58,6 +58,9 @@ var world: NpcWorld = null
 ## 이 길드를 대표하는 세계의 인물. 영입 판정이 「후보가 이 사람을 어떻게 보는가」를 묻는다.
 var leader_person: int = PersonRegistry.NO_PERSON
 
+## 대원을 데려온 소속. **길드는 소속이다** (설계 24.29.2).
+var home_faction: int = PersonRegistry.NO_FACTION
+
 ## 이미 정산한 원정 번호 장부.
 ##
 ## 보고서 쪽 플래그로도 막을 수 있지만, 그러면 보고서를 복제해 오면 뚫린다.
@@ -76,38 +79,129 @@ func _init(name: String = "이름 없는 길드") -> void:
 ## **첫 화면부터** 성립시키기 위해서다 (docs/design/14-squad.md §14.4.3).
 ## 넷 이하로 시작하면 초반에는 전부 데려갈 수 있어 편성이 결정이 아니게 된다.
 ##
-## npc_world 를 주면 **길드가 세계에 발을 딛는다** — 대표 인물이 정해지고
-## 접선처가 그 사람의 연줄로 후보를 찾는다 (GuildSettlement).
+## npc_world 를 주면 **대원이 세계의 인물이 된다** — 이름을 지어내지 않고
+## 인구에서 뽑고, 그 사람들에게는 가족과 원수가 이미 있다 (설계 24.29).
 static func create_starting(
 	seed_value: int = 0, name: String = "새벽 길드", npc_world: NpcWorld = null
 ) -> Guild:
 	var guild := Guild.new(name)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
+	if npc_world != null and npc_world.is_ready():
+		guild._recruit_from_world(npc_world, rng)
+	else:
+		guild._invent_members(rng)
+	return guild
+
+
+## 세계 없이 대원을 만든다. 이름을 지어내므로 **관계가 없다** —
+## 화면이 그 사실을 사유로 말한다 (RecruitProspect.blocked_reason).
+func _invent_members(rng: RandomNumberGenerator) -> void:
 	var used := {}
 	for discipline in MemberDiscipline.count():
-		guild.add_member(
+		add_member(
 			GuildMember.new(
 				"member_%d" % discipline,
 				MemberNames.pick(rng, used),
 				discipline as MemberDiscipline.Kind
 			)
 		)
-	guild.bind_world(npc_world, rng)
-	return guild
 
 
-## 세계를 물린다. 대표는 **연줄이 있는 사람**으로 고른다 —
-## 관계가 없는 사람을 세우면 접선처가 아무도 못 찾고, 그것은 세계의 사실이 아니라
-## 뽑기 실패다 (NpcWorld.pick_connected).
-func bind_world(npc_world: NpcWorld, rng: RandomNumberGenerator) -> void:
-	if npc_world == null or not npc_world.is_ready():
-		return
+## 인구에서 대원 다섯을 뽑는다. **계열 하나씩**이고 **서로 연줄이 있다.**
+##
+## 계열을 하나씩 채우는 규칙은 그대로다 — 정원(3)이 계열 수(5)보다 작아야
+## 편성이 첫 화면부터 결정이 된다 (docs/design/14-squad.md §14.4.3).
+##
+## **길드는 소속이다.** 처음에는 한 사람을 기점으로 연줄에서 뽑아 봤는데
+## 대원끼리 아는 사이가 **열 쌍 중 한 쌍뿐**이었다 — 계열을 하나씩 채워야 해서
+## 연줄 탐색이 계열 문턱에서 미끄러지고 결국 무작위로 떨어진다.
+##
+## 소속에서 뽑으면 대원이 **같은 바닥의 사람들**이 되고, 그 안에서 세계가 이미 맺어 둔
+## 관계가 그대로 딸려 온다. 이것이 설계 24.1 의 2층(인물↔길드)이 서는 첫 자리다.
+## 소속에 그 계열이 없으면 연줄로, 그래도 없으면 아무나로 떨어진다.
+func _recruit_from_world(npc_world: NpcWorld, rng: RandomNumberGenerator) -> void:
 	world = npc_world
-	leader_person = npc_world.pick_connected(rng)
+	home_faction = SocialReach.pick_faction(npc_world, rng)
+	var pool := npc_world.factions.members_of(home_faction)
+	var anchor := (
+		pool[rng.randi() % pool.size()] if not pool.is_empty() else PersonRegistry.NO_PERSON
+	)
+	var taken := {}
+	for discipline in MemberDiscipline.count():
+		var found := _draw_member(npc_world, pool, anchor, taken, rng, discipline)
+		if found == SocialReach.NOBODY:
+			continue
+		taken[found] = true
+		var member := GuildMember.new(
+			"member_%d" % discipline,
+			npc_world.registry.name_of(found),
+			discipline as MemberDiscipline.Kind
+		)
+		member.person = found
+		add_member(member)
+	_elect_leader()
+
+
+## 대원 하나. **소속 안이 먼저이고 연줄이 그다음이다.**
+func _draw_member(
+	npc_world: NpcWorld,
+	pool: PackedInt32Array,
+	anchor: int,
+	taken: Dictionary,
+	rng: RandomNumberGenerator,
+	discipline: int
+) -> int:
+	var inside := PackedInt32Array()
+	for person in pool:
+		if not taken.has(person) and int(npc_world.registry.discipline_of(person)) == discipline:
+			inside.append(person)
+	if not inside.is_empty():
+		return inside[rng.randi() % inside.size()]
+	return SocialReach.near(npc_world, anchor, taken, rng, discipline)[0]
+
+
+## 대표는 **대원 중 연줄이 가장 두터운 사람**이다.
+##
+## 따로 세우지 않는 이유는 그 사람이 길드 밖에 있으면 *"우리 대표"* 가
+## 화면 어디에도 안 나오기 때문이다. 영입 판정이 묻는 것은
+## **후보가 우리를 어떻게 보는가**이고, 그 「우리」의 얼굴이 대원이라야 한다.
+func _elect_leader() -> void:
+	var best := -1
+	for member in members:
+		if not member.is_in_world():
+			continue
+		var ties := world.graph.mutuals_of(member.person).size()
+		if ties > best:
+			best = ties
+			leader_person = member.person
 
 
 # ---------------------------------------------------------------- 등급과 정원
+
+
+## 대원의 **세계 쪽 한 줄** — 나이와 엮인 사람 수.
+##
+## 화면이 다시 조립하지 않게 코어가 만든다 (member_panel 의 요약과 같은 규율).
+## **이 줄이 있어야 대원이 이름이 아니라 사람으로 읽힌다** — 나이가 있고
+## 아는 사람이 있고 가족이 있다 (설계 24.29).
+func member_note(member: GuildMember) -> String:
+	if world == null or not member.is_in_world():
+		return "세계 인물과 안 물려 있다 (인물-길드 층 미구현)"
+
+	var kin := 0
+	for other in world.graph.targets_of(member.person):
+		if RelationKind.is_inborn(world.graph.kind_of(member.person, other)):
+			kin += 1
+	var line := (
+		"%d세 • 아는 사람 %d"
+		% [world.registry.age_of(member.person), world.graph.mutuals_of(member.person).size()]
+	)
+	if kin > 0:
+		line += " • 가족 %d" % kin
+	if member.person == leader_person:
+		line += "  [대표]"
+	return line
 
 
 ## 길드 등급. 지금은 아지트 레벨과 같은 값이다.

@@ -56,6 +56,8 @@ func _member_box(
 	var current := guild.assignment.facility_of(member.id)
 	box.body.add_child(_facility_row(guild, member, current, locked))
 	box.line(MemberDiscipline.eye_note(member.discipline), BaseWidgets.INK_DIM)
+	# 대원이 세계의 인물이라는 것이 여기서 보인다 (설계 24.29). 문장은 코어가 만든다.
+	box.line(guild.member_note(member), BaseWidgets.INK_DIM)
 	return box
 
 
