@@ -39,6 +39,9 @@ ModelSamplingAuraFlow shift 3.0` 이었다. 그 레인의 배선은 `euler` 였�
 
 from __future__ import annotations
 
+import ast
+import os
+
 # ── zitani (Z-Image Turbo) — 전신 일러스트 ───────────────────────────────────
 
 ZITANI_CKPT = "kompostoZITANI_zitANI_fp8.safetensors"
@@ -69,66 +72,93 @@ SD_SIZE = 512
 
 # ── 코드가 고정하는 문장 ─────────────────────────────────────────────────────
 
-#: **원본을 재구성한 것이다. 내가 지은 문장이 아니다** (§27.24).
-#:
-#: 1차 배치의 전신 일러스트가 불합격이었다. 원인이 분명하다 —
-#: **`minimal-char-studio` 에 이미 잘 나오는 프롬프트가 있는데 내가 통째로 갈고
-#: 새로 지었다.** 그 프롬프트에는 화풍, 구도, 배경, 품질 어휘가 다 들어 있고
-#: 그것이 그림을 만든다.
-#:
-#: 출처는 `mcs/commands/illust.py` 의 `build_prompt()` 이고,
-#: 실제로 모델에 간 문자열은 `2dAnim/outputs/minimal-char/results.jsonl` 에
-#: **212건** 남아 있다 (전부 zitani, 전부 832x1216).
-#:
-#:     A 2D Japanese anime illustration. {style}. {character}. {FRAME}
-#:
-#: **고정 넷, 변수 둘이다.** 우리가 갈아 끼우는 것은 `character` 하나뿐이다.
-ANIME_ANCHOR = "A 2D Japanese anime illustration"
+# ---------------------------------------------------------------------------
+# 원본 조리법 — **베끼지 않고 읽어 온다** (§27.24)
+# ---------------------------------------------------------------------------
+#
+# 출처: `2dAnim/minimal-char-studio/mcs/commands/illust.py` 의 `build_prompt()`,
+# `mcs/prompt/quality.py` 의 `ANIME_ANCHOR`.
+# 실제로 모델에 간 문자열이 `outputs/minimal-char/results.jsonl` 에 **212건** 남아 있다
+# (전부 zitani, 전부 832x1216).
+#
+#     A 2D Japanese anime illustration. {style}. {character}. {FRAME}
+#
+# **상수를 베껴 적지 않는다.** 이 저장소에서 베낀 상수가 조용히 낡은 사고가 여러 번이다.
+# 그 파일을 실제로 읽어서 값을 꺼낸다 — 그쪽이 문자열을 고치면 여기가 같이 바뀌고,
+# 이름이 바뀌면 **조용히 낡는 대신 터진다.**
+#
+# `import` 대신 `ast` 로 읽는 이유: `mcs/commands/illust.py` 는 PIL 과 그 패키지의
+# 절반을 끌고 오고 락 파일까지 건드린다. **우리는 문자열 두 개만 필요하다.**
+# 파싱은 실행이 아니라 읽기라 부작용이 없다.
 
-#: 구도, 배경, 그림자를 한 덩어리로 잡는 고정 문자열. **한 글자도 안 고친다.**
-#: 그쪽 주석이 근거를 적어 뒀다 — *"그림자를 세 방향으로 막는다. no shadow on the
-#: ground 만으로는 바닥에 해칭 그림자와 접지 그림자가 계속 그려졌다."*
-ILLUST_FRAME = (
-    "Full body from head to toe, standing straight in a neutral idle pose, "
-    "arms slightly away from the body, character centered. "
-    "Isolated on a pure flat white background. No ground, no floor, no cast shadow "
-    "and no contact shadow under the feet. Nothing else in the image."
-)
+_STUDIO = os.path.join(os.path.expanduser("~"), "2dAnim", "minimal-char-studio")
 
-#: 기록에 남은 네거티브. **zitani 는 cfg 1.0 이라 실제로는 무효다**(`PROMPTS.md` §7-1) —
-#: 그래도 원본이 보낸 것을 그대로 보낸다. 빼는 것도 바꾸는 것이므로 지금은 안 건드린다.
-ILLUST_NEGATIVE = (
-    "arms, legs, limbs, drop shadow, cast shadow, ground, floor, gradient background, "
-    "photorealistic, 3d render, blurry, cropped, multiple views, text, watermark, fingers"
-)
 
-#: 화풍 슬롯. **원본은 여기를 인물마다 LLM 이 새로 짓는다** — 무한 탐색이 목적이라 그렇다.
-#: **우리는 고정한다.** 인물마다 화풍이 달라지면 같은 게임의 얼굴이 아니게 된다 (§27.9.1).
+def _const_from(rel_path: str, name: str) -> str:
+    """그 파일의 모듈 수준 문자열 상수 하나를 읽어 온다. **없으면 터뜨린다.**"""
+    path = os.path.join(_STUDIO, *rel_path.split("/"))
+    with open(path, encoding="utf-8") as f:
+        tree = ast.parse(f.read(), filename=path)
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == name:
+                return ast.literal_eval(node.value)
+    raise RuntimeError(
+        f"{path} 에 {name} 이 없다. minimal-char-studio 가 바뀌었다 — "
+        f"§27.24 를 읽고 조리법을 다시 맞춰라"
+    )
+
+
+#: 매체 앵커. **맨 앞이라 가장 세다.** 그쪽 주석 — *"이게 없으면 그림체 슬롯이 회화 쪽으로
+#: 갈 때 모델이 반실사로 끌려간다."* 순서를 바꾸지 마라 (위치가 곧 가중치다).
+ANIME_ANCHOR = _const_from("mcs/prompt/quality.py", "ANIME_ANCHOR")
+
+#: 구도, 배경, 그림자를 한 덩어리로 잡는 고정 문자열.
+#: 그쪽 주석이 근거를 적어 뒀다 — *"그림자를 세 방향으로 막는다. `no shadow on the
+#: ground` 만으로는 바닥에 해칭 그림자와 접지 그림자가 계속 그려졌다."*
+ILLUST_FRAME = _const_from("mcs/commands/illust.py", "FRAME")
+
+#: 화풍 슬롯. **원본은 매 장 LLM 이 새로 짓는다** (무한 탐색이 목적이라 그렇다).
+#: **우리는 하나로 고정한다** — 사용자 결정. 3000명이 같은 화집에서 나온 것처럼 보여야 한다.
+#: 화풍 다양성을 버리는 대신 **초상도 전신도 SD 도 같은 손이 된다.**
 #:
-#: 형식은 원본 가이드가 요구하는 **실행 가능한 작화 지시** 그대로다 —
-#: 윤곽선, 음영, 색 셋을 각각 "무엇을 하라"로 적는다. 기록에 남은 표본이 그 모양이다:
+#: 형식은 원본 가이드가 요구하는 **실행 가능한 작화 지시**다 — 윤곽선, 음영, 색 셋을
+#: 각각 "무엇을 하라"로. 기록에 남은 표본이 그 모양이다:
 #:
 #:     "Fine dotted outlines, rich velvety shading, sepia tones paired with
 #:      desaturated rose and cypress suggest early 1900s manga nostalgia"
 #:
-#: **이 값은 아직 사용자 검수를 안 받았다.** 값 하나를 바꾸는 자리이므로
-#: 검수에서 갈아 끼우기 쉽다.
+#: **`water_bishoujo` 를 뽑은 실제 문자열은 어디에도 안 남아 있다** (§27.24.3).
+#: 그래서 후보를 만들어 검수를 받는다. `STYLE_CANDIDATES` 를 보라.
 ILLUST_STYLE = (
     "Fine ink outlines over translucent watercolour washes, the pigment pooling and "
     "drying unevenly inside each shape, muted slate blue, ochre and dull red"
 )
 
+#: 검수용 후보. **값 하나를 바꾸는 자리라 갈아 끼우기가 싸다.**
+STYLE_CANDIDATES: dict[str, str] = {
+    "wash": ILLUST_STYLE,
+    "ink": (
+        "Firm dark ink contours with dry-brush breaks, flat translucent watercolour fills "
+        "left pale at the edges, faded indigo, rust and bone white"
+    ),
+    "soft": (
+        "Soft graphite contours under wet watercolour bleeding past the line, colour "
+        "settling into grainy pools, dusty green, warm grey and muted plum"
+    ),
+}
 
-def compose_illust(character: str) -> str:
+
+def compose_illust(character: str, style: str = "") -> str:
     """원본 조립 그대로. **갈아 끼우는 것은 `character` 한 칸뿐이다** (§27.24).
 
-    순서가 곧 가중치다 (`PROMPTS.md` §3) — 매체 앵커가 맨 앞이고, 그 다음이 화풍,
-    그 다음이 인물, 규격이 맨 뒤다. **순서를 바꾸지 마라.**
-
-    품질 태그(`masterpiece, best quality ...`)는 **안 붙인다.**
-    원본이 A/B 로 재고 나서 사용자 결정으로 뺐다.
+    순서가 곧 가중치다 — 앵커, 화풍, 인물, 규격. **바꾸지 마라.**
+    품질 태그는 **안 붙인다** — 원본이 A/B 재고 사용자 결정으로 뺐다.
     """
-    return f"{ANIME_ANCHOR}. {ILLUST_STYLE.rstrip('.')}. {character.rstrip('.')}. {ILLUST_FRAME}"
+    style = (style or ILLUST_STYLE).rstrip(".")
+    return f"{ANIME_ANCHOR}. {style}. {character.rstrip('.')}. {ILLUST_FRAME}"
 
 
 def zitani_graph(prompt: str, seed: int, width: int, height: int,
