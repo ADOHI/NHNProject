@@ -3128,6 +3128,10 @@ godot --path . -s res://tools/capture_pop.gd -- .renders/46-tone slash stills
 
 `.renders/50-slash_{abyss,plum,azure,dancheong}.png` · `.renders/50-slash.gif`
 
+**§20.37 이 제목을 바꾼 뒤 다시 뽑았다.** 합본은 HEAD 를 따라가야 하는 산출물이라
+안이 하나 붙을 때마다 새로 뽑는다 — 안 그러면 `.renders` 가 **어느 시점의 화면인지
+모르는 그림**이 된다. 편 여든 장은 안 남긴다: GIF 가 판정 매체고 프레임은 20MB 다.
+
 GIF 는 **「단청」 하나로만** 뽑는다. 신호(치자황) · 고름(벽록) · 험(단홍)이
 **색상환에서 셋 다 멀어** 포인트를 셋으로 가른 것이 가장 또렷하게 보인다.
 정지 넷은 색을 재는 것이고 GIF 는 **움직임**을 재는 것이라 — 스냅으로 들어와 서고,
