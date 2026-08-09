@@ -33,12 +33,28 @@ const VOLUME_SPLASH_PER_CELL := 0.333
 var max_value: float = 100.0
 
 ## 각 단계에 닿는 눈금. 오름차순이어야 한다.
+##
+## **확정됐다** (§28.20.35). `tools/survey_break_thresholds.gd` 가 실제로 나올 수 있는
+## 체인들을 통과시켜 기준 넷으로 판정했다 — 무작위로는 안 뜨고, 표본 5타면 경직,
+## 작정한 9타면 띄우기, 한 판 체인으로는 안 쓰러진다.
+##
+## > **다만 감쇠와 한 몸이다** (§28.20.22). 아래 `decay_per_second` 를 만지면
+## > 이 셋의 뜻이 통째로 바뀐다. 같이 보라.
 var stagger_at: float = 30.0
 var launch_at: float = 60.0
 var knockdown_at: float = 100.0
 
-## 초당 빠지는 양. **미정 중의 미정이다** (§28.8 「무너짐 회복」).
-var decay_per_second: float = 20.0
+## 초당 빠지는 양. §28.8 「무너짐 회복」이 미정으로 남긴 값이다.
+##
+## **문턱을 확정하면서 이 값도 같이 움직였다** (20 -> 10, §28.20.35).
+## 셋을 따로 못 정하기 때문이다 — 초당 20 에서는 **어떤 문턱도 기준 넷을 못 세운다.**
+##
+## 초당 20 에서 1칸 한 타가 남기는 몫이 **한 방의 29%** 뿐이라
+## 아홉 타를 쳐도 다섯 타와 거의 같은 데서 만난다. 초당 10 이면 65% 가 남는다.
+##
+## > 되돌리려면 이 한 줄만 고치면 된다. `tools/survey_break_thresholds.gd` 가
+## > 그때마다 판정을 다시 낸다.
+var decay_per_second: float = 10.0
 
 ## 검이 닿기까지 걸리는 시간(`impact_seconds`). **무기 부피에서 나온다.**
 ##
@@ -97,7 +113,9 @@ var splash_base: float = 1.0
 var splash_per_cell: float = 0.0
 
 
-func _init(p_decay_per_second: float = 20.0) -> void:
+## 감쇠만 갈아 끼우고 나머지는 그대로. 기본값은 위 `decay_per_second` 와 같아야 한다 —
+## 두 곳에 다른 수를 적으면 `new()` 와 `new(10.0)` 이 다른 판이 된다.
+func _init(p_decay_per_second: float = 10.0) -> void:
 	decay_per_second = p_decay_per_second
 
 
