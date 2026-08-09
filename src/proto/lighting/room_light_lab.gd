@@ -32,7 +32,7 @@ extends Node2D
 ## | `4` | 가림 폴리곤 on/off |
 ## | `5` | 폴리곤 외곽선 보기 |
 ## | `6` | 그림자 필터 순환 (없음 → PCF5 → PCF13) |
-## | `7` | **판 노멀맵** 순환 (없음 → 휘도 → DSINE). §26.4.5 |
+## | `7` | **판 노멀맵** 순환 (없음 → 휘도 → DSINE → DSINE 바닥고침). §26.4.5 |
 ## | `[` `]` | 폴리곤 `epsilon` (화면 픽셀). 점 수가 즉시 바뀐다 |
 ## | `←` `→` | 카메라 |
 ## | `Tab` | 방 바꾸기 |
@@ -62,7 +62,7 @@ const _FILTER_NAMES: Array[String] = ["없음", "PCF5", "PCF13"]
 const _DARK_STEPS: Array[float] = [1.0, 0.85, 0.70, 0.55, 0.42, 0.30]
 const _DARK_NAMES: Array[String] = ["없음", "0.85", "0.70", "0.55", "0.42", "0.30"]
 
-## 판에 씌울 노멀맵. `없음` → `휘도` → `DSINE` 순으로 돈다 (§26.4.5).
+## 판에 씌울 노멀맵. `없음` → `휘도` → `DSINE` → `DSINE 바닥고침` 순으로 돈다 (§26.4.5).
 const _NORMAL_NAMES: Array[String] = ["없음", "휘도", "DSINE", "DSINE 바닥고침"]
 ## 모드별 파일 꼬리. 휘도는 파일이 아니라 엔진이 그 자리에서 만든다.
 const _NORMAL_SUFFIX: Array[String] = ["", "", ".normal", ".normal_fixed"]
