@@ -67,7 +67,7 @@ func test_blocked_reason_tells_the_two_causes_apart() -> void:
 	var grid := _grid(4, 4)
 	grid.place(_building("shop", Vector2i(2, 2), Vector2i(0, 0), Facility.Kind.WORKSHOP))
 	assert_eq(grid.blocked_reason(Vector2i(1, 1), Vector2i(4, 0)), "판 밖이다")
-	assert_eq(grid.blocked_reason(Vector2i(1, 1), Vector2i(0, 0)), "공방 와 겹친다")
+	assert_eq(grid.blocked_reason(Vector2i(1, 1), Vector2i(0, 0)), "공방과 겹친다")
 	assert_eq(grid.blocked_reason(Vector2i(1, 1), Vector2i(3, 3)), "", "빈 칸은 이유가 없다")
 
 

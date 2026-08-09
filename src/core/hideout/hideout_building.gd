@@ -24,6 +24,20 @@ extends RefCounted
 ## 그것을 걸러야 한다.
 const NOT_A_FACILITY := -1
 
+## 시설별 발자국. **잠정이다** — §30.9 ★3 이 건물 종류를 열어 두었다.
+##
+## 여기 한 곳에 두는 이유는, 처음에 화면의 시작 배치표에 크기를 적어 두었더니
+## 「짓기」가 생기는 순간 같은 값이 두 곳에 살게 되었기 때문이다.
+## 크기가 갈리면 미리보기와 실제 건물이 다른 크기가 된다.
+##
+## 셋이 다 다른 모양인 것은 일부러다 — 정사각형만 있으면 회전도 방향도 눈에 안 들어오고,
+## 겹침 검사가 정사각형에서만 맞는 것을 못 잡는다.
+const _FOOTPRINTS: Array[Vector2i] = [
+	Vector2i(2, 2),  ## 공방
+	Vector2i(2, 3),  ## 정보실
+	Vector2i(3, 2),  ## 접선처
+]
+
 ## 판 안에서 이 건물을 가리키는 이름. 격자의 점유표가 이 값을 든다.
 var id: String
 
@@ -47,6 +61,12 @@ func _init(
 	facility_kind = kind
 	footprint = Vector2i(maxi(1, size.x), maxi(1, size.y))
 	origin = at
+
+
+static func footprint_for(facility_kind: int) -> Vector2i:
+	if facility_kind < 0 or facility_kind >= _FOOTPRINTS.size():
+		return Vector2i.ONE
+	return _FOOTPRINTS[facility_kind]
 
 
 func is_facility() -> bool:

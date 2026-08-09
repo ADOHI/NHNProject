@@ -1,9 +1,10 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://src/ui/hideout/hideout_screen.gd" id="1_root"]
 [ext_resource type="Script" path="res://src/ui/hideout/hideout_floor.gd" id="2_floor"]
 [ext_resource type="Script" path="res://src/ui/hideout/hideout_building_view.gd" id="3_building"]
 [ext_resource type="Script" path="res://src/ui/hideout/hideout_cursor.gd" id="4_cursor"]
+[ext_resource type="Script" path="res://src/ui/hideout/hideout_ghost.gd" id="5_ghost"]
 
 [node name="HideoutScreen" type="Node2D"]
 script = ExtResource("1_root")
@@ -33,6 +34,10 @@ script = ExtResource("3_building")
 unique_name_in_owner = true
 script = ExtResource("4_cursor")
 
+[node name="GhostView" type="Node2D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("5_ghost")
+
 [node name="Ui" type="CanvasLayer" parent="."]
 
 [node name="StatusLabel" type="Label" parent="Ui"]
@@ -40,7 +45,7 @@ unique_name_in_owner = true
 offset_left = 12.0
 offset_top = 8.0
 offset_right = 900.0
-offset_bottom = 60.0
+offset_bottom = 84.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.88, 0.91, 0.96, 1)
 theme_override_colors/font_outline_color = Color(0.05, 0.05, 0.07, 1)
@@ -52,7 +57,7 @@ unique_name_in_owner = true
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 12.0
-offset_top = -140.0
+offset_top = -170.0
 offset_right = 720.0
 offset_bottom = -10.0
 grow_vertical = 0

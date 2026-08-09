@@ -8,6 +8,8 @@ extends SceneTree
 ## | `.captures/hideout_board.png` | 판 전체가 한눈에 들어오고 칸이 읽히는가 (§30.9 ★2) |
 ## | `.captures/hideout_close.png` | **칸과 건물의 각도가 캐릭터와 맞는가** (§30.2.1) |
 ## | `.captures/hideout_hover.png` | 가리킨 칸이 마우스 밑에 정확히 붙는가 |
+## | `.captures/hideout_ghost_ok.png` | ③ 놓을 수 있는 자리의 미리보기 |
+## | `.captures/hideout_ghost_blocked.png` | ③ 겹치는 자리의 미리보기와 그 이유 |
 ##
 ## ## 창을 한 번만 띄운다
 ##
@@ -65,6 +67,14 @@ func _process(_delta: float) -> bool:
 			_point_at_a_building()
 		4:
 			_save("hideout_hover")
+		5:
+			_aim_build_at_free_ground()
+		6:
+			_save("hideout_ghost_ok")
+		7:
+			_aim_build_at_a_building()
+		8:
+			_save("hideout_ghost_blocked")
 		_:
 			return true
 	_step += 1
@@ -94,6 +104,24 @@ func _point_at_a_building() -> void:
 	var world: Vector2 = iso.cell_to_world(target)
 	Input.warp_mouse(_screen.get_viewport().get_canvas_transform() * world)
 	print("[capture] 커서를 %s 칸으로 옮겼다" % [target])
+
+
+## 빈 땅에 정보실(2x3)을 겨눈다. 발자국이 정사각형이 아닌 것을 일부러 고른다.
+func _aim_build_at_free_ground() -> void:
+	_screen.call("begin_build", Facility.Kind.INTEL_ROOM)
+	_warp_to(Vector2i(6, 6))
+
+
+## 이미 선 건물 위에 겹쳐 겨눈다. 빨갛게 뜨고 이유가 나와야 한다.
+func _aim_build_at_a_building() -> void:
+	var grid = _screen.call("grid")
+	_screen.call("begin_build", Facility.Kind.INTEL_ROOM)
+	_warp_to(grid.buildings()[0].origin)
+
+
+func _warp_to(cell: Vector2i) -> void:
+	var iso = _screen.call("projection")
+	Input.warp_mouse(_screen.get_viewport().get_canvas_transform() * iso.cell_to_world(cell))
 
 
 func _save(shot_name: String) -> void:

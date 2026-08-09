@@ -97,7 +97,7 @@ func blocked_reason(footprint: Vector2i, origin: Vector2i, ignore_id: String = "
 			var holder := occupant_at(cell)
 			if not holder.is_empty() and holder != ignore_id:
 				var blocker: HideoutBuilding = _buildings[holder]
-				return "%s 와 겹친다" % blocker.label()
+				return "%s 겹친다" % KoreanJosa.wa(blocker.label())
 	return ""
 
 
@@ -172,6 +172,17 @@ func buildings_by_depth() -> Array[HideoutBuilding]:
 ## 비어 있는 칸 수. 배회할 자리가 남았는지를 판단할 때 쓴다(§30.3).
 func free_cell_count() -> int:
 	return cols * rows - _occupants.size()
+
+
+## 아직 안 쓰인 건물 이름을 만든다.
+##
+## 이름 짓기를 화면에 두면 화면마다 규칙이 갈리고, 두 화면이 같은 이름을 만들면
+## 나중에 놓은 것이 앞의 것을 조용히 덮는다 (place 가 같은 id 를 "옮기기" 로 본다).
+func unique_id(prefix: String) -> String:
+	var index := _buildings.size()
+	while _buildings.has("%s_%d" % [prefix, index]):
+		index += 1
+	return "%s_%d" % [prefix, index]
 
 
 func _clear_cells(building_id: String) -> void:

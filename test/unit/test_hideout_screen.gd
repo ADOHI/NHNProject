@@ -70,6 +70,63 @@ func test_pointing_off_the_board_is_reported_not_clamped() -> void:
 	assert_string_contains(_screen.status_text(), "판 밖")
 
 
+# ------------------------------------------------------------------ ③ 배치 배선
+
+
+func _aim(cell: Vector2i) -> void:
+	_screen.point_at_world(_screen.projection().cell_to_world(cell))
+
+
+func test_building_lands_where_the_screen_was_aimed() -> void:
+	var before: int = _screen.grid().buildings().size()
+	_aim(Vector2i(11, 11))
+	_screen.begin_build(Facility.Kind.WORKSHOP)
+	assert_true(_screen.commit_here())
+	assert_eq(_screen.grid().buildings().size(), before + 1)
+	assert_string_contains(_screen.status_text(), "놓았다")
+
+
+func test_screen_refuses_to_stack_buildings_and_says_why() -> void:
+	var grid = _screen.grid()
+	var existing = grid.buildings()[0]
+	var before: int = grid.buildings().size()
+	_aim(existing.origin)
+	_screen.begin_build(Facility.Kind.WORKSHOP)
+	assert_false(_screen.commit_here())
+	assert_eq(grid.buildings().size(), before, "겹치는 자리에 놓이면 안 된다")
+	assert_string_contains(_screen.status_text(), existing.label())
+
+
+func test_grabbing_a_building_and_dropping_it_moves_it() -> void:
+	var grid = _screen.grid()
+	var target = grid.buildings()[0]
+	var was: Vector2i = target.origin
+	_aim(was)
+	assert_true(_screen.grab_here())
+	_aim(Vector2i(11, 11))
+	assert_true(_screen.commit_here())
+	assert_ne(grid.building(target.id).origin, was)
+	assert_eq(grid.occupant_at(was), "", "떠난 자리는 비어야 한다")
+
+
+func test_grabbing_empty_ground_does_nothing() -> void:
+	_aim(Vector2i(0, 0))
+	assert_false(_screen.grab_here())
+	assert_false(_screen.placement().is_active())
+
+
+func test_cancelling_leaves_the_board_alone() -> void:
+	var grid = _screen.grid()
+	var target = grid.buildings()[0]
+	var was: Vector2i = target.origin
+	_aim(was)
+	_screen.grab_here()
+	_aim(Vector2i(11, 11))
+	_screen.cancel_placement()
+	assert_false(_screen.placement().is_active())
+	assert_eq(grid.building(target.id).origin, was)
+
+
 func test_camera_frames_the_whole_board() -> void:
 	var grid := _screen.grid()
 	var camera := _screen.find_children("*", "Camera2D", true, false)[0] as Camera2D
