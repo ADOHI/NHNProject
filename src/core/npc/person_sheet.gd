@@ -191,7 +191,10 @@ static func _relations(registry: PersonRegistry, person: int, graph: RelationGra
 				graph.bond(person, other),
 			]
 		)
-		section.add(SheetField.filled(label, line))
+		# **줄이 상대를 들고 있다.** 눌러서 그 사람으로 가는 길이 여기서 난다 (§20.23.4).
+		var entry := SheetField.filled(label, line)
+		entry.link = other
+		section.add(entry)
 	if inborn == 0:
 		section.add(SheetField.missing("태생", "가족도 스승도 없다 — 혼자다"))
 	section.add(SheetField.missing("얻은 것", "우호/원수 없음 — 사건 미구현 (설계 24.21)"))

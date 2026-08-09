@@ -24,7 +24,7 @@ const _WAIT_FRAMES := 200
 const _SHOTS := ["vivid", "colorless", "famous", "unaffiliated"]
 
 var _out := "res://.captures/npc_sheet"
-var _screen: Control
+var _screen: NpcSheetScreen
 var _frames := 0
 var _shot := 0
 
@@ -37,7 +37,7 @@ func _initialize() -> void:
 	if args.size() > 0:
 		_out = "res://%s" % args[0]
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_out))
-	_screen = load(_SCREEN).instantiate()
+	_screen = load(_SCREEN).instantiate() as NpcSheetScreen
 	root.add_child(_screen)
 
 
@@ -46,12 +46,9 @@ func _process(_delta: float) -> bool:
 	if _frames < 3:
 		return false
 
-	# 준비가 **끝났는지**를 본다. registry.size() 나 _generator 만 보면
-	# 인구 뒤에 오는 가족 심기(설계 24.22)를 놓쳐 빈 화면을 찍는다.
-	# **_factions 가 마지막에 서므로 그것 하나가 준비 신호다.**
-	var registry: PersonRegistry = _screen.get("_registry")
-	var ready: Variant = _screen.get("_factions")
-	if registry == null or registry.size() == 0 or ready == null:
+	# 준비가 **끝났는지**를 화면에게 묻는다. 사적 변수를 들여다보던 것을 고쳤다
+	# (설계 20.23) — 도구가 뒷문으로 들어가면 그 문이 막혀도 아무도 모른다.
+	if not _screen.is_ready():
 		if _frames > _WAIT_FRAMES:
 			push_error("인구 생성이 %d 프레임 안에 끝나지 않았다" % _WAIT_FRAMES)
 			return true
@@ -65,7 +62,7 @@ func _process(_delta: float) -> bool:
 		_shot += 1
 		_armed = false
 		return false
-	_screen.call("_show", _pick(registry, _SHOTS[_shot]))
+	_screen.show_person(_pick(_screen.registry(), _SHOTS[_shot]))
 	_armed = true
 	return false
 

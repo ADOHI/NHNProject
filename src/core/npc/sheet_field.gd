@@ -32,6 +32,9 @@ enum State {
 ## 그래서 **있고 없음은 `has_meter` 가 들고 값은 `bar` 가 든다.**
 const NO_BAR := -1.0
 
+## 이 줄이 아무도 안 가리킬 때의 `link`.
+const NO_LINK := -1
+
 ## 왼쪽에 적히는 이름. 비어 있으면 값만 한 줄로 나간다 (문장처럼).
 var label: String
 
@@ -60,6 +63,15 @@ var has_meter := false
 ##
 ## 뷰가 칸 종류로 짐작하게 두지 않는다. 짐작하면 칸을 하나 더할 때 조용히 틀린다.
 var is_signed_bar := false
+
+## 이 줄이 가리키는 인물. `NO_LINK` 면 아무도 안 가리킨다.
+##
+## **누르면 그 사람으로 간다** — 관계 줄이 쓴다 (§20.23.4). 화면에 나가는 값이 아니라
+## **줄이 들고 있는 목적지**다.
+##
+## 이름 글자에서 인물을 되찾는 길(문자열 검색)을 안 쓴 이유는 §24.22.7 이 성 분포를
+## 일부러 치우치게 했기 때문이다 — **동명이인에서 조용히 틀린다.**
+var link := NO_LINK
 
 
 func _init(
@@ -117,6 +129,11 @@ func display_text() -> String:
 			return reason
 		_:
 			return value
+
+
+## 누르면 갈 곳이 있는가.
+func has_link() -> bool:
+	return link != NO_LINK
 
 
 func has_bar() -> bool:
