@@ -22,6 +22,7 @@ func _initialize() -> void:
 	_report_encounters(world, guild)
 	_report_sample(world, guild)
 	_report_nameable(world, guild)
+	_report_names(world)
 	quit()
 
 
@@ -195,3 +196,36 @@ func _report_nameable(world: NpcWorld, guild: Guild) -> void:
 	print("%-26s %.0f%%" % ["태생 유형 (아들 · 스승 …)", 100.0 * float(inborn) / float(total)])
 	print("%-26s %.0f%%" % ["유형 + 근거 사건", 100.0 * float(storied) / float(total)])
 	print("%-26s %.0f%%" % ["수치뿐 — 부를 말이 없다", 100.0 * float(bare) / float(total)])
+
+
+## 소속 이름이 겹치나, 그리고 **번호 순서가 이름에 비치나** (설계 24.33).
+func _report_names(world: NpcWorld) -> void:
+	var seen := {}
+	var unnamed := 0
+	var shown := PackedStringArray()
+	for faction in 200:
+		var name := world.factions.name_of(faction)
+		if name.is_empty():
+			continue
+		if name == FactionNames.UNNAMED:
+			unnamed += 1
+		seen[name] = int(seen.get(name, 0)) + 1
+		if shown.size() < 8:
+			shown.append("#%d %s" % [faction, name])
+
+	var doubled := 0
+	for name in seen:
+		if int(seen[name]) > 1:
+			doubled += 1
+	print("\n== 소속 이름 (설계 24.33) ==")
+	print("%-26s %d" % ["만들 수 있는 이름", FactionNames.capacity()])
+	print("%-26s %d개" % ["이름이 선 소속", seen.size()])
+	print(
+		(
+			"%-26s %.0f%%"
+			% ["부하 (소속 / 용량)", 100.0 * float(seen.size()) / float(FactionNames.capacity())]
+		)
+	)
+	print("%-26s %d" % ["겹친 이름", doubled])
+	print("%-26s %d" % ["이름을 못 만든 소속", unnamed])
+	print("%-26s %s" % ["앞의 여덟", "  ".join(shown)])

@@ -219,4 +219,4 @@ func _build_events() -> void:
 		return
 	_stage = Stage.READY
 	# 소속 색인은 여기서 선다. **이것이 준비 신호다** — 도구가 이 하나를 보고 기다린다.
-	factions = FactionIndex.new(registry)
+	factions = FactionIndex.new(registry, seed_value, true)

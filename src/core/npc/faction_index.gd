@@ -29,9 +29,16 @@ var _ranks := PackedInt32Array()
 var _largest := 0
 var _populated := 0
 
+## 소속 번호 -> 이름. 시드를 안 주면 비어 있고 화면이 번호만 낸다.
+var _names: Dictionary = {}
 
-func _init(registry: PersonRegistry) -> void:
+
+## name_seed 를 주면 **소속마다 이름이 선다** (설계 24.33).
+## 안 주면 번호뿐이다 — 이름 없이도 크기와 순위는 읽힌다 (§24.17.6).
+func _init(registry: PersonRegistry, name_seed: int = 0, names_wanted: bool = false) -> void:
 	_build(registry)
+	if names_wanted:
+		_names = FactionNames.assign(name_seed, _populated_factions())
 
 
 ## 소속의 인원. 없는 소속이면 0.
@@ -68,14 +75,32 @@ func factions_of_at_least(wanted: int) -> PackedInt32Array:
 	return found
 
 
-## 소속을 한 줄로. `#12 86명 4/75` 또는 `무소속`.
+## 이 소속의 이름. 이름이 없으면 빈 문자열이다.
+func name_of(faction: int) -> String:
+	return str(_names.get(faction, ""))
+
+
+## 인원이 1명 이상인 소속들.
+func _populated_factions() -> PackedInt32Array:
+	var found := PackedInt32Array()
+	for faction in _sizes.size():
+		if _sizes[faction] > 0:
+			found.append(faction)
+	return found
+
+
+## 소속을 한 줄로. `무쇠 문 • 86명 • 4/75` 또는 `무소속`.
 ##
 ## 짧게 쓰는 이유는 왼쪽 열이 좁고 인원 막대가 같은 줄에 들어가야 해서다.
 ## 「크기」 같은 말머리를 빼도 `4/75` 가 순위로 읽힌다.
 func describe(faction: int) -> String:
 	if faction == PersonRegistry.NO_FACTION:
 		return "무소속"
-	return "#%d %d명 %d/%d" % [faction, size_of(faction), rank_of(faction), _populated]
+	# 이름이 있으면 번호를 뺀다 — **번호와 이름을 같이 내면 화면이 둘 다 읽으라고 시킨다.**
+	var head := name_of(faction)
+	if head.is_empty():
+		head = "#%d" % faction
+	return "%s %d명 %d/%d" % [head, size_of(faction), rank_of(faction), _populated]
 
 
 func _build(registry: PersonRegistry) -> void:
