@@ -34,14 +34,24 @@ const PAD := 26.0
 const SLIDE := 190.0
 const SNAP := 0.34
 
-## **화면을 가로지르는 벤 자국 한 줄.** 각도 · 지나는 점 · 벌어지는 폭.
+## **화면을 가로지르는 벤 자국 한 줄.**
 ##
 ## 「참격」이 지금까지 **무늬**였다 — 사선 줄무늬와 기울어진 판. 이 한 줄은
-## 판 다섯(비활성 버튼 · 팝업 · 창 모서리 · 메뉴 · 강조 띠)을 **실제로 가른다.**
-## 판마다 자기 가운데를 여는 것이 아니라 **한 줄이 판들을 건너 이어진다.**
-const RIP_ANGLE := -0.72
-const RIP_THROUGH := Vector2(330.0, 380.0)
+## 걸린 판을 **실제로 가른다.** 판마다 자기 가운데를 여는 것이 아니라
+## **한 줄이 판들을 건너 이어진다.**
+##
+## 각도와 지나는 점을 **손으로 안 고른다** — 판의 **왼아래에서 오른위로 가는 대각선**이고
+## **판의 한가운데**를 지난다. 손으로 고르면 화면마다 다시 맞춰야 하고, 맞추다 보면
+## 큰 판의 모서리를 얕게 스치는 각도에 앉는다(§20.33.3). 대각선은 **판을 가로질러 지나가서**
+## 걸리는 것을 깊게 벤다.
 const RIP_APART := 10.0
+
+## 떨어져 나온 조각이 판의 이 비율보다 작으면 **안 베고 밀린다.**
+##
+## 0.12 로 시작했더니 **벨 만한 판까지 밀어냈다** — 강조 띠가 7% 짜리 조각을 내는데
+## 그건 충분히 깊고 잘 보이는 자국이었다. 문턱은 **「그리다 만 것으로 보이는 크기」**여야지
+## 「작은 크기」가 아니다. 5% 아래만 밀어낸다.
+const RIP_LEAST := 0.05
 
 ## 베는 순간. 판이 다 들어와 선 직후에 **한 번에** 지나간다.
 const RIP_AT := 0.78
@@ -158,13 +168,38 @@ func _rip() -> float:
 	return _snap(RIP_AT, 0.12) * RIP_APART
 
 
+## 벤 자국의 각도. **판의 왼아래에서 오른위로 가는 대각선**이다.
+func _rip_angle() -> float:
+	return atan2(-size.y, size.x)
+
+
+## 벤 자국이 지나는 점. **판의 한가운데.**
+func _rip_through() -> Vector2:
+	return size * 0.5
+
+
 ## 판 하나를 그린다. **벤 자국에 걸리면 두 조각이 되어 어긋난다.**
 ##
 ## 판을 칠하는 모든 자리가 이 함수를 지나간다 — 한 군데라도 빠지면 그 판만
 ## 자국을 안 맞은 것이 되고, 그러면 자국이 **한 줄로 안 이어져** 그냥 깨진 판이 된다.
-func _plate(shape: PackedVector2Array, tint: Color) -> void:
-	for piece in GraphicCut.severed(shape, RIP_ANGLE, RIP_THROUGH, _rip()):
+func _plate(shape: PackedVector2Array, tint: Color, least: float = RIP_LEAST) -> void:
+	for piece in GraphicCut.severed(shape, _rip_angle(), _rip_through(), _rip(), least):
 		draw_colored_polygon(piece, tint)
+
+
+## 판 **안에** 깔리는 것 — 무늬 한 줄 · 뒤판 초승달 — 은 **판의 판정을 따라간다.**
+##
+## 각자 판정하게 두면 안 된다. 얇은 무늬 한 줄은 「얕게 걸렸다」가 거의 늘 참이라
+## **판은 베였는데 무늬는 통째로 밀려** 벌어진 틈 위를 가로지른다. 반대도 난다 —
+## 판이 밀렸는데 무늬만 베이면 있지도 않은 틈에 무늬가 갈라져 있다.
+##
+## **문턱은 판의 성질이지 그 위에 깔리는 것의 성질이 아니다.**
+func _follow(panel: PackedVector2Array, piece: PackedVector2Array, tint: Color) -> void:
+	var push := GraphicCut.shove(panel, _rip_angle(), _rip_through(), _rip(), RIP_LEAST)
+	if push == Vector2.ZERO:
+		_plate(piece, tint, 0.0)
+		return
+	draw_colored_polygon(GraphicCut.swelled(piece, 0.0, push), tint)
 
 
 ## 어긋난 **뒤판.** 앞판이 덮을 자리를 **잘라 내고** 초승달만 남긴다.
@@ -174,7 +209,7 @@ func _plate(shape: PackedVector2Array, tint: Color) -> void:
 ## 「이건 그림자가 아니라 판이 두 장」이라고 말한다 — 겹쳐 두면 아무 말도 안 한다.
 func _backplate(front: PackedVector2Array, by: float, at: Vector2, tint: Color) -> void:
 	for crescent in GraphicCut.notched(GraphicCut.swelled(front, by, at), front, BLEED):
-		_plate(crescent, tint)
+		_follow(front, crescent, tint)
 
 
 ## 채워진 판 위의 **주사선.** 망점이 있던 자리다 — 무늬만 바뀌고 판은 그대로다.
@@ -184,7 +219,7 @@ func _backplate(front: PackedVector2Array, by: float, at: Vector2, tint: Color) 
 func _scanlines(shape: PackedVector2Array, surface: Color, force: float) -> void:
 	var tint := Color(_ink(surface), force)
 	for bar in GraphicCut.stripes(shape, 0.0, 4.0, 1.6, _clock * 9.0):
-		_plate(bar, tint)
+		_follow(shape, bar, tint)
 
 
 ## 모서리 꺾쇠와 작은 눈금. **큰 판 가장자리에 붙는 장식**이지 판을 대신하지 않는다.
@@ -313,7 +348,7 @@ func _buttons() -> void:
 		_plate(shape, face)
 		if i == 3:
 			for bar in GraphicCut.stripes(shape, -PI * 0.25, 9.0, 4.0, 0.0):
-				_plate(bar, Color(_void(), 0.55))
+				_follow(shape, bar, Color(_void(), 0.55))
 		if hot:
 			_scanlines(shape, face, 0.22)
 		_shape_text(labels[i], Rect2(box.position, box.size), 18, face, 0.35 if i == 3 else 1.0)
@@ -360,9 +395,17 @@ func _window() -> void:
 		)
 
 
+## **험이 지금 화면에 떠 있나** 0..1. 팝업이 찢어져 열리는 정도가 그대로 이 값이다.
+##
+## 창의 닫기 표시도 험의 색이지만 이 값에 안 넣는다 — 그건 **늘 거기 있는 표시**고,
+## 늘 있는 것에 신호가 반응하면 신호가 영영 안 켜진다. 반응하는 것은 **뜨는 것**에만이다.
+func _peril_up() -> float:
+	return _snap(2.00, 0.30)
+
+
 ## 팝업 — **사선으로 찢어지며 열린다.** 커지는 게 아니라 갈라지는 것이다.
 func _popup() -> void:
-	var open := _snap(2.00, 0.30)
+	var open := _peril_up()
 	var box := Rect2(PAD + 356.0, 206.0, 252.0, 178.0)
 	var shape := GraphicCut.clipped(box, 24.0, 1 | 4)
 	for piece in GraphicCut.torn_open(shape, -PI * 0.22, open, 46.0):
@@ -487,25 +530,37 @@ func _inputs() -> void:
 
 
 ## 강조 — **한 줄로 화면을 가른다.** 글자가 판을 넘는다.
+##
+## ## 험이 뜨면 신호가 숨을 죽인다
+##
+## 붉은색은 언제나 이긴다 — 팝업이 떠 있는 동안 「지금 여기」는 이미 그쪽이고,
+## 여기가 계속 켜져 있으면 **화면에 「지금 여기」가 둘**이 된다.
+##
+## 다만 **면 색은 안 끈다.** 강조색은 이 부품의 **신분**이고, 신호는 그 위에 얹은 것들
+## — 주사선 · 꺾쇠 · 밝은 뒤판 — 이다. 얹은 것이 물러나고 면이 바탕 쪽으로 내려앉으면
+## **꺼진 것으로 읽히되 무엇이었는지는 남는다.** 색까지 지우면 부품이 사라진다.
 func _here() -> void:
 	var enter := _snap(0.60)
+	var hush := _peril_up()
 	var box := Rect2(PAD - (1.0 - enter) * SLIDE * 1.6, 596.0, size.x - PAD * 2.0, 58.0)
 	var shape := GraphicCut.fang(Rect2(box.position, box.size - Vector2(26.0, 0.0)), 26.0)
-	_backplate(shape, 0.012, Vector2(9.0, 9.0), _paper())
+	_backplate(shape, 0.012, Vector2(9.0, 9.0), _paper().lerp(_void(), 0.80 * hush))
 	# **화면에서 신호색이 나오는 자리는 여기 하나다** (§20.32).
-	_plate(shape, _accent())
-	_scanlines(shape, _accent(), 0.18)
-	_rig(Rect2(box.position, box.size - Vector2(26.0, 0.0)), 8)
+	var face := _accent().lerp(_void(), 0.34 * hush)
+	_plate(shape, face)
+	if hush < 0.5:
+		_scanlines(shape, face, 0.18)
+		_rig(Rect2(box.position, box.size - Vector2(26.0, 0.0)), 8)
 	draw_string(
 		FONT,
 		Vector2(PAD, 588.0),
-		"강조 — 지금 여기",
+		"강조 — 지금 여기" if hush < 0.5 else "강조 — 험이 떠 있는 동안은 꺼진다",
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		13,
-		Color(_paper(), 0.5)
+		Color(_paper(), 0.5 - 0.22 * hush)
 	)
-	_shape_text("3층 봉인된 문", box, 24, _accent())
+	_shape_text("3층 봉인된 문", box, 24, face)
 
 
 func _weak() -> void:

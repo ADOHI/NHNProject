@@ -257,14 +257,26 @@ static func torn_open(
 ##
 ## 「참격」이 지금까지 **무늬**였다(사선 줄무늬 · 기울어진 판). 이것은 벤 자국을
 ## **구조**로 만든다 — 판의 형태가 그 한 줄의 결과가 된다.
+##
+## `least` 는 **얕게 걸린 판**의 문턱이다. 큰 판의 모서리를 살짝 스치면 떨어져 나온
+## 조각이 너무 작아 **디자인이 아니라 그리다 만 것**으로 읽힌다 — 실제로 창의
+## 오른아래에 그런 빈 쐐기가 났다.
+##
+## 얕게 걸린 판을 **안 베는 것**이 첫 답이었는데, 그러면 걸린 판이 다섯에서 셋으로
+## 줄어 **자국이 지나갔다는 사실 자체가 약해졌다.** 그래서 안 베는 대신 **민다**(`shove`) —
+## 날이 지나가며 밀친 것이 된다. **판은 하나도 빠짐없이 그 한 줄에 반응한다.**
 static func severed(
-	shape: PackedVector2Array, angle: float, through: Vector2, apart: float
+	shape: PackedVector2Array, angle: float, through: Vector2, apart: float, least: float = 0.0
 ) -> Array[PackedVector2Array]:
 	var out: Array[PackedVector2Array] = []
 	if shape.is_empty():
 		return out
 	if apart <= 0.01:
 		out.append(shape)
+		return out
+	var push := shove(shape, angle, through, apart, least)
+	if push != Vector2.ZERO:
+		out.append(_moved(shape, push))
 		return out
 	var dir := Vector2.from_angle(angle)
 	var side := dir.orthogonal()
@@ -275,21 +287,87 @@ static func severed(
 	var reach := span.size.length() + through.distance_to(span.get_center()) + 64.0
 	var ways: Array[float] = [-1.0, 1.0]
 	for way in ways:
-		var half := PackedVector2Array(
-			[
-				through - dir * reach,
-				through + dir * reach,
-				through + dir * reach + side * reach * way,
-				through - dir * reach + side * reach * way,
-			]
-		)
+		var half := _half_plane(through, dir, side, way, reach)
 		for piece in Geometry2D.intersect_polygons(shape, half):
-			var moved := PackedVector2Array()
 			# 벌어지기만 하면 틈이고, **베인 쪽으로 같이 밀려야** 지나간 자국이 된다.
-			for point in piece:
-				moved.append(point + side * way * apart * 0.5 + dir * way * apart * 0.34)
-			out.append(moved)
+			out.append(_moved(piece, _push_of(dir, side, way, apart)))
 	return out
+
+
+## 이 판이 자국에 **얕게** 걸렸나. 얕으면 밀려날 양을 내고, 깊게 걸렸으면 `ZERO` 를 낸다.
+##
+## 자국에 아예 안 걸린 판도 밀려날 양이 나온다 — 그쪽 반평면에 통째로 들어 있으니
+## **떨어져 나온 조각이 0** 이고, 0 은 어떤 문턱보다도 작다. 그래서 규칙이 하나다:
+## **얕으면 밀린다.** 「안 걸림」은 「가장 얕게 걸림」이다.
+##
+## `ZERO` 가 「벤다」를 뜻할 수 있는 것은 `apart` 가 0 보다 클 때 밀림이 절대 0 이
+## 안 되기 때문이다. 부르는 쪽은 `apart` 를 먼저 걸러야 한다.
+static func shove(
+	shape: PackedVector2Array, angle: float, through: Vector2, apart: float, least: float
+) -> Vector2:
+	if shape.is_empty() or apart <= 0.01:
+		return Vector2.ZERO
+	var dir := Vector2.from_angle(angle)
+	var side := dir.orthogonal()
+	var span := _bounds(shape)
+	var reach := span.size.length() + through.distance_to(span.get_center()) + 64.0
+	var whole := area_of(shape)
+	if whole <= 0.0:
+		return Vector2.ZERO
+	var most := -1.0
+	var push := Vector2.ZERO
+	var shallow := false
+	var ways: Array[float] = [-1.0, 1.0]
+	for way in ways:
+		var half := _half_plane(through, dir, side, way, reach)
+		var got := 0.0
+		for piece in Geometry2D.intersect_polygons(shape, half):
+			got += area_of(piece)
+		if got / whole < least:
+			shallow = true
+		if got > most:
+			most = got
+			push = _push_of(dir, side, way, apart)
+	return push if shallow else Vector2.ZERO
+
+
+## 선의 한쪽 편 전체를 덮는 아주 큰 사각형.
+static func _half_plane(
+	through: Vector2, dir: Vector2, side: Vector2, way: float, reach: float
+) -> PackedVector2Array:
+	return PackedVector2Array(
+		[
+			through - dir * reach,
+			through + dir * reach,
+			through + dir * reach + side * reach * way,
+			through - dir * reach + side * reach * way,
+		]
+	)
+
+
+## 그쪽 조각이 밀려나는 양.
+static func _push_of(dir: Vector2, side: Vector2, way: float, apart: float) -> Vector2:
+	return side * way * apart * 0.5 + dir * way * apart * 0.34
+
+
+static func _moved(shape: PackedVector2Array, by: Vector2) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for point in shape:
+		out.append(point + by)
+	return out
+
+
+## 다각형의 넓이. **감싼 사각형이 아니라 진짜 넓이**여야 한다 —
+## 비스듬한 조각은 감싼 사각형이 실제의 두 배가 되어 「얕다」를 못 잡는다.
+static func area_of(shape: PackedVector2Array) -> float:
+	if shape.size() < 3:
+		return 0.0
+	var twice := 0.0
+	for i in shape.size():
+		var here := shape[i]
+		var next := shape[(i + 1) % shape.size()]
+		twice += here.x * next.y - next.x * here.y
+	return absf(twice) * 0.5
 
 
 ## 판을 **위에서부터 `upto` 픽셀만큼만** 드러낸다. 한 줄씩 그려지는 표시에 쓴다.
