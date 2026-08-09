@@ -82,10 +82,10 @@ func _build_shots() -> Array:
 		["07_out_of_bounds", _stage_out_of_bounds, false],
 		["08_loop", _stage_loop, false],
 		["09_heavy_ready", _stage_heavy_chain, false],
-		["10_bout_early", _fire, false, 0.5],
-		["11_bout_mid", _wait, false, 1.6],
-		["12_bout_launch", _wait, false, 3.0],
-		["13_bout_settled", _wait, false, 6.5],
+		["10_bout_early", _fire, false, 1.0],
+		["11_bout_mid", _wait, false, 5.0],
+		["12_bout_launch", _wait, false, 9.5],
+		["13_bout_settled", _wait, false, 17.5],
 	]
 
 
@@ -102,7 +102,7 @@ func _stage_heavy_chain() -> void:
 	var grid: BackpackGrid = _screen._grid
 	grid.clear()
 	var index := 0
-	for row in 3:
+	for row in grid.height:
 		var going_right := row % 2 == 0
 		for column in grid.width:
 			var x := column if going_right else grid.width - 1 - column

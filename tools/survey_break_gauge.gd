@@ -141,10 +141,31 @@ func _report_cliff() -> void:
 			)
 		)
 	print("")
-	print("  **뒤집혔다.** 타 간격이 상수였을 때는 1칸 29 / 4칸 63 이라 큰 무기가 강했다.")
-	print("  휘두르는 시간을 부피에서 뽑자 1칸 43 / 4칸 31 이 됐다 — **작은 무기가 더 강하다.**")
-	print("  무게는 10->22 (2.2배) 인데 시간은 0.23->0.71 (3.1배) 라 초당 무게가 오히려 떨어진다.")
-	print("  (오른쪽 칸의 「안 된다」는 %d타 안에 못 넘겼다는 뜻이다. 1칸은 순증 +0.8 이라 더 치면 된다.)" % _MAX_HITS)
+	# **설명문에 수치를 박지 마라.** 애니 레인이 값을 옮길 때마다 여기가 거짓말이 된다.
+	# 실제로 두 번 그랬다. 그래서 지금 잰 값에서 문장을 만든다.
+	var light := _limit_for(1)
+	var heavy := _limit_for(4)
+	var stronger := "작은" if light > heavy else "큰"
+	print("  1칸 한계 초당 %.0f vs 4칸 초당 %.0f  ->  **%s 무기가 감쇠에 더 강하다.**" % [light, heavy, stronger])
+	var reference := BreakTuning.new()
+	var weight_ratio := (
+		reference.poise_for(_uniform_item(4)) / reference.poise_for(_uniform_item(1))
+	)
+	var time_ratio := (
+		reference.strike_seconds_for(_uniform_item(4))
+		/ reference.strike_seconds_for(_uniform_item(1))
+	)
+	print(
+		(
+			"  무게는 %.1f배 느는데 시간은 %.1f배 늘어서 초당 무게가 %s."
+			% [
+				weight_ratio,
+				time_ratio,
+				"떨어진다" if time_ratio > weight_ratio else "오른다",
+			]
+		)
+	)
+	print("  (오른쪽 칸의 「안 된다」는 %d타 안에 못 넘겼다는 뜻이다.)" % _MAX_HITS)
 	print("")
 	_report_proportional_weight()
 
@@ -156,6 +177,13 @@ func _report_cliff() -> void:
 ##
 ## 아래는 「무게를 시간에 비례시키면 어떻게 되는가」를 재 본 것이다.
 ## **값을 바꾼 것이 아니다.** 정할 때 보라고 내는 표다 (§28.5 수치는 전부 미정).
+## 그 무기의 한계 빠짐 속도 = 한 방 무게 / 검이 닿기까지의 시간.
+func _limit_for(cells: int) -> float:
+	var tuning := BreakTuning.new()
+	var item := _uniform_item(cells)
+	return tuning.poise_for(item) / tuning.strike_seconds_for(item)
+
+
 func _report_proportional_weight() -> void:
 	print("== 만약 무게를 휘두르는 시간에 비례시키면 (제안이지 채택이 아니다) ==")
 	var reference := BreakTuning.new()

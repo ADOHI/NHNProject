@@ -51,8 +51,11 @@ const _DONE_LINE := Color(0.52, 0.86, 0.56)
 const _TAG_TOP_MARGIN := 96.0
 
 ## 대련장 자리. 글자판 아래의 빈 곳이다.
-const ARENA_CENTER_X := 1150.0
+const ARENA_LEFT := 1052.0
 const ARENA_GROUND := 655.0
+
+## 대련장 거리를 화면에 줄여 그리는 비율. 기본 간격 240 이 화면 밖으로 나갔다.
+const ARENA_SCALE := 0.78
 const _LOOT_FILL := Color(0.33, 0.33, 0.31)
 const _TEXT := Color(0.93, 0.95, 0.98)
 const _DIM_TEXT := Color(0.62, 0.66, 0.72)
@@ -79,6 +82,7 @@ var _chains: Array[ChainResult] = []
 var _outcomes: Array[ChainBreakOutcome] = []
 var _break_tuning: BreakTuning = null
 var _bout: SparringBout = null
+var _field: SparringField = null
 
 var _drag_item: BackpackItem = null
 var _drag_grab: Vector2i = Vector2i.ZERO
@@ -122,6 +126,12 @@ func set_break(outcomes: Array[ChainBreakOutcome], tuning: BreakTuning) -> void:
 ## 지금 굴러가고 있는 대련 판. `null` 이면 아직 안 쐈다.
 func set_bout(bout: SparringBout) -> void:
 	_bout = bout
+	queue_redraw()
+
+
+## 대련장의 거리. 리치·전진 값이 오면 여기 그린 간격 위에서 판정이 붙는다 (§28.20.27).
+func set_field(field: SparringField) -> void:
+	_field = field
 	queue_redraw()
 
 
@@ -738,52 +748,32 @@ func _gauge_caption(shown: float, peak_value: float, highest: BreakState.Kind) -
 ##
 ## **이동 · 회전 · 배율만 쓴다** (§28.7). 프레임 교체도 변형도 없다.
 func _draw_arena() -> void:
+	if _field == null:
+		return
 	var font := get_theme_default_font()
 	var ground := ARENA_GROUND
 	draw_line(
-		Vector2(ARENA_CENTER_X - 100.0, ground),
-		Vector2(ARENA_CENTER_X + 100.0, ground),
-		_CELL_LINE,
-		2.0
+		Vector2(ARENA_LEFT - 24.0, ground), Vector2(ARENA_LEFT + 224.0, ground), _CELL_LINE, 2.0
 	)
 
 	var state := BreakState.Kind.NONE
 	if _bout != null and _bout.phase() != SparringBout.Phase.READY:
 		state = _bout.state()
 
-	# 단계마다 자세가 다르다. 값은 연출이지 규칙이 아니다.
-	var lift := 0.0
-	var tilt := 0.0
-	var squash := 1.0
-	if state == BreakState.Kind.STAGGER:
-		tilt = 0.16
-	elif state == BreakState.Kind.LAUNCH:
-		lift = 78.0
-		tilt = 0.42
-	elif state == BreakState.Kind.KNOCKDOWN:
-		squash = 0.32
-		tilt = 1.35
+	# 대원과 적. **둘 다 위치를 가진다** — 리치·전진 값이 오면 이 간격 위에 판정이 얹힌다.
+	_draw_fighter(_field.attacker_x, ground, Color(0.42, 0.56, 0.78), BreakState.Kind.NONE)
+	_draw_fighter(_field.target_x, ground, _state_color(state), state)
 
-	var half := Vector2(38.0, 46.0 * squash)
-	var center := Vector2(ARENA_CENTER_X, ground - half.y - lift)
-	var corners := [
-		Vector2(-half.x, -half.y),
-		Vector2(half.x, -half.y),
-		Vector2(half.x, half.y),
-		Vector2(-half.x, half.y)
-	]
-	var points := PackedVector2Array()
-	for corner: Vector2 in corners:
-		points.append(center + corner.rotated(tilt))
-	draw_colored_polygon(points, _state_color(state))
-	draw_polyline(points + PackedVector2Array([points[0]]), _TEXT, 2.0)
+	var left := _arena_x(minf(_field.attacker_x, _field.target_x))
+	var right := _arena_x(maxf(_field.attacker_x, _field.target_x))
+	draw_line(Vector2(left, ground + 12.0), Vector2(right, ground + 12.0), _DIM_TEXT, 1.0)
 
 	# 글자는 **바닥선 아래 한 줄**로 모은다. 위에 두었더니 체인 목록과 겹쳤다 —
 	# 18타짜리를 쐈을 때 캡처에서 드러났다.
 	draw_string(
 		font,
-		Vector2(ARENA_CENTER_X - 100.0, ground + 24.0),
-		"대련장 (F)",
+		Vector2(ARENA_LEFT - 24.0, ground + 32.0),
+		"대련장 (F)   간격 %.0f" % _field.gap(),
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1.0,
 		14,
@@ -791,10 +781,43 @@ func _draw_arena() -> void:
 	)
 	draw_string(
 		font,
-		Vector2(ARENA_CENTER_X - 10.0, ground + 24.0),
+		Vector2(ARENA_LEFT + 150.0, ground + 32.0),
 		BreakState.label(state),
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1.0,
 		16,
 		_state_color(state)
 	)
+
+
+func _arena_x(field_x: float) -> float:
+	return ARENA_LEFT + field_x * ARENA_SCALE
+
+
+## 싸우는 것 하나. **이동 · 회전 · 배율만** 쓴다 (§28.7).
+func _draw_fighter(field_x: float, ground: float, color: Color, state: BreakState.Kind) -> void:
+	var lift := 0.0
+	var tilt := 0.0
+	var squash := 1.0
+	if state == BreakState.Kind.STAGGER:
+		tilt = 0.16
+	elif state == BreakState.Kind.LAUNCH:
+		lift = 62.0
+		tilt = 0.42
+	elif state == BreakState.Kind.KNOCKDOWN:
+		squash = 0.32
+		tilt = 1.35
+
+	var half := Vector2(26.0, 38.0 * squash)
+	var center := Vector2(_arena_x(field_x), ground - half.y - lift)
+	var corners: Array[Vector2] = [
+		Vector2(-half.x, -half.y),
+		Vector2(half.x, -half.y),
+		Vector2(half.x, half.y),
+		Vector2(-half.x, half.y),
+	]
+	var points := PackedVector2Array()
+	for corner in corners:
+		points.append(center + corner.rotated(tilt))
+	draw_colored_polygon(points, color)
+	draw_polyline(points + PackedVector2Array([points[0]]), _TEXT, 2.0)

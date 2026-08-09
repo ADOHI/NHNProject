@@ -33,19 +33,29 @@ var knockdown_at: float = 100.0
 ## 초당 빠지는 양. **미정 중의 미정이다** (§28.8 「무너짐 회복」).
 var decay_per_second: float = 20.0
 
-## 검이 닿기까지 걸리는 시간 = `anticipate + strike`. **무기 부피에서 나온다.**
+## 검이 닿기까지 걸리는 시간(`impact_seconds`). **무기 부피에서 나온다.**
 ##
-## 상수로 박으면 안 된다 — 캐릭터 애니 레인이 실측한 값이 **1칸 0.23초 · 4칸 0.71초**다.
-## 「입력 뒤 0.2초에 판정」 같은 상수를 쓰면 4칸에서 **검이 아직 머리 위에 있을 때
-## 적이 날아간다.**
+## 상수로 박으면 안 된다 — 「입력 뒤 0.2초에 판정」 같은 것을 쓰면 큰 무기에서
+## **검이 아직 머리 위에 있을 때 적이 날아간다.**
 ##
-## 두 값에 직선을 맞춘 것이다: `0.07 + 0.16 * 칸수`
-## (1칸 0.23 · 2칸 0.39 · 3칸 0.55 · 4칸 0.71).
+## 캐릭터 애니 레인 실측: **1칸 0.355초 · 4칸 1.018초.**
+## 두 값에 직선을 맞춘 것이다: `0.134 + 0.221 * 칸수`.
 ##
-## **애니 쪽이 `anticipate + strike` 를 내주고 우리가 그것을 읽는다** 는 규약이다.
-## 아직 코드로 잇지 않았다 (§28.20.25). 이으면 이 두 상수가 없어진다.
-var strike_base: float = 0.07
-var strike_per_cell: float = 0.16
+## > **이 값은 이미 한 번 옮겨졌다** (1칸 0.27 -> 0.355, 4칸 0.82 -> 1.018).
+## > 상수로 박았으면 그때 조용히 깨졌다. 값으로 읽으니 여기 두 줄만 고치면 된다.
+## > **그리고 이걸로 잰 모든 수가 낡는다** — 고칠 때마다 측정 도구를 다시 돌린다.
+var strike_base: float = 0.134
+var strike_per_cell: float = 0.221
+
+## 타격 순간 멈추는 시간(히트스톱). **그동안 눈금이 빠지지 않는다.**
+##
+## 애니 레인의 `CharActor.hitstop_seconds()` 가 낼 값이고, 지금은 부피로 근사한다
+## (1칸 0.02초 · 4칸 0.125초). 이으면 이 근사가 없어진다.
+##
+## **눈금을 멈추는 것이 중요하다.** 안 멈추면 무거운 무기일수록 멈춤이 길어서
+## 그동안 더 빠지고, 히트스톱이 **페널티**가 된다.
+var hitstop_base: float = -0.015
+var hitstop_per_cell: float = 0.035
 
 ## 한 타의 기본 무게.
 var poise_base: float = 6.0
@@ -78,6 +88,11 @@ func poise_for(item: BackpackItem) -> float:
 ## **무거운 게 무겁게 보여야 무거운 값이 납득된다.**
 func strike_seconds_for(item: BackpackItem) -> float:
 	return strike_base + strike_per_cell * float(item.shape.size())
+
+
+## 이 무기를 맞혔을 때 멈추는 시간. **이 동안 눈금은 빠지지 않는다.**
+func hitstop_seconds_for(item: BackpackItem) -> float:
+	return maxf(0.0, hitstop_base + hitstop_per_cell * float(item.shape.size()))
 
 
 ## 그 눈금이 어느 단계인가.

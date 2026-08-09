@@ -48,6 +48,12 @@ var _elapsed := 0.0
 var _next_index := 0
 var _settle_left := 0.0
 
+## 히트스톱으로 멈춰 있는 남은 시간. **이 동안 눈금도 일정도 멈춘다.**
+var _hitstop_left := 0.0
+
+## 실제로 흐른 시간(히트스톱 포함). `_elapsed` 는 멈춤을 뺀 전투 시계다.
+var _wall_elapsed := 0.0
+
 ## 각 타가 **떨어지는 시각**(누적). 무기마다 다르므로 미리 쌓아 둔다.
 var _due_times: PackedFloat32Array = PackedFloat32Array()
 
@@ -73,6 +79,8 @@ static func from_chain(chain: ChainResult, tuning: BreakTuning = null) -> Sparri
 func start() -> void:
 	_phase = Phase.SWINGING if not _items.is_empty() else Phase.DONE
 	_elapsed = 0.0
+	_wall_elapsed = 0.0
+	_hitstop_left = 0.0
 	_next_index = 0
 	_settle_left = SETTLE_SECONDS
 	_gauge.reset()
@@ -87,6 +95,18 @@ func start() -> void:
 func tick(delta: float) -> void:
 	if delta <= 0.0:
 		return
+	_wall_elapsed += delta
+
+	# **히트스톱 동안에는 아무것도 흐르지 않는다** — 눈금도, 다음 타 일정도.
+	# 안 멈추면 무거운 무기일수록 멈춤이 길어 그동안 더 빠지고,
+	# 히트스톱이 연출이 아니라 **페널티**가 된다.
+	if _hitstop_left > 0.0:
+		var frozen := minf(delta, _hitstop_left)
+		_hitstop_left -= frozen
+		delta -= frozen
+		if delta <= 0.0:
+			return
+
 	if _phase == Phase.SWINGING:
 		_advance_swings(delta)
 		return
@@ -113,6 +133,12 @@ func _advance_swings(delta: float) -> void:
 		_gauge.hit_with(item)
 		hit_landed.emit(_next_index, item)
 		_next_index += 1
+		# 맞은 순간 멈춘다. 남은 delta 는 다음 tick 에서 히트스톱이 먼저 먹는다.
+		_hitstop_left = _tuning.hitstop_seconds_for(item)
+		if _hitstop_left > 0.0:
+			var frozen := minf(remaining, _hitstop_left)
+			_hitstop_left -= frozen
+			remaining -= frozen
 
 	if remaining > 0.0:
 		_gauge.tick(remaining)
@@ -159,6 +185,19 @@ func total_hits() -> int:
 
 func elapsed() -> float:
 	return _elapsed
+
+
+## 히트스톱까지 포함해 **실제로 흐른** 시간. 사람이 느끼는 길이다.
+func wall_elapsed() -> float:
+	return _wall_elapsed
+
+
+## 히트스톱까지 더한 체인 길이. `swing_seconds()` 는 멈춤을 뺀 전투 시계다.
+func felt_seconds() -> float:
+	var total := swing_seconds()
+	for item in _items:
+		total += _tuning.hitstop_seconds_for(item)
+	return total
 
 
 ## 이 체인이 몇 초짜리인가. **무기 구성에 따라 달라진다** —

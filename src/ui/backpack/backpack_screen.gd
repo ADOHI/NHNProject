@@ -24,6 +24,9 @@ var _break_tuning := BreakTuning.new()
 ## 지금 굴러가는 대련 판. `null` 이면 아직 안 쐈다.
 var _bout: SparringBout = null
 
+## 대련장의 거리. **리치·전진 값이 아직 없어 판정에는 안 쓰인다** (§28.20.27).
+var _field := SparringField.new()
+
 @onready var _board: BackpackBoard = %Board
 @onready var _help_label: Label = %HelpLabel
 @onready var _chain_label: Label = %ChainLabel
@@ -35,6 +38,7 @@ func _ready() -> void:
 	_board.bind(_grid, leftover)
 	_board.layout_changed.connect(_refresh)
 	_board.fire_requested.connect(_fire)
+	_board.set_field(_field)
 	_help_label.text = _help_text()
 	_refresh()
 
