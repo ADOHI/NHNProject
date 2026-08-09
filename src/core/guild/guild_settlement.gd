@@ -44,6 +44,10 @@ static func apply(
 	result.base_progress_gained = GuildBalance.base_progress_for(result.workshop_staff)
 	result.levels_gained = guild.add_base_progress(result.base_progress_gained)
 
+	# **판을 돌면 세계가 달라진다** (설계 24.30). 후보를 찾기 전에 반영해야
+	# 이번 판에서 생긴 관계가 이번 영입 판정에 들어간다.
+	result.shocked = ExpeditionAftermath.apply(guild, report, guild.expeditions_settled)
+
 	result.prospects_found = _find_prospects(guild, result.contact_staff, prospect_seed)
 	for prospect in result.prospects_found:
 		guild.add_prospect(prospect)

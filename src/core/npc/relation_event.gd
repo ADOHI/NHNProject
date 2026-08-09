@@ -29,6 +29,7 @@ enum Kind {
 	COOPERATION,  ## 협력 조우 — 함께 싸웠다
 	BETRAYAL,  ## 배신 — 협력 후 공격했다
 	WIPEOUT,  ## 전멸 — 이끌고 들어간 원정이 몰살당했다
+	AFTERMATH,  ## 후유증 — 제거되고 돌아왔다 (설계 2.6.1.5)
 }
 
 ## 설계 24.5 표의 `+` / `++` / `+++` 에 대응하는 값 (설계 24.21.4).
@@ -36,7 +37,7 @@ const NOTCH_ONE := 33
 const NOTCH_TWO := 66
 const NOTCH_THREE := 100
 
-const _LABELS := ["협력", "배신", "전멸"]
+const _LABELS := ["협력", "배신", "전멸", "후유증"]
 
 ## 이 사건이 무엇인가.
 var kind: Kind
@@ -82,6 +83,8 @@ static func of(kind: Kind) -> RelationEvent:
 			return _betrayal()
 		Kind.WIPEOUT:
 			return _wipeout()
+		Kind.AFTERMATH:
+			return _aftermath()
 		_:
 			return _cooperation()
 
@@ -197,6 +200,24 @@ static func _wipeout() -> RelationEvent:
 	event.actor_kind = RelationKind.Kind.COMRADESHIP
 	event.target_kind = RelationKind.Kind.NONE
 	event.sweeps_bonded = true
+	return event
+
+
+## 후유증 — 제거되고 돌아온 사람이 겪는 것 (설계 2.6.1.5).
+##
+## **다른 셋과 모양이 다르다.** 나머지는 「누가 누구에게 한 일」이라 행위자에 대한
+## 호감이 움직이는데, 후유증은 **당한 사람이 세상을 보는 눈**이 나빠지는 것이다.
+## 그래서 벡터도 강도도 안 쓴다 — `ExpeditionAftermath` 가 성향에서 크기를 뽑는다.
+##
+## **그래도 사건으로 두는 이유**는 열전이 사건 기록을 먹기 때문이다 (설계 24.19).
+## 후유증이 사건이 아니면 *"그 판에서 제거됐다"* 가 인물의 이력에 안 남는다.
+static func _aftermath() -> RelationEvent:
+	var event := RelationEvent.new(Kind.AFTERMATH)
+	event.strength = 0
+	event.target_affinity = 0
+	event.bond_gain = 0
+	event.actor_kind = RelationKind.Kind.NONE
+	event.target_kind = RelationKind.Kind.NONE
 	return event
 
 

@@ -75,7 +75,7 @@ func role_of(cause: int, person: int, heard: bool = false) -> String:
 	if not has(cause):
 		return ""
 	if _actors[cause] == person:
-		return "행위자"
+		return "본인" if kind_of(cause) == RelationEvent.Kind.AFTERMATH else "행위자"
 	if Array(targets_of(cause)).has(person):
 		return "대상"
 	return "소문" if heard else "목격자"
@@ -144,6 +144,8 @@ func describe(cause: int, registry: PersonRegistry) -> String:
 					KoreanParticle.object_of(first),
 				]
 			)
+		RelationEvent.Kind.AFTERMATH:
+			return "후유증 • %s%s 제거되고 돌아왔다" % [actor, KoreanParticle.subject(actor)]
 		RelationEvent.Kind.WIPEOUT:
 			return "전멸 • %s%s 이끈 원정에서 %d명" % [actor, KoreanParticle.subject(actor), targets.size()]
 		_:

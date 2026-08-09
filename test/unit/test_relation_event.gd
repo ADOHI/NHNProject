@@ -60,6 +60,11 @@ func test_untouched_axes_are_zero() -> void:
 func test_every_kind_has_a_definition() -> void:
 	for kind in RelationEvent.count():
 		var event := RelationEvent.of(kind as RelationEvent.Kind)
+		# **후유증만 벡터도 강도도 없다.** 모양이 다른 사건이라 크기를 성향에서 뽑는다
+		# (ExpeditionAftermath). 사건으로 두는 이유는 열전이 사건 기록을 먹기 때문이다.
+		if kind == RelationEvent.Kind.AFTERMATH:
+			assert_eq(event.magnitude(), 0, "후유증은 벡터를 안 쓴다")
+			continue
 		assert_gt(event.magnitude(), 0, RelationEvent.label(kind as RelationEvent.Kind))
 		assert_gt(event.strength, 0, RelationEvent.label(kind as RelationEvent.Kind))
 

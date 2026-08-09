@@ -99,6 +99,16 @@ func seed_all() -> void:
 		pass
 
 
+## 사건을 count 건 **더** 굴린다. 세계가 한 틱 도는 것이다 (설계 24.11).
+##
+## 흐름 번호가 이어지므로 **앞의 사건은 다시 안 굴린다.** 그래서 같은 시드에서
+## 「스무 판 돈 세계」와 「한 번에 스무 틱 준 세계」가 같다.
+func roll(count: int) -> void:
+	_total += maxi(count, 0)
+	while not seed_chunk(count):
+		pass
+
+
 ## 최대 chunk 건까지 이어서 굴린다. 다 굴렸으면 true.
 func seed_chunk(chunk: int) -> bool:
 	var target := mini(_done + maxi(chunk, 1), _total)
