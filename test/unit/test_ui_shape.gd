@@ -23,16 +23,49 @@ func test_closed_outline_returns_to_the_first_point() -> void:
 	assert_eq(outline[outline.size() - 1], outline[0], "윤곽선은 첫 점으로 돌아온다")
 
 
-func test_deckle_edge_wobbles_around_the_rect() -> void:
-	var torn := UiShape.deckle_edge(_RECT, 6.0, 20.0, 1.0)
+## 점이 **자기가 속한 변의 직선에서** 수직으로 얼마나 벗어났나.
+##
+## 사각형까지의 거리로 재면 안 된다 — 흔들림이 **변을 따라 미끄러지기만 해도**
+## 모서리 밖으로 나가 거리가 0 이 아니게 되고, 그건 찢긴 것이 아니라 밀린 것이다.
+## 실제로 `.orthogonal()` 을 뺀 판이 그 자로는 통과했다.
+##
+## 네 변의 직선까지의 거리 중 **가장 작은 것**을 쓰면 미끄러진 점은 0 이 되고
+## 수직으로 밀려난 점만 값이 남는다.
+func _off_edge(point: Vector2, rect: Rect2) -> float:
+	return minf(
+		minf(absf(point.y - rect.position.y), absf(point.y - rect.end.y)),
+		minf(absf(point.x - rect.position.x), absf(point.x - rect.end.x))
+	)
+
+
+## **「찢겼는가」를 재려면 테두리로부터의 거리를 재야 한다.**
+##
+## 처음에는 「좌표가 0 이 아닌 점이 몇 개인가」를 셌다. 오른쪽 변의 점은 (100, 30)
+## 이라 진폭이 0 이어도 그 조건을 만족한다 — **완벽한 직사각형이 「찢겼다」로 통과했다.**
+## `shape.gd` 에서 `.orthogonal()` 만 빼도(흔들림이 변을 따라 미끄러져 테두리가
+## 곧아진다) 그대로 통과했다.
+##
+## §20.13.1 · §20.15.4 와 같은 병이다 — **재는 축이 대상이 아니었다.**
+func test_deckle_edge_actually_leaves_the_ruled_edge() -> void:
+	var amplitude := 6.0
+	var torn := UiShape.deckle_edge(_RECT, amplitude, 20.0, 1.0)
 	assert_gt(torn.size(), 8, "찢긴 가장자리는 꼭짓점이 훨씬 많다")
-	var bounds := _RECT.grow(6.5)
-	var off_axis := 0
+	# 흔들림은 -0.5 ~ 0.5 라 벗어날 수 있는 최대가 진폭의 절반이다.
+	var reach := amplitude * 0.5
+	var worst := 0.0
 	for point in torn:
-		assert_true(bounds.has_point(point), "떨림은 진폭 안에 머문다")
-		if not is_equal_approx(point.x, 0.0) and not is_equal_approx(point.y, 0.0):
-			off_axis += 1
-	assert_gt(off_axis, 4, "실제로 자 밖으로 나간 점이 있어야 찢긴 것이다")
+		worst = maxf(worst, _off_edge(point, _RECT))
+	assert_gt(worst, reach * 0.5, "변의 직선에서 수직으로 떨어진 점이 있어야 찢긴 것이다")
+	assert_lte(worst, reach + 0.001, "떨림이 진폭을 넘지는 않는다")
+	for point in torn:
+		assert_true(_RECT.grow(reach + 0.5).has_point(point), "떨림은 진폭 안에 머문다")
+
+
+func test_zero_amplitude_is_not_torn() -> void:
+	# **위 단언이 빨개지는지 확인하는 단언이다.** 진폭 0 이면 완벽한 직사각형이고,
+	# 그것을 「찢겼다」로 통과시키던 것이 원래 결함이었다.
+	for point in UiShape.deckle_edge(_RECT, 0.0, 20.0, 1.0):
+		assert_almost_eq(_off_edge(point, _RECT), 0.0, 0.001, "진폭 0 은 자로 자른 것이다")
 
 
 func test_deckle_edge_is_stable_for_the_same_seed() -> void:
