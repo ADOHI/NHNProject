@@ -340,7 +340,13 @@ func _reachable_targets(item: BackpackItem, ally: int) -> PackedInt32Array:
 	if _field == null:
 		return PackedInt32Array([0])
 	var reach := WeaponMotion.reach_px(item)
-	var candidates := _field.targets_within(reach, _field.enemy_count())
+	var reachable := _field.targets_within(reach, _field.enemy_count())
+
+	# **빠진 적은 후보가 아니다** (§28.20.52). 필드는 눈금을 모르므로 여기서 거른다.
+	var candidates := PackedInt32Array()
+	for index in reachable:
+		if not _is_out(index):
+			candidates.append(index)
 	var limit := _tuning.splash_targets_for(item)
 	if candidates.size() <= 1:
 		return candidates
@@ -419,6 +425,17 @@ func _sorted_by(candidates: PackedInt32Array, score: Callable) -> PackedInt32Arr
 	return out
 
 
+## 그 적이 **판에서 빠졌나** (§28.20.52).
+##
+## §28.10 이 「몬스터는 죽고 사람은 제압」을 확정했으므로 쓰러진 쪽은 그 판에서 빠진다.
+## 다만 **대련장이 지금까지 아무도 안 치웠고** 옛 표가 전부 그 위에 서 있어서
+## 필드의 손잡이가 꺼져 있으면 옛 동작 그대로다.
+func _is_out(enemy: int) -> bool:
+	if _field == null or not _field.downed_leave:
+		return false
+	return not BreakState.is_worse(BreakState.Kind.KNOCKDOWN, enemy_gauge(enemy).peak_state())
+
+
 ## 그 적이 이 무리의 우두머리인가 — **그리고 우리가 그것을 아는가** (§28.20.47).
 ##
 ## **모르면 못 노린다.** 아는 방법이 정해지지 않았으므로 필드가 손잡이로 들고 있고,
@@ -455,6 +472,10 @@ func _swing_enemy(index: int) -> BackpackItem:
 	if weapon == null:
 		return null
 	_enemy_due[index] += _enemy_interval(index)
+
+	# 빠진 적은 안 때린다. **일정은 계속 굴린다** — 되살아나는 규칙이 생기면 그대로 쓴다.
+	if _is_out(index):
+		return null
 
 	# 무너진 적도 못 친다. **한쪽에만 걸면 무너뜨리는 것이 한쪽 이득이 된다.**
 	if _tuning.cuts_chain(enemy_gauge(index).state()):
