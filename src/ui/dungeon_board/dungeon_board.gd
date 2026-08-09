@@ -69,12 +69,29 @@ const _ZOOM_STEP := 1.12
 const _DETAIL_NAME_ZOOM := 0.62
 const _DETAIL_FULL_ZOOM := 0.92
 
+## 두 길 띠의 굵기. 괘선 중 가장 굵은 것(RULE_BANNER)에 곱해 쓴다.
+##
+## **간선 괘선보다 굵어야 「아래에 깔린 띠」로 읽힌다.** 같은 굵기면 길이 아니라
+## 또 하나의 통로로 보이고, 그러면 판이 더 복잡해질 뿐이다.
+const _ROUTE_SHORTCUT_SCALE := 1.4
+const _ROUTE_DETOUR_SCALE := 1.0
+
+## 우회로 파선의 한 칸 길이. 통로 점선(DASH_LENGTH)보다 길어야 **띠**로 읽힌다.
+const _ROUTE_DASH_SCALE := 3.0
+
 ## 개발 모드에서는 숨김을 걷어낸다.
 ##
 ## 플레이 화면은 정보를 숨기는 것이 곧 재미라서(docs/design/13-information-design.md),
 ## 개발 중에 "생성기가 의도대로 모호함을 만들었는지"를 확인할 방법이 없다.
 ## 이 값이 켜지면 모든 방이 실제 위험도와 개체 수를 드러낸다.
 var reveal_everything := false
+
+## 보스까지의 두 길(지름길 • 우회로)을 판 위에 그린다.
+##
+## 이것도 숨김을 걷는 표시다 — 보스가 어디인지 드러나기 때문이다. 그래도 교정쇄와
+## 따로 켜지는 이유는 **재는 것이 다르기** 때문이다. 교정쇄는 방 안의 값을 보고,
+## 이쪽은 판의 모양을 본다 (docs/design/17-dungeon-generation.md §17.27).
+var show_boss_routes := false
 
 var _run: DungeonRun
 var _room_nodes: Dictionary = {}
@@ -93,6 +110,12 @@ var _pointer_moved := false
 ## 음수는 "아직 보여 준 적 없음"이다.
 var _last_threat := -1
 
+## 지금 판의 보스까지 두 길. DungeonRoutes.to_boss() 의 결과를 그대로 들고 있는다.
+##
+## 판마다 한 번만 잰다. 매 프레임 다시 재면 방 50개짜리 판에서 너비 우선 탐색이
+## 두 번씩 돌아간다 — 그리는 것은 이미 정해진 길을 따라가는 일뿐이다.
+var _routes: Dictionary = {}
+
 @onready var _room_layer: Control = %RoomLayer
 @onready var _room_label: Label = %RoomLabel
 @onready var _elevation_label: Label = %ElevationLabel
@@ -101,6 +124,10 @@ var _last_threat := -1
 @onready var _squad_label: Label = %SquadLabel
 @onready var _hint_label: Label = %HintLabel
 @onready var _turn_label: PlateLabel = %TurnLabel
+@onready var _routes_panel: PressPanel = %Routes
+@onready var _shortcut_label: Label = %ShortcutLabel
+@onready var _detour_label: Label = %DetourLabel
+@onready var _verdict_label: Label = %VerdictLabel
 
 
 ## 판 하나를 이 화면에 붙인다.
@@ -108,6 +135,7 @@ func setup(run: DungeonRun, layout_seed: int) -> void:
 	_run = run
 	_last_threat = -1
 	_threat_delta_label.text = ""
+	_routes = DungeonRoutes.to_boss(run.blueprint)
 	_positions = run.blueprint.layout(layout_seed, _SPACING)
 	_build_room_nodes()
 	redraw()
@@ -342,6 +370,10 @@ func _detail_level() -> RoomNode.Detail:
 func _draw() -> void:
 	if _run == null:
 		return
+	# 두 길은 **통로보다도 먼저** 그린다. 굵은 띠라서 나중에 그리면 지도를 덮는다.
+	# 아래에 깔리면 괘선과 점선이 띠 위를 그대로 지나가 판을 읽는 데 방해가 없다.
+	if show_boss_routes:
+		_draw_boss_routes()
 	# 방보다 먼저 그려져야 선이 방 아래로 깔린다. _room_layer 는 자식이라 나중에 그려진다.
 	var current_id := _run.player_room_id()
 	var dash := UiTokens.DASH_LENGTH * _zoom
@@ -359,6 +391,35 @@ func _draw() -> void:
 		var length := (UiTokens.DASH_LENGTH * 2.0 * _zoom) if blocked else dash
 		for segment in UiShape.dash_segments(from_pos, to_pos, length, gap):
 			draw_line(segment[0], segment[1], color, width, true)
+
+
+## 보스까지의 두 길. **우회로를 먼저, 지름길을 나중에** 그린다.
+##
+## 두 길은 간선을 공유하지 않지만 방은 공유한다(적어도 입구와 보스). 겹치는 자리에서
+## 위에 오는 것이 지름길이어야 "이쪽이 빠른 길"이 읽힌다.
+func _draw_boss_routes() -> void:
+	_draw_route_band(_routes.get("detour", []), UiTokens.INK_MUTED, _ROUTE_DETOUR_SCALE, true)
+	_draw_route_band(_routes.get("shortcut", []), UiTokens.SPOT, _ROUTE_SHORTCUT_SCALE, false)
+
+
+## 길 하나를 굵은 띠로 그린다.
+##
+## 색만으로 가르지 않는다 — 굵기와 무늬가 함께 갈려야 색약자에게도 남는다
+## (docs/design/17-dungeon-generation.md §17.27.5).
+func _draw_route_band(route: Array, color: Color, scale_factor: float, dashed: bool) -> void:
+	# 배율을 낮춰도 띠가 실처럼 가늘어지면 안 된다. 낮은 배율은 판 전체를 훑는 배율이고,
+	# 두 길을 판정하는 것도 대개 그 배율이다.
+	var thickness := maxf(3.0, UiTokens.RULE_BANNER * scale_factor * _zoom)
+	var dash := UiTokens.DASH_LENGTH * _ROUTE_DASH_SCALE * _zoom
+	var gap := UiTokens.DASH_GAP * _zoom
+	for index in range(1, route.size()):
+		var from_pos := _map_to_screen(route[index - 1])
+		var to_pos := _map_to_screen(route[index])
+		if not dashed:
+			draw_line(from_pos, to_pos, color, thickness, true)
+			continue
+		for segment in UiShape.dash_segments(from_pos, to_pos, dash, gap):
+			draw_line(segment[0], segment[1], color, thickness, true)
 
 
 ## 살아 있는 통로 한 줄. 굵은 괘선과 그 옆의 가는 괘선.
@@ -436,6 +497,7 @@ func _refresh() -> void:
 	_turn_label.set_text("제 %d 판" % _run.turn)
 	_update_threat()
 	_update_hint()
+	_update_routes()
 
 
 ## 인접 위험도 합과 그 변화량.
@@ -462,6 +524,58 @@ func _update_hint() -> void:
 		_hint_label.text = "교정쇄 — 모든 방의 실제 값이 드러나 있다"
 		return
 	_hint_label.text = "끌거나 가장자리로 이동      휠 확대 %d%%" % int(round(_zoom * 100.0))
+
+
+## 두 길 범례. **켜져 있을 때만 뜬다.**
+##
+## 없는 것은 조용히 빠지지 않고 그 자리에 적힌다 — 아무것도 안 그려진 판이
+## "보스가 없는 판"인지 "안 켜진 화면"인지 구분되어야 한다 (§17.27.6).
+func _update_routes() -> void:
+	_routes_panel.visible = show_boss_routes
+	if not show_boss_routes:
+		return
+
+	var boss: String = _routes.get("boss", "")
+	var shortcut: Array = _routes.get("shortcut", [])
+	if boss.is_empty():
+		_show_route_notice("이 판에는 보스가 없다")
+		return
+	if shortcut.size() < 2:
+		_show_route_notice("보스까지 닿는 길이 없다")
+		return
+
+	var short_length := int(_routes.get("shortcut_length", 0))
+	var short_climb := int(_routes.get("shortcut_climb", 0))
+	_shortcut_label.text = "지름길 (별색 실선)   %d 칸   최대 오름 %d" % [short_length, short_climb]
+
+	var detour: Array = _routes.get("detour", [])
+	if detour.size() < 2:
+		_detour_label.text = "우회로 없음 (외길)"
+		_verdict_label.text = "이 판 — 안 갈린다. 길이 하나뿐이다"
+		return
+
+	var long_length := int(_routes.get("detour_length", 0))
+	var long_climb := int(_routes.get("detour_climb", 0))
+	_detour_label.text = "우회로 (먹 파선)   %d 칸   최대 오름 %d" % [long_length, long_climb]
+	_verdict_label.text = _verdict_text(short_length, short_climb, long_length, long_climb)
+
+
+func _show_route_notice(text: String) -> void:
+	_shortcut_label.text = text
+	_detour_label.text = ""
+	_verdict_label.text = ""
+
+
+## 이 판이 「짧고 가파른 길」과 「길고 완만한 길」로 갈렸는가.
+##
+## **안 갈린 판을 갈린 것처럼 적지 않는다.** 이 화면은 판정하려고 만든 것이라,
+## 보기 좋게 뒤집어 적으면 판정을 막는다 (§17.27.6).
+func _verdict_text(short_len: int, short_climb: int, long_len: int, long_climb: int) -> String:
+	if short_climb <= long_climb:
+		return "이 판 — 안 갈린다. 지름길이 더 가파르지 않다"
+	if short_len >= long_len:
+		return "이 판 — 안 갈린다. 지름길이 더 짧지 않다"
+	return "이 판 — 갈린다. 짧고 가파른 길과 길고 완만한 길"
 
 
 ## 방에 붙일 고도 표시.

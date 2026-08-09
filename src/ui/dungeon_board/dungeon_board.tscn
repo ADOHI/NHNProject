@@ -103,6 +103,49 @@ layout_mode = 2
 theme_type_variation = &"Micro"
 text = "밝은 방을 눌러 이동"
 
+[node name="Routes" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(392, 0)
+offset_left = 34.0
+offset_top = 424.0
+offset_right = 34.0
+offset_bottom = 424.0
+grow_horizontal = 1
+grow_vertical = 1
+script = ExtResource("2_panel")
+show_ticks = true
+visible = false
+
+[node name="Content" type="MarginContainer" parent="Routes"]
+layout_mode = 2
+
+[node name="Rows" type="VBoxContainer" parent="Routes/Content"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="RouteCaption" type="Label" parent="Routes/Content/Rows"]
+layout_mode = 2
+theme_type_variation = &"Micro"
+text = "보스까지 두 길"
+
+[node name="ShortcutLabel" type="Label" parent="Routes/Content/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "지름길"
+
+[node name="DetourLabel" type="Label" parent="Routes/Content/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "우회로"
+
+[node name="VerdictLabel" type="Label" parent="Routes/Content/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Micro"
+text = ""
+
 [node name="OnAir" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 anchor_top = 1.0

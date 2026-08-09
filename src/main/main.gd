@@ -20,6 +20,14 @@ var _character := 0
 ## 지금 판의 설계도. 등급을 띄우려고 들고 있는다.
 var _plan: DungeonBlueprint = null
 var _debug_visible := false
+
+## 보스까지의 두 길을 그리고 있는가.
+##
+## **새 판을 찍어도 꺼지지 않는다.** 두 길이 갈리는지는 여러 판을 연달아 봐야
+## 판정되는데, 판마다 다시 켜야 하면 그 자체가 번거로움이 된다
+## (docs/design/17-dungeon-generation.md §17.27.4).
+var _routes_visible := false
+
 var _sheet: ShaderMaterial
 
 @onready var _background: ColorRect = %Background
@@ -28,6 +36,7 @@ var _sheet: ShaderMaterial
 @onready var _plate: PressPlate = %PressPlate
 @onready var _overlay: DebugOverlay = %DebugOverlay
 @onready var _debug_button: Button = %DebugButton
+@onready var _routes_button: Button = %RoutesButton
 @onready var _generate_button: Button = %GenerateButton
 @onready var _size_slider: HSlider = %SizeSlider
 @onready var _size_label: Label = %SizeLabel
@@ -46,16 +55,20 @@ func _ready() -> void:
 
 	_generate_button.pressed.connect(_generate_new)
 	_debug_button.pressed.connect(_toggle_debug)
+	_routes_button.pressed.connect(_toggle_routes)
 	# 한 턴이 넘어갈 때마다 새 판을 찍는다. 전환 자체가 이 게임의 볼거리다.
 	_board.player_acted.connect(_print_edition)
 	_board.struck.connect(_plate.strike_at)
-	for button in [_generate_button, _debug_button]:
+	for button in [_generate_button, _routes_button, _debug_button]:
 		(button as Button).pressed.connect(_strike_from.bind(button))
 	_size_slider.value_changed.connect(func(_value: float) -> void: _update_size_label())
 
-	_update_size_label()
 	_build_run()
+	# **판을 만든 뒤에 라벨을 쓴다.** 등급은 만들어진 판을 재서 나오므로(DungeonGrade),
+	# 순서를 뒤집으면 **첫 판만 등급이 빈칸**이 된다 — 새 판을 한 번 찍어야 나타났다.
+	_update_size_label()
 	_apply_debug_state()
+	_apply_routes_state()
 	# 화면이 뜨는 것 자체가 **첫 판을 찍는 것**이다. 켜자마자 인쇄기가 한 번 지나간다.
 	# 첫 프레임에 완성된 지면이 그냥 놓여 있으면, 이 화면이 인쇄물이라는 전제가
 	# 글로만 남고 몸짓으로는 한 번도 나타나지 않는다.
@@ -100,6 +113,9 @@ func _print_edition(rip: bool = false) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_debug"):
 		_toggle_debug()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("toggle_boss_routes"):
+		_toggle_routes()
 		get_viewport().set_input_as_handled()
 
 
@@ -185,6 +201,22 @@ func _apply_debug_state() -> void:
 	_board.redraw()
 	_overlay.refresh()
 	_debug_button.text = "교정쇄 닫기 (F1)" if _debug_visible else "교정쇄 (F1)"
+
+
+## 보스까지의 두 길을 켜고 끈다.
+##
+## 교정쇄와 따로 두는 이유는 **재는 것이 다르기** 때문이다. 교정쇄는 방 안의 값을 보고,
+## 두 길은 판의 모양을 본다. 험난 등급이 화면에서 판정되는 자리가 여기다
+## (docs/design/17-dungeon-generation.md §17.27).
+func _toggle_routes() -> void:
+	_routes_visible = not _routes_visible
+	_apply_routes_state()
+
+
+func _apply_routes_state() -> void:
+	_board.show_boss_routes = _routes_visible
+	_board.redraw()
+	_routes_button.text = "두 길 닫기 (F2)" if _routes_visible else "두 길 (F2)"
 
 
 ## 지면 아래쪽 여백에 찍히는 한 줄. 신문의 쪽수 자리다.
