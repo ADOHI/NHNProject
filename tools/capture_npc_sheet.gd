@@ -21,7 +21,10 @@ const _WAIT_FRAMES := 200
 
 ## 찍을 인물. 골라 놓은 이유는 §24.17.8 의 무작위 뽑기를 재현할 수 없어서다 —
 ## 대신 **성향이 뚜렷한 인물과 무색한 인물을 골라** 딱지 규칙이 둘 다 보이게 한다.
-const _SHOTS := ["vivid", "colorless", "famous", "unaffiliated"]
+##
+## `entangled` 와 `onesided` 는 관계 칸을 보려고 넣었다. **관계 칸은 가장 늦게 자라는 칸이라
+## 넘치는지는 가장 엮인 인물에서만 드러난다** — 평범한 인물만 찍으면 터지는 것을 못 본다.
+const _SHOTS := ["vivid", "colorless", "famous", "unaffiliated", "entangled", "onesided"]
 
 var _out := "res://.captures/npc_sheet"
 var _screen: Control
@@ -65,24 +68,24 @@ func _process(_delta: float) -> bool:
 		_shot += 1
 		_armed = false
 		return false
-	_screen.call("_show", _pick(registry, _SHOTS[_shot]))
+	_screen.call("_show", _pick(registry, _screen.get("_graph") as RelationGraph, _SHOTS[_shot]))
 	_armed = true
 	return false
 
 
 ## 찍고 싶은 성질의 인물을 찾는다. 없으면 0 번을 쓴다.
-func _pick(registry: PersonRegistry, kind: String) -> int:
+func _pick(registry: PersonRegistry, graph: RelationGraph, kind: String) -> int:
 	var best := 0
 	var best_score := -1
 	for person in registry.size():
-		var score := _score(registry, person, kind)
+		var score := _score(registry, graph, person, kind)
 		if score > best_score:
 			best_score = score
 			best = person
 	return best
 
 
-func _score(registry: PersonRegistry, person: int, kind: String) -> int:
+func _score(registry: PersonRegistry, graph: RelationGraph, person: int, kind: String) -> int:
 	match kind:
 		"vivid":
 			return registry.pole_count_of(person)
@@ -90,8 +93,23 @@ func _score(registry: PersonRegistry, person: int, kind: String) -> int:
 			return NpcAxis.count() - registry.pole_count_of(person)
 		"famous":
 			return registry.fame_of(person)
+		"entangled":
+			return 0 if graph == null else graph.degree_of(person)
+		"onesided":
+			return _one_way_count(graph, person)
 		_:
 			return 1 if registry.faction_of(person) == PersonRegistry.NO_FACTION else 0
+
+
+## 상대가 나를 모르는 관계의 수. **비대칭이 화면에 드러나는 자리다** (설계 24.21.2).
+func _one_way_count(graph: RelationGraph, person: int) -> int:
+	if graph == null:
+		return 0
+	var found := 0
+	for other in graph.targets_of(person):
+		if not graph.knows(other, person):
+			found += 1
+	return found
 
 
 func _capture(name: String) -> void:

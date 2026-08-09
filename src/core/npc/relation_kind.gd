@@ -24,11 +24,26 @@ enum Kind {
 	SIBLING,  ## 형제 — 태생. 양쪽이 같은 유형이다
 	MASTER,  ## 상대가 내 스승 — 태생
 	STUDENT,  ## 상대가 내 제자 — 태생
-	COMRADESHIP,  ## 생사고락 — 협력이 남긴다
-	BETRAYED,  ## 배신당함 — 배신이 남긴다
+	COMRADESHIP,  ## 생사고락 — 협력과 전멸이 남긴다
+	BETRAYED,  ## 배신당함 — 배신의 대상 쪽
+	BETRAYER,  ## 배신함 — 배신의 행위자 쪽
+	TRUST,  ## 신뢰 — 사건을 보고 편이 된 목격자
+	GRUDGE,  ## 원한 — 사건을 보고 등을 돌린 목격자
 }
 
-const _LABELS := ["없음", "부모", "자식", "형제", "스승", "제자", "생사고락", "배신당함"]
+const _LABELS := [
+	"없음",
+	"부모",
+	"자식",
+	"형제",
+	"스승",
+	"제자",
+	"생사고락",
+	"배신당함",
+	"배신함",
+	"신뢰",
+	"원한",
+]
 
 ## 태생 유형. 사건이 이것들의 유대와 유형을 못 건드린다 (설계 24.18).
 const _INBORN := [Kind.PARENT, Kind.CHILD, Kind.SIBLING, Kind.MASTER, Kind.STUDENT]
@@ -52,7 +67,10 @@ static func shares_surname(kind: Kind) -> bool:
 	return _SHARES_SURNAME.has(kind)
 
 
-## 반대편 슬롯이 가질 유형. 형제는 자기 자신이다.
+## 반대편 슬롯이 가질 유형. 형제 · 생사고락은 자기 자신이다.
+##
+## **배신에도 짝이 있다.** 당한 쪽 화면에는 「배신당함」, 한 쪽 화면에는 「배신함」이 뜬다 —
+## 유형을 한쪽에만 두면 **같은 사건이 가해자의 화면에서 사라진다.**
 static func opposite(kind: Kind) -> Kind:
 	match kind:
 		Kind.PARENT:
@@ -63,6 +81,10 @@ static func opposite(kind: Kind) -> Kind:
 			return Kind.STUDENT
 		Kind.STUDENT:
 			return Kind.MASTER
+		Kind.BETRAYED:
+			return Kind.BETRAYER
+		Kind.BETRAYER:
+			return Kind.BETRAYED
 		_:
 			return kind
 
