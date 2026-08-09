@@ -80,6 +80,10 @@ const RING_PERIOD := 0.26
 ## 맞는 순간의 눌림. 몸이 한 번 찌그러졌다 펴진다.
 const IMPACT_SQUASH := 0.075
 
+## 들고 있는 무기. **무기가 얹힌 상태가 전투 애니메이션의 바탕이다**(§25.11) —
+## 무거운 무기는 더 길어서 쓰러질 때 검끝이 바닥에 박히기 쉽다.
+var weapon := CharWeapon.new(1)
+
 
 func clip_name() -> String:
 	# 가운뎃점(U+00B7)이 아니라 불릿(U+2022)이다. **SongMyung 에 U+00B7 이 없어서**
@@ -144,6 +148,8 @@ func sample(t: float, features: AnimFeatures) -> CharPose:
 	var snap := recoil(at)
 	for part in CharPart.COUNT:
 		_apply_part(pose, part, at, features, height, back, down, snap)
+	# 무기는 파츠가 아니라 접지 검사가 못 본다. 검끝이 박혔으면 든 손을 들어 띄운다.
+	keep_weapon_off_floor(pose, weapon)
 	return pose
 
 
@@ -178,7 +184,7 @@ func _apply_part(
 	# 보정이 툭 꺼져 발이 0.22 만큼 파고들었다. 보정은 회전에서 나오는 값이지 높이와
 	# 무관하므로 **언제나 건다** — 조건을 다는 것 자체가 불연속을 만든다.
 	if CharPart.is_foot(part):
-		pose.positions[part] += Vector2(0.0, rig.sole_drop(part, pose.rotations[part]))
+		pose.positions[part] += Vector2(0.0, pose.lift_to_clear_ground(part, rig))
 
 	if part == CharPart.Id.TORSO:
 		pose.scales[part] = CharClip.volume_scale(-IMPACT_SQUASH * snap * f.squash)

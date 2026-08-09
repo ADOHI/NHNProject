@@ -181,11 +181,13 @@ func _apply_foot(pose: CharPose, t: float, f: AnimFeatures, part: CharPart.Id) -
 	# 발끝을 축으로 돌리려면 피벗을 그만큼 들어 올려야 한다. **이 값이 유일한 상승분이다** —
 	# 여기에 「전체를 조금 더 띄우는」 항을 더하면 그만큼 발끝이 땅에서 떠 버린다.
 	# 처음에 0.5 를 더했다가 발끝이 정확히 그만큼 뜨는 것을 테스트가 잡았다.
-	var toe_drop := rig.sole_drop(part, heel)
-	pose.positions[part] += Vector2(-FOOT_SLIDE * freed, toe_drop)
+	pose.positions[part] += Vector2(-FOOT_SLIDE * freed, 0.0)
 	pose.rotations[part] = heel
 	# 피벗이 밑면이라 눌려도 밑면이 정확히 자기 지면에 남는다.
 	pose.scales[part] = CharClip.volume_scale(-FOOT_SQUASH * loaded * f.squash)
+	# 회전이 밑창 끝을 내린 만큼 되들어 올린다. **공식이 아니라 실제 트랜스폼을 잰다** —
+	# 회전과 배율이 다 반영된 뒤라야 「낮은 쪽 끝」이 어디인지 정확히 나온다.
+	pose.positions[part] += Vector2(0.0, pose.lift_above_ground(part, rig, 0.0))
 
 
 func _breath(t: float, delay: float, f: AnimFeatures) -> float:

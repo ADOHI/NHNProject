@@ -133,13 +133,16 @@ func _apply_foot(pose: CharPose, t: float, f: AnimFeatures, part: CharPart.Id) -
 	)
 
 	var angle := track.z
-	# 피벗이 밑면 한가운데라 회전만 시키면 낮은 쪽 밑창 끝이 땅을 파고든다.
-	# 그만큼 들어 올리는 것이 **유일한 상승분**이다 (idle 과 같은 규칙).
-	# **반너비가 아니라 밑창 길이로 재야 한다** — 부츠 밑창은 반너비보다 좁고 비대칭이다.
-	var corner_drop := rig.sole_drop(part, angle)
 	var rest_x := rig.rest_positions[part].x
-	pose.positions[part] += Vector2(TRACK_CENTER + track.x - rest_x, track.y + corner_drop)
+	pose.positions[part] += Vector2(TRACK_CENTER + track.x - rest_x, 0.0)
 	pose.rotations[part] = angle
+	# 발의 **가장 낮은 점을 정확히 `track.y` 높이에 놓는다.** 디딤이면 0(접지),
+	# 스윙이면 호의 높이다. 회전이 밑창 끝을 내린 만큼은 저절로 상쇄된다.
+	#
+	# **「파고들 때만 올린다」로는 안 된다** — 스윙 초반은 호가 낮고 회전이 커서 발이
+	# 지면에 얹혀 버리고, 그러면 나는 발이 디딘 발로 잘못 읽힌다.
+	# **공식이 아니라 실제 트랜스폼을 잰다**: 반너비도 배율도 예측이 아니라 측정이다.
+	pose.positions[part] += Vector2(0.0, pose.lift_above_ground(part, rig, track.y))
 
 
 ## 디딘 발 · 나는 발의 규칙. `(앞뒤, 높이, 회전)`.

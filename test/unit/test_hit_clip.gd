@@ -89,11 +89,13 @@ func test_nothing_ever_sinks_into_the_ground() -> void:
 
 func test_the_blade_never_goes_through_the_floor() -> void:
 	# 검은 파츠가 아니라 손의 자식이라 파츠 검사가 못 본다 (§25.11.2).
-	var clip := _clip()
 	var f := AnimFeatures.all_on()
-	for t in _times(clip):
-		var tip := CharWeapon.new(1).tip_position(clip.sample(t, f), clip.rig)
-		assert_gt(tip.y, 0.0, "t = %.3f 에서 검끝이 땅을 뚫는다" % t)
+	for cells in [CharWeapon.MIN_CELLS, CharWeapon.MAX_CELLS]:
+		var clip := _clip()
+		clip.weapon = CharWeapon.new(cells)
+		for t in _times(clip):
+			var tip := clip.weapon.tip_position(clip.sample(t, f), clip.rig)
+			assert_gt(tip.y, 0.0, "%d 칸 t = %.3f 에서 검끝이 땅을 뚫는다" % [cells, t])
 
 
 func test_the_parts_do_not_all_shake_alike() -> void:

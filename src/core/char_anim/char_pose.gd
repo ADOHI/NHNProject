@@ -81,6 +81,33 @@ func part_ground_point(part: CharPart.Id, rig: CharRig) -> Vector2:
 	return lowest
 
 
+## 파츠를 자기 지면 위로 올리는 데 필요한 높이. **파고들지 않았으면 0 이다.**
+##
+## 회전 · 배율까지 **실제로 반영된 트랜스폼을 재서** 답한다. 그래서 클립이 보정량을
+## 따로 계산할 필요가 없다.
+##
+## **왜 공식이 아니라 측정인가.** 전에는 클립이 `rig.sole_drop(각도)` 로 보정량을
+## 예측했는데, 그 식이 **배율을 안 봤다.** 발이 눌리면 밑창이 `1/sy` 배 넓어져서
+## 기운 모서리가 예측보다 더 내려간다 — idle 은 회전이 작아 오차가 EPS 아래였고
+## `die` 에서 처음 튀어나왔다.
+##
+## 예측식과 실제 기하가 갈리면 조용히 틀린다(§25.13.1). **재면 갈릴 수가 없다.**
+func lift_to_clear_ground(part: CharPart.Id, rig: CharRig) -> float:
+	return maxf(0.0, sink_depth(part, rig))
+
+
+## 파츠의 **가장 낮은 점을 자기 지면 위 `clearance` 에 정확히** 놓는 데 필요한 높이.
+##
+## `lift_to_clear_ground()` 와 다르다. 저쪽은 **파고들 때만** 밀어 올리고, 이쪽은
+## 떠 있으면 **끌어내리기도 한다.**
+##
+## 걸음처럼 **발 높이를 클립이 직접 정하는** 경우에 쓴다. 「파고들 때만」으로 두면
+## 스윙 초반처럼 회전이 큰 구간에서 발이 지면에 **얹혀 버리고**, 그러면 나는 발이
+## 디딘 발로 잘못 읽힌다 — 미끄러짐 자가 그 표본을 디딤으로 세어 실제로 걸렸다.
+func lift_above_ground(part: CharPart.Id, rig: CharRig, clearance: float) -> float:
+	return rig.ground_y(part) + clearance - part_lowest(part, rig)
+
+
 ## 파츠가 자기 지면 아래로 얼마나 파고들었는가. 음수면 떠 있는 것이라 문제가 없다.
 ##
 ## **지면이 파츠마다 다르다** — 사이드 사선에서는 뒷발의 바닥이 앞발보다 높다.

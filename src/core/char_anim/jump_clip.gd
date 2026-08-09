@@ -143,6 +143,8 @@ func _apply_feet(pose: CharPose, f: AnimFeatures, height: float, press: float) -
 		# 발이 아니다. 처음에 웅크림만큼 발도 내렸다가 그대로 땅을 파고들었다.
 		pose.positions[part] += Vector2(0.0, height + tuck)
 		pose.rotations[part] = -0.30 * airborne * f.arc
-		# 땅에 있을 때 회전한 만큼 되들어 올린다. **조건 없이 언제나 건다** (§25.12.3).
-		pose.positions[part] += Vector2(0.0, rig.sole_drop(part, pose.rotations[part]))
 		pose.scales[part] = CharClip.volume_scale(-press * 0.5 * f.squash)
+		# 파고들었으면 그만큼 되들어 올린다. **반드시 회전과 배율을 정한 뒤에** 부른다 —
+		# 재서 올리는 것이라 그 앞의 것만 반영된다. 배율을 뒤에 두었다가 눌린 밑창이
+		# 넓어지면서 그만큼 다시 파고들었다.
+		pose.positions[part] += Vector2(0.0, pose.lift_to_clear_ground(part, rig))

@@ -223,6 +223,7 @@ func _apply_feet(pose: CharPose, at: float, f: AnimFeatures) -> void:
 	pose.scales[near] = CharClip.volume_scale(-FOOT_SQUASH * loaded * f.squash)
 
 	var far := CharPart.Id.FOOT_FAR
-	var heel := -FOOT_HEEL_LIFT * loaded
-	pose.positions[far] += Vector2(0.0, rig.sole_drop(far, heel))
-	pose.rotations[far] = heel
+	# **회전을 먼저 정하고 나서 올린다.** 재서 올리는 것이라 그 앞의 것만 반영된다 —
+	# 순서를 뒤집었다가 회전이 반영 안 된 0 을 더하고 그대로 파고들었다.
+	pose.rotations[far] = -FOOT_HEEL_LIFT * loaded
+	pose.positions[far] += Vector2(0.0, pose.lift_to_clear_ground(far, rig))

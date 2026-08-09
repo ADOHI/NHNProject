@@ -60,6 +60,23 @@ func wave(cycles: float, t: float, delay: float, f: AnimFeatures) -> float:
 	return sin(TAU * cycles * (t - delay * f.delay) / loop_seconds())
 
 
+## 검끝이 바닥을 뚫었으면 **든 손을 그만큼 들어** 띄운다.
+##
+## **무기는 파츠가 아니라서 접지 검사가 통째로 못 본다**(§25.13.3). 파츠 여섯이 전부
+## 땅 위에 멀쩡히 있어도 검은 박혀 있을 수 있고, 무기가 길수록 더 그렇다.
+##
+## `swing` 은 이것을 **자세를 풀 때 한 번에** 해결한다(§25.16.3) — 보간이 선형이라
+## 양 끝만 맞추면 되기 때문이다. 쓰러지는 동작들은 경로가 선형이 아니므로 여기서
+## **재서** 올린다. 어느 쪽이든 원칙은 같다 — **예측하지 말고 측정한다.**
+##
+## 이미 떠 있으면 아무것도 안 한다.
+func keep_weapon_off_floor(pose: CharPose, weapon: CharWeapon) -> void:
+	var tip := weapon.tip_position(pose, rig)
+	var short_by := CharWeapon.TIP_CLEARANCE - tip.y
+	if short_by > 0.0:
+		pose.positions[CharWeapon.HOLDER] += Vector2(0.0, short_by)
+
+
 ## 면적을 보존하는 배율. `stretch` 가 0 이면 정확히 `Vector2.ONE` 이다.
 ##
 ## `1.0 / 1.0` 이 부동소수점에서도 정확히 `1.0` 이므로 "배율 끄기" 가 근사가 아니라 등식이다.
