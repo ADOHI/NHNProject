@@ -32,8 +32,10 @@ func _initialize() -> void:
 	# **다른 두 축도 크기를 따라 밀리는가.** 규모가 그랬으니 여기도 봐야 한다.
 	# 복잡·험난은 크기와 **독립**이어야 한다 — 크기는 규모가 말하는 것이다(§17.20).
 	print("크기  복잡 등급 분포 1..3   험난 등급 분포 1..3")
+	var degrees := PackedFloat32Array()
+	var climbs := PackedFloat32Array()
 	for size in range(SampleDungeons.SIZE_MIN, SampleDungeons.SIZE_MAX + 1):
-		_report_other_axes(size)
+		_report_other_axes(size, degrees, climbs)
 	print("")
 	print(
 		(
@@ -41,6 +43,12 @@ func _initialize() -> void:
 			% [str(DungeonGrade._COMPLEXITY_STEPS), str(DungeonGrade._HARDSHIP_STEPS)]
 		)
 	)
+	# **경계를 다시 자르려면 분포의 백분위가 있어야 한다.** 없어서 한 번은 임시 계산으로
+	# 뽑고 표만 남겼는데(§17.30.3), 그러면 다음 사람이 그 수를 다시 못 낸다
+	# (`conventions.md` §6.3 규칙 2). 사다리 전 구간을 한 무더기로 놓고 낸다 —
+	# 복잡·험난은 **크기와 독립이어야** 하므로 크기별로 나눌 값이 아니다.
+	_report_cut_points("복잡(평균 차수)", degrees)
+	_report_cut_points("험난(간선당 상승)", climbs)
 	print("")
 	# 크기가 「보스까지 두 길이 갈리는가」에 미치는 몫. 화면의 판정이 크기마다 얼마나
 	# 자주 나오는지를 알아야 **크기 1 로 보고 잘못 판단하는 것**을 막을 수 있다 (§17.27.7).
@@ -86,7 +94,7 @@ func _report_boss_routes(size: int) -> void:
 ##
 ## **밀리면 축이 하나로 붙은 것이다.** 크기를 올렸을 뿐인데 「복잡」이 따라 오르면
 ## 화면의 세 수치가 사실은 하나가 된다(§17.20.3 이 상관을 재 둔 이유다).
-func _report_other_axes(size: int) -> void:
+func _report_other_axes(size: int, degrees: PackedFloat32Array, climbs: PackedFloat32Array) -> void:
 	var complexity := [0, 0, 0]
 	var hardship := [0, 0, 0]
 	for character in DungeonCatalog.count():
@@ -96,7 +104,42 @@ func _report_other_axes(size: int) -> void:
 			var grade := DungeonGrade.of(plan)
 			complexity[clampi(int(grade["complexity"]) - 1, 0, 2)] += 1
 			hardship[clampi(int(grade["hardship"]) - 1, 0, 2)] += 1
+			degrees.append(float(grade["average_degree"]))
+			climbs.append(float(grade["average_climb"]))
 	print("%3d   %-20s %s" % [size, str(complexity), str(hardship)])
+
+
+## 경계를 다시 자를 때 쓰는 백분위. **등급 몫을 정하는 것이 이 수다.**
+##
+## §17.20.8 의 목표 분포는 25 / 55 / 20 이라 자를 자리는 **25 백분위와 80 백분위**다.
+## 50 · 75 도 같이 내는 이유는 분포가 통째로 움직였는지(가운데가 어디로 갔는지)를
+## 한눈에 보기 위해서다 — 경계만 보면 그것을 놓친다(§17.30.3 이 놓쳤던 자리다).
+func _report_cut_points(label: String, values: PackedFloat32Array) -> void:
+	if values.is_empty():
+		return
+	var sorted_values := values.duplicate()
+	sorted_values.sort()
+	print(
+		(
+			"%s 백분위 25/50/75/80: %.3f / %.3f / %.3f / %.3f   -> 25·80 으로 자르면 [%.2f, %.2f]"
+			% [
+				label,
+				_percentile(sorted_values, 0.25),
+				_percentile(sorted_values, 0.50),
+				_percentile(sorted_values, 0.75),
+				_percentile(sorted_values, 0.80),
+				_percentile(sorted_values, 0.25),
+				_percentile(sorted_values, 0.80),
+			]
+		)
+	)
+
+
+func _percentile(sorted_values: PackedFloat32Array, ratio: float) -> float:
+	var index := clampi(
+		int(round(ratio * float(sorted_values.size() - 1))), 0, sorted_values.size() - 1
+	)
+	return sorted_values[index]
 
 
 func _report(size: int) -> void:

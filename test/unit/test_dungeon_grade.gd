@@ -129,3 +129,36 @@ func test_each_size_step_reads_as_its_own_scale_grade() -> void:
 			0.85,
 			"크기 %d 가 규모 %d 로 안 읽힌다 (%d/%d)" % [size, size, hits, boards]
 		)
+
+
+## **복잡 경계도 성격 축과 같이 움직여야 한다.** 규모에 건 것과 같은 모양의 자다.
+##
+## §17.20.8 이 노린 몫은 25 / 55 / 20 이다 — **가운데가 가장 흔해야** 한다.
+## 극단이 가장 흔해지면 등급이 뜻을 잃는다.
+##
+## **한 번 어긋난 적이 있다.** §17.24 가 순환 계수를 목표에 넣으려고 간선을 줄이자
+## 평균 차수 분포가 통째로 내려갔는데 경계는 그 전 분포에 맞춰 잘린 채로 남아
+## 복잡 1 이 60% 가 됐다(§17.30.3). **성격 축을 건드릴 때마다 여기가 걸린다** —
+## 얕은 갱도의 단차와 먼 출구의 막다른방 하한이 실제로 분포를 움직였다.
+##
+## 경계를 다시 고를 때 쓰는 백분위는 `tools/survey_size_ladder.gd` 가 낸다.
+func test_the_middle_complexity_is_the_most_common() -> void:
+	var counts := [0, 0, 0]
+	for size in range(SampleDungeons.SIZE_MIN, SampleDungeons.SIZE_MAX + 1):
+		for character in DungeonCatalog.count():
+			for seed_value in _SEEDS:
+				var params := SampleDungeons.params_for_size(size, character)
+				var plan := GeneratorScript.new(seed_value * 977 + character, params).generate()
+				var grade := int(GradeScript.of(plan)["complexity"])
+				counts[clampi(grade - 1, 0, 2)] += 1
+
+	var total := float(counts[0] + counts[1] + counts[2])
+	assert_gt(
+		float(counts[1]),
+		float(maxi(counts[0], counts[2])),
+		"가운데 복잡이 가장 흔하지 않다 %s — 경계가 분포를 안 따라왔다" % str(counts)
+	)
+	# 끝 등급이 죽어도(0%) 넘쳐도(40%+) 축이 뜻을 잃는다. 목표는 각각 25 · 20 이다.
+	for index in [0, 2]:
+		var share := 100.0 * float(counts[index]) / total
+		assert_between(share, 8.0, 40.0, "복잡 %d 의 몫이 %.0f%% 다 %s" % [index + 1, share, str(counts)])

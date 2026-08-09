@@ -27,10 +27,6 @@ const _SIZE := 3
 
 const _RUNS := 20
 
-## §17.30.3 이 제안한 복잡 경계. **성격마다 어떻게 갈리는지 함께 보려고 여기 둔다.**
-## 채택되면 `DungeonGrade._COMPLEXITY_STEPS` 로 옮기고 이 줄을 지운다.
-const _PROPOSED_COMPLEXITY := [2.42, 2.70]
-
 ## 재는 지표. [키, 화면 이름].
 ##
 ## **위 여섯은 전부 그래프 지표다.** 처음에는 그것만 쟀는데 다섯 중 **벌집 하나만**
@@ -272,37 +268,25 @@ func _alone_on_pair(first: Array, second: Array, character: int) -> bool:
 
 ## 복잡 등급이 성격마다 어떻게 나오나.
 ##
-## **경계 하나로 다섯을 다 맞출 수 있는지**가 §17.30.3 의 재절단 제안에 붙는다.
-## 성격마다 분포가 크게 다르면 경계 하나로는 어느 성격에서든 「가운데가 가장 흔하게」를
-## 만들 수 없다.
+## **경계 하나로 다섯을 다 맞출 수 있는지**를 본다. 성격마다 분포가 크게 다르면
+## 경계 하나로는 어느 성격에서든 「가운데가 가장 흔하게」를 만들 수 없다.
+##
+## **살아 있는 경계로만 센다.** 예전에는 「제안」 열을 나란히 두었는데, 제안이 채택된
+## 뒤로는 그 열이 낡은 수를 조용히 계속 내놓는다. 경계를 고르는 백분위는
+## `survey_size_ladder` 가 낸다 — 후보를 견주려면 거기서 본다.
 func _print_complexity() -> void:
 	print("== 복잡 등급 분포 (크기 %d, 성격마다 %d 판) ==" % [_SIZE, _RUNS])
-	print("%-11s%-15s%-15s%s" % ["성격", "지금 1/2/3", "제안 1/2/3", "평균 차수"])
+	print("%-11s%-15s%s" % ["성격", "복잡 1/2/3", "평균 차수"])
 	for character in DungeonCatalog.count():
 		var now := [0, 0, 0]
-		var proposed := [0, 0, 0]
 		var total := 0.0
 		for run in _RUNS:
 			var params := SampleDungeons.params_for_size(_SIZE, character)
 			var plan := DungeonGenerator.new(run * 977 + character, params).generate()
 			var grade := DungeonGrade.of(plan)
-			var degree := float(grade["average_degree"])
 			now[clampi(int(grade["complexity"]) - 1, 0, 2)] += 1
-			proposed[_step(degree, _PROPOSED_COMPLEXITY)] += 1
-			total += degree
+			total += float(grade["average_degree"])
 		print(
-			(
-				"%-11s%-15s%-15s%.3f"
-				% [DungeonCatalog.name_of(character), str(now), str(proposed), total / float(_RUNS)]
-			)
+			"%-11s%-15s%.3f" % [DungeonCatalog.name_of(character), str(now), total / float(_RUNS)]
 		)
-	print("지금 경계 %s   제안 경계 %s" % [str(DungeonGrade._COMPLEXITY_STEPS), str(_PROPOSED_COMPLEXITY)])
-
-
-## 경계 목록에서 몇 번째 칸인가. 0 부터 센다 (배열 색인으로 바로 쓴다).
-func _step(value: float, steps: Array) -> int:
-	var index := 0
-	for edge in steps:
-		if value >= float(edge):
-			index += 1
-	return index
+	print("복잡 경계 %s (DungeonGrade._COMPLEXITY_STEPS)" % str(DungeonGrade._COMPLEXITY_STEPS))
