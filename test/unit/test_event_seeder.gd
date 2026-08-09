@@ -61,18 +61,26 @@ func test_events_add_relations() -> void:
 	assert_eq((world[2] as RelationLedger).size(), seeder.event_count())
 
 
-func test_all_three_kinds_are_rolled() -> void:
+func test_every_weighted_kind_is_rolled() -> void:
 	# 하나라도 안 나오면 그 사건은 굴려 본 적이 없는 코드가 된다.
 	#
-	# **후유증은 여기서 안 나온다** — 세계가 굴리는 사건이 아니라 내 원정이 남기는 것이라
-	# `ExpeditionAftermath` 가 적는다. 그래서 가중치 표의 길이로 센다.
+	# **가중치 0 은 세지 않는다.** 후유증이 그렇다 — 세계가 굴리는 사건이 아니라
+	# 내 원정이 남기는 것이라 `ExpeditionAftermath` 가 적는다.
 	var world := _world()
 	_seed_all(world)
 	var ledger: RelationLedger = world[2]
 	var seen := {}
 	for cause in ledger.size():
 		seen[int(ledger.kind_of(cause))] = true
-	assert_eq(seen.size(), EventSeeder.KIND_WEIGHTS.size())
+
+	var wanted := 0
+	for slot in EventSeeder.KIND_WEIGHTS.size():
+		if int(EventSeeder.KIND_WEIGHTS[slot]) <= 0:
+			assert_false(seen.has(slot), RelationEvent.label(slot as RelationEvent.Kind))
+			continue
+		wanted += 1
+		assert_true(seen.has(slot), RelationEvent.label(slot as RelationEvent.Kind))
+	assert_eq(seen.size(), wanted)
 
 
 func test_someone_ends_up_knowing_a_stranger() -> void:

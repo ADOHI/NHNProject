@@ -131,23 +131,25 @@ func describe(cause: int, registry: PersonRegistry) -> String:
 	var targets := targets_of(cause)
 	if targets.is_empty():
 		return "%s • %s" % [RelationEvent.label(kind), actor]
+	return _sentence(kind, actor, _name(registry, targets[0]), targets.size())
 
-	var first := _name(registry, targets[0])
+
+## 사건 종류마다 한 문장. **표가 아니라 match 인 이유**는 조사가 이름마다 달라
+## 틀에 값만 끼울 수 없기 때문이다 (KoreanParticle).
+func _sentence(kind: RelationEvent.Kind, actor: String, first: String, count: int) -> String:
+	var subject := KoreanParticle.subject(actor)
+	var object_of := KoreanParticle.object_of(first)
 	match kind:
 		RelationEvent.Kind.BETRAYAL:
-			return (
-				"배신 • %s%s %s%s"
-				% [
-					actor,
-					KoreanParticle.subject(actor),
-					first,
-					KoreanParticle.object_of(first),
-				]
-			)
+			return "배신 • %s%s %s%s" % [actor, subject, first, object_of]
+		RelationEvent.Kind.RESCUE:
+			return "구조 • %s%s %s%s 끌고 나왔다" % [actor, subject, first, object_of]
+		RelationEvent.Kind.INFORM:
+			return "정보 • %s%s %s에게 알렸다" % [actor, subject, first]
 		RelationEvent.Kind.AFTERMATH:
-			return "후유증 • %s%s 제거되고 돌아왔다" % [actor, KoreanParticle.subject(actor)]
+			return "후유증 • %s%s 제거되고 돌아왔다" % [actor, subject]
 		RelationEvent.Kind.WIPEOUT:
-			return "전멸 • %s%s 이끈 원정에서 %d명" % [actor, KoreanParticle.subject(actor), targets.size()]
+			return "전멸 • %s%s 이끈 원정에서 %d명" % [actor, subject, count]
 		_:
 			return "협력 • %s%s %s" % [actor, KoreanParticle.conjunction(actor), first]
 

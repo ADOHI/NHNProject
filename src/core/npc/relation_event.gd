@@ -30,6 +30,8 @@ enum Kind {
 	BETRAYAL,  ## 배신 — 협력 후 공격했다
 	WIPEOUT,  ## 전멸 — 이끌고 들어간 원정이 몰살당했다
 	AFTERMATH,  ## 후유증 — 제거되고 돌아왔다 (설계 2.6.1.5)
+	RESCUE,  ## 구조 — 죽을 사람을 끌고 나왔다
+	INFORM,  ## 정보 제공 — 알아야 할 것을 알려 줬다
 }
 
 ## 설계 24.5 표의 `+` / `++` / `+++` 에 대응하는 값 (설계 24.21.4).
@@ -37,7 +39,7 @@ const NOTCH_ONE := 33
 const NOTCH_TWO := 66
 const NOTCH_THREE := 100
 
-const _LABELS := ["협력", "배신", "전멸", "후유증"]
+const _LABELS := ["협력", "배신", "전멸", "후유증", "구조", "정보"]
 
 ## 이 사건이 무엇인가.
 var kind: Kind
@@ -85,6 +87,10 @@ static func of(kind: Kind) -> RelationEvent:
 			return _wipeout()
 		Kind.AFTERMATH:
 			return _aftermath()
+		Kind.RESCUE:
+			return _rescue()
+		Kind.INFORM:
+			return _inform()
 		_:
 			return _cooperation()
 
@@ -200,6 +206,41 @@ static func _wipeout() -> RelationEvent:
 	event.actor_kind = RelationKind.Kind.COMRADESHIP
 	event.target_kind = RelationKind.Kind.NONE
 	event.sweeps_bonded = true
+	return event
+
+
+## 구조 — 의리 +++ 선 ++ 무모 + (설계 24.5 A).
+##
+## **호감을 가장 크게 되돌리는 사건이다.** 세계에 호감을 올리는 길이 협력 하나뿐이면
+## 오래 돌릴수록 한쪽으로만 기운다 (설계 24.31). 구조가 그 반대편이다 —
+## 배신이 −70 을 내리듯 구조는 +60 을 올린다.
+static func _rescue() -> RelationEvent:
+	var event := RelationEvent.new(Kind.RESCUE)
+	event._set_axis(NpcAxis.Kind.LOYAL, NOTCH_THREE)
+	event._set_axis(NpcAxis.Kind.GOOD, NOTCH_TWO)
+	event._set_axis(NpcAxis.Kind.RECKLESS, NOTCH_ONE)
+	event.strength = 45
+	event.target_affinity = 60
+	event.bond_gain = 25
+	# **유형이 양쪽에서 다르다.** 구한 쪽에는 생사고락, 구해진 쪽에는 은혜가 남는다.
+	event.actor_kind = RelationKind.Kind.COMRADESHIP
+	event.target_kind = RelationKind.Kind.GRATITUDE
+	return event
+
+
+## 정보 제공 — 정직 ++ 의리 + (설계 24.5 C).
+##
+## **작고 흔한 사건이다.** 구조가 드물게 크게 올린다면 이쪽은 자주 조금 올린다 —
+## 되돌리는 길이 큰 것 하나뿐이면 그것이 안 날 때 세계가 계속 내려간다.
+static func _inform() -> RelationEvent:
+	var event := RelationEvent.new(Kind.INFORM)
+	event._set_axis(NpcAxis.Kind.HONEST, NOTCH_TWO)
+	event._set_axis(NpcAxis.Kind.LOYAL, NOTCH_ONE)
+	event.strength = 20
+	event.target_affinity = 25
+	event.bond_gain = 10
+	event.actor_kind = RelationKind.Kind.TRUST
+	event.target_kind = RelationKind.Kind.TRUST
 	return event
 
 
