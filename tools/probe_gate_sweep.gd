@@ -21,6 +21,11 @@ const _CELL := 32.0
 
 
 func _initialize() -> void:
+	var args := OS.get_cmdline_user_args()
+	if args.size() > 0 and args[0] == "facing":
+		_facing()
+		quit()
+		return
 	_sweep()
 	_facing()
 	_cornered()
@@ -167,7 +172,8 @@ func _facing() -> void:
 	print("| 문 폭 | 인원 | 정지 | 전원끝 | 막힘 | 왼쪽에 남은 수 |")
 	print("| --- | --- | --- | --- | --- | --- |")
 	var widths: Array[int] = [1, 2]
-	var crowds: Array[int] = [8, 24, 40]
+	# **인원을 훑는다.** 40 에서만 굳는다면 인원 문제이고, 이 레인은 인원 훑는 법을 안다.
+	var crowds: Array[int] = [8, 16, 24, 28, 32, 36, 40, 44]
 	for gate_cells in widths:
 		for count in crowds:
 			var grid := _gate_grid(gate_cells)

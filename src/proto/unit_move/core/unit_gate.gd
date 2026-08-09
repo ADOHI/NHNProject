@@ -17,11 +17,13 @@ extends RefCounted
 ## `gate_goal` 은 `yield_goal` 과 같은 구조다 - 상태로 걸고, 자리에 닿을 때까지 그쪽으로 가고,
 ## 조건이 풀리면 놓는다. **새 층이 아니라 그 기계를 한 번 더 쓰는 것이다.**
 
-## 문에서 이만큼 안에 있는 유닛만 줄에 세운다(픽셀).
+## 문에서 이만큼 안에 있는 유닛만 줄에 세운다(픽셀). **줄의 길이도 이 값이 정한다.**
 ##
-## 너무 넓으면 아직 문을 겨냥하지도 않은 유닛까지 줄을 서고, 너무 좁으면 이미 뭉친 뒤에야
-## 줄이 선다. 여덟 칸이면 몸 열 남짓이라 문 앞 인파를 덮는다.
-const _GATE_REACH := 256.0
+## 너무 넓으면 아직 문을 겨냥하지도 않은 유닛까지 줄을 서고, **너무 좁으면 줄이 짧아져
+## 줄 밖 무리가 서 있는 줄을 들이받는다**(`_LINE_LIMIT` 주석). 처음에 256 으로 두었더니
+## 한 칸 문 40 이 25.70 초였고, 640 으로 넓히니 22 초 언저리로 내려가면서
+## **문 안 맞교차도 스물여덟에서 서른둘까지 늘었다** - 줄이 길수록 양쪽이 덜 부딪힌다.
+const _GATE_REACH := 640.0
 
 ## 줄 자리 사이의 간격(몸 반지름의 배수). 2.4 면 몸이 닿지 않고 이어진다.
 const _LINE_STEP := 2.4
@@ -153,7 +155,21 @@ static func _place(
 		if position_index < _LEAD or position_index >= _LINE_LIMIT or back == Vector2.ZERO:
 			_release(agent)
 			continue
-		var spot := gate_pos + back * (agent.radius * _LINE_STEP * float(position_index))
+		# **줄이 판 밖으로 뻗으면 안 된다.**
+		#
+		# 상한을 예순넷으로 올리자 스물여덟 번째 자리가 문에서 700 픽셀이 됐고, 맞교차판에서
+		# 그 자리가 격자 밖으로 나가 **엔진이 죽었다**(signal 11). 상한을 고친 것이 만든
+		# 새 길이다 - **값 하나를 키우면 그 값에 기대던 다른 것이 드러난다.**
+		#
+		# 줄은 사정권 안에서만 뻗는다. 그보다 뒤는 어차피 줄에 설 유닛이 아니다.
+		var offset := agent.radius * _LINE_STEP * float(position_index)
+		if offset > _GATE_REACH:
+			_release(agent)
+			continue
+		var spot := gate_pos + back * offset
+		if not field.grid.is_inside(field.grid.world_to_cell(spot)):
+			_release(agent)
+			continue
 		if not field.grid.is_circle_free(spot, agent.radius):
 			_release(agent)
 			continue

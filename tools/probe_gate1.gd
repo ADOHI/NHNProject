@@ -120,7 +120,9 @@ func _run(count: int, gate_cells: int) -> void:
 	)
 	for index in field.agents.size():
 		var agent := field.agents[index]
-		if agent.position.x >= cross_x:
+		# **안 끝난 유닛을 전부 본다.** 문을 못 넘은 유닛뿐 아니라 넘고도 `양보`로 남은
+		# 유닛까지 - `전원끝` 이 안 나는 판은 뒤엣것이 원인이다.
+		if agent.is_settled() and agent.position.x >= cross_x:
 			continue
 		var blocker := field.agent_of(agent.blocker_id)
 		var mutual := blocker != null and blocker.blocker_id == agent.id
