@@ -60,7 +60,7 @@ src/
 │   └── unit_move/              # 이동 조작감 프로토타입 (본 게임과 독립 씬)
 │       ├── unit_move_proto.tscn / .gd   # 진입점 · 입력 해석
 │       ├── terrain_view.gd · field_view.gd · debug_draw.gd · tuning_panel.gd
-│       └── core/               # 흐름장 · 대형 · 선택 · 부대. 노드 비의존
+│       └── core/               # 흐름장 · 걸음 고르기 · 비켜주기 · 전파 · 막힘 기억. 노드 비의존
 ├── ui/
 │   ├── kit/                    # **UI 원자 단위 실험.** 버튼과 팝업만. 방향 미정
 │   │   ├── kit_showcase.tscn   # 견본 화면. 1/2/3 으로 조형 방향 전환
@@ -92,6 +92,8 @@ tools/  (전부 빌드에 포함되지 않는다)
   capture_base_screen.gd        # 아지트 화면 한 바퀴를 일곱 장으로
   capture_unit_move.gd          # 이동 프로토 캡처
   measure_unit_move.gd          # 이동 지표 실측 (꺾임 · 튕김 · 정지 · 막힘)
+  probe_open40.gd               # 안 멎는 판을 열어 본다 (제자리 왕복 찾기)
+  probe_gate1.gd                # 한 칸 문에서 못 넘는 유닛을 찍는다
   bench_dungeon_generation.gd   # 생성 소요 시간 실측
   check_glyphs.gd               # src/ 문자열이 폰트에 있는지 검사
   check_glyphs_text.gd          # 화면에 나갈 표본 .txt 도 같은 검사
