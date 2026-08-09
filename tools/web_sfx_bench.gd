@@ -76,22 +76,27 @@ func _unhandled_input(event: InputEvent) -> void:
 		_since_trigger = _RETRIGGER
 
 
-## 1. 디코딩 — wav 68개를 읽어 PCM 으로 꺼내는 비용.
+## 1. 원재료 — 내보낸 빌드에는 없어야 정상이다.
+##
+## 층 쌓기를 미리 해 두었으므로 게임은 원재료를 안 쓴다 (§29.7.11).
+## `export_presets.cfg` 가 `assets/audio/sfx/*` 를 뺀다.
 func _decode() -> void:
 	SfxSample.clear_cache()
 	SfxLibrary.clear_cache()
-	var started := Time.get_ticks_usec()
-	var count := 0
-	var bytes := 0
+	var present := 0
 	for folder in SfxLibrary.COUNTS:
 		for tier in SfxLibrary.COUNTS[folder]:
-			for path in SfxLibrary.paths_in(folder, tier):
-				var clip := SfxSample.load_clip(path)
-				count += 1
-				bytes += clip.samples.size() * 2
-	var elapsed := (Time.get_ticks_usec() - started) / 1000.0
-	_say("[1] 디코딩  파일 %d개  %.1f ms  (%.2f ms/개)" % [count, elapsed, elapsed / maxi(count, 1)])
-	_say("     PCM %.0f KB" % (bytes / 1024.0))
+			present += SfxLibrary.paths_in(folder, tier).size()
+	_say("[1] 원재료   %d개 (내보낸 빌드에서는 0이 정상)" % present)
+	_say(
+		(
+			"     미리 섞은 표 %d개 / 사건 해결률 %.0f %%"
+			% [
+				SfxAtlas.size(),
+				SfxBank.new().precomputed_ratio() * 100.0,
+			]
+		)
+	)
 	_phase = Phase.BAKE
 	_bake()
 

@@ -54,7 +54,7 @@ func streams_for(request: SfxRequest, variations: int = 1) -> Array[AudioStreamW
 	for index in wanted:
 		# CC0 재료가 있으면 벌마다 **다른 녹음 파일**이 걸린다. 합성 씨를 흔드는 것보다
 		# 훨씬 강한 변주다 — 같은 물건을 다시 때린 것이 아니라 원래 다른 녹음이다.
-		var stream := SfxRender.render(request, index).to_stream()
+		var stream := _stream_for_variation(request, index)
 		_baked_bytes += stream.data.size()
 		made.append(stream)
 	_cache[key] = made
@@ -80,6 +80,34 @@ func warm(events: Array = []) -> float:
 	for event in targets:
 		stream_for(event)
 	return (Time.get_ticks_usec() - started) / 1000.0
+
+
+## 한 벌을 얻는다. **미리 섞어 둔 것이 있으면 읽기만 한다** (§29.7.11).
+##
+## 층 쌓기는 GDScript 가 샘플 단위로 도는 부분이라 wasm 에서 가장 비쌌다 —
+## 타격 하나에 2.641 ms, 웹 전체로 412 ms. 카탈로그가 정적이라 빌드 시점에 다 만들 수 있고,
+## 만들어 두면 이 비용이 통째로 사라진다.
+func _stream_for_variation(request: SfxRequest, variation: int) -> AudioStreamWAV:
+	if SfxRender.mode == SfxRender.Source.FILE:
+		var baked := SfxAtlas.path_for(request, variation)
+		if not baked.is_empty() and ResourceLoader.exists(baked):
+			var loaded := load(baked) as AudioStreamWAV
+			if loaded != null:
+				return loaded
+	# 표에 없는 조합(프로토 화면이 슬라이더로 만든 무게 등)은 그 자리에서 만든다.
+	return SfxRender.render(request, variation).to_stream()
+
+
+## 미리 섞어 둔 것으로 해결되는 비율. 실측 도구가 쓴다.
+func precomputed_ratio() -> float:
+	var total := 0
+	var hit := 0
+	for event in SfxEvent.all():
+		var request := SfxCatalog.request_for(event)
+		total += 1
+		if not SfxAtlas.path_for(request, 0).is_empty():
+			hit += 1
+	return float(hit) / maxi(total, 1)
 
 
 ## 구워 둔 스트림 벌 수.

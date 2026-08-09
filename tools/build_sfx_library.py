@@ -244,7 +244,7 @@ def main() -> int:
     total_bytes = 0
 
     for group, tiers in CURATION.items():
-        rate = CLOTH_RATE if group in ("cloth", "air") else DEFAULT_RATE
+        rate = CLOTH_RATE if group == "cloth" else DEFAULT_RATE
         floor = SMOOTH_FLOOR if group in SMOOTH_GROUPS else PERCUSSIVE_FLOOR
         for tier, names in tiers.items():
             index = 0
