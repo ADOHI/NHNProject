@@ -105,6 +105,41 @@ static func torn(box: Rect2, bite: float, seed_value: int) -> PackedVector2Array
 	return out
 
 
+## **위 판이 아래 판을 잘라 낸다.** 겹친 자리를 아래 판에서 지우고 `bleed` 만큼 더 지운다.
+##
+## 뒤판을 그리고 그 위에 앞판을 덮으면 **가려진 것**이지 잘린 것이 아니다.
+## 겹치는 데가 없어야 뒤판이 초승달 모양의 **독립한 판**으로 보이고,
+## 그래야 「그림자가 아니라 판 한 겹 더」가 형태로 증명된다 — 사이의 빈 줄이 그 증거다.
+static func notched(
+	under: PackedVector2Array, over: PackedVector2Array, bleed: float
+) -> Array[PackedVector2Array]:
+	var out: Array[PackedVector2Array] = []
+	if under.is_empty():
+		return out
+	if over.is_empty():
+		out.append(under)
+		return out
+	for piece in Geometry2D.clip_polygons(under, _fattened(over, bleed)):
+		out.append(piece)
+	return out
+
+
+## 판을 바깥으로 `bleed` 만큼 불린다.
+##
+## `Geometry2D.offset_polygon` 은 **감는 방향에 따라 부호가 뒤집힌다** — 시계 방향
+## 다각형에 양수를 주면 오히려 줄어든다. 여기 판들은 `lean` · `clipped` · `fang` 이
+## 제각각 만들어서 방향이 한결같지 않으므로, **넓어진 쪽을 골라** 쓴다.
+static func _fattened(shape: PackedVector2Array, bleed: float) -> PackedVector2Array:
+	if bleed <= 0.0:
+		return shape
+	var was := _bounds(shape).get_area()
+	for delta: float in [bleed, -bleed]:
+		var grown := Geometry2D.offset_polygon(shape, delta)
+		if not grown.is_empty() and _bounds(grown[0]).get_area() > was:
+			return grown[0]
+	return shape
+
+
 ## 판을 그만큼 부풀린 외곽. 뒤판이 삐져나오게 할 때 쓴다.
 ##
 ## **뒤판은 「그림자」가 아니라 한 겹 더 있는 판이다.** 그래서 어긋나게 놓는다.

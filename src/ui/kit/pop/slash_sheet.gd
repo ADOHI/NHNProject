@@ -46,6 +46,9 @@ const RIP_APART := 10.0
 ## 베는 순간. 판이 다 들어와 선 직후에 **한 번에** 지나간다.
 const RIP_AT := 0.78
 
+## 앞판이 뒤판에서 잘라 내는 여유. **이 빈 줄 하나가 「판이 두 장」이라고 말한다.**
+const BLEED := 3.0
+
 ## 색은 **`HoloPalette` 한 곳에서만** 정해진다 (§20.31). 화면은 번호만 든다 —
 ## 색만 바꿔 여러 장을 찍으려면 바꾸는 자리가 한 줄이어야 한다.
 var palette := 0:
@@ -164,6 +167,16 @@ func _plate(shape: PackedVector2Array, tint: Color) -> void:
 		draw_colored_polygon(piece, tint)
 
 
+## 어긋난 **뒤판.** 앞판이 덮을 자리를 **잘라 내고** 초승달만 남긴다.
+##
+## 덮어서 안 보이는 것과 잘려서 없는 것은 화면에서 똑같아 보이지만 **가장자리가 다르다.**
+## 잘라 내면 앞판과 뒤판 사이에 `BLEED` 만큼의 빈 줄이 생기고, 그 줄 하나가
+## 「이건 그림자가 아니라 판이 두 장」이라고 말한다 — 겹쳐 두면 아무 말도 안 한다.
+func _backplate(front: PackedVector2Array, by: float, at: Vector2, tint: Color) -> void:
+	for crescent in GraphicCut.notched(GraphicCut.swelled(front, by, at), front, BLEED):
+		_plate(crescent, tint)
+
+
 ## 채워진 판 위의 **주사선.** 망점이 있던 자리다 — 무늬만 바뀌고 판은 그대로다.
 ##
 ## 줄의 색을 부르는 쪽이 정하지 않는다. **면이 어두워지면 주사선은 밝아져야** 하고,
@@ -259,7 +272,7 @@ func _backdrop() -> void:
 ## 제목 — **글자가 도형이다.** 기울고, 검은 판에 잘리고, 판 밖으로 넘친다.
 func _title() -> void:
 	var slab := GraphicCut.lean(Rect2(-30.0, 22.0, 340.0, 62.0), 0.30)
-	_plate(GraphicCut.swelled(slab, 0.012, Vector2(7.0, 7.0)), _back())
+	_backplate(slab, 0.012, Vector2(7.0, 7.0), _back())
 	_plate(slab, _paper())
 	# 글자를 판보다 크게 잡아 오른쪽으로 넘긴다.
 	draw_set_transform(Vector2(24.0, 74.0), -0.075, Vector2.ONE)
@@ -294,10 +307,7 @@ func _buttons() -> void:
 
 		# 뒤판 — **그림자가 아니라 판 한 겹 더**라서 어긋나 있고 색이 있다.
 		if i != 3:
-			_plate(
-				GraphicCut.swelled(shape, 0.02, Vector2(8.0, 8.0)),
-				_back() if not down else _paper()
-			)
+			_backplate(shape, 0.02, Vector2(8.0, 8.0), _back() if not down else _paper())
 		# 「올림」은 **고름**이다. 켜진 것이지 「지금 여기」가 아니다.
 		var face := _pick() if hot else _paper()
 		_plate(shape, face)
@@ -315,7 +325,7 @@ func _window() -> void:
 	var box := Rect2(PAD - (1.0 - enter) * SLIDE, 206.0, 336.0, 178.0)
 	var shape := GraphicCut.clipped(box, 26.0, 2 | 8)
 	# 뒤판이 **반투명해졌다** — 판 뒤에 다른 판이 비친다.
-	_plate(GraphicCut.swelled(shape, 0.014, Vector2(9.0, 9.0)), Color(_back(), 0.55))
+	_backplate(shape, 0.014, Vector2(9.0, 9.0), Color(_back(), 0.55))
 	var drawn := _reveal(shape, 0.24)
 	if drawn.is_empty():
 		return
@@ -358,7 +368,7 @@ func _popup() -> void:
 	for piece in GraphicCut.torn_open(shape, -PI * 0.22, open, 46.0):
 		# 어긋난 뒤판이 **험**의 색이다 — 팝업 전체가 「되돌릴 수 없는 것」이라
 		# 그 사실이 버튼 하나가 아니라 판 테두리에서 먼저 보인다.
-		_plate(GraphicCut.swelled(piece, 0.012, Vector2(8.0, 8.0)), Color(_peril(), 0.72))
+		_backplate(piece, 0.012, Vector2(8.0, 8.0), Color(_peril(), 0.72))
 		_plate(piece, _paper())
 		_scanlines(piece, _paper(), 0.10)
 	if open < 0.55:
@@ -384,7 +394,7 @@ func _popup() -> void:
 		var solid := i == 0
 		var shape_button := GraphicCut.lean(button, 0.22)
 		if solid:
-			_plate(GraphicCut.swelled(shape_button, 0.03, Vector2(5.0, 5.0)), _void())
+			_backplate(shape_button, 0.03, Vector2(5.0, 5.0), _void())
 		var face := _peril() if solid else Color(_void(), 0.10)
 		_plate(shape_button, face)
 		_shape_text("확인" if solid else "취소", button, 16, face if solid else _paper())
@@ -407,8 +417,7 @@ func _menu() -> void:
 		var shape_row := GraphicCut.lean(row, 0.20)
 		if i == chosen:
 			var grow := 1.0 if _clock < 2.85 else slam
-			var lit := GraphicCut.swelled(shape_row, 0.03 * grow, Vector2(6.0, 6.0) * grow)
-			_plate(lit, _void())
+			_backplate(shape_row, 0.03 * grow, Vector2(6.0, 6.0) * grow, _void())
 			# 골라 둔 것은 **고름**이다. 눈에 띄어야 하지만 「지금 여기」는 아니다.
 			_plate(shape_row, _pick())
 			_scanlines(shape_row, _pick(), 0.18)
@@ -448,12 +457,12 @@ func _inputs() -> void:
 	var knob := Rect2(
 		rail.position.x + rail.size.x * 0.62 - 8.0, rail.position.y - 11.0, 18.0, 30.0
 	)
-	_plate(GraphicCut.swelled(GraphicCut.lean(knob, 0.4), 0.04, Vector2(4.0, 4.0)), _void())
+	_backplate(GraphicCut.lean(knob, 0.4), 0.04, Vector2(4.0, 4.0), _void())
 	_plate(GraphicCut.lean(knob, 0.4), _paper())
 
 	var tick := Rect2(box.position.x + 20.0, box.position.y + 96.0, 26.0, 26.0)
 	var shape_tick := GraphicCut.lean(tick, 0.22)
-	_plate(GraphicCut.swelled(shape_tick, 0.04, Vector2(5.0, 5.0)), _void())
+	_backplate(shape_tick, 0.04, Vector2(5.0, 5.0), _void())
 	_plate(shape_tick, _pick())
 	draw_polyline(
 		PackedVector2Array(
@@ -482,7 +491,7 @@ func _here() -> void:
 	var enter := _snap(0.60)
 	var box := Rect2(PAD - (1.0 - enter) * SLIDE * 1.6, 596.0, size.x - PAD * 2.0, 58.0)
 	var shape := GraphicCut.fang(Rect2(box.position, box.size - Vector2(26.0, 0.0)), 26.0)
-	_plate(GraphicCut.swelled(shape, 0.012, Vector2(9.0, 9.0)), _paper())
+	_backplate(shape, 0.012, Vector2(9.0, 9.0), _paper())
 	# **화면에서 신호색이 나오는 자리는 여기 하나다** (§20.32).
 	_plate(shape, _accent())
 	_scanlines(shape, _accent(), 0.18)
