@@ -71,13 +71,18 @@ const DEFAULT_SCALE := 1.0
 ## 재생 속도. 0 이면 멈춘다.
 @export var speed := 1.0
 
-## **무너짐 문턱.** 반응 층의 누적이 이걸 넘으면 상태가 바뀐다 (§28.5 의 눈금).
+## **무너짐 문턱.** 쌓인 눈금이 이걸 넘으면 상태가 바뀐다 (§28.5).
 ##
 ## 넘기 전까지는 **때리던 동작이 계속 돈다** — 맞아도 안 멈춘다.
-@export var breakdown_at := 1.1
+## **전투 레인이 확정한 값이다** — 경직 30 · 띄우기 60 · 쓰러짐 100.
+@export var breakdown_at := CharHitClip.STUN_AT
 
 ## 눈금이 잦아드는 빠르기(초당). 안 맞으면 서서히 회복된다.
-@export var stagger_recovery := 0.9
+##
+## **전투 레인이 20 에서 10 으로 옮겼다.** 20 이면 1 칸은 한 방의 29 %, 4 칸은 7 % 만
+## 남아서 **아홉 타가 다섯 타와 같은 데서 만난다** — *"문턱은 그 폭을 나눌 뿐
+## 폭을 만들지 못한다."* 문턱이 아니라 감쇠가 폭을 만든다.
+@export var stagger_recovery := 10.0
 
 ## 얹는 연출 장치들 (§25.23). 바꾸면 바로 반영된다.
 var flourish := CharFlourish.none():
@@ -124,8 +129,13 @@ func play(action: Action) -> void:
 ##
 ## 눈금이 문턱을 넘어야 비로소 상태가 바뀐다. 그래서 **때리다 맞으면 스윙이 계속 돌고
 ## 그 위에 흔들림이 얹힌다** — 전환이 없다.
+##
+## `power` 는 **§28.5 의 무너짐 눈금**이다 (쓰러짐이 100). 그 단위는 전투가 정한다.
+##
+## **밀림의 세기는 같은 축의 다른 단위다.** 한 방에 눕히는 값(100)을 `1` 로 두고 나눈다 —
+## 눈금을 그대로 넣으면 어떤 타격이든 누적 상한에 붙어서 **1 칸과 4 칸이 같아 보인다.**
 func take_hit(power: float, direction := -1.0) -> void:
-	_reaction.strike(_time, power, direction)
+	_reaction.strike(_time, power / CharHitClip.FALL_AT, direction)
 	_stagger += power
 	_refresh()
 
@@ -133,6 +143,11 @@ func take_hit(power: float, direction := -1.0) -> void:
 ## 지금 쌓인 무너짐. `0` … `breakdown_at` 을 넘으면 무너진다.
 func stagger() -> float:
 	return _stagger
+
+
+## **어디까지 무너졌나.** `broke_down` 을 받고 읽으면 된다 (경직 · 띄우기 · 쓰러짐).
+func breakdown_depth() -> CharHitClip.Depth:
+	return (_clips[Action.HIT] as CharHitClip).depth
 
 
 func current_action() -> Action:
@@ -203,6 +218,8 @@ func _process(delta: float) -> void:
 func _settle_stagger(delta: float) -> void:
 	_reaction.forget_spent(_time)
 	if _stagger >= breakdown_at and _action != Action.HIT and _action != Action.DIE:
+		# **깊이를 지우기 전에 읽는다.** 눈금이 어디까지 갔는지가 곧 어디까지 무너지는지다.
+		(_clips[Action.HIT] as CharHitClip).depth = CharHitClip.depth_for(_stagger)
 		_stagger = 0.0
 		_reaction.clear()
 		play(Action.HIT)

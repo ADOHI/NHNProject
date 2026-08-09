@@ -134,7 +134,7 @@ func show_at(
 	apply_pose(pose)
 	_stretch_blade(clip, at, f)
 	set_motion(
-		_past_poses(clip, at, f), _blade_sweep(clip, at, f), _flash_left(at, impact, reaction, wall)
+		past_poses(clip, at, f), blade_sweep(clip, at, f), _flash_left(at, impact, reaction, wall)
 	)
 
 
@@ -262,20 +262,20 @@ func _draw_ghost_blade(pose: CharPose, tint: Color) -> void:
 
 ## 과거 자세들. **기록이 아니라 `sample(t - Δ)` 다** — 클립이 시각의 순수 함수라
 ## 그냥 뽑힌다. 링 버퍼가 없고 프레임률이 튀어도 간격이 안 변한다 (§25.3).
-func _past_poses(clip: CharClip, at: float, f: AnimFeatures) -> Array[CharPose]:
+func past_poses(clip: CharClip, at: float, f: AnimFeatures) -> Array[CharPose]:
 	var out: Array[CharPose] = []
 	for i in range(1, flourish.trail_count + 1):
 		var back := held(at - float(i) * flourish.trail_gap)
 		if back < 0.0:
 			if not clip.is_looping():
 				break
-			back = clip.wrapat(back)
+			back = clip.wrap_time(back)
 		out.append(clip.sample(back, f))
 	return out
 
 
 ## 검이 지나간 호를 면으로 만든다. **바깥은 날 끝, 안쪽은 자루 쪽**이라 부채꼴이 된다.
-func _blade_sweep(clip: CharClip, at: float, f: AnimFeatures) -> PackedVector2Array:
+func blade_sweep(clip: CharClip, at: float, f: AnimFeatures) -> PackedVector2Array:
 	var sweep := PackedVector2Array()
 	if not flourish.arc_on:
 		return sweep
@@ -289,7 +289,7 @@ func _blade_sweep(clip: CharClip, at: float, f: AnimFeatures) -> PackedVector2Ar
 		if back < 0.0:
 			if not clip.is_looping():
 				break
-			back = clip.wrapat(back)
+			back = clip.wrap_time(back)
 		var mount := (
 			clip.sample(back, f).canvas_transform(CharWeapon.HOLDER)
 			* Transform2D(-weapon.rest_angle(rig), Vector2(grip.x, -grip.y))

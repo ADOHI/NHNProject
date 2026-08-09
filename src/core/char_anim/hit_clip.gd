@@ -18,6 +18,31 @@ extends CharClip
 ## 띄우기가 지면 규칙과 부딪히지도 않는다. 지면 규칙은 **파고드는 것만 금지하고
 ## 뜨는 것은 허용**하기 때문이다 (§25.12.1).
 
+## 어디까지 무너지나. **구간을 자를 뿐 수식을 하나도 안 바꾼다** —
+## 전부 「사건 이후 흐른 시간의 함수」라(§25.3.1) 앞부분만 쓰는 것이 그냥 된다.
+enum Depth { STUN, LAUNCH, FALL }
+
+## **무너짐 눈금** — 전투 레인이 §28.5 를 확정했다. **저쪽이 정한 값이고 여기가 받는다.**
+##
+## | 넘으면 | 어디까지 |
+## | --- | --- |
+## | **30** | 경직만 |
+## | **60** | 띄우기까지 |
+## | **100** | 쓰러짐까지 |
+##
+## **문턱만으로는 못 정했다는 것이 저쪽의 발견이다** — 감쇠가 초당 20 이면 1 칸은
+## 한 방의 29 %, 4 칸은 7 % 만 남아서 **아홉 타가 다섯 타와 같은 데서 만난다.**
+## *"문턱은 그 폭을 나눌 뿐 폭을 만들지 못한다."* 그래서 저쪽이 **감쇠를 10 으로** 옮겼다.
+const STUN_AT := 30.0
+const LAUNCH_AT := 60.0
+const FALL_AT := 100.0
+
+## 얕은 눈금이 **제자리로 돌아오는 데** 쓰는 끝자락의 비율.
+##
+## **「앞부분만 재생」은 반만 맞았다**(§25.12.6). 밀려난 채로 끝나면 다음 동작이
+## 그 차이만큼 튄다 — 쓰러짐만 안 돌아온다. 그것 하나가 **상태로 남는 것**이기 때문이다.
+const HOME_TAIL := 0.45
+
 ## 경직. 맞은 자세로 멈춰 있는 시간. **짧아야 한다** — 길면 정지가 아니라 고장으로 보인다.
 const FREEZE := 0.09
 
@@ -80,9 +105,25 @@ const RING_PERIOD := 0.26
 ## 맞는 순간의 눌림. 몸이 한 번 찌그러졌다 펴진다.
 const IMPACT_SQUASH := 0.075
 
+## 맞은 자세가 풀리는 데 걸리는 시간. **경직만 맞았을 때 이만큼 더 보여 준다** —
+## 경직에서 딱 끊으면 젖혀진 자세 그대로 다음 동작이 시작되어 툭 튄다.
+const RECOIL_RELEASE := FLIGHT * 0.8
+
 ## 들고 있는 무기. **무기가 얹힌 상태가 전투 애니메이션의 바탕이다**(§25.11) —
 ## 무거운 무기는 더 길어서 쓰러질 때 검끝이 바닥에 박히기 쉽다.
 var weapon := CharWeapon.new(1)
+
+## 어디까지 무너지나. **전투가 준 눈금에서 나온다** — 여기서 만들지 않는다 (§25.18.2).
+var depth := Depth.FALL
+
+
+## 눈금을 구간으로 옮긴다. **문턱은 저쪽 것이고 구간은 이쪽 것이다.**
+static func depth_for(stagger: float) -> Depth:
+	if stagger >= FALL_AT:
+		return Depth.FALL
+	if stagger >= LAUNCH_AT:
+		return Depth.LAUNCH
+	return Depth.STUN
 
 
 func clip_name() -> String:
@@ -92,7 +133,26 @@ func clip_name() -> String:
 
 
 func loop_seconds() -> float:
-	return FREEZE + FLIGHT + BOUNCE + SETTLE
+	match depth:
+		Depth.STUN:
+			return FREEZE + RECOIL_RELEASE
+		Depth.LAUNCH:
+			return FREEZE + FLIGHT + BOUNCE
+		_:
+			return FREEZE + FLIGHT + BOUNCE + SETTLE
+
+
+## **얕은 눈금은 제자리로 돌아온다.** `1` 에서 시작해 끝자락에서 `0` 이 된다.
+##
+## 쓰러짐만 `1` 로 남는다 — 되돌아오지 않는 것이 쓰러짐의 정의다 (§25.17).
+func homing(t: float) -> float:
+	if depth == Depth.FALL:
+		return 1.0
+	var span := loop_seconds()
+	var tail := span * HOME_TAIL
+	if tail <= 0.0 or t <= span - tail:
+		return 1.0
+	return 1.0 - smoothstep(0.0, 1.0, (t - (span - tail)) / tail)
 
 
 ## **루프가 아니다.** 쓰러진 자세에 멈춰 선다 — 일어나기는 별개의 동작이다.
@@ -104,6 +164,9 @@ func is_looping() -> bool:
 ##
 ## 경직 동안에는 0 이다. 맞은 자리에서 **멈춰 있어야** 정지가 보인다.
 func lift(t: float) -> float:
+	# **경직만 맞으면 안 뜬다.** 30 을 넘고 60 을 못 넘긴 것이 그 눈금이다.
+	if depth == Depth.STUN:
+		return 0.0
 	var flying := t - FREEZE
 	if flying <= 0.0:
 		return 0.0
@@ -117,15 +180,22 @@ func lift(t: float) -> float:
 
 ## 뒤로 밀린 거리 (음수). 끝에서 속도가 0 이 되어 **미끄러지다 멈춘다.**
 func drift(t: float) -> float:
+	if depth == Depth.STUN:
+		return 0.0
 	var flying := t - FREEZE
 	if flying <= 0.0:
 		return 0.0
 	var span := FLIGHT + BOUNCE
-	return -KNOCKBACK * smoothstep(0.0, 1.0, clampf(flying / span, 0.0, 1.0))
+	# **밀린 채로 끝나면 다음 동작이 그만큼 튄다.** 쓰러짐만 밀린 자리에 남는다.
+	var push := -KNOCKBACK * smoothstep(0.0, 1.0, clampf(flying / span, 0.0, 1.0))
+	return push * homing(t)
 
 
 ## 주저앉은 자세로 얼마나 갔는가. 땅에 닿고 나서야 오른다.
 func slump(t: float) -> float:
+	# **쓰러지는 것은 100 을 넘었을 때뿐이다.** 띄우기까지는 떴다가 서 있는 것으로 끝난다.
+	if depth != Depth.FALL:
+		return 0.0
 	var landing := t - (FREEZE + FLIGHT)
 	if landing <= 0.0:
 		return 0.0
@@ -136,7 +206,7 @@ func slump(t: float) -> float:
 func recoil(t: float) -> float:
 	if t < FREEZE:
 		return 1.0
-	return maxf(0.0, 1.0 - (t - FREEZE) / (FLIGHT * 0.8))
+	return maxf(0.0, 1.0 - (t - FREEZE) / RECOIL_RELEASE)
 
 
 func sample(t: float, features: AnimFeatures) -> CharPose:

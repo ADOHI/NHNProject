@@ -81,6 +81,9 @@ var _cells := 1
 var _span := 1
 var _flourish := "none"
 
+## **무너짐 눈금.** `hit` 이 어디까지 갈지를 정한다 (§25.12.6).
+var _stagger := CharHitClip.FALL_AT
+
 ## **때리는 중에 맞는 것**을 보여 주려고 미리 충격을 심어 둔다 (`hitat0.35` 처럼).
 var _reaction: CharReaction = null
 
@@ -134,6 +137,10 @@ func _initialize() -> void:
 		elif token in CharFlourish.preset_names():
 			# `arc_hard` 처럼 연출 장치를 고른다. 장치마다 약/세/과 셋이 있다 (§25.23).
 			_flourish = token
+		elif token.begins_with("stagger"):
+			# `stagger45` 처럼 **무너짐 눈금**을 준다 — 경직 30 · 띄우기 60 · 쓰러짐 100 (§28.5).
+			# 눈금이 구간을 정하므로 셋을 나란히 놓으려면 이 낱말 하나면 된다.
+			_stagger = float(token.substr(7))
 		elif token.begins_with("cells"):
 			# `cells3` 은 3 칸 곧은 것, `cells4x2` 는 총 4 칸에 긴 쪽 2 칸(철퇴).
 			# 길이와 무게를 따로 줘야 창과 철퇴가 갈린다 (§25.20).
@@ -288,13 +295,20 @@ func _make_clip(name: String, rig: CharRig) -> CharClip:
 		"walk": func() -> CharClip: return CharWalkClip.new(rig),
 		"run": func() -> CharClip: return CharRunClip.new(rig),
 		"jump": func() -> CharClip: return CharJumpClip.new(rig),
-		"hit": func() -> CharClip: return CharHitClip.new(rig),
+		"hit": func() -> CharClip: return _make_hit(rig),
 		"die": func() -> CharClip: return CharDieClip.new(rig),
 		"front": func() -> CharClip: return CharFrontIdleClip.new(rig),
 	}
 	if name in makers:
 		return (makers[name] as Callable).call()
 	return CharIdleClip.new(rig)
+
+
+## 눈금이 구간을 정한다. **문턱은 전투가 정하고 구간은 이쪽이 자른다** (§25.18.2).
+func _make_hit(rig: CharRig) -> CharClip:
+	var clip := CharHitClip.new(rig)
+	clip.depth = CharHitClip.depth_for(_stagger)
+	return clip
 
 
 func _parse_features(spec: String) -> AnimFeatures:
