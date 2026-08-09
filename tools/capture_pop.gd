@@ -87,6 +87,14 @@ func _initialize() -> void:
 
 func _pick() -> Control:
 	match _which:
+		"ring":
+			_card = NoiseRadial.CARD
+			_loop = NoiseRadial.LOOP
+			return NoiseRadial.new()
+		"person":
+			_card = NoiseDossier.CARD
+			_loop = NoiseDossier.LOOP
+			return NoiseDossier.new()
 		"noise":
 			_card = NoiseSheet.CARD
 			_loop = NoiseSheet.LOOP
