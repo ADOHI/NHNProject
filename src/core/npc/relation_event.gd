@@ -47,6 +47,11 @@ enum Kind {
 	SNITCH,  ## 밀고 — 위치를 흘렸다
 	LOOT_BODY,  ## 시체 털이 — **대상이 죽어 있다. 유족만 반응한다**
 	DEFECT,  ## 길드 이탈 — **대상이 없다**
+	BREAK_PACT,  ## 계약 파기 — 대상이 없다
+	FOUND_GUILD,  ## 길드 창설 — 대상이 없다
+	HEADLINE,  ## 렉카 1면 — 대상이 없다
+	HAUL,  ## 대박 회수 — 대상이 없다
+	DELVE,  ## 심층 진입 — 대상이 없다
 }
 
 ## 설계 24.5 표의 `+` / `++` / `+++` 에 대응하는 값 (설계 24.21.4).
@@ -71,6 +76,11 @@ const _LABELS := [
 	"밀고",
 	"시체털이",
 	"길드이탈",
+	"계약파기",
+	"길드창설",
+	"렉카1면",
+	"대박회수",
+	"심층진입",
 ]
 
 ## 이 사건이 무엇인가.
@@ -157,6 +167,16 @@ static func of(kind: Kind) -> RelationEvent:
 			return _loot_body()
 		Kind.DEFECT:
 			return _defect()
+		Kind.BREAK_PACT:
+			return _break_pact()
+		Kind.FOUND_GUILD:
+			return _found_guild()
+		Kind.HEADLINE:
+			return _headline()
+		Kind.HAUL:
+			return _haul()
+		Kind.DELVE:
+			return _delve()
 		_:
 			return _cooperation()
 
@@ -484,6 +504,72 @@ static func _defect() -> RelationEvent:
 	event.bond_gain = 0
 	event.actor_kind = RelationKind.Kind.NONE
 	event.target_kind = RelationKind.Kind.NONE
+	event.needs_target = false
+	return event
+
+
+## 계약 파기 — 자유 66 · 기만 100 (설계 24.5 D). **대상이 없다.**
+##
+## 벡터 합이 유기·밀고와 같은 Σ166 인데 **대상 호감이 0 이다.**
+## 설계 24.5 D 표에는 「남기는 관계」 칸이 아예 없다 — 없는 칸을 채우면
+## 표에 없는 관계가 생긴다 (§24.38.1). 그래서 힘이 전부 목격자 쪽으로 간다.
+static func _break_pact() -> RelationEvent:
+	var event := RelationEvent.new(Kind.BREAK_PACT)
+	event._set_axis(NpcAxis.Kind.HIERARCHY, -NOTCH_TWO)
+	event._set_axis(NpcAxis.Kind.HONEST, -NOTCH_THREE)
+	event.strength = 45
+	event.needs_target = false
+	return event
+
+
+## 길드 창설 — 자유 33 · 과시 66 (설계 24.5 D). **대상이 없다.**
+##
+## **길드 이탈의 반대편이 아니다.** 이탈은 위계만 밟고 창설은 과시를 같이 밟는다 —
+## 나가는 것은 조용히 할 수 있지만 세우는 것은 알려야 한다.
+static func _found_guild() -> RelationEvent:
+	var event := RelationEvent.new(Kind.FOUND_GUILD)
+	event._set_axis(NpcAxis.Kind.HIERARCHY, -NOTCH_ONE)
+	event._set_axis(NpcAxis.Kind.SHOWY, NOTCH_TWO)
+	event.strength = 30
+	event.needs_target = false
+	return event
+
+
+## 렉카 1면 — 과시 100 (설계 24.5 D). **대상이 없다.**
+##
+## 설계 24.5 —
+## *"벡터가 과시 하나뿐이다. 그래서 과시형에게는 상, 은둔형에게는 벌이 자동으로 나온다 —
+## 사건 하나에 규칙 하나다."* **이 문서가 공식을 설명할 때 든 예가 이것이고,
+## 사건 열다섯이 붙는 동안 그 예가 코드에 없었다** (§24.38.2).
+static func _headline() -> RelationEvent:
+	var event := RelationEvent.new(Kind.HEADLINE)
+	event._set_axis(NpcAxis.Kind.SHOWY, NOTCH_THREE)
+	event.strength = 35
+	event.needs_target = false
+	return event
+
+
+## 대박 회수 — 과시 33 (설계 24.5 B). **대상이 없다.**
+##
+## **자주 조금 흔드는 쪽이다** — 정보 제공이 호감 쪽에서 하는 일을 과시 축에서 한다.
+## 유명세는 ↑↑↑ 인데 강도는 낮다: 많이 알려지는 것과 사람 사이가 갈리는 것은 다르다.
+static func _haul() -> RelationEvent:
+	var event := RelationEvent.new(Kind.HAUL)
+	event._set_axis(NpcAxis.Kind.SHOWY, NOTCH_ONE)
+	event.strength = 20
+	event.needs_target = false
+	return event
+
+
+## 심층 진입 — 무모 100 (설계 24.5 B). **대상이 없다.**
+##
+## **전멸과 같은 축을 반대 방향에서 밟는다.** 전멸은 무모 +33 이고 이쪽은 +100 인데
+## 전멸의 강도가 더 크다 — 전멸은 사람이 죽고 이것은 아직 아무 일도 안 났다.
+## 무모형은 *"저래야 뭐가 나온다"*, 신중형은 *"저러다 죽는다"* 로 갈린다.
+static func _delve() -> RelationEvent:
+	var event := RelationEvent.new(Kind.DELVE)
+	event._set_axis(NpcAxis.Kind.RECKLESS, NOTCH_THREE)
+	event.strength = 30
 	event.needs_target = false
 	return event
 

@@ -139,9 +139,22 @@ func describe(cause: int, registry: PersonRegistry) -> String:
 ## **길드 이탈이 그렇다** — 누구에게 한 일이 아니라 한 일 그 자체라 목적어가 없다.
 ## 설계 24.5 D 의 사건 대부분이 이 모양이므로 자리를 열어 둔다.
 func _solo_sentence(kind: RelationEvent.Kind, actor: String) -> String:
-	if kind == RelationEvent.Kind.DEFECT:
-		return "길드이탈 • %s%s 소속을 버렸다" % [actor, KoreanParticle.subject(actor)]
-	return "%s • %s" % [RelationEvent.label(kind), actor]
+	var subject := KoreanParticle.subject(actor)
+	var text := "%s • %s" % [RelationEvent.label(kind), actor]
+	match kind:
+		RelationEvent.Kind.DEFECT:
+			text = "길드이탈 • %s%s 소속을 버렸다" % [actor, subject]
+		RelationEvent.Kind.BREAK_PACT:
+			text = "계약파기 • %s%s 약속을 뒤집었다" % [actor, subject]
+		RelationEvent.Kind.FOUND_GUILD:
+			text = "길드창설 • %s%s 제 길드를 세웠다" % [actor, subject]
+		RelationEvent.Kind.HEADLINE:
+			text = "렉카1면 • %s%s 렉카 1면에 올랐다" % [actor, subject]
+		RelationEvent.Kind.HAUL:
+			text = "대박회수 • %s%s 크게 챙겨 나왔다" % [actor, subject]
+		RelationEvent.Kind.DELVE:
+			text = "심층진입 • %s%s 더 깊이 들어갔다" % [actor, subject]
+	return text
 
 
 ## 사건 종류마다 한 문장. **표가 아니라 match 인 이유**는 조사가 이름마다 달라
