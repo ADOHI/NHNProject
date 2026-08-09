@@ -72,6 +72,28 @@ func create_run() -> DungeonRun:
 	return SampleDungeons.create_run(dungeon_seed, dungeon_size(), dungeon_character)
 
 
+## **이 게이트를 끝내려면 필요한 민첩.** 입장 판정의 기준이다.
+##
+## 안쪽 보스에 닿는 경로의 최소 고도차다 — 「모든 방」이 아니다.
+## 왜 보스인지는 `DungeonGrade.required_agility` 에 적었다.
+func required_agility() -> int:
+	return DungeonGrade.required_agility(blueprint())
+
+
+## **다 보려면 필요한 민첩.** 막는 값이 아니라 화면에 뜨는 값이다.
+func full_agility() -> int:
+	return DungeonGrade.full_agility(blueprint())
+
+
+## 이 스쿼드가 들어갈 수 있는가.
+##
+## **「들어가서 못 가는 것」이 아니라 「애초에 못 들어가는 것」으로 바꾸는 자리다.**
+## 예전에는 민첩이 모자라도 들어갈 수 있었고, 판의 절반이 잠긴 것을 **들어가 봐야**
+## 알았다(§17.38.2 — 민첩 한 칸에 20~49%p 가 닫힌다). 그건 선택이 아니라 사고다.
+func can_enter(squad_agility: int = SampleDungeons.SQUAD_AGILITY) -> bool:
+	return required_agility() <= squad_agility
+
+
 ## 설계도만 본다. 처음 한 번만 만들고 이후에는 같은 것을 돌려준다.
 ##
 ## 존재 배치 없이 구조만 필요할 때 쓴다 — 해부 수준의 미리보기가 그것이다.
@@ -124,6 +146,11 @@ func preview_lines(level: GateDisclosure.Level) -> Array[String]:
 				"갈림길 %d%% • 한 걸음 평균 상승 %.1f"
 				% [int(round(float(grade["junction_pct"]))), float(grade["average_climb"])]
 			)
+		)
+		# **두 수를 같이 낸다.** 앞은 못 들어가는 조건이고 뒤는 들어가서 얼마나 열리나다.
+		# 하나로 합치면 「필요 민첩 8」이 입장 불가로 읽혀 성격 하나가 화면에서 사라진다.
+		lines.append(
+			"필요 민첩 %d • 다 보려면 %d" % [int(grade["required_agility"]), int(grade["full_agility"])]
 		)
 		lines.append("고가치 방 %d 개" % plan.rooms_of_kind(Room.Kind.TREASURE).size())
 		lines.append(
