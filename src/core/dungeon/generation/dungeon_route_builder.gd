@@ -55,10 +55,16 @@ static func pick_prize(
 	ranks: PackedInt32Array,
 	entrance: int
 ) -> int:
-	var neighbours := _adjacency(points.size(), delaunay)
 	# **여유 검사를 한 번만 한다.** 후보마다 다시 하면 방 개수 x 간선 수 만큼 거리를 재게 되고,
 	# 방 50개에서 생성이 7.1 ms 에서 14.6 ms 로 두 배가 됐다 (프레임 예산 16.7 의 88%).
 	var usable := _readable_only(points, delaunay)
+
+	# **이웃도 그 집합으로 센다.**
+	#
+	# 예전에는 들로네 전체로 셌다. 그런데 `expose` 는 읽히는 간선만 붙이므로, 들로네 이웃이
+	# 넷이어도 그중 셋만 읽히면 차수 4 를 못 채운다. **자격을 재는 자와 실제로 쓰는 자가
+	# 달랐던 것**이고, 그래서 보스 차수가 3.7 에 머물렀다 (§17.17.9 의 교훈).
+	var neighbours := _adjacency(points.size(), usable)
 	var deepest := 0
 	for index in points.size():
 		deepest = maxi(deepest, _rank_of(zones, ranks, index))
