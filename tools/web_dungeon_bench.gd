@@ -38,6 +38,19 @@ const _CASES := [
 	["규모5 • 복잡3 • 험난3 (최악)", 5, 0.46, 5.0],
 ]
 
+## §17.21.6 의 확인 셋을 **장면이 스스로** 묻는 스크립트. 사람이 콘솔에 붙여넣지 않아도 된다.
+## `rAF` 를 기다리지 않으므로 얼어 있어도 즉시 답한다 — 다만 얼어 있으면 `_process` 가
+## 안 돌아 이 호출 자체가 없다. **그것이 바로 신호다** (`_ready` 의 예고 줄을 봐라).
+const _PROBE_JS := """(() => {
+	const c = document.querySelector('canvas');
+	const r = c ? c.getBoundingClientRect() : null;
+	return JSON.stringify({
+		v: document.visibilityState,
+		w: r ? Math.round(r.width) : 0,
+		h: r ? Math.round(r.height) : 0
+	});
+})()"""
+
 var _label: Label
 var _case := 0
 var _seen := 0
@@ -45,6 +58,16 @@ var _step_ms := PackedFloat32Array()
 var _frame_ms := PackedFloat32Array()
 var _last_frame_start := 0
 var _lines := PackedStringArray()
+
+## 첫 프레임 진단을 한 번만 찍기 위한 것.
+var _probed := false
+
+## **한 번이라도 걸리면 이 판 전체를 버린다.** 중간에 탭이 숨겨져도 프레임 시간이 무너지므로
+## 첫 프레임만 보고 끝내지 않는다.
+var _tainted := false
+
+## 네이티브에서는 확인 줄을 한 번만 낸다 (`rAF` 가 없어 매번 물을 것이 없다).
+var _probed_native_said := false
 
 
 func _ready() -> void:
@@ -56,10 +79,17 @@ func _ready() -> void:
 	layer.add_child(_label)
 	add_child(layer)
 	_say("던전 생성 프레임 측정 — 표본 %d, 예열 %d" % [_SAMPLES, _WARMUP])
+	# **여기까지는 얼어 있어도 찍힌다.** `_ready` 는 `rAF` 없이 돌기 때문이다.
+	# 다음 줄(확인)이 안 뜨면 0 프레임에서 멈춘 것이다 — §17.21.6.
+	_say("확인 대기 — 다음 줄이 안 뜨면 프레임이 0 이다 (§17.21.6). 그 경우 수치는 없다")
 	_last_frame_start = Time.get_ticks_usec()
 
 
 func _process(_delta: float) -> void:
+	if not _probed:
+		_probed = true
+		_probe("첫 프레임")
+
 	if _case >= _CASES.size():
 		return
 
@@ -86,6 +116,9 @@ func _process(_delta: float) -> void:
 		_frame_ms.append(frame)
 	if _seen % 20 == 0:
 		_say("%s — %d/%d 판, 방 %d" % [entry[0], _seen, _SAMPLES + _WARMUP, rooms])
+		# **이 프레임은 이미 출력으로 지저분하다.** 확인도 여기 붙여 깨끗한 프레임을 안 건드린다.
+		if not _tainted:
+			_probe("%d 판" % _seen)
 	if _seen >= _SAMPLES + _WARMUP:
 		_report(String(entry[0]))
 		_case += 1
@@ -111,8 +144,9 @@ func _report(label: String) -> void:
 
 	_say(
 		(
-			"%s | 생성 중앙 %.2f 95 %.2f 최악 %.2f | 프레임 중앙 %.2f 95 %.2f | 넘침 %d/%d 그중 우리 %d"
+			"%s%s | 생성 중앙 %.2f 95 %.2f 최악 %.2f | 프레임 중앙 %.2f 95 %.2f | 넘침 %d/%d 그중 우리 %d"
 			% [
+				"★ 버려라 — " if _tainted else "",
 				label,
 				_at(steps, 0.50),
 				_at(steps, 0.95),
@@ -125,6 +159,49 @@ func _report(label: String) -> void:
 			]
 		)
 	)
+
+
+## **재는 대상이 실제로 도는지 장면이 스스로 묻는다** (§17.21.6 · `conventions.md` §6.3).
+## 사람이 브라우저 콘솔에 스크립트를 붙여넣어야 알 수 있었던 것을 없앤다.
+func _probe(when: String) -> void:
+	var engine_size := get_window().size
+	if not OS.has_feature("web"):
+		# 네이티브에서는 `rAF` 가 없다. 이 함수가 불렸다는 것 자체가 프레임이 돈다는 뜻이다.
+		if not _probed_native_said:
+			_probed_native_said = true
+			_say("확인(%s): 네이티브 — 프레임이 돈다, 창 %dx%d" % [when, engine_size.x, engine_size.y])
+		return
+
+	var raw: Variant = JavaScriptBridge.eval(_PROBE_JS, true)
+	var parsed: Variant = JSON.parse_string(str(raw)) if typeof(raw) == TYPE_STRING else null
+	if typeof(parsed) != TYPE_DICTIONARY:
+		_tainted = true
+		_say("★ 확인(%s) 실패: 브라우저가 답을 안 했다. 이 판의 수치는 버려라" % when)
+		return
+
+	var probe: Dictionary = parsed
+	var state := str(probe.get("v", "?"))
+	var width := int(probe.get("w", 0))
+	var height := int(probe.get("h", 0))
+	var frozen := state != "visible" or width <= 0 or height <= 0
+	if frozen:
+		_tainted = true
+	# 첫 확인은 정상이어도 남긴다 — 그 줄이 없으면 잰 환경을 나중에 알 수 없다 (§6.3 규칙 4).
+	if frozen or when == "첫 프레임":
+		_say(
+			(
+				"%s확인(%s): visibilityState=%s · 캔버스 %dx%d · 엔진 %dx%d"
+				% [
+					"★ " if frozen else "",
+					when,
+					state,
+					width,
+					height,
+					engine_size.x,
+					engine_size.y,
+				]
+			)
+		)
 
 
 func _say(line: String) -> void:
