@@ -45,6 +45,10 @@ const LOOP: float = 4.00
 ## 글이 흐르는 구간. 열고 잠깐 두었다가 끝까지 내린다.
 const ROLL := Vector2(0.90, 3.40)
 
+## 휠 한 칸이 굴리는 픽셀. 글 한 줄(16px)의 세 배쯤 — 한 칸에 한 줄이면 답답하고
+## 한 화면이면 읽던 자리를 잃는다.
+const WHEEL_STEP: float = 48.0
+
 ## 실루엣이 이만큼 넘게 움직이면 「춤춘다」고 적는다(px). **절대값이다** —
 ## 눈이 알아채는 것은 판 크기 대비 비율이 아니라 변이 움직인 거리다.
 const JITTER_LIMIT: float = 6.0
@@ -67,6 +71,11 @@ var _cards: Array[LedgerCard] = []
 var _base: Array[PackedFloat32Array] = []
 var _reach_down: Array[float] = []
 var _clock := 0.0
+
+## 손이 굴린 자리 0..1. **닿기 전에는 시계가 굴린다** — 그동안 이 값은 안 쓰인다.
+var _rolled := 0.0
+var _hand := false
+
 var _frozen := false
 var _driven := false
 var _who := ""
@@ -143,6 +152,31 @@ func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo and key.keycode == KEY_S:
 		_frozen = not _frozen
+	var click := event as InputEventMouseButton
+	if click == null or not click.pressed:
+		return
+	if click.button_index == MOUSE_BUTTON_WHEEL_UP:
+		wheel(1)
+	elif click.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		wheel(-1)
+
+
+## **스크롤을 재는 벤치는 손으로 굴려져야 한다.**
+##
+## 시계가 대신 굴려 주는 동안에는 **휠이 없다는 것을 아무도 못 본다** — 캡처가 통과하고
+## 카드 밑의 값도 나오기 때문이다. §20.22 가 이름 붙인 「대역이 낀 검사」의 두 번째 자리고,
+## `RadialStage` 와 같은 고침이다: **진짜 마우스와 캡처가 이 한 문으로 들어간다.**
+##
+## 그리고 손으로 굴려야만 나오는 것이 있다 — 시계는 늘 같은 속도로 같은 데까지만 굴린다.
+## 흔들림이 제일 심한 자리는 **거기가 아닐 수 있다.**
+func wheel(dir: int) -> void:
+	_hand = true
+	_frozen = true
+	var most := 0.0
+	for reach in _reach_down:
+		most = maxf(most, reach)
+	_rolled = clampf(_rolled + float(-dir) * WHEEL_STEP / maxf(most, 1.0), 0.0, 1.0)
+	set_clock(_clock)
 
 
 func set_clock(t: float) -> void:
@@ -154,7 +188,8 @@ func set_clock(t: float) -> void:
 		phase = PopupMotion.Phase.OPEN
 		if since_open < PopupMotion.PIECE_TIME + PopupMotion.STAGGER * 5.0:
 			phase = PopupMotion.Phase.OPENING
-	var rolled := smoothstep(ROLL.x, ROLL.y, t)
+	# 손이 닿았으면 손이 굴린 자리를 쓴다. **닿기 전에는 시계가 굴린다** — 캡처가 그것을 본다.
+	var rolled := _rolled if _hand else smoothstep(ROLL.x, ROLL.y, t)
 	for i in _cards.size():
 		var card := _cards[i]
 		card.scroll = _reach_down[i] * rolled
@@ -167,7 +202,8 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), BACKDROP)
 	_label("스크롤을 견디는 형태가 있나 — 열전 아홉 줄을 흘린다", Vector2(26.0, 44.0), 19, INK)
 	_label("이음매를 자료가 정하는 것은 자료가 가만히 있을 때만 성립한다. 글이 흐르면 형태도 흐른다.", Vector2(26.0, 68.0), 13, DIM)
-	_label("인물 | %s | 열전만 긴 글로 갈아 끼웠다" % _who, Vector2(26.0, 88.0), 13, DIM)
+	var how := "휠 = 손으로 굴린다 (%d%%)" % int(_rolled * 100.0) if _hand else "휠을 굴리면 손이 이어받는다"
+	_label("인물 | %s | 열전만 긴 글로 갈아 끼웠다 | %s" % [_who, how], Vector2(26.0, 88.0), 13, DIM)
 	draw_rect(Rect2(0.0, 100.0, size.x, 1.0), FAINT)
 
 	for i in _cards.size():
