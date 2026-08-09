@@ -91,7 +91,7 @@ func begin_build(facility_kind: int) -> void:
 	_plan.begin_build(facility_kind)
 	_plan.aim_at(_cursor_view.cell())
 	_notice = "%s 를 놓을 자리를 고른다" % Facility.label(facility_kind)
-	_after_change()
+	refresh_views()
 
 
 ## 지금 가리키는 칸에서 건물을 집는다. 건물이 없으면 아무 일도 없다.
@@ -99,7 +99,7 @@ func grab_here() -> bool:
 	if not _plan.begin_move(_cursor_view.cell()):
 		return false
 	_notice = "옮길 자리를 고른다"
-	_after_change()
+	refresh_views()
 	return true
 
 
@@ -109,11 +109,11 @@ func commit_here() -> bool:
 	var placed_id := _plan.commit()
 	if placed_id.is_empty():
 		_notice = _plan.reason()
-		_after_change()
+		refresh_views()
 		return false
 	var building := _grid.building(placed_id)
 	_notice = "%s 를 %s" % [building.label(), "옮겼다" if moved else "놓았다"]
-	_after_change()
+	refresh_views()
 	return true
 
 
@@ -122,11 +122,13 @@ func cancel_placement() -> void:
 		return
 	_plan.cancel()
 	_notice = "그만뒀다"
-	_after_change()
+	refresh_views()
 
 
 ## 판이 바뀌었다. 그리는 층들에게 다시 그리라고 하고 글자를 새로 뽑는다.
-func _after_change() -> void:
+##
+## 판을 밖에서 고친 쪽(도구 · 테스트)도 이것을 불러 준다.
+func refresh_views() -> void:
 	_building_view.refresh()
 	_floor_view.refresh()
 	_ghost_view.refresh()

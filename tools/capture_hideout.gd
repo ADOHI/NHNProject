@@ -10,6 +10,8 @@ extends SceneTree
 ## | `.captures/hideout_hover.png` | 가리킨 칸이 마우스 밑에 정확히 붙는가 |
 ## | `.captures/hideout_ghost_ok.png` | ③ 놓을 수 있는 자리의 미리보기 |
 ## | `.captures/hideout_ghost_blocked.png` | ③ 겹치는 자리의 미리보기와 그 이유 |
+## | `.captures/hideout_occlusion_1f.png` | **1층이 뒤 몇 칸을 가리는가** (§30.10.3) |
+## | `.captures/hideout_occlusion_2f.png` | **2층이 뒤 몇 칸을 가리는가** — 높이 상한의 근거 |
 ##
 ## ## 창을 한 번만 띄운다
 ##
@@ -75,6 +77,14 @@ func _process(_delta: float) -> bool:
 			_aim_build_at_a_building()
 		8:
 			_save("hideout_ghost_blocked")
+		9:
+			_stage_occlusion(1)
+		10:
+			_save("hideout_occlusion_1f")
+		11:
+			_stage_occlusion(2)
+		12:
+			_save("hideout_occlusion_2f")
 		_:
 			return true
 	_step += 1
@@ -117,6 +127,31 @@ func _aim_build_at_a_building() -> void:
 	var grid = _screen.call("grid")
 	_screen.call("begin_build", Facility.Kind.INTEL_ROOM)
 	_warp_to(grid.buildings()[0].origin)
+
+
+## 판을 비우고 건물 한 채만 세운다. **뒤 칸이 몇 개 사라지는지 세려는 것**이므로
+## 다른 건물이 있으면 안 된다. 바닥 격자선을 세어서 확인한다.
+func _stage_occlusion(storeys: int) -> void:
+	_screen.call("cancel_placement")
+	var grid = _screen.call("grid")
+	for building in grid.buildings():
+		grid.remove(building.id)
+	var probe := HideoutBuilding.new(
+		"probe", Facility.Kind.WORKSHOP, Vector2i(2, 2), Vector2i(7, 7), storeys
+	)
+	grid.place(probe)
+	var iso = _screen.call("projection")
+	var camera := _camera()
+	camera.zoom = Vector2(1.25, 1.25)
+	camera.position = iso.cell_to_world(Vector2i(5, 5))
+	Input.warp_mouse(Vector2(4.0, 4.0))
+	_screen.call("refresh_views")
+	print(
+		(
+			"[capture] %d층 (%d px) — 계산상 뒤 %d 칸을 완전히 가린다"
+			% [storeys, int(probe.height_px()), probe.hidden_cells_behind()]
+		)
+	)
 
 
 func _warp_to(cell: Vector2i) -> void:

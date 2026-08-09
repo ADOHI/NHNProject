@@ -50,17 +50,26 @@ var footprint: Vector2i
 ## 발자국의 **왼쪽 위**(칸 좌표가 가장 작은) 모서리.
 var origin: Vector2i
 
+## 몇 층인가. 그림 규격과 가림이 여기서 갈린다 (HideoutBuildingArt).
+##
+## 층수를 건물마다 들게 한 이유는, 전에는 화면이 상수 하나로 전부 같은 높이를 그렸기
+## 때문이다. 그러면 **가림을 시험할 수가 없다** — 높이가 하나뿐인 판에서는
+## 「높은 건물이 뒤를 가린다」가 일어나지 않는다.
+var storeys: int = 1
+
 
 func _init(
 	building_id: String,
 	kind: int = NOT_A_FACILITY,
 	size: Vector2i = Vector2i.ONE,
-	at: Vector2i = Vector2i.ZERO
+	at: Vector2i = Vector2i.ZERO,
+	storey_count: int = 1
 ) -> void:
 	id = building_id
 	facility_kind = kind
 	footprint = Vector2i(maxi(1, size.x), maxi(1, size.y))
 	origin = at
+	storeys = clampi(storey_count, 1, HideoutBuildingArt.MAX_STOREYS)
 
 
 static func footprint_for(facility_kind: int) -> Vector2i:
@@ -99,6 +108,21 @@ func cells() -> Array[Vector2i]:
 func covers(cell: Vector2i) -> bool:
 	var local := cell - origin
 	return local.x >= 0 and local.y >= 0 and local.x < footprint.x and local.y < footprint.y
+
+
+## 화면에서 얼마나 솟는가(px).
+func height_px() -> float:
+	return IsoProjection.height_to_px(storeys * HideoutBuildingArt.STOREY_CELLS)
+
+
+## 이 건물이 바로 뒤 몇 칸을 완전히 가리는가.
+func hidden_cells_behind() -> int:
+	return HideoutBuildingArt.hidden_cells_behind(storeys)
+
+
+## 이 건물의 그림 캔버스 크기(px). 발주서가 쓰는 값이다.
+func art_canvas_size() -> Vector2i:
+	return HideoutBuildingArt.canvas_size(footprint, storeys)
 
 
 ## 그리는 차례. 큰 값이 나중에 그려져 앞을 가린다 (IsoProjection.rect_depth).

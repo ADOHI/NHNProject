@@ -12,13 +12,6 @@ extends Node2D
 ## 그림이 오면 이 파일이 통째로 스프라이트로 갈린다
 ## (docs/design/30-hideout.md §30.2).
 
-## 건물 높이(픽셀). 잠정값.
-##
-## **카메라가 낮으면(3:1, 약 19.5도) 벽이 바닥보다 훨씬 크게 보인다.** 2:1 로 세웠을 때의
-## 44 를 그대로 두면 건물이 납작한 판으로 읽혔다. 칸 세로 폭의 두 배가 아니라
-## **칸 가로 폭의 6할**이 기준이다 — 벽 높이는 바닥의 기울기가 아니라 실제 높이를 따른다.
-const BUILDING_HEIGHT := 58.0
-
 var _grid: HideoutGrid
 var _iso: IsoProjection
 var _font: Font
@@ -44,7 +37,7 @@ func _draw() -> void:
 
 func _draw_building(building: HideoutBuilding) -> void:
 	var base := _iso.rect_polygon(building.origin, building.footprint)
-	var lift := Vector2(0.0, -BUILDING_HEIGHT)
+	var lift := Vector2(0.0, -building.height_px())
 	var roof := PackedVector2Array()
 	for point in base:
 		roof.append(point + lift)

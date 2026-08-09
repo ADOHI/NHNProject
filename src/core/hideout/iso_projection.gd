@@ -42,6 +42,19 @@ const DEFAULT_TILE_WIDTH := 96.0
 ## **바꿀 때는 이 값 하나만 바꾼다.** 그것이 이 파일이 존재하는 이유다 (§30.2).
 const DEFAULT_TILE_HEIGHT := 32.0
 
+## **칸 한 변만큼의 높이가 화면에서 차지하는 세로 픽셀.**
+##
+## 바닥은 눕혀서 보지만 높이는 눕지 않는다. 그래서 세로 환산이 따로 필요하고,
+## 이 값이 없으면 「2층 건물」이 몇 픽셀인지 아무도 말할 수 없다.
+##
+## 유도: 내려보는 각 t 에서 sin(t) = 세로/가로 = 1/3 이므로 t = 19.47도.
+## 칸 한 변의 월드 길이는 화면 반폭에서 `48 x sqrt(2) = 67.88`,
+## 세로는 거기에 `cos(t) = 0.9428` 이 곱해져 **정확히 64.0** 이 된다.
+##
+## **딱 떨어지는 것은 우연이 아니라 3:1 을 골랐기 때문이다** (§30.2.1).
+## 타일 비를 바꾸면 이 값도 같이 바뀐다 — 그래서 여기 같이 둔다.
+const CELL_HEIGHT_PX := 64.0
+
 ## 마름모 가로 반폭.
 var half_width: float
 
@@ -125,6 +138,22 @@ static func depth_of(cell: Vector2i) -> int:
 static func rect_depth(origin: Vector2i, footprint: Vector2i) -> int:
 	var span := Vector2i(maxi(1, footprint.x), maxi(1, footprint.y))
 	return depth_of(origin + span - Vector2i.ONE)
+
+
+## 칸 단위 높이를 화면 픽셀로. 「2층」이 몇 픽셀인지는 여기서만 정해진다.
+static func height_to_px(height_cells: float) -> float:
+	return height_cells * CELL_HEIGHT_PX
+
+
+## **이 높이의 건물이 바로 뒤 몇 칸을 완전히 가리는가.** 높이 상한의 근거다 (§30.10.3).
+##
+## 화면에서 대각선 위로 한 칸 물러나면 세로로 마름모 한 개(=`tile_height`)만큼 올라간다.
+## 그래서 가려지는 칸 수는 **높이를 마름모 세로로 나눈 몫**이다.
+##
+## 꼭짓점 넷을 다 넣고 푼 값이라 «반쯤 가림» 이 아니라 **완전히 가림**의 개수다.
+## 부분적으로 가려지는 칸은 이보다 한 칸 더 뒤까지 간다.
+func hidden_cells_behind(height_px: float) -> int:
+	return int(floor(height_px / (half_height * 2.0)))
 
 
 ## 판 전체가 화면에서 차지하는 크기. 카메라를 맞출 때 쓴다.
