@@ -107,6 +107,19 @@ const REACH_LIMIT: Dictionary[CharPart.Id, float] = {
 	CharPart.Id.FOOT_FAR: 1.7,
 }
 
+## 키에 대한 비율로 적어 둔 지금 구도. **자리는 여기서만 나온다.**
+const TORSO_AT := Vector2(-0.014, 0.241)
+const HEAD_AT_X := 0.007
+const NECK_AT := 0.035
+const HAND_NEAR_AT := Vector2(0.177, 0.369)
+const HAND_FAR_AT := Vector2(-0.128, 0.411)
+const FOOT_NEAR_AT_X := 0.057
+const FOOT_FAR_AT := Vector2(-0.092, 0.035)
+
+## 앞손이 그 높이의 몸보다 밖으로 떠 있어야 하는 간격, 뒷손이 겹쳐야 하는 양 (키 대비).
+const HAND_CLEAR := 0.024
+const HAND_TUCK := 0.031
+
 ## 파츠의 피벗 위치 (쉬는 자세, 캐릭터 공간).
 var rest_positions: PackedVector2Array
 
@@ -135,6 +148,73 @@ func _init() -> void:
 			Vector2(0.0, FOOT_NEAR_HALF.y),
 		]
 	)
+
+
+## **파츠 크기에서 리그를 세운다** — 그림이 오면 이 길로 들어온다 (§25.41.5).
+##
+## **크기는 그림이 정하고 자리는 리그가 정한다.** 시트 안에서 파츠가 어디에 놓였는지는
+## 그냥 늘어놓은 것이라 아무 뜻이 없다.
+##
+## ## 자리를 어떻게 푸나
+##
+## **지금 배치를 키에 대한 비율로 적어 두고 그대로 다시 쓴다.** 값을 손으로 다시 잡는
+## 것이 아니라, **손으로 잡아 둔 구도를 새 크기에 옮기는 것**이다.
+##
+## 키는 쌓아서 나온다 — 몸 밑면이 키의 `24.1 %`, 그 위에 몸, 목(`3.5 %`), 머리다.
+##
+##     H = (몸 높이 + 머리 높이) / (1 − 0.241 − 0.035)
+##
+## 지금 치수를 넣으면 `(42 + 60) / 0.724 = 141` 로 **현재 키가 그대로 나온다.**
+## 그것이 이 식이 맞다는 확인이다.
+##
+## 손의 좌우만 비율로 안 끝난다 — **앞손은 그 높이의 몸보다 바깥, 뒷손은 안쪽**이어야
+## 하므로(§25.38.1) 비율로 놓은 뒤 **그 규칙으로 민다.** 같은 표가 검사에도 배치에도 쓰인다.
+static func from_part_sizes(half_sizes_in: Dictionary) -> CharRig:
+	var rig := CharRig.new()
+	for part in CharPart.COUNT:
+		if half_sizes_in.has(part):
+			rig.half_sizes[part] = half_sizes_in[part]
+	var head := rig.half_sizes[CharPart.Id.HEAD].y * 2.0
+	var torso := rig.half_sizes[CharPart.Id.TORSO].y * 2.0
+	var height := (head + torso) / (1.0 - TORSO_AT.y - NECK_AT)
+	rig._place(height)
+	return rig
+
+
+## 비율표를 그 키에 펼친다.
+func _place(height: float) -> void:
+	var torso_h := half_sizes[CharPart.Id.TORSO].y * 2.0
+	rest_positions[CharPart.Id.FOOT_NEAR] = Vector2(FOOT_NEAR_AT_X * height, 0.0)
+	rest_positions[CharPart.Id.FOOT_FAR] = FOOT_FAR_AT * height
+	rest_positions[CharPart.Id.TORSO] = TORSO_AT * height
+	var torso_top := TORSO_AT.y * height + torso_h
+	rest_positions[CharPart.Id.HEAD] = Vector2(HEAD_AT_X * height, torso_top + NECK_AT * height)
+	for part in [CharPart.Id.HAND_NEAR, CharPart.Id.HAND_FAR]:
+		var at: Vector2 = HAND_NEAR_AT if part == CharPart.Id.HAND_NEAR else HAND_FAR_AT
+		rest_positions[part] = at * height
+	# 피벗이 밑면인 것들의 중심을 다시 잡는다. 손은 중심이 곧 피벗이라 0 이다.
+	for part in CharPart.COUNT:
+		var mid := (
+			0.0 if part in [CharPart.Id.HAND_NEAR, CharPart.Id.HAND_FAR] else half_sizes[part].y
+		)
+		local_centers[part] = Vector2(0.0, mid)
+	_settle_hands(height)
+
+
+## **앞손은 밖으로 밀고 뒷손은 안으로 당긴다.** 비율만으로는 몸 폭이 바뀌면 어긋난다.
+func _settle_hands(height: float) -> void:
+	var near := CharPart.Id.HAND_NEAR
+	var far := CharPart.Id.HAND_FAR
+	var near_y := rest_positions[near].y
+	var want_near := torso_front_at(near_y) + HAND_CLEAR * height + half_sizes[near].x
+	if rest_positions[near].x < want_near:
+		rest_positions[near].x = want_near
+	var far_y := rest_positions[far].y
+	# **겹침은 최소 조건이다.** 부등호를 뒤집어 놓았다가 자에 걸렸다 —
+	# 뒷손의 **안쪽 모서리**가 몸의 뒷면보다 안으로 들어와 있어야 가려진다.
+	var want_far := torso_back_at(far_y) + HAND_TUCK * height - half_sizes[far].x
+	if rest_positions[far].x < want_far:
+		rest_positions[far].x = want_far
 
 
 ## 정수리까지의 키. 화면에 맞춰 배율을 정할 때 쓴다.

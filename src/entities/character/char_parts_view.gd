@@ -33,13 +33,18 @@ var rig: CharRig
 ## 노드 일곱이라는 것이 값을 하는지 재려고 둔 손잡이다.
 var merged := false
 
+## **그림으로 갈아 끼우는 스위치.** `null` 이면 자리표시자 도형으로 그린다 (§25.41).
+##
+## 애니메이션 수식은 이 값을 모른다 — 파츠가 도형이든 그림이든 **트랜스폼만 받는다.**
+var skin: CharSkin = null
+
 ## 든 무기. **칸 수가 길이 · 두께를 정하고 그것이 다시 동작을 정한다** (§25.16).
 var weapon := CharWeapon.new(1)
 
 ## 얹는 연출 장치들. `null` 이면 아무것도 안 얹는다.
 var flourish := CharFlourish.none()
 
-var _shapes: Array[CharPartShape] = []
+var _shapes: Array[Node2D] = []
 var _weapon: CharWeaponShape
 var _shadow_scale := 1.0
 var _shadow_offset := 0.0
@@ -57,13 +62,12 @@ func setup(p_rig: CharRig) -> void:
 	_shapes.resize(CharPart.COUNT)
 	# 뒤에서 앞으로 붙인다 — 자식 순서가 곧 그리는 순서다.
 	for part in CharPart.DRAW_ORDER:
-		var shape := CharPartShape.new()
+		var shape := _make_part(part)
 		shape.name = "Part%d" % part
 		# **합칠 때는 트리에 안 넣는다.** 트리 밖의 `Node2D` 는 스스로 안 그리므로
 		# 트랜스폼만 들고 있는 상자가 되고, 그리는 것은 이 노드 하나가 다 한다.
 		if not merged:
 			add_child(shape)
-		shape.setup(part, rig)
 		_shapes[part] = shape
 	_mount_weapon()
 	apply_pose(CharPose.from_rig(rig))
@@ -114,6 +118,20 @@ func _notification(what: int) -> void:
 	for shape in _shapes:
 		if is_instance_valid(shape) and shape.get_parent() == null:
 			shape.free()
+
+
+## 파츠 하나를 만든다. **도형이냐 그림이냐가 갈리는 유일한 자리다.**
+##
+## 둘이 같은 얼굴(`paint_into` · `flash` · `transform`)을 갖고 있어서
+## 나머지 코드가 어느 쪽인지 안 물어봐도 된다.
+func _make_part(part: CharPart.Id) -> Node2D:
+	if skin != null and skin.textures.has(part):
+		var sprite := CharPartSprite.new()
+		sprite.setup(part, rig, skin.textures[part])
+		return sprite
+	var shape := CharPartShape.new()
+	shape.setup(part, rig)
+	return shape
 
 
 func apply_pose(pose: CharPose) -> void:
@@ -225,7 +243,7 @@ func blade_heading(clip: CharClip, at: float) -> Vector2:
 
 
 ## 파츠 노드. 나중에 `Sprite2D` 로 갈아 끼울 때의 접점이다.
-func part_node(part: CharPart.Id) -> CharPartShape:
+func part_node(part: CharPart.Id) -> Node2D:
 	return _shapes[part]
 
 

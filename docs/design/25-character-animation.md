@@ -390,6 +390,11 @@ src/core/char_anim/            # 노드에 의존하지 않는 순수 로직
 ├── idle_clip.gd               # idle 의 수식 (사이드 사선)
 └── front_idle_clip.gd         # **대조군.** 같은 그림에 정면 문법만 얹은 것
 
+src/entities/character/
+├── char_skin.gd               # 파츠 PNG 여섯 → 리그 + 그림 (§25.41)
+├── char_part_sprite.gd        # 그림으로 그리는 파츠. char_part_shape.gd 의 형제
+└── ...
+
 src/proto/char_anim/           # 띄워 보는 층
 ├── char_anim_proto.tscn/gd    # 진입점. 입력 · 조절판 · 시각 주입
 ├── char_parts_view.gd         # 파츠 여섯을 Node2D 로 만들고 포즈를 트랜스폼에 반영
@@ -2825,7 +2830,7 @@ walk 에서도 **안 바뀐다**(§25.10.1 — 교대하는 것은 위치이지 
 | **스프라이트로 그리는 파츠** | `char_part_shape.gd` 자리에 형제 파일 하나 |
 | **피벗 뽑기** | 알파 경계상자 규칙이라 그림을 안 봐도 된다 |
 | **배치 다시 풀기** | §25.41.5 의 여섯 줄이 식이다 |
-| **자체 시험** | **지금 도형을 PNG 로 뽑아 그 길로 되돌려 보면** 실물 없이 길이 도는지 확인된다 |
+| **자체 시험** | **했다.** 시트에서 잰 조각 크기로 자리표시자 PNG 여섯을 만들어 그 길로 넣었다 — `test_skin.gd` |
 
 | 실물을 봐야 아는 것 | 왜 |
 | --- | --- |
