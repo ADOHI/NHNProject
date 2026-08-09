@@ -179,6 +179,17 @@ func wheel(dir: int) -> void:
 	set_clock(_clock)
 
 
+## 손이 굴린 자리 0..1. **캡처 대본이 끝까지 굴리는지를 헤드리스로 재는 데 쓴다** —
+## 반만 굴리는 대본이면 GIF 가 글 아랫부분을 한 번도 안 보여 준다.
+func rolled() -> float:
+	return _rolled
+
+
+## 손이 이어받았는가.
+func by_hand() -> bool:
+	return _hand
+
+
 func set_clock(t: float) -> void:
 	_clock = t
 	var phase := PopupMotion.Phase.SHUT
