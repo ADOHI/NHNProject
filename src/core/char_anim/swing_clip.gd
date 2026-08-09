@@ -63,8 +63,25 @@ const SETTLE_CYCLES := 1.6
 ## **26 도다.** 처음에 0.10(6 도)으로 두고 「몸이 참여한다」고 적었는데,
 ## 참여의 **방향만** 맞고 **양이** 액션의 근처에도 못 갔다 (§25.22).
 const TORSO_TWIST := 0.46
-const TORSO_SHIFT := 7.0
+
+## **상체가 앞으로 나간다.** 허리에서 접히는 것이라 회전만으로는 안 된다.
+##
+## 처음에 3.4 로 두고 「몸이 참여한다」고 적었는데, 그 정도로는 **몸이 뒤에 남고
+## 팔만 나가서** 「칼 처음 써 본 사람이 무서워서 휘두르는」 모양이 됐다 (§25.25).
+const TORSO_SHIFT := 17.0
 const TORSO_DROP := 6.0
+
+## **머리가 발보다 앞으로 나간다.** 회전이 아니라 **위치**다.
+##
+## 각도만 맞추고 위치를 안 옮기면 **머리가 뒤에 남아 「피하면서 치는」** 모양이 된다.
+## 파츠가 떠 있어서 머리를 따로 옮길 수 있다 — **관절이 없는 것이 여기서 이득이다.**
+##
+## `advance_px` 와 다르다. 저쪽은 **캐릭터 전체**가 나가는 것이고 이것은
+## **머리가 몸보다 더** 나가는 것이다. 둘 다 필요하다.
+const HEAD_LUNGE := 26.0
+
+## 어깨(몸통 윗쪽)가 앞으로 접히는 만큼 — 머리와 몸통 사이를 메운다.
+const TORSO_FOLD := 0.30
 
 ## **예비에 몸이 반대로 꼬인다.** 팔만 뒤로 가면 풀리는 힘이 안 생긴다.
 ##
@@ -116,10 +133,26 @@ const SQUASH_LAND := 0.09
 ## 예비에 **살짝 뒤로** 빼는 비율. 그래야 앞으로 나갈 때 힘이 실린다.
 const ADVANCE_BACK := 0.24
 
-## 머리가 몸통과 **어긋나는** 각. **20 도 넘게** 벌어져야 목이 살아 있는 것으로 보인다.
+## **머리는 목표를 본다.** 이것이 머리의 **절대** 각도이고 거의 안 변한다.
 ##
-## 몸통과 부호가 반대라 실제 어긋남은 둘의 합이다.
-const HEAD_TWIST := 0.34
+## 살짝 아래(내려치기의 목표가 아래에 있으므로). 몸통이 아무리 크게 돌아도 이 값이다.
+##
+## **처음에 몸통과 반대로 크게 돌렸다가 틀렸다.** 그러면 예비에서 머리가 뒤로 젖혀져
+## **하늘을 본다.** 물리적으로 안 일어나고, 12 원칙의 **스테이징**으로도 틀렸다 —
+## **눈이 목표를 봐야 관객이 「저길 치려 한다」를 안다** (§25.24).
+const GAZE_ANGLE := -0.10
+
+## 목이 꺾이는 한계. 몸통이 이보다 더 돌면 **머리가 따라갈 수밖에 없다.**
+##
+## 그래서 「시선 유지」가 무한히 버티지 않는다 — 실제로 그렇다.
+const NECK_LIMIT := 0.52
+
+## 닿는 순간 머리가 **짧게** 뒤로 젖혀진다. 충격 흡수다.
+##
+## **머리가 실제로 젖혀지는 것은 셋뿐이다** — 임팩트 순간 · `get hit` · `die`.
+## 예비에서 젖혀지는 것은 그중 하나도 아니다.
+const HEAD_IMPACT_SNAP := 0.20
+const HEAD_IMPACT_FADE := 0.09
 const HEAD_DELAY := 0.06
 
 ## 무게가 실리는 발. 휘두르면 앞발을 디디고 뒷발의 뒤꿈치가 뜬다.
@@ -353,7 +386,22 @@ func _apply_torso(pose: CharPose, t: float, f: AnimFeatures) -> void:
 	pose.scales[part] = CharClip.volume_scale(volume * big * f.squash)
 
 
-## 머리 — **맨 마지막으로 따라온다.** 예비에는 살짝 반대로 남는다.
+## 몸통이 그 시각에 얼마나 돌아 있나. **머리가 이 값을 봐야** 목 각도를 풀 수 있다.
+func torso_angle_at(t: float, f: AnimFeatures) -> float:
+	var at := progress_for(t, LEAD_TORSO * f.delay)
+	var twist := TORSO_COIL if at < 0.0 else (TORSO_TWIST + DRAG_TWIST * weapon.drag())
+	return -twist * at * exaggeration() * f.arc
+
+
+## 머리 — **목표를 본다.** 절대 각도가 거의 고정이고, **목 각도가 크게 변한다.**
+##
+## 각도를 표에서 안 읽고 **푼다** — 자세 각도를 기하로 푼 것(§25.16.3)과 같은 방식이다.
+##
+##     머리 절대 각 = 목표를 보는 각 (거의 고정)
+##     목 각 = 머리 절대 각 − 몸통 각        ← 이쪽이 크게 벌어진다
+##
+## 그래서 **몸통이 아무리 커져도 시선이 안 흔들린다.** 진폭을 키우라고 한 다섯 중
+## **머리만 예외**인 이유가 이것이다.
 func _apply_head(pose: CharPose, t: float, f: AnimFeatures) -> void:
 	var part := CharPart.Id.HEAD
 	var at := progress_for(t, LEAD_HEAD * f.delay)
@@ -362,9 +410,19 @@ func _apply_head(pose: CharPose, t: float, f: AnimFeatures) -> void:
 	var wound := maxf(-at, 0.0) / ANTICIPATE_DEPTH
 	var height := -TORSO_DIP * 0.5 * wound + TORSO_EXTEND * 0.7 * sin(PI * forward)
 	height -= TORSO_DROP * 0.5 * forward
-	pose.positions[part] += Vector2(TORSO_SHIFT * 0.7 * at, height * big) * f.arc
-	# **몸통과 부호가 반대다.** 둘이 반대로 돌아야 목이 살아 있는 것으로 보인다.
-	pose.rotations[part] = HEAD_TWIST * at * big * f.arc
+	# **머리가 앞으로 나간다.** 예비에는 조금 뒤에 남고 타격에 크게 앞으로 넘어간다.
+	var lunge := TORSO_SHIFT * 0.7 * at + HEAD_LUNGE * forward * big
+	pose.positions[part] += Vector2(lunge, height * big) * f.arc
+
+	var torso := torso_angle_at(t, f)
+	# 닿는 순간에만 짧게 젖혀진다 — 충격 흡수다.
+	var since := t - (anticipate + still + strike)
+	var snap := 0.0
+	if since >= 0.0 and since < HEAD_IMPACT_FADE:
+		snap = HEAD_IMPACT_SNAP * (1.0 - since / HEAD_IMPACT_FADE)
+	var gaze := (GAZE_ANGLE + snap) * f.arc
+	# **목이 꺾이는 한계.** 몸통이 너무 돌면 머리가 따라갈 수밖에 없다.
+	pose.rotations[part] = clampf(gaze, torso - NECK_LIMIT, torso + NECK_LIMIT)
 	pose.scales[part] = CharClip.volume_scale(-SQUASH_WIND * 0.5 * wound * big * f.squash)
 
 
@@ -378,11 +436,13 @@ func _apply_feet(pose: CharPose, t: float, f: AnimFeatures) -> void:
 	var coiled := maxf(-at, 0.0) / ANTICIPATE_DEPTH * f.asymmetry
 
 	var big := exaggeration()
+	# **체중이 앞발로 완전히 넘어간다.** 뒷발에 남으면 겁먹은 자세다.
+	var shifted := maxf(at, 0.0) * f.asymmetry
 	var near := CharPart.Id.FOOT_NEAR
 	# **스탠스가 좁았다 넓어진다.** 예비에 당기고 타격에 크게 내딛는다.
 	# 발이 거의 고정이면 아무리 위를 흔들어도 서 있는 사람으로 보인다.
 	pose.positions[near] += Vector2(STANCE_OPEN * at * big * f.arc, 0.0)
-	pose.scales[near] = CharClip.volume_scale(-FOOT_SQUASH * loaded * f.squash)
+	pose.scales[near] = CharClip.volume_scale(-FOOT_SQUASH * 2.2 * loaded * f.squash)
 	pose.rotations[near] = FOOT_HEEL_LIFT * 0.5 * coiled
 	# 자리를 옮기는 동안에는 떠 있어야 한다 — 안 그러면 땅을 긁는다.
 	pose.positions[near] += Vector2(0.0, STEP_HEIGHT * absf(sin(PI * at)) * big)
@@ -390,7 +450,8 @@ func _apply_feet(pose: CharPose, t: float, f: AnimFeatures) -> void:
 
 	var far := CharPart.Id.FOOT_FAR
 	# **회전을 먼저 정하고 나서 올린다.** 재서 올리는 것이라 그 앞의 것만 반영된다.
-	pose.rotations[far] = -FOOT_HEEL_LIFT * loaded
+	# 뒷발은 무게가 빠지면서 뒤꿈치가 크게 뜬다 — 밀고 나간 발이다.
+	pose.rotations[far] = -FOOT_HEEL_LIFT * (1.0 + 1.6 * shifted) * loaded
 	pose.scales[far] = CharClip.volume_scale(-FOOT_SQUASH * 0.7 * coiled * f.squash)
 	pose.positions[far] += Vector2(0.0, pose.lift_to_clear_ground(far, rig))
 

@@ -49,6 +49,17 @@ var smear := 0.0
 ## 닿는 순간 몇 초 동안 하얗게 번쩍인다. `0` 이면 끈다.
 var flash := 0.0
 
+## **초당 몇 장으로 끊어 보여 주나.** `0` 이면 안 끊는다(연속).
+##
+## **격투게임은 보간을 안 한다** — 그림 12 장을 딱딱 넘긴다. 부드럽게 흐르면
+## 3D 처럼 읽힌다. 일본 애니메이션의 `on 2s`(24 fps 에 12 장)와 같은 원리다.
+##
+## **공짜다.** 클립이 시각의 순수 함수라 `sample(floor(t·N)/N)` 이면 끝이고,
+## 링 버퍼도 보간 상태도 없다 — §25.3 의 「기록하지 않는다」가 네 번째로 값을 한다.
+##
+## **표현 층에만 둔다.** 클립은 계속 연속 함수라 코어 검사가 표본 사이까지 본다 (§25.26.4).
+var hold_fps := 0.0
+
 
 ## 아무 장치도 없는 상태. **비교의 바닥이다.**
 static func none() -> CharFlourish:
@@ -61,6 +72,12 @@ static func none() -> CharFlourish:
 static func preset(name: String) -> CharFlourish:
 	var it := CharFlourish.new()
 	match name:
+		"hold_8":
+			it.hold_fps = 8.0
+		"hold_12":
+			it.hold_fps = 12.0
+		"hold_16":
+			it.hold_fps = 16.0
 		"trail_soft":
 			it.trail_count = 3
 			it.trail_alpha = 0.18
@@ -126,6 +143,9 @@ static func preset_names() -> PackedStringArray:
 	return PackedStringArray(
 		[
 			"none",
+			"hold_8",
+			"hold_12",
+			"hold_16",
 			"trail_soft",
 			"trail_hard",
 			"trail_over",

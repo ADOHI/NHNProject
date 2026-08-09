@@ -127,3 +127,76 @@ func test_the_back_foot_stays_planted_while_the_body_advances() -> void:
 	for t in _times(clip):
 		var pose := clip.sample(t, f)
 		assert_almost_eq(pose.positions[far].x, first, 0.001, "t = %.3f 에서 뒷발이 미끄러진다" % t)
+
+
+func test_the_head_keeps_looking_at_the_target() -> void:
+	# **사용자가 물리를 짚었다** — *"머리가 뒤로 젖혀지는게 맞나 물리적으로?"* 아니다.
+	#
+	# 머리의 **절대** 각도는 거의 안 변한다. 크게 변하는 것은 **목 각도**(머리 − 몸통)다.
+	# 예비에서 머리가 하늘을 보면 물리적으로 틀렸고, 12 원칙의 스테이징으로도 틀렸다 —
+	# **눈이 목표를 봐야 관객이 「저길 치려 한다」를 안다** (§25.24).
+	var clip := _clip()
+	var f := AnimFeatures.all_on()
+	var head := CharPart.Id.HEAD
+	var widest_neck := 0.0
+	for t in _times(clip):
+		var pose := clip.sample(t, f)
+		var absolute := pose.rotations[head]
+		# **뒤로 젖혀지는 것이 양수다.** 예비 내내 하늘을 보면 안 된다.
+		if t < clip.anticipate + clip.still:
+			assert_lt(absolute, 0.06, "t = %.3f 에서 예비 중에 머리가 젖혀졌다" % t)
+		assert_lt(absf(absolute), 0.45, "t = %.3f 에서 머리 절대 각이 너무 크다" % t)
+		widest_neck = maxf(widest_neck, absf(absolute - pose.rotations[CharPart.Id.TORSO]))
+	# 그런데 **목은 크게 벌어져야** 한다 — 안 그러면 머리가 몸통에 붙은 덩어리다.
+	assert_gt(widest_neck, 0.35, "목 각도가 안 벌어지면 머리가 몸통에 붙은 덩어리다")
+
+
+func test_the_head_snaps_back_only_at_the_moment_of_impact() -> void:
+	# 머리가 실제로 젖혀지는 것은 셋뿐이다 — 임팩트 · get hit · die.
+	var clip := _clip()
+	var f := AnimFeatures.all_on()
+	var impact := clip.anticipate + clip.still + clip.strike
+	var at_impact := clip.sample(impact + 0.005, f).rotations[CharPart.Id.HEAD]
+	var before := clip.sample(clip.anticipate * 0.5, f).rotations[CharPart.Id.HEAD]
+	assert_gt(at_impact, before, "닿는 순간에는 뒤로 젖혀져야 한다")
+
+
+func test_the_neck_cannot_bend_past_its_limit() -> void:
+	# 몸통이 너무 돌면 머리가 따라갈 수밖에 없다. 시선 유지가 무한히 버티지 않는다.
+	var clip := _clip(WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW, CharWeapon.MAX_CELLS)
+	var f := AnimFeatures.all_on()
+	for t in _times(clip):
+		var pose := clip.sample(t, f)
+		var neck := absf(pose.rotations[CharPart.Id.HEAD] - clip.torso_angle_at(t, f))
+		assert_lte(neck, CharSwingClip.NECK_LIMIT + 0.001, "t = %.3f 에서 목이 한계를 넘었다" % t)
+
+
+func test_the_body_lines_up_behind_the_blade_at_impact() -> void:
+	# **사용자가 실루엣에서 잡았다** — *"칼 처음 써본 사람이 무서워서 휘두르는 것 같은데"*.
+	# 몸이 뒤에 남고 팔만 나가면 그렇게 보인다.
+	#
+	# 판정: **머리 · 든손 · 검끝이 거의 한 줄**이어야 「내리친다」로 읽힌다 (§25.25).
+	var clip := _clip()
+	assert_gt(CharSilhouette.straightest(clip), 140.0, "타격에 몸이 검 뒤로 안 실린다")
+
+
+func test_the_head_ends_up_ahead_of_the_back_foot() -> void:
+	# **머리는 회전만 하는 게 아니라 이동한다.** 각도만 맞추고 위치를 안 옮기면
+	# 머리가 뒤에 남아 「피하면서 치는」 모양이 된다.
+	var clip := _clip()
+	var f := AnimFeatures.all_on()
+	var impact := clip.anticipate + clip.still + clip.strike
+	var pose := clip.sample(impact, f)
+	var head := pose.positions[CharPart.Id.HEAD].x
+	var rest := clip.rig.rest_positions[CharPart.Id.HEAD].x
+	assert_gt(head - rest, 15.0, "머리가 앞으로 안 나간다")
+	assert_gt(head, pose.positions[CharPart.Id.FOOT_FAR].x, "머리가 뒷발보다 앞에 있어야 한다")
+
+
+func test_the_weight_ends_on_the_front_foot() -> void:
+	# 뒷발에 무게가 남으면 겁먹은 자세다. 앞발이 눌리고 뒷발 뒤꿈치가 크게 떠야 한다.
+	var clip := _clip()
+	var f := AnimFeatures.all_on()
+	var pose := clip.sample(clip.anticipate + clip.still + clip.strike, f)
+	assert_lt(pose.scales[CharPart.Id.FOOT_NEAR].y, 0.97, "앞발이 안 눌린다")
+	assert_lt(pose.rotations[CharPart.Id.FOOT_FAR], -0.1, "뒷발 뒤꿈치가 안 뜬다")

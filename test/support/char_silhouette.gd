@@ -101,3 +101,32 @@ static func widest_change(clip: CharClip, samples := 24) -> float:
 		for j in range(i + 1, masks.size()):
 			lowest = minf(lowest, overlap(masks[i], masks[j]))
 	return lowest
+
+
+## **타격 순간에 한 줄이 되나** — 머리 · 든손 · 검끝이 이루는 각(도).
+##
+## `180` 에 가까울수록 앞으로 곧게 뻗은 것이고, 꺾여 있으면 **머리가 뒤에 남아
+## 「피하면서 치는」** 모양이다 — 사용자가 실루엣에서 잡아낸 것이 정확히 이것이다.
+##
+## **실루엣 자와 짝이다.** 저쪽은 「다르게 생겼나」를 재고 이쪽은 **「제대로 생겼나」**를 잰다.
+## 다르게 생기기만 하고 제대로 안 생긴 자세가 있을 수 있어서 둘 다 필요하다.
+static func reach_line_degrees(pose: CharPose, rig: CharRig, weapon: CharWeapon) -> float:
+	var hand := pose.positions[CharWeapon.HOLDER]
+	var head := pose.positions[CharPart.Id.HEAD] + Vector2(0.0, rig.half_sizes[CharPart.Id.HEAD].y)
+	var tip := weapon.tip_position(pose, rig)
+	var to_head := head - hand
+	var to_tip := tip - hand
+	if to_head.length() < 0.001 or to_tip.length() < 0.001:
+		return 180.0
+	return rad_to_deg(absf(to_head.angle_to(to_tip)))
+
+
+## 그 클립에서 **가장 곧게 뻗은 순간**의 각. 타격 언저리에서 나온다.
+static func straightest(clip: CharSwingClip) -> float:
+	var f := AnimFeatures.all_on()
+	var best := 0.0
+	var t := 0.0
+	while t <= clip.loop_seconds():
+		best = maxf(best, reach_line_degrees(clip.sample(t, f), clip.rig, clip.weapon))
+		t += 0.01
+	return best

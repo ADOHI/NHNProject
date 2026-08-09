@@ -87,6 +87,16 @@ func apply_pose(pose: CharPose) -> void:
 	queue_redraw()
 
 
+## 그 시각을 **끊어 보여 주는 표본점으로** 내린다. `hold_fps` 가 0 이면 그대로다.
+##
+## 잔상과 호도 이 표본점에서 뽑아야 한다 — 안 그러면 몸은 딱딱 넘어가는데 잔상만
+## 부드럽게 흘러 **둘이 따로 논다.**
+func held(at: float) -> float:
+	if flourish == null or flourish.hold_fps <= 0.0:
+		return at
+	return floorf(at * flourish.hold_fps) / flourish.hold_fps
+
+
 ## 과거 자세와 호를 넣는다. **뷰는 이것을 그리기만 한다** — 어디서 왔는지 모른다.
 func set_motion(echoes: Array[CharPose], arc: PackedVector2Array, flash: float) -> void:
 	_echoes = echoes
@@ -101,6 +111,8 @@ func set_motion(echoes: Array[CharPose], arc: PackedVector2Array, flash: float) 
 ## 게임에서 나오는 것이 달라진다.
 func show_at(clip: CharClip, at: float, impact := -1.0) -> void:
 	var f := AnimFeatures.all_on()
+	# **보간을 끈다.** 표본점으로 내려 딱딱 넘어가게 만든다 (§25.26.1).
+	at = held(at)
 	apply_pose(clip.sample(at, f))
 	_stretch_blade(clip, at, f)
 	set_motion(_past_poses(clip, at, f), _blade_sweep(clip, at, f), _flash_left(at, impact))
@@ -221,7 +233,7 @@ func _draw_ghost_blade(pose: CharPose, tint: Color) -> void:
 func _past_poses(clip: CharClip, at: float, f: AnimFeatures) -> Array[CharPose]:
 	var out: Array[CharPose] = []
 	for i in range(1, flourish.trail_count + 1):
-		var back := at - float(i) * flourish.trail_gap
+		var back := held(at - float(i) * flourish.trail_gap)
 		if back < 0.0:
 			if not clip.is_looping():
 				break
@@ -241,7 +253,7 @@ func _blade_sweep(clip: CharClip, at: float, f: AnimFeatures) -> PackedVector2Ar
 	var outer := PackedVector2Array()
 	var inner := PackedVector2Array()
 	for i in ARC_STEPS + 1:
-		var back := at - flourish.arc_span * float(i) / float(ARC_STEPS)
+		var back := held(at - flourish.arc_span * float(i) / float(ARC_STEPS))
 		if back < 0.0:
 			if not clip.is_looping():
 				break
