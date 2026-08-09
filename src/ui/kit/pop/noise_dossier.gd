@@ -167,7 +167,10 @@ func _list() -> void:
 		paper(),
 		Grain.KEPT
 	)
-	paint(box_of(LIST_BOX), Color(paper(), 0.14), Grain.KEPT)
+	# **판이 직사각형이 아니다** — 왼아래 모서리가 비스듬히 잘리고 뒤판이 어긋나 있다.
+	var board := GraphicCut.clipped(LIST_BOX, 22.0, 8)
+	backplate(board, 0.008, Vector2(8.0, 8.0), Color(back(), 0.8), Grain.KEPT)
+	paint(board, Color(paper(), 0.14), Grain.KEPT)
 	var mark := _marked_row()
 	var over := ROW_NEXT if _hover_force() > 0.0 else -1
 	for i in LIST:
@@ -187,15 +190,33 @@ func _list() -> void:
 			]
 		)
 		var noise := Grain.LIVE
+		var out := 0.0
+		var slant := SLANT * 0.7
+		if i == mark:
+			# 「자리」 — **기울기가 뒤집히고 판 밖으로 나간다.** 노이즈 0.18 과 같이 온다.
+			out = 18.0
+			slant = -SLANT * 0.7
+		elif i == over:
+			out = 7.0 * _hover_force()
+			slant = SLANT * 0.7 * (1.0 - _hover_force())
+		rect.position.x -= out
+		rect.size.x += out
+		var shape := GraphicCut.lean(rect, slant)
 		if i == mark:
 			noise = Grain.NEAR
-			paint(box_of(rect), pick(), noise)
-			say(line, rect.position + Vector2(10.0, 16.0), LINE_SIZE, ink(pick()), noise)
+			backplate(shape, 0.0, Vector2(9.0, 4.0), back(), noise)
+			paint(shape, pick(), noise)
+			paint(
+				GraphicCut.fang(Rect2(rect.position, Vector2(8.0, rect.size.y)), 6.0),
+				paper(),
+				noise
+			)
+			say(line, rect.position + Vector2(12.0, 16.0), LINE_SIZE, ink(pick()), noise)
 			continue
 		if i == over:
 			noise = lerpf(Grain.LIVE, Grain.NEAR + 0.10, _hover_force())
-			paint(box_of(rect), Color(paper(), 0.10 * _hover_force()), noise)
-		say(line, rect.position + Vector2(10.0, 16.0), LINE_SIZE, paper(), noise)
+			paint(shape, Color(paper(), 0.10 * _hover_force()), noise)
+		say(line, rect.position + Vector2(12.0, 16.0), LINE_SIZE, paper(), noise)
 
 
 ## 이 줄이 누구인가. **고른 줄과 상세가 같은 사람이어야 한다** — 목록은 줄 번호로
@@ -211,11 +232,23 @@ func _person_of(row: int) -> int:
 
 ## 오른쪽 — 인물 상세 한 창. 칸을 두 열로 세운다.
 func _sheet() -> void:
-	paint(box_of(SHEET_BOX), Color(paper(), 0.14), Grain.KEPT)
+	var frame := GraphicCut.clipped(SHEET_BOX, 26.0, 2 | 8)
+	backplate(frame, 0.006, Vector2(10.0, 10.0), Color(back(), 0.7), Grain.KEPT)
+	paint(frame, Color(paper(), 0.14), Grain.KEPT)
 	var sections: Array[SheetSection] = _sheets[_shown()]
 	var person := _who[_shown()]
 	var top := SHEET_BOX.position + Vector2(24.0, 44.0)
-	say(_registry.name_of(person), top, 28, paper(), Grain.KEPT)
+	# 이름은 **판을 뚫는 글자**다 (§20.37). 판 · 획 · 뒤판이 같은 띠로 통째로 움직인다.
+	var slab := GraphicCut.lean(Rect2(top.x - 14.0, top.y - 34.0, 250.0, 46.0), 0.26)
+	var unit := top.y - 11.0
+	backplate(slab, 0.01, Vector2(6.0, 6.0), back(), Grain.KEPT, unit)
+	paint(slab, paper(), Grain.KEPT, unit)
+	var mark := glyphs(_registry.name_of(person), top, -0.06, 30)
+	for ring: PackedVector2Array in mark["solid"]:
+		pierce(slab, ring, void_color(), paper(), Grain.KEPT, unit)
+	# 구멍을 안 덮으면 ㅇ · ㅁ 의 속이 메워져 **그 글자만 다른 글자로 읽힌다.**
+	for ring: PackedVector2Array in mark["hole"]:
+		pierce(slab, ring, paper(), void_color(), Grain.KEPT, unit)
 	say(
 		(
 			"%d세 %s  %s"
@@ -265,8 +298,9 @@ func _line(field: SheetField, at: Vector2, wide: float) -> float:
 		# 첫 관계 줄이 눌린 줄이다. **초점이 여기로 온다.**
 		noise = lerpf(Grain.LIVE, Grain.HERE, _link_force())
 		_link_at = Vector2(at.x + wide * 0.5, at.y - 4.0)
+		var hit := Rect2(at.x - 6.0 - 10.0 * _link_force(), at.y - 15.0, wide + 12.0, LINE_STEP)
 		paint(
-			box_of(Rect2(at.x - 6.0, at.y - 15.0, wide + 12.0, LINE_STEP)),
+			GraphicCut.lean(hit, -SLANT * 0.5 * _link_force()),
 			Color(accent(), 0.85 * _link_force()),
 			noise
 		)
@@ -290,11 +324,8 @@ func _line(field: SheetField, at: Vector2, wide: float) -> float:
 func _blank(field: SheetField, at: Vector2, wide: float) -> float:
 	say(field.label, at, LINE_SIZE, Color(paper(), 0.7), Grain.LOST)
 	if field.state == SheetField.State.HIDDEN:
-		paint(
-			box_of(Rect2(at.x + 92.0, at.y - 11.0, minf(wide - 100.0, 150.0), 12.0)),
-			Color(paper(), 0.5),
-			Grain.LOST
-		)
+		var chunk := Rect2(at.x + 92.0, at.y - 11.0, minf(wide - 100.0, 150.0), 12.0)
+		paint(GraphicCut.lean(chunk, 0.5), Color(paper(), 0.5), Grain.LOST)
 		return at.y + LINE_STEP
 	say(field.reason, Vector2(at.x + 92.0, at.y), LINE_SIZE, paper(), Grain.LOST, wide - 92.0)
 	return at.y + LINE_STEP
@@ -303,23 +334,29 @@ func _blank(field: SheetField, at: Vector2, wide: float) -> float:
 ## 막대. **값이 차 있는 쪽은 고름**이다 — 켜진 것과 골라 둔 것과 찬 것은 같은 종류다.
 func _meter(field: SheetField, at: Vector2) -> void:
 	var rail := Rect2(at.x, at.y, 80.0, 8.0)
-	paint(box_of(rail), Color(paper(), 0.18), Grain.LIVE)
+	paint(GraphicCut.lean(rail, 0.9), Color(paper(), 0.18), Grain.LIVE)
 	var full := clampf(absf(field.bar), 0.0, 1.0)
 	if field.is_signed_bar:
 		var half := rail.size.x * 0.5
 		var span := half * full
 		var from := rail.position.x + half if field.bar >= 0.0 else rail.position.x + half - span
-		paint(box_of(Rect2(from, rail.position.y, span, rail.size.y)), pick(), Grain.LIVE)
+		paint(
+			GraphicCut.lean(Rect2(from, rail.position.y, span, rail.size.y), 0.9),
+			pick(),
+			Grain.LIVE
+		)
 		return
-	paint(
-		box_of(Rect2(rail.position, Vector2(rail.size.x * full, rail.size.y))), pick(), Grain.LIVE
-	)
+	var full_box := Rect2(rail.position, Vector2(rail.size.x * full, rail.size.y))
+	paint(GraphicCut.lean(full_box, 0.9), pick(), Grain.LIVE)
 
 
 ## 강조 — **지금 여기.** 관계 줄로 초점이 넘어가면 이 자리를 내준다.
 func _mark() -> void:
 	var noise := lerpf(Grain.HERE, Grain.LIVE, _link_force())
-	paint(box_of(MARK_BOX), accent(), noise)
+	# **뾰족한 끝.** 「지금 여기」는 판 중에 혼자 다른 도형이다.
+	var shape := GraphicCut.fang(Rect2(MARK_BOX.position, MARK_BOX.size - Vector2(24.0, 0.0)), 24.0)
+	backplate(shape, 0.01, Vector2(8.0, 8.0), paper(), noise)
+	paint(shape, accent(), noise)
 	say(
 		"출정에 넣는다",
 		Vector2(MARK_BOX.position.x, MARK_BOX.get_center().y + 8.0),

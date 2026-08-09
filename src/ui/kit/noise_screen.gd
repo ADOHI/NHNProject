@@ -24,6 +24,15 @@ const FIELD := preload("res://src/ui/kit/cel/grain_field.gdshader")
 ## 초점이 옮겨가는 데 걸리는 시간. **또렷해지는 것은 사건이라 스냅이다.**
 const SNAP := 0.14
 
+## 앞판이 뒤판에서 잘라 내는 여유. **이 빈 줄 하나가 「판이 두 장」이라고 말한다** (§20.28).
+##
+## 겹쳐 두면 아무 말도 안 한다 — 덮여서 안 보이는 것과 잘려서 없는 것은 화면에서
+## 똑같아 보이지만 **가장자리가 다르다** (§20.34.1).
+const BLEED := 3.0
+
+## 판이 눕는 기본 기울기. **직사각형이 아니다** (§20.28).
+const SLANT := 0.20
+
 ## 색은 `HoloPalette` 한 곳에서만 정해진다 (§20.31). 화면은 번호만 든다.
 var palette := 0:
 	set(value):
@@ -164,12 +173,22 @@ func box_of(rect: Rect2) -> PackedVector2Array:
 
 
 ## **칠하는 자리는 여기 하나다.** 노이즈가 찢김 · 빠짐 · 대비를 한 번에 정한다.
-func paint(shape: PackedVector2Array, tint: Color, noise: float) -> void:
+##
+## `unit_y` 를 주면 **안 찢고** 그 높이의 띠 밀림만큼 통째로 민다. 글자를 뚫은 판이
+## 그렇다 — 판과 획이 따로 찢기면 **획이 끊겨 글자를 못 읽는다**(§20.44.5 의 규칙을
+## 판·글자 한 덩어리에도 그대로 쓴다). 한 덩어리는 **같은 `unit_y`** 를 받아야 한다.
+func paint(shape: PackedVector2Array, tint: Color, noise: float, unit_y := INF) -> void:
 	var faint := Grain.dim(tint, noise, void_color())
-	for piece in Grain.shred(shape, noise, _clock):
-		if piece.size() < 3 or GraphicCut.area_of(piece) < 0.05:
-			continue
-		_face.draw_colored_polygon(piece, faint)
+	if is_inf(unit_y):
+		for piece in Grain.shred(shape, noise, _clock):
+			if piece.size() < 3 or GraphicCut.area_of(piece) < 0.05:
+				continue
+			_face.draw_colored_polygon(piece, faint)
+		return
+	var whole := Grain.moved(shape, Vector2(Grain.slip(Grain.band_of(unit_y), _clock, noise), 0.0))
+	if whole.size() < 3 or GraphicCut.area_of(whole) < 0.05:
+		return
+	_face.draw_colored_polygon(whole, faint)
 
 
 ## 획 하나. **자기 띠의 밀림을 탄다** — 판과 같은 격자라 같은 줄에서 어긋난다.
@@ -204,6 +223,54 @@ func say(
 	_face.draw_string(FONT, at + push, text, align, wide, tall, faint)
 
 
-## 글자가 이 크기로 몇 픽셀을 먹나. 넘치는지 재는 쪽이 쓴다.
-func text_wide(text: String, tall: int) -> float:
-	return FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, tall).x
+## 어긋난 **뒤판.** 앞판이 덮을 자리를 **잘라 내고** 초승달만 남긴다 (§20.34).
+##
+## **그림자가 아니라 판 한 겹 더**라서 색이 있고 어긋나 있다. 노이즈는 앞판과 같은 값을
+## 받는다 — 뒤판만 다른 칸에 있으면 **한 부품이 두 군데를 보고 있는 것**이 된다.
+func backplate(
+	front: PackedVector2Array, by: float, at: Vector2, tint: Color, noise: float, unit_y := INF
+) -> void:
+	for crescent in GraphicCut.notched(GraphicCut.swelled(front, by, at), front, BLEED):
+		paint(crescent, tint, noise, unit_y)
+
+
+## 어긋난 뒤판의 색. **고름의 짙은 쪽**이라 어긋남이 색으로도 읽힌다.
+func back() -> Color:
+	return HoloPalette.back(palette)
+
+
+## 글자의 윤곽을 **다각형으로** 받아 자리에 앉힌다 (§20.37).
+##
+## `draw_set_transform` 을 안 쓰는 이유는 찢김이 **화면 좌표**의 띠 격자에서 계산되기
+## 때문이다 — 변환을 걸어 둔 채로 넘기면 글자만 딴 띠에서 찢긴다.
+## 자리와 기울기를 **점에 미리 발라** 넘긴다.
+func glyphs(text: String, seat: Vector2, lean: float, tall: int) -> Dictionary:
+	var made := GlyphShape.of(text, FONT, tall, Vector2.ZERO)
+	var pose := Transform2D(lean, seat)
+	var out := {"solid": [] as Array[PackedVector2Array], "hole": [] as Array[PackedVector2Array]}
+	for key: String in ["solid", "hole"]:
+		var bag: Array[PackedVector2Array] = out[key]
+		for ring: PackedVector2Array in made[key]:
+			var moved := PackedVector2Array()
+			for point in ring:
+				moved.append(pose * point)
+			bag.append(moved)
+	return out
+
+
+## 글자 획 하나를 **판 안팎으로 갈라** 칠한다. 안은 `within`(구멍), 밖은 `beyond`(판).
+##
+## **글자가 도형이다** (§20.37) — 판 위에서는 구멍이고 판 밖에서는 판이다.
+## 안팎이 같은 노이즈를 받으므로 같은 띠에서 같이 찢긴다.
+func pierce(
+	slab: PackedVector2Array,
+	ring: PackedVector2Array,
+	within: Color,
+	beyond: Color,
+	noise: float,
+	unit_y := INF
+) -> void:
+	for inside in Geometry2D.intersect_polygons(ring, slab):
+		paint(inside, within, noise, unit_y)
+	for outside in Geometry2D.clip_polygons(ring, slab):
+		paint(outside, beyond, noise, unit_y)

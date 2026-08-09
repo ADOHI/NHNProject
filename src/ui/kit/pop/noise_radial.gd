@@ -130,11 +130,22 @@ func _back_to_front() -> Array:
 func _figure(index: int) -> void:
 	var noise := _noise_of(index)
 	var box := _figure_of(index)
-	paint(box_of(box), Color(paper(), 0.20), noise)
+	# 액자도 **평행사변형**이고 뒤판이 색을 갖고 어긋나 있다 (§20.28).
+	var frame := GraphicCut.lean(box, SLANT * 0.6)
+	backplate(frame, 0.01, Vector2(9.0, 9.0), back(), noise)
+	paint(frame, Color(paper(), 0.20), noise)
 	var plate := Rect2(box.position.x, box.end.y, box.size.x, PLATE * (box.size.y / FIGURE.y) * 1.6)
-	# 맨 앞의 이름패만 **신호색**이다. 화면에 이 색이 나오는 자리는 하나뿐이다 (§20.32).
-	var face := accent() if noise < 0.05 else Color(paper(), 0.18)
-	paint(box_of(plate), face, noise)
+	# 맨 앞의 이름패만 **신호색**이고 **뾰족하다.** 화면에 이 색이 나오는 자리는 하나뿐이다.
+	var lit := noise < 0.05
+	var face := accent() if lit else Color(paper(), 0.18)
+	var tag := (
+		GraphicCut.fang(Rect2(plate.position, plate.size - Vector2(14.0, 0.0)), 14.0)
+		if lit
+		else GraphicCut.lean(plate, SLANT * 0.6)
+	)
+	if lit:
+		backplate(tag, 0.012, Vector2(7.0, 7.0), paper(), noise)
+	paint(tag, face, noise)
 	var tall := int(clampf(plate.size.y * 0.52, 9.0, 20.0))
 	say(
 		_registry.name_of(index),
@@ -176,7 +187,9 @@ func _slot() -> void:
 	var figure := _figure_of(front)
 	var rect := RadialDeck.slot_rect(RadialDeck.Slot.IDENTITY, figure, CARD, unfold)
 	var noise := lerpf(Grain.LOST, Grain.NEAR, unfold)
-	paint(box_of(rect), Color(paper(), 0.16), noise)
+	var shape := GraphicCut.clipped(rect, minf(18.0, rect.size.y * 0.4), 1 | 4)
+	backplate(shape, 0.01, Vector2(8.0, 8.0), Color(back(), 0.8), noise)
+	paint(shape, Color(paper(), 0.16), noise)
 	stroke(
 		RadialDeck.anchor_at(RadialDeck.Slot.IDENTITY, figure),
 		Vector2(rect.position.x, rect.get_center().y),
@@ -199,15 +212,9 @@ func _slot() -> void:
 		say(field.value, Vector2(rect.position.x + 78.0, y), 13, paper(), noise)
 		if field.has_meter:
 			var rail := Rect2(rect.position.x + 150.0, y - 9.0, 80.0, 8.0)
-			paint(box_of(rail), Color(paper(), 0.18), noise)
-			paint(
-				box_of(
-					Rect2(
-						rail.position,
-						Vector2(rail.size.x * clampf(absf(field.bar), 0.0, 1.0), rail.size.y)
-					)
-				),
-				pick(),
-				noise
+			paint(GraphicCut.lean(rail, 0.9), Color(paper(), 0.18), noise)
+			var full := Rect2(
+				rail.position, Vector2(rail.size.x * clampf(absf(field.bar), 0.0, 1.0), rail.size.y)
 			)
+			paint(GraphicCut.lean(full, 0.9), pick(), noise)
 		y += 22.0
