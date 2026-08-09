@@ -39,11 +39,31 @@ const DECAY_JITTER := 0.12
 ## 안전 상한. 어떤 파라미터 조합도 이보다 긴 소리를 만들지 않는다.
 const MAX_SECONDS := 2.0
 
+## UI 를 전투 위로 밀어 올리는 문턱 (§29.7.6). 실측으로 정한 값이다 —
+## 전투 중심이 40~470 Hz 라 그 위에 자리를 만들려면 이만큼 깎아야 했다.
+const TICK_HIGHPASS := 900.0
+const TONE_HIGHPASS := 550.0
+
 var kind: SfxRequest.Kind
 var hz: float
 var tau: float
 var noise_tau: float
 var cutoff_hz: float
+## 이 아래를 깎아 낸다. **UI 를 전투 위로 밀어 올리는 유일한 수단이다** (§29.7.6).
+##
+## 합성일 때는 기본 주파수를 직접 두 배로 올려 자리를 나눴다. 녹음물은 그게 안 된다 —
+## 파일의 스펙트럼은 우리가 못 정한다. 그래서 **아래를 깎아서** 자리를 만든다.
+var highpass_hz: float
+## 무게가 **크기**를 뜻하는가.
+##
+## 타격과 바람은 물리다 — 4칸 무기는 실제로 더 큰 물체라 리샘플로 늘이는 것이 맞다.
+## **UI 딸깍과 확인음은 물리가 아니라 기호다.** 사람이 그 높이로 들으라고 만든 소리라
+## 무게를 핑계로 피치를 내리면 설계된 신호가 망가진다.
+##
+## 실제로 겪었다 — 확인음(원본 791 Hz)을 무게 2.0 으로 1.74배 늘였더니 255 Hz 가 되어
+## 전투음(374 Hz)보다 낮게 깔렸다. UI 를 위로 올리려고 고역 통과를 넣었는데
+## 정작 리샘플이 아래로 끌어내리고 있었다.
+var scales_with_size: bool = true
 var tone_ratio: float
 var partials: Array[float]
 var pitch_drop: float
@@ -114,7 +134,11 @@ static func _apply_kind(voice: SfxVoice, request: SfxRequest, scale: float) -> v
 			voice.tau = voice.duration * 0.25
 			voice.noise_tau = voice.tau
 			voice.tone_ratio = minf(voice.tone_ratio + 0.25, 0.85)
-			voice.hz *= 2.0  # UI 는 전투보다 높은 자리를 쓴다 (§29.7 겹침 참고)
+			voice.hz *= 2.0  # 합성일 때의 자리 나눔
+			# 녹음물일 때의 자리 나눔. 전투는 40~470 Hz 에 있으므로 그 위로 올린다.
+			voice.highpass_hz = TICK_HIGHPASS
+			voice.cutoff_hz = BASE_CUTOFF * 2.0  # UI 를 저역 통과로 둔하게 만들지 않는다
+			voice.scales_with_size = false
 		SfxRequest.Kind.TONE:
 			voice.duration = 0.090 * scale
 			voice.tau = voice.duration * 0.42
@@ -123,6 +147,10 @@ static func _apply_kind(voice: SfxVoice, request: SfxRequest, scale: float) -> v
 			voice.pitch_drop = 0.0
 			voice.attack = 0.006
 			voice.hz *= 2.0
+			# 음정이 있는 신호는 몸통을 조금 남겨야 음정으로 들린다. 딸깍보다 낮게 깎는다.
+			voice.highpass_hz = TONE_HIGHPASS
+			voice.cutoff_hz = BASE_CUTOFF * 2.0
+			voice.scales_with_size = false
 
 
 static func _apply_bend(voice: SfxVoice, request: SfxRequest) -> void:

@@ -18,6 +18,7 @@ var _wave: SfxWaveformView
 var _player: Node
 var _current_event := SfxEvent.Kind.HIT_LANDED
 var _use_event := true
+var _source_button: Button
 
 
 func _ready() -> void:
@@ -114,6 +115,11 @@ func _build_actions(parent: VBoxContainer) -> void:
 	_add_button(row, "5타 체인 (변주 있이)", func() -> void: _play_chain(true))
 	_add_button(row, "5타 체인 (변주 없이)", func() -> void: _play_chain(false))
 	_add_button(row, "무게 1 부터 4", _play_weight_sweep)
+	_source_button = Button.new()
+	_source_button.toggle_mode = true
+	_source_button.pressed.connect(_on_source_toggled)
+	row.add_child(_source_button)
+	_refresh_source_button()
 
 
 func _add_button(parent: HBoxContainer, text: String, action: Callable) -> void:
@@ -180,10 +186,12 @@ func _play_weight_sweep() -> void:
 func _refresh() -> void:
 	var request := _current_request()
 	var voice := SfxVoice.resolve(request)
-	var samples := SfxSynth.render(voice)
-	_wave.show_samples(samples)
+	var clip := SfxRender.render(request)
+	_wave.show_clip(clip)
+	var used := SfxRender.source_for(request)
+	var source_text := "CC0 파일" if used == SfxRender.Source.FILE else "합성 (재료 없음)"
 
-	var overlap := voice.duration - CHAIN_INTERVAL
+	var overlap := clip.seconds() - CHAIN_INTERVAL
 	var overlap_text := (
 		"[color=#8fce7f]안 겹침[/color]"
 		if overlap <= 0.0
@@ -207,6 +215,22 @@ func _refresh() -> void:
 		+ "체인 타 간격 %.2f 초 대비  %s\n" % [CHAIN_INTERVAL, overlap_text]
 		+ "지금 울리는 소리 %d 개" % _player.active_count()
 	)
+
+
+## 원천을 바꾼다. **앞 판(합성)과 이번 판(CC0 파일)을 나란히 들어 보는 자리다.**
+func _on_source_toggled() -> void:
+	SfxRender.mode = (
+		SfxRender.Source.SYNTH if _source_button.button_pressed else SfxRender.Source.FILE
+	)
+	_refresh_source_button()
+	_refresh()
+	_play_current()
+
+
+func _refresh_source_button() -> void:
+	var is_synth := SfxRender.mode == SfxRender.Source.SYNTH
+	_source_button.button_pressed = is_synth
+	_source_button.text = "원천: 합성" if is_synth else "원천: CC0 파일"
 
 
 func _unhandled_key_input(event: InputEvent) -> void:

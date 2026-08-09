@@ -36,17 +36,22 @@ var _baked_bytes := 0
 ## 처음 재생하는 사건은 여기서 한 프레임을 쓴다. 그게 싫으면 미리 `warm()` 한다.
 func streams_for(request: SfxRequest, variations: int = 1) -> Array[AudioStreamWAV]:
 	var wanted := maxi(variations, 1)
+	# 재료가 세 개뿐인데 네 벌을 구우면 한 벌이 중복이다. 있는 만큼만 굽는다.
+	var available := SfxLibrary.paths_for(request).size()
+	if SfxRender.mode == SfxRender.Source.FILE and available > 0:
+		wanted = mini(wanted, available)
 	# 벌 수를 열쇠에 넣는다. 안 넣으면 한 벌짜리로 먼저 캐시된 요청이
 	# 나중에 네 벌을 달라고 해도 한 벌만 돌려줘, 변주가 조용히 사라진다.
-	var key := "%s#%d" % [request.bake_key(), wanted]
+	# 원천(파일/합성)도 넣는다 — 안 넣으면 모드를 바꿔도 옛 소리가 나온다.
+	var key := "%s#%d#%d" % [request.bake_key(), wanted, SfxRender.mode]
 	if _cache.has(key):
 		return _cache[key]
 
 	var made: Array[AudioStreamWAV] = []
 	for index in wanted:
-		# 씨 0 은 "안 흔든 기준 소리" 다. 여러 벌일 때는 1 부터 쓴다.
-		var seed_value := 0 if variations <= 1 else index + 1
-		var stream := SfxSynth.bake_request(request.with_seed(seed_value))
+		# CC0 재료가 있으면 벌마다 **다른 녹음 파일**이 걸린다. 합성 씨를 흔드는 것보다
+		# 훨씬 강한 변주다 — 같은 물건을 다시 때린 것이 아니라 원래 다른 녹음이다.
+		var stream := SfxRender.render(request, index).to_stream()
 		_baked_bytes += stream.data.size()
 		made.append(stream)
 	_cache[key] = made

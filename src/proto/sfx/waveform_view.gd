@@ -19,9 +19,9 @@ var _samples := PackedFloat32Array()
 var _seconds := 0.0
 
 
-func show_samples(samples: PackedFloat32Array) -> void:
-	_samples = samples
-	_seconds = float(samples.size()) / SfxSynth.MIX_RATE
+func show_clip(clip: SfxClip) -> void:
+	_samples = clip.samples
+	_seconds = clip.seconds()
 	queue_redraw()
 
 
