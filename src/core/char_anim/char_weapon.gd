@@ -12,14 +12,28 @@ extends RefCounted
 ## * 손의 피벗이 중심이라(§25.2) **무기가 손을 축으로 돈다**
 ## * 손목 각도 = 손의 회전이다. 관절을 새로 만들 필요가 없다
 ##
-## ## 부피가 곧 무게이고, 무게가 동작을 정한다
+## ## 모양이 곧 특성이고, 특성이 동작을 정한다
 ##
 ## 전투 레인이 실측했다 — **아이템 부피가 한 방의 무게다.** 4 칸은 4 타로 적을 띄우고
 ## 1 칸은 열 몇 타가 필요하다. **그런데 화면에서 둘이 같은 속도로 같은 궤적을 그리면
 ## 화면이 전투 규칙을 부정한다.**
 ##
-## 그래서 **칸 수 하나만 넣으면 나머지가 전부 계산으로 나온다.** 넷을 손으로 따로
-## 만들지 않는다 (`docs/design/25-character-animation.md` §25.16).
+## **입력이 둘이다** — [`28-combat.md`](../../../docs/design/28-combat.md) §28.2 의
+## 「한 블럭과 방향」에서 **그냥 나온다.**
+##
+## | 축 | 어디서 오나 | 무엇을 정하나 |
+## | --- | --- | --- |
+## | **길이** | **긴 쪽 칸 수** | 궤적 반경 · 가장 가파른 각도 · 검끝이 바닥을 뚫는 위험 |
+## | **무게** | **총 칸 수** | 휘두르는 시간 · 멈춤 · 몸 끌림 · 예비 길이 |
+##
+## **같은 4 칸인데 `3×1` 은 창이고 `2×2` 는 철퇴다.** 새 자료를 하나도 안 만든다.
+##
+## 하나로 뭉쳐 두면 **사분면의 대각선 둘만** 나온다 — 길고 무거운 것(대검)과
+## 짧고 가벼운 것(단검). **길고 가벼운 것과 짧고 무거운 것이 통째로 빠지는데,
+## 그 둘이 액션에서 가장 다르게 생긴 무기다.**
+##
+## 관성은 **여전히 둘의 곱이다** (`I ∝ 질량 × 길이²`). 식을 버린 것이 아니라
+## **입력을 둘로 나눈 것**이다 (`docs/design/25-character-animation.md` §25.20).
 
 ## 칸 수의 범위. [`28-combat.md`](../../../docs/design/28-combat.md) 의 아이템 부피다.
 const MIN_CELLS := 1
@@ -28,8 +42,8 @@ const MAX_CELLS := 4
 ## 1 칸짜리의 길이. 캐릭터 키(141)의 37 % 다.
 const BASE_LENGTH := 52.0
 
-## 길이가 칸 수를 따라 자라는 지수. **1 보다 훨씬 작다** — 4 칸이 4 배 길지는 않다.
-## 부피가 늘면 길이보다 **두께와 밀도**로 더 간다.
+## 길이가 **긴 쪽 칸 수**를 따라 자라는 지수. **1 보다 훨씬 작다** —
+## 4 칸 길이가 4 배 길지는 않다. 화면을 가로지르면 그림이 무너진다.
 const LENGTH_EXPONENT := 0.30
 
 ## 무기를 든 손. 그리는 순서의 맨 마지막이라 무엇에도 안 가려진다.
@@ -59,26 +73,44 @@ const TIP_CLEARANCE := 4.0
 const HITSTOP_BASE := 0.045
 const HITSTOP_PER_CELL := 0.045
 
-## 칸 수. 1 … 4.
+## **총 칸 수 = 질량.** 1 … 4.
 var cells: int
 
+## **긴 쪽 칸 수 = 길이.** 1 … 4. 총 칸 수를 넘을 수 없다.
+var span: int
 
-func _init(p_cells := 1) -> void:
+
+func _init(p_cells := 1, p_span := -1) -> void:
 	cells = clampi(p_cells, MIN_CELLS, MAX_CELLS)
+	span = cells if p_span < MIN_CELLS else clampi(p_span, MIN_CELLS, cells)
 
 
-## 자루 끝에서 날 끝까지.
-func length() -> float:
-	return BASE_LENGTH * pow(float(cells), LENGTH_EXPONENT)
-
-
-func blade_half_width() -> float:
-	return BASE_HALF_WIDTH * pow(float(cells), 0.42)
-
-
-## 1 칸짜리에 대한 **관성 모멘트**의 비. `I ∝ 질량 × 길이²` 이고 질량은 칸 수다.
+## 백팩의 블럭 모양에서 바로 만든다. **§28.2 의 자료를 그대로 먹는다.**
 ##
-## **이 값 하나가 동작 전부를 정한다.** 예비 · 타격 · 회복이 다 여기서 나온다.
+## `4×1` 은 대검(무겁고 길다) · `2×2` 는 철퇴(무겁고 짧다) · `3×1` 은 창(길고 덜 무겁다).
+static func from_block(width: int, height: int) -> CharWeapon:
+	var w := maxi(width, 1)
+	var h := maxi(height, 1)
+	return CharWeapon.new(w * h, maxi(w, h))
+
+
+## 자루 끝에서 날 끝까지. **긴 쪽 칸 수에서만 나온다.**
+func length() -> float:
+	return BASE_LENGTH * pow(float(span), LENGTH_EXPONENT)
+
+
+## 날 두께. **길이당 질량**에서 나온다 — 같은 무게라도 짧으면 두껍다.
+##
+## 그래서 `2×2` 철퇴가 `4×1` 대검보다 굵게 그려진다. 그림도 표가 아니라 모양에서 나온다.
+func blade_half_width() -> float:
+	var density := float(cells) / float(span)
+	return BASE_HALF_WIDTH * pow(density, 0.5) * pow(float(cells), 0.15)
+
+
+## 1 칸짜리에 대한 **관성 모멘트**의 비. `I ∝ 질량 × 길이²`.
+##
+## **질량은 총 칸 수, 길이는 긴 쪽 칸 수에서 온다.** 그래서 같은 4 칸이라도
+## `4×1` 대검이 `2×2` 철퇴보다 관성이 크다 — 더 멀리 뻗어 있기 때문이다.
 func inertia_ratio() -> float:
 	var reach := length() / BASE_LENGTH
 	return float(cells) * reach * reach
@@ -100,7 +132,17 @@ func hitstop_seconds() -> float:
 	return HITSTOP_BASE + HITSTOP_PER_CELL * float(cells - MIN_CELLS)
 
 
-## 몸이 무기에 끌려가는 정도 (`0` … `1`). 무거우면 상체가 따라간다.
+## 사람이 읽는 이름. **종류가 아니라 모양에서 나온 것만 말한다** —
+## 도끼냐 둔기냐는 §28.2 가 아직 안 정했다.
+func shape_name() -> String:
+	if cells == span:
+		return "%d칸 곧은 것" % cells
+	return "%d칸 %d칸짜리로 뭉친 것" % [cells, span]
+
+
+## 몸이 무기에 끌려가는 정도 (`0` … `1`). **무게 축이다** — 길이와 무관하다.
+##
+## 창은 길어도 안 끌려가고 철퇴는 짧아도 끌려간다.
 func drag() -> float:
 	return float(cells - MIN_CELLS) / float(MAX_CELLS - MIN_CELLS)
 

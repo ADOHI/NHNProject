@@ -7,7 +7,8 @@ extends Node2D
 ## ```gdscript
 ## var actor := CharActor.new()
 ## add_child(actor)
-## actor.weapon_cells = 3
+## actor.weapon_cells = 4     # 무게 (총 칸 수)
+## actor.weapon_span = 2      # 길이 (긴 쪽 칸 수) -> 2x2 철퇴
 ## actor.play(CharActor.Action.WALK)
 ## actor.struck.connect(_on_struck)   # 검이 닿는 순간
 ## ```
@@ -38,13 +39,24 @@ enum Action { IDLE, WALK, RUN, JUMP, SWING, SWING_UP, HIT, DIE }
 ## 화면에서 캐릭터 키(141)를 몇 배로 볼 것인가. 쓰는 쪽이 정한다.
 const DEFAULT_SCALE := 1.0
 
-## 든 무기의 칸 수. **부피가 곧 동작의 무게다** (§25.16).
+## 무기의 **총 칸 수 = 무게.** 휘두르는 시간 · 멈춤 · 몸 끌림이 여기서 나온다.
 @export_range(1, 4) var weapon_cells := 1:
 	set(value):
 		var next := clampi(value, CharWeapon.MIN_CELLS, CharWeapon.MAX_CELLS)
 		if next == weapon_cells:
 			return
 		weapon_cells = next
+		_rebuild_weapon()
+
+## 무기의 **긴 쪽 칸 수 = 길이.** 궤적 반경과 가장 가파른 각도가 여기서 나온다.
+##
+## **총 칸 수와 따로 준다.** 같은 4 칸이라도 `4×1` 은 길고 `2×2` 는 짧다 (§25.20).
+@export_range(1, 4) var weapon_span := 1:
+	set(value):
+		var next := clampi(value, CharWeapon.MIN_CELLS, CharWeapon.MAX_CELLS)
+		if next == weapon_span:
+			return
+		weapon_span = next
 		_rebuild_weapon()
 
 ## `+1` 이면 오른쪽, `-1` 이면 왼쪽을 본다.
@@ -112,7 +124,7 @@ func impact_seconds() -> float:
 ## 휘두르는 쪽 혼자 멈추는 것은 절반이다 — 타격감은 둘이 동시에 설 때 난다.
 ## 눈금도 같이 멈춰야 화면과 규칙이 안 갈린다 (§25.19.2).
 func hitstop_seconds() -> float:
-	return CharWeapon.new(weapon_cells).hitstop_seconds()
+	return CharWeapon.new(weapon_cells, weapon_span).hitstop_seconds()
 
 
 ## 지금 자세. 체인 조건이 확정되면 `앞.to_guard == 뒤.from_guard` 로 쓴다 (§25.11.4).
@@ -163,7 +175,7 @@ func _build() -> void:
 func _rebuild_weapon() -> void:
 	if _rig == null:
 		return
-	var weapon := CharWeapon.new(weapon_cells)
+	var weapon := CharWeapon.new(weapon_cells, weapon_span)
 	_clips[Action.SWING] = CharSwingClip.new(_rig, WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW, weapon)
 	_clips[Action.SWING_UP] = CharSwingClip.new(
 		_rig, WeaponGuard.Id.LOW, WeaponGuard.Id.HIGH, weapon

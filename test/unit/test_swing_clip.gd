@@ -217,3 +217,55 @@ func test_the_hitstop_is_long_enough_to_see() -> void:
 	var heavy := CharWeapon.new(CharWeapon.MAX_CELLS)
 	assert_gt(light.hitstop_seconds() * 25.0, 1.0, "1 칸 히트스톱이 한 프레임은 돼야 한다")
 	assert_gt(heavy.hitstop_seconds() * 25.0, 4.0, "4 칸 히트스톱이 네 프레임은 돼야 한다")
+
+
+func test_length_and_weight_are_separate_inputs() -> void:
+	# **같은 4 칸인데 `4x1` 은 대검이고 `2x2` 는 철퇴다.** 하나로 뭉쳐 두면
+	# 사분면의 대각선 둘만 나오고, 길고 가벼운 것과 짧고 무거운 것이 통째로 빠진다.
+	var greatsword := CharWeapon.from_block(4, 1)
+	var mace := CharWeapon.from_block(2, 2)
+	assert_eq(greatsword.cells, mace.cells, "둘 다 4 칸이라 무게는 같아야 한다")
+	assert_gt(greatsword.length(), mace.length(), "대검이 철퇴보다 길어야 한다")
+	assert_gt(mace.blade_half_width(), greatsword.blade_half_width(), "철퇴가 더 굵어야 한다")
+	assert_almost_eq(
+		greatsword.hitstop_seconds(), mace.hitstop_seconds(), 0.0001, "멈춤은 무게 축이라 같아야 한다"
+	)
+	assert_almost_eq(greatsword.drag(), mace.drag(), 0.0001, "몸 끌림도 무게 축이라 같아야 한다")
+
+
+func test_a_long_light_weapon_swings_faster_than_a_short_heavy_one() -> void:
+	# **창과 철퇴가 이 판의 목적이다.** 창은 크게 도는데 빠르고 철퇴는 작게 도는데 느리다.
+	var rig := CharRig.new()
+	var spear := CharSwingClip.new(
+		rig, WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW, CharWeapon.from_block(3, 1)
+	)
+	var mace := CharSwingClip.new(
+		rig, WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW, CharWeapon.from_block(2, 2)
+	)
+	assert_gt(spear.weapon.length(), mace.weapon.length(), "창이 더 길어야 한다")
+	assert_gt(mace.hitstop, spear.hitstop, "철퇴가 4 칸이라 창(3 칸)보다 멈춤이 길어야 한다")
+	assert_gt(mace.weapon.drag(), spear.weapon.drag(), "철퇴가 몸을 더 끌어야 한다")
+
+
+func test_the_block_shape_is_the_only_input() -> void:
+	# 표를 안 늘린다. §28.2 의 블럭 모양을 그대로 먹는다.
+	assert_eq(CharWeapon.from_block(1, 1).cells, 1)
+	assert_eq(CharWeapon.from_block(1, 3).span, 3, "세로 3 칸도 긴 쪽이 3 이다")
+	assert_eq(CharWeapon.from_block(2, 2).span, 2)
+	# 긴 쪽이 총 칸 수를 넘을 수 없다 — 넘으면 밀도가 1 미만이 되어 뜻이 없다.
+	assert_lte(CharWeapon.new(2, 4).span, 2, "긴 쪽이 총 칸 수를 넘으면 안 된다")
+
+
+func test_every_block_shape_keeps_the_blade_off_the_floor() -> void:
+	# 길이 축이 갈렸으니 **긴 쪽 칸 수마다** 다시 봐야 한다.
+	var f := AnimFeatures.all_on()
+	for block: Array in [[1, 1], [2, 1], [3, 1], [4, 1], [2, 2]]:
+		var weapon := CharWeapon.from_block(block[0], block[1])
+		for pair: Array in [
+			[WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW],
+			[WeaponGuard.Id.LOW, WeaponGuard.Id.HIGH],
+		]:
+			var clip := CharSwingClip.new(CharRig.new(), pair[0], pair[1], weapon)
+			for t in _times(clip):
+				var tip := weapon.tip_position(clip.sample(t, f), clip.rig)
+				assert_gt(tip.y, 0.0, "%dx%d 의 t = %.3f 에서 검끝이 뚫는다" % [block[0], block[1], t])

@@ -69,6 +69,7 @@ var _pending := -1
 var _verified := false
 var _frames := 0
 var _cells := 1
+var _span := 1
 
 
 func _initialize() -> void:
@@ -80,8 +81,11 @@ func _initialize() -> void:
 		if token in CLIPS:
 			clip_name = token
 		elif token.begins_with("cells"):
-			# `cells3` 처럼 무기 칸 수를 준다. 무게가 동작을 어떻게 바꾸는지 나란히 보려는 것.
-			_cells = int(token.substr(5))
+			# `cells3` 은 3 칸 곧은 것, `cells4x2` 는 총 4 칸에 긴 쪽 2 칸(철퇴).
+			# 길이와 무게를 따로 줘야 창과 철퇴가 갈린다 (§25.20).
+			var spec := token.substr(5).split("x")
+			_cells = int(spec[0])
+			_span = int(spec[1]) if spec.size() > 1 else _cells
 		else:
 			_features = _parse_features(token)
 
@@ -101,7 +105,7 @@ func _initialize() -> void:
 	_viewport.add_child(stage)
 
 	_view = CharPartsView.new()
-	_view.weapon = CharWeapon.new(_cells)
+	_view.weapon = CharWeapon.new(_cells, _span)
 	_view.position = Vector2(float(VIEW_SIZE.x) * 0.5, GROUND_Y)
 	_view.scale = Vector2(VIEW_SCALE, VIEW_SCALE)
 	stage.add_child(_view)
@@ -160,7 +164,7 @@ static func frame_count(loop_seconds: float) -> int:
 
 ## 낱말에서 클립을 만든다. **표로 두면 클립이 늘어도 분기가 안 늘어난다.**
 func _make_clip(name: String, rig: CharRig) -> CharClip:
-	var weapon := CharWeapon.new(_cells)
+	var weapon := CharWeapon.new(_cells, _span)
 	var swings: Dictionary[String, Array] = {
 		"swing": [WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW],
 		"swingup": [WeaponGuard.Id.LOW, WeaponGuard.Id.HIGH],
