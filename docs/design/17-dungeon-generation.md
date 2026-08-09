@@ -3636,11 +3636,16 @@ python -m http.server 8231 --directory build/web
 **빌드가 최신인지 먼저 본다.**
 
 ```bash
-find src tools -newer build/web/index.pck \( -name '*.gd' -o -name '*.tscn' \)
+find src tools/web_dungeon_bench.gd tools/web_dungeon_bench.tscn \
+  -newer build/web/index.pck \( -name '*.gd' -o -name '*.tscn' \)
 ```
 
 아무것도 안 나와야 한다. **`project.godot` 하나만 나오는 것은 정상이다** — 내보낸 뒤에
 되돌리기 때문이고, 부팅 장면은 이미 `.pck` 안에 박혀 있다.
+
+> **`tools/` 전체를 보면 안 된다 (2026-08-10 에 좁혔다).** `.pck` 는 전부를 담지만
+> 이 벤치가 도는 데 걸리는 것은 **`src/` 와 벤치 스크립트 둘뿐**이다. 다른 조사 도구를
+> 고칠 때마다 「낡았다」가 뜨면 **진짜 낡았을 때 아무도 안 믿는다.**
 
 ### 17.21.8 재기 전에 본 것 — **이 벤치의 전제**
 
