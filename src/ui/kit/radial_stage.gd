@@ -56,6 +56,19 @@ const TURN_TIME: float = 5.20
 ## 「돌아간다」로 읽힌다.
 const HOLD_PART: float = 0.55
 
+## 확대한 창이 화면에서 남기는 테두리 여백.
+const WINDOW_INSET := Vector2(90.0, 70.0)
+
+## 휠 한 칸이 도는 데 걸리는 시간. 저절로 도는 쪽(45%)과 비슷하게 잡았다.
+const HAND_STEP: float = 0.42
+
+## 창이 확대되는 데 걸리는 시간.
+const ZOOM_TIME: float = 0.46
+
+## 확대한 창 안에서 더 당길 수 있는 범위.
+const MAG_MIN: float = 1.0
+const MAG_MAX: float = 2.2
+
 ## 스스로 누르는 시각. **GIF 가 판정 매체인데 손이 없으면 파문을 못 본다**(§20.20.5).
 ##
 ## 링이 **멈춰 있는 동안**으로 잡았다 — 도는 중에 누르면 파문과 궤적이 겹쳐
@@ -111,6 +124,28 @@ var _poke_from := POKE_AT
 var _poke_by_hand := false
 var _poke_where := Vector2.ZERO
 
+## 손이 닿았나. **닿으면 시계가 도는 것을 멈추고 휠이 링을 돌린다.**
+##
+## 손이 안 닿은 동안에는 시계 하나가 전부를 정한다 — 캡처가 시각을 아무 순서로 꽂아도
+## 같은 그림이 나온다(§20.20.6). 손이 닿으면 그때부터 사건에 **시작 시각**이 생긴다.
+var _hand := false
+var _turn_from := 0.0
+var _turn_to := 0.0
+var _turn_began := 0.0
+
+## 어느 창으로 들어갔나. **들어갔는지는 `_inside` 가 들고 어느 창인지는 `_into` 가 든다** —
+## 어떤 값도 「없음」을 겸하지 않는다(§20.18.5).
+var _inside := false
+var _into: int = 0
+var _into_began := 0.0
+var _going_in := false
+
+## 확대한 창 안에서 더 당긴 배율. **휠은 층마다 뜻이 다르다** — 여기서는 줌이다.
+##
+## 상자만 키우면 글자는 그대로라 「넓힘」이지 「줌」이 아니다. 그래서 판도 글도
+## **같은 변환**으로 함께 커진다.
+var _mag := 1.0
+
 var _figures: Array[Texture2D] = []
 var _sheet: Array[SheetSection] = []
 var _names: Array[String] = []
@@ -159,8 +194,10 @@ func _build() -> void:
 func _process(delta: float) -> void:
 	if _driven:
 		return
-	if not _frozen:
-		set_clock(fposmod(_clock + delta, LOOP))
+	if _frozen:
+		return
+	# 손이 닿으면 시계를 안 감는다 — 사건의 시작 시각이 한 바퀴마다 뒤로 밀리면 안 된다.
+	set_clock(_clock + delta if _hand else fposmod(_clock + delta, LOOP))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -168,8 +205,68 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key != null and key.pressed and not key.echo and key.keycode == KEY_S:
 		_frozen = not _frozen
 	var click := event as InputEventMouseButton
-	if click != null and click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
-		_poke(get_local_mouse_position())
+	if click == null or not click.pressed:
+		return
+	if click.button_index == MOUSE_BUTTON_WHEEL_UP:
+		wheel(1)
+	elif click.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		wheel(-1)
+	elif click.button_index == MOUSE_BUTTON_LEFT:
+		tap(get_local_mouse_position())
+
+
+## **휠은 층마다 뜻이 다르다**(§20.17.1). 원형 층에서는 다음 인물, 확대한 창 안에서는 스크롤.
+##
+## 같은 손짓이 두 뜻인 것이 문제가 아니다 — **화면이 무엇을 하는 중인지가 보이므로**
+## 안내가 필요 없다. 인물이 줄지어 있으면 고르는 중이고 하나가 꽉 차 있으면 읽는 중이다.
+func wheel(dir: int) -> void:
+	if _inside and _into_u() > 0.5:
+		_mag = clampf(_mag + float(dir) * 0.28, MAG_MIN, MAG_MAX)
+		_refresh()
+		return
+	_take_over()
+	_turn_from = _picked()
+	# **한 칸씩만 간다.** 여러 칸을 한 번에 넘기면 「고른다」가 아니라 「감는다」가 된다.
+	_turn_to = roundf(_turn_from) + float(signi(dir))
+	_turn_began = _clock
+	_refresh()
+
+
+## **창을 누르면 그 창으로 들어가고 바깥을 누르면 나온다.** `where` 는 이 노드 안 좌표다.
+func tap(where: Vector2) -> void:
+	_take_over()
+	if _inside:
+		# 나가는 것도 사건이라 시각이 있다. 들어간 곳에서 되짚어 나온다.
+		_going_in = false
+		_into_began = _clock
+		_refresh()
+		return
+	for each in _pending:
+		if (each["pane"] as Rect2).grow(6.0).has_point(where) and float(each["open"]) >= 0.72:
+			_inside = true
+			_into = int(each["slot"])
+			_going_in = true
+			_into_began = _clock
+			_mag = MAG_MIN
+			_refresh()
+			return
+	_poke(where)
+	_refresh()
+
+
+## 손이 처음 닿는 순간. **시계가 저절로 도는 것을 여기서 멈춘다.**
+func _take_over() -> void:
+	if _hand:
+		return
+	_hand = true
+	# 지금 보이는 자리에서 이어받는다. 안 그러면 손이 닿는 순간 링이 튄다.
+	_turn_from = _picked()
+	_turn_to = roundf(_turn_from)
+	_turn_began = _clock
+
+
+func _refresh() -> void:
+	set_clock(_clock)
 
 
 ## 누른 자리를 **판 안 좌표**로 받아 예약한다. 판 넷은 같은 화면이라 넷 다 함께 튄다.
@@ -190,6 +287,9 @@ func _poke(where: Vector2) -> void:
 
 func set_clock(t: float) -> void:
 	_clock = t
+	# 다 물러났으면 들어간 상태를 놓는다. **끝난 사건을 붙잡고 있으면 다음 누름이 안 먹는다.**
+	if _inside and not _going_in and _clock - _into_began >= ZOOM_TIME:
+		_inside = false
 	_layout()
 	for skin in _skins:
 		skin.set_clock(t)
@@ -226,6 +326,7 @@ func _plan(at: Vector2, level: int) -> void:
 	var picked := _picked()
 	var figure := _figure_rect(RadialDeck.front_index(SQUAD, picked), picked, ZOOM_ONE)
 	var live := HoloSpark.live_line(_clock, RadialDeck.count())
+	var grown := _into_u()
 	for slot in RadialDeck.count():
 		var here := slot as RadialDeck.Slot
 		# **가운데가 바뀌는 순간이 접힘과 펴짐의 경계다.** 그래서 창이 옮겨 붙는 것을
@@ -234,10 +335,30 @@ func _plan(at: Vector2, level: int) -> void:
 		var box := RadialDeck.slot_rect(here, figure, SCREEN, open)
 		var line := RadialDeck.tether(here, figure, SCREEN, open)
 		var pane := Rect2(at + box.position, box.size)
+		# **들어간 창은 커지고 나머지는 접힌다.** 접힘은 이미 있는 낱말이라 새로 만들 것이 없다.
+		var raw := pane
+		if _inside:
+			if slot == _into:
+				var full := Rect2(at + WINDOW_INSET, SCREEN - WINDOW_INSET * 2.0)
+				# **줌은 틀을 키우는 것이 아니라 안엣것을 당기는 것이다.** 틀이 화면을 넘어가면
+				# 「확대됐다」가 아니라 「UI 가 깨졌다」로 읽힌다. 판은 여기 서 있고
+				# 글만 `_draw_over` 에서 당겨지며 넘친 줄은 잘린다.
+				raw = Rect2(
+					pane.position.lerp(full.position, grown), pane.size.lerp(full.size, grown)
+				)
+				pane = raw
+			else:
+				open *= 1.0 - grown
+				if open < 0.22:
+					pane.size.y = RadialDeck.FOLDED_H
 		var shape := _pane_shape(here, pane, level)
 		var skin := _skin_for(level, slot) if open >= 0.22 else null
 		if skin != null:
 			skin.visible = true
+			# **재료의 무늬는 UV 안에서 잰다.** 창이 화면만 해지면 그 무늬도 같이 커져
+			# 가장자리 빛이 판 전체를 덮고 **흰 덩어리**가 된다. 커진 만큼 묽게 탄다.
+			var wash := grown if (_inside and slot == _into) else 0.0
+			skin.strength = HoloSpark.stuff_strength(level) * (1.0 - 0.75 * wash)
 			skin.position = pane.position
 			skin.size = pane.size
 			var local := PackedVector2Array()
@@ -245,11 +366,16 @@ func _plan(at: Vector2, level: int) -> void:
 				local.append(point - pane.position)
 			skin.shape = local
 			skin.queue_redraw()
+			# 들어간 창의 재료는 **막보다 위**에 있어야 한다. 형제끼리는 순서가 곧 앞뒤다.
+			if _inside and slot == _into:
+				move_child(skin, _skins.size() - 1)
 		(
 			_pending
 			. append(
 				{
 					"slot": here,
+					# 줌을 걸기 **전**의 자리. 글은 이 자리에 그리고 같은 배로 함께 커진다.
+					"raw": raw,
 					"pane": pane,
 					"shape": shape,
 					"open": open,
@@ -263,11 +389,30 @@ func _plan(at: Vector2, level: int) -> void:
 		)
 
 
-## 지금 고른 인물. **칸마다 멈췄다 다음으로 간다.**
+## 지금 고른 인물. **칸마다 멈췄다 다음으로 간다** — 등속이면 「고른다」가 아니라 「돌아간다」다.
+##
+## 손이 안 닿았으면 시계가 저절로 한 칸씩 넘긴다(캡처가 이것을 본다).
+## 손이 닿으면 **휠이 넘긴 칸으로** 같은 곡선을 타고 간다.
 func _picked() -> float:
+	if _hand:
+		var u := clampf((_clock - _turn_began) / HAND_STEP, 0.0, 1.0)
+		return lerpf(_turn_from, _turn_to, smoothstep(0.0, 1.0, u))
 	var step := TURN_TIME / float(SQUAD)
 	var slot := floorf(_clock / step)
 	return slot + smoothstep(HOLD_PART, 1.0, fposmod(_clock, step) / step)
+
+
+## 창이 확대된 정도 0..1. 0 이면 제자리고 1 이면 화면을 채운다.
+##
+## **들어가는 것과 나오는 것은 같은 축의 양끝이다**(§20.10) — 들어갈 때는 지나쳤다
+## 되돌아오고 나올 때는 되튐 없이 물러난다.
+func _into_u() -> float:
+	if not _inside:
+		return 0.0
+	var t := clampf((_clock - _into_began) / ZOOM_TIME, 0.0, 1.0)
+	if _going_in:
+		return clampf(KitEase.out_back(t, 1.4), 0.0, 1.0)
+	return 1.0 - KitEase.in_quad(t)
 
 
 ## 링이 도는 속도 0..1. **재지 않고 미분한다**(§20.20.6).
@@ -285,8 +430,15 @@ func _turn_speed() -> float:
 
 
 ## 파문이 난 뒤 흐른 몫. 1 을 넘으면 끝난 것이다. **특별한 값이 「없음」을 겸하지 않는다.**
+##
+## 저절로 도는 동안에는 한 바퀴에 한 번 다시 난다. 손이 닿은 뒤에는 시계를 안 감으므로
+## 누른 그 한 번뿐이고, **아직 한 번도 안 눌렀으면 파문이 없다.**
 func _poke_u() -> float:
-	return fposmod(_clock - _poke_from, LOOP) / HoloSpark.RIPPLE_TIME
+	if not _hand:
+		return fposmod(_clock - _poke_from, LOOP) / HoloSpark.RIPPLE_TIME
+	if not _poke_by_hand:
+		return 2.0
+	return maxf(_clock - _poke_from, 0.0) / HoloSpark.RIPPLE_TIME
 
 
 func _panel_at(index: int) -> Vector2:
@@ -365,8 +517,20 @@ func _draw_one(at: Vector2, picked: float, level: int) -> void:
 	for each in _pending:
 		if int(each["level"]) == level:
 			_hologram(each)
-	if level != HoloSpark.Level.NONE:
-		_label("%s | 가운데가 곧 선택됨" % _names[front], at + Vector2(30.0, SCREEN.y - 26.0), 15, DIM)
+	# **확대가 거의 끝나면 뒤를 덮는다.** 늦게 켜는 이유는 그때쯤 다른 창이 이미 접혀
+	# 재료 노드를 놓았기 때문이다 — 재료는 자식이라 이 막보다 위에 그려진다.
+	var grown := smoothstep(0.78, 1.0, _into_u())
+	if grown > 0.002:
+		draw_rect(Rect2(at, SCREEN), Color(DESK, grown * 0.92))
+	if level == HoloSpark.Level.NONE:
+		return
+	# **화면이 무엇을 하는 중인지가 곧 휠의 뜻이다**(§20.17.1).
+	var says := "%s | 휠 = 다음 인물, 창을 누르면 그 칸으로" % _names[front]
+	if _inside and grown > 0.5:
+		says = (
+			"%s | 휠 = 줌 (x%.2f), 바깥을 누르면 나온다" % [RadialDeck.label(_into as RadialDeck.Slot), _mag]
+		)
+	_label(says, at + Vector2(30.0, SCREEN.y - 26.0), 15, DIM)
 
 
 ## **판 안 좌표다.** 판 오프셋은 그리는 자리에서만 더한다 — 상자에 넣어 두면
@@ -519,14 +683,19 @@ func _skin_for(level: int, slot: int) -> HoloPane:
 ## 창 **위**에 얹히는 것. 자식이라 창보다 나중에 그려진다 — 유리 위의 잉크다.
 func _draw_over() -> void:
 	var burst := _poke_u()
+	var grown := _into_u()
 	for each in _pending:
 		var pane: Rect2 = each["pane"]
 		var shape: PackedVector2Array = each["shape"]
 		var open: float = each["open"]
 		var level: int = each["level"]
 		var slot: RadialDeck.Slot = each["slot"]
+		var chosen := _inside and int(slot) == _into
+		# 확대가 반을 넘으면 **그 창 말고는 아무것도 안 남는다.** 뒤가 시끄러우면 확대가 아니다.
+		if grown > 0.5 and not chosen:
+			continue
 		# **선은 창이 접혀도 남는다.** 그래서 신호는 접힘과 상관없이 흐른다.
-		if level != HoloSpark.Level.NONE:
+		if level != HoloSpark.Level.NONE and not chosen:
 			_signals(each["line"], level, each["live"])
 		# **테두리는 펴진 창에만.** 접힌 표식까지 갈라지면 골고루가 되어 죽는다(§20.17.3).
 		if open >= 0.22:
@@ -536,28 +705,52 @@ func _draw_over() -> void:
 				_over.draw_polyline(_closed(shape), Color(RULE, 0.65), 1.2, true)
 			else:
 				_pane_edge(shape, open, level, flare)
-		if open < 0.72:
+		if open < 0.72 and not chosen:
 			continue
+		# **줌은 글자까지 커져야 줌이다.** 상자만 키우면 「넓힘」이다.
+		#
+		# 그리기 좌표를 전부 `pull` 로 나눠 놓고 그만큼 확대해 그린다. 그러면 잘라 내는
+		# 계산(`paged`)이 **나누기 전 좌표**에서 돌아 넘친 줄이 그대로 잘린다 —
+		# 틀은 제자리에 있고 안엣것만 당겨진다.
+		var pull := _mag if chosen else 1.0
+		if pull > 1.001:
+			_over.draw_set_transform(Vector2.ZERO, 0.0, Vector2(pull, pull))
+		# 제목은 창이 커지면 같이 커진다. **판이 커졌는데 글이 그대로면 확대가 아니라 늘림이다.**
+		var title := 14 + int(round(8.0 * grown)) if chosen else 14
+		var inset := 16.0 + 8.0 * (grown if chosen else 0.0)
 		_over.draw_string(
 			FONT,
-			pane.position + Vector2(16.0, 20.0),
+			(pane.position + Vector2(inset, inset + 4.0 + float(title) * 0.3)) / pull,
 			RadialDeck.label(slot),
 			HORIZONTAL_ALIGNMENT_LEFT,
 			-1,
-			14,
-			Color(INK, open)
+			title,
+			Color(INK, maxf(open, grown))
 		)
 		_over.draw_rect(
-			Rect2(pane.position.x + 16.0, pane.position.y + 26.0, 22.0, 2.0), Color(ACCENT, open)
+			Rect2(
+				Vector2(pane.position.x + inset, pane.position.y + inset + 18.0) / pull,
+				Vector2(22.0 + 12.0 * grown, 2.0) / pull
+			),
+			Color(ACCENT, maxf(open, grown))
 		)
 		if not RadialDeck.shows_text(ZOOM_ONE):
+			if pull > 1.001:
+				_over.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 			continue
-		_ink.only = [_section_for(slot)]
-		_ink.columns = 1
-		_ink.scroll = 0.0
-		_ink.paint(
-			_over, Rect2(pane.position + Vector2(16.0, 44.0), pane.size - Vector2(32.0, 56.0)), open
+		# **커지면 더 많이 든다.** 같은 칸만 크게 그리면 확대가 아니라 돋보기다.
+		_ink.only = [_section_for(slot), "인물"] if chosen and grown > 0.5 else [_section_for(slot)]
+		var box := Rect2(
+			(pane.position + Vector2(inset, inset + 30.0)) / pull,
+			(pane.size - Vector2(inset, inset + 44.0) * 2.0) / pull
 		)
+		# **420px 아래는 무조건 한 열이다**(§20.16.4). 창이 커지면서 그 선을 실제로 넘고,
+		# 더 당기면 자리가 좁아져 **다시 한 열로 돌아온다.**
+		_ink.columns = 2 if _ink.fits(box, 2) else 1
+		_ink.scroll = 0.0
+		_ink.paint(_over, box, maxf(open, grown))
+		if pull > 1.001:
+			_over.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if burst < 1.0:
 		_ripple(burst)
 
