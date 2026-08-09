@@ -257,7 +257,10 @@ func _build_lights() -> void:
 		light.energy = 1.1
 		# 노멀맵이 일하려면 빛이 면에서 떠 있어야 한다. 0 이면 노멀을 켜도 거의 안 보인다
 		# (Godot 문서: "increase the Height property").
-		light.height = 0.35
+		# **단위는 픽셀이다** (`0,1024,1,or_greater,suffix:px`). 여기 적혀 있던 `0.35` 는
+		# 0~1 로 착각한 값이라 사실상 0 이었다 — **비용 표(§26.3.2)는 그대로 유효하다**
+		# (height 는 채우는 화소 수를 안 바꾼다). 그림 판정만 영향을 받는다.
+		light.height = 128.0
 		light.visible = false
 		add_child(light)
 		_lights.append(light)

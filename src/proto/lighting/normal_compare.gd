@@ -96,7 +96,11 @@ func _ready() -> void:
 		light.texture_scale = 1.5
 		light.energy = 2.2
 		# 노멀이 일하려면 빛이 면에서 떠 있어야 한다 (Godot 문서의 Height).
-		light.height = 0.30
+		# **단위는 픽셀이다.** 엔진에 직접 물어보면 `0,1024,1,or_greater,suffix:px` 라고
+		# 답한다 — 여기 오래 적혀 있던 `0.30` 은 0~1 로 착각한 값이라 **사실상 0** 이었고,
+		# 그 상태에서는 빛이 판에 누워 화면을 보는 법선(`N ≈ [0,0,1]`)의 `N·L` 이 0 이 된다.
+		# §26.4 의 그림 판정이 전부 그 아래에서 났다 (`26-2d-lighting.md` §26.4.12).
+		light.height = 128.0
 		light.range_item_cull_mask = 1 << i
 		add_child(light)
 		_lights.append(light)

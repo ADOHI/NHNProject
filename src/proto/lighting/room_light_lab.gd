@@ -5,6 +5,12 @@ extends Node2D
 ##     godot --path . res://src/proto/lighting/room_light_lab.tscn -- shot     # 판마다 저장
 ##     godot --path . res://src/proto/lighting/room_light_lab.tscn -- ladder   # 어둠 단계
 ##     godot --path . res://src/proto/lighting/room_light_lab.tscn -- normal   # 판 노멀맵
+##     godot --path . res://src/proto/lighting/room_light_lab.tscn -- height   # 빛의 높이
+##
+## **`-- shot` 에는 노멀 축이 없다.** 어둠과 노멀을 같이 켠 화면을 찾는다면
+## `-- normal` 이다 — 그쪽이 어둠 0.55 · 대원 빛 켬으로 고정하고 노멀 넷을 돌린다.
+## 문서에 `-- shot` 이라고 적혀 있던 적이 있고, 그래서 「그 화면은 아직 못 봤다」가
+## 넉 달치 결론처럼 남아 있었다 (`26-2d-lighting.md` §26.4.11).
 ##
 ## `docs/design/26-2d-lighting.md` §26.6 의 두 항목을 한 장면이 같이 답한다 —
 ## 소품 알파에서 뽑은 가림 폴리곤이 **화면에서 그림자를 지우는가**, 그리고
@@ -100,10 +106,12 @@ var _shot := false
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	_shot = args.has("shot") or args.has("ladder") or args.has("normal")
+	_shot = args.has("shot") or args.has("ladder") or args.has("normal") or args.has("height")
 	_build_nodes()
 	_load_room(_ROOMS[_room])
-	if args.has("normal"):
+	if args.has("height"):
+		_run_height()
+	elif args.has("normal"):
 		_run_normal()
 	elif args.has("ladder"):
 		_run_ladder()
@@ -136,6 +144,15 @@ func _build_nodes() -> void:
 	_squad.texture = falloff
 	_squad.color = Color(0.78, 0.86, 1.0)
 	_squad.energy = 1.1
+	# **노멀이 일하려면 빛이 면에서 떠 있어야 한다.** `height` 가 0 이면 빛 벡터가
+	# 판과 같은 평면에 눕고, 화면을 보는 법선(`N ≈ [0,0,1]`)과의 `N·L` 이 0 이 된다 —
+	# **노멀을 켜는 순간 소품이 통째로 어두워진다.** 이 장면은 이 줄이 없어서
+	# 2026-08-09 16:25 의 `normal_*.png` 넷을 그 상태로 찍었고, 그 그림이
+	# §26.4.5 의 "얻는 것이 작다" 판정의 근거였다 (`height0/` 에 남겨 뒀다).
+	# **단위는 픽셀이다** (`0,1024,1,or_greater,suffix:px` — 엔진에 직접 물어봤다).
+	# 같은 레인의 `normal_compare.gd`(0.30)·`lighting_bench.gd`(0.35) 는 이 값을
+	# 0~1 로 착각하고 적은 것이라 **둘 다 사실상 0 이다.** 반지름의 절반쯤을 준다.
+	_squad.height = _SQUAD_REACH * 0.5
 	_squad.shadow_enabled = true
 	# 그림자가 잘리지 않게 넉넉히. 이 값이 작으면 먼 그림자가 뚝 끊긴다.
 	_squad.texture_scale = _SQUAD_REACH * 2.0 / 256.0
@@ -332,6 +349,9 @@ func _place_lamp() -> void:
 	_lamp.color = Color8(int(rgb[0]), int(rgb[1]), int(rgb[2]))
 	_lamp.energy = float(first.get("strength", 1.0)) * 0.5
 	_lamp.texture_scale = float(first.get("reach_px", 320.0)) * 2.4 / 256.0
+	# 대원 빛과 같은 이유로 띄운다 (`_build_nodes` 의 주석). 이 빛은 §26.2.1 이 금지한
+	# 선택을 **보여 주기 위해** 있는 것이라, 노멀이 안 먹으면 보여 주는 것도 틀린다.
+	_lamp.height = 0.30
 	_lamp.shadow_enabled = true
 
 
@@ -581,6 +601,38 @@ func _run_normal() -> void:
 		image.save_png("%s/normal_%d_%s.png" % [out, mode, _NORMAL_NAMES[mode]])
 		var stats := _luma_stats(image, _to_screen(_squad.position), 150)
 		print("| %s | **%.2f** | %.1f |" % [_NORMAL_NAMES[mode], stats.y * 255.0, stats.x * 255.0])
+	get_tree().quit()
+
+
+## **`Light2D.height` 를 훑는다.** 이 손잡이는 이 레인에서 세 번 잘못 적혔다 —
+## `normal_compare.gd` 는 0.30, `lighting_bench.gd` 는 0.35 을 넣었는데 **단위가
+## 픽셀이다** (엔진에 물어보면 `0,1024,1,or_greater,suffix:px` 라고 답한다).
+## 즉 셋 다 사실상 0 이었고, **노멀맵을 켠 판정이 전부 「판에 누운 빛」 아래에서 났다.**
+##
+## 그래서 값을 찍어 두는 대신 훑는다. 노멀은 `DSINE 바닥고침` 하나로 고정하고
+## height 만 바꾼다 — **한 판에 한 축만 바꾼다**(§26.3.2 의 규율).
+func _run_height() -> void:
+	var out := ProjectSettings.globalize_path(_SHOT_DIR)
+	DirAccess.make_dir_recursive_absolute(out)
+	_lamp_on = false
+	_squad_on = true
+	_occluders_on = true
+	_outlines_on = false
+	_dark_step = 3
+	_normal_mode = 3
+	_apply_normal()
+	_squad.position = _anchor_prop() + Vector2(60, -110)
+	print("| height(px) | 빛 안 밝기 표준편차 | 평균 |")
+	print("| --- | ---: | ---: |")
+	for height in [0.0, 20.0, 60.0, 160.0, 320.0, 640.0, 1024.0]:
+		_squad.height = height
+		await get_tree().process_frame
+		await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		var image := get_viewport().get_texture().get_image()
+		image.save_png("%s/height_%04d.png" % [out, int(height)])
+		var stats := _luma_stats(image, _to_screen(_squad.position), 150)
+		print("| %.0f | **%.2f** | %.1f |" % [height, stats.y * 255.0, stats.x * 255.0])
 	get_tree().quit()
 
 
