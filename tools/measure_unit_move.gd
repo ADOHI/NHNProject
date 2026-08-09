@@ -47,7 +47,8 @@ extends SceneTree
 ## | **전원끝** | **`이동`도 `양보`도 없어지기까지**의 시간. 이쪽이 "전원이 끝났다"이다 |
 ## | 90% | 열에 아홉이 멎기까지의 시간. 정지와의 차이가 뒤끝이다 |
 ## | 통과 | 전원이 벽 너머로 넘어가기까지의 시간(괄호는 못 넘은 인원) |
-## | 뒤진동 | 멎은 뒤 3 초 동안 움직인 총 거리 |
+## | 뒤진동 | 멎은 뒤 3 초 동안 움직인 총 거리. **밀려서 제 자리에 가까워진 것도 센다** |
+## | **이탈** | 멎은 뒤 3 초 동안 **제 자리에서 멀어진** 거리만. **이쪽이 해로운 몫이다** |
 ##
 ## **꺾임에서 옆걸음을 빼야 한다.** 비켜주기가 들어가면서 몸이 초당 140 픽셀로 옆으로
 ## 옮겨지는데, 위치만 보면 그 프레임의 진행 방향은 옆이고 지표는 그것을 "방향이 꺾였다"로
@@ -441,16 +442,24 @@ func _measure(
 			break
 
 	var resting := PackedVector2Array()
+	# **제 자리까지의 거리도 함께 적는다.** 뒤진동은 "움직였나"만 보는데, 밀려서 제 자리에
+	# 가까워진 것은 해가 아니다. 둘을 못 가르면 막을 것과 안 막을 것을 못 고른다.
+	var resting_gap := PackedFloat32Array()
 	for agent in field.agents:
 		resting.append(agent.position)
+		resting_gap.append(agent.position.distance_to(agent.goal))
 	for _i in int(_AFTER_SECONDS / _STEP):
 		field.step(_STEP)
 		elapsed += _STEP
 		if done_time < 0.0 and field.moving_count() == 0 and _waiting_count(field) == 0:
 			done_time = elapsed
 	var after := 0.0
+	# **제 자리에서 멀어진 몫만 따로 센다.** 가까워진 유닛은 0 으로 친다.
+	var drift := 0.0
 	for index in count:
 		after += resting[index].distance_to(field.agents[index].position)
+		var gap := field.agents[index].position.distance_to(field.agents[index].goal)
+		drift += maxf(gap - resting_gap[index], 0.0)
 
 	var wiggle := 0.0
 	for index in count:
@@ -517,6 +526,7 @@ func _measure(
 		"cross": cross_time,
 		"stranded": stranded,
 		"after": after,
+		"drift": drift,
 		"blocked": giving_up,
 		"waiting": waiting,
 		"peak": field.overlap_push_peak,
@@ -605,13 +615,13 @@ func _print_table(rows: Array[Dictionary]) -> void:
 	print(
 		(
 			"| 상황 | 걸음꺾임 | 방향반전 /초 | 옆걸음 px | 눌림 % | 역주행 % | 굽이 | 튕김 최대 "
-			+ "| 정지 | 전원끝 | 90% | 통과 | 뒤진동 | 막힘 | 양보 | 흐름장 | step 평균 | step 최악 |"
+			+ "| 정지 | 전원끝 | 90% | 통과 | 뒤진동 | 이탈 | 막힘 | 양보 | 흐름장 | step 평균 | step 최악 |"
 		)
 	)
 	print(
 		(
 			"| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- "
-			+ "| --- | --- | --- | --- | --- |"
+			+ "| --- | --- | --- | --- | --- | --- |"
 		)
 	)
 	for row in rows:
@@ -619,7 +629,7 @@ func _print_table(rows: Array[Dictionary]) -> void:
 			(
 				(
 					"| %s | %.0f | %.2f | %.0f | %.0f | %.1f | %.2f | %.1f px | %s | %s | %s | %s "
-					+ "| %.1f px | %d | %d | %.1f ms | %.3f ms | %.2f ms |"
+					+ "| %.1f px | %.1f px | %d | %d | %.1f ms | %.3f ms | %.2f ms |"
 				)
 				% [
 					row["label"],
@@ -635,6 +645,7 @@ func _print_table(rows: Array[Dictionary]) -> void:
 					_seconds(row["ninety"]),
 					_crossing(row["cross"], row["stranded"]),
 					row["after"],
+					row["drift"],
 					row["blocked"],
 					row["waiting"],
 					row["flow_ms"],

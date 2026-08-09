@@ -81,9 +81,12 @@ func _after_settle(label: String, field: ProtoUnitField, target: Vector2) -> voi
 
 	var resting := PackedVector2Array()
 	var was := PackedStringArray()
+	# **밀리기 전의 자리까지 거리.** 밀려서 가까워졌는지 멀어졌는지가 해로움을 가른다.
+	var was_gap := PackedFloat32Array()
 	for agent in field.agents:
 		resting.append(agent.position)
 		was.append(agent.state_name())
+		was_gap.append(agent.position.distance_to(agent.goal))
 
 	var tally := {}
 	for name in was:
@@ -97,8 +100,8 @@ func _after_settle(label: String, field: ProtoUnitField, target: Vector2) -> voi
 	var total := 0.0
 	var movers := 0
 	print("")
-	print("| 번호 | 멎을 때 | 3초 뒤 | 옮겨진 거리 | 자리까지 | 비켜 | 길대기 |")
-	print("| --- | --- | --- | --- | --- | --- | --- |")
+	print("| 번호 | 멎을 때 | 3초 뒤 | 옮겨진 거리 | 자리까지 (전) | 자리까지 (후) " + "| **멀어졌나** | 비켜 | 길대기 |")
+	print("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
 	for index in field.agents.size():
 		var agent := field.agents[index]
 		var shift := resting[index].distance_to(agent.position)
@@ -106,15 +109,18 @@ func _after_settle(label: String, field: ProtoUnitField, target: Vector2) -> voi
 		if shift <= 0.05:
 			continue
 		movers += 1
+		var gap := agent.position.distance_to(agent.goal)
 		print(
 			(
-				"| %d | %s | %s | %.2f px | %.0f px | %s | %s |"
+				"| %d | %s | %s | %.2f px | %.1f px | %.1f px | **%+.1f px** | %s | %s |"
 				% [
 					agent.id,
 					was[index],
 					agent.state_name(),
 					shift,
-					agent.position.distance_to(agent.goal),
+					was_gap[index],
+					gap,
+					gap - was_gap[index],
 					"O" if agent.is_yielding() else "-",
 					"O" if agent.waiting_for_path else "-",
 				]
