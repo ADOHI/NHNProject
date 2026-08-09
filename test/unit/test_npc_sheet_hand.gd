@@ -235,6 +235,38 @@ func test_long_press_opens_the_same_information() -> void:
 	assert_eq(view.note(), by_right, "길게 눌러도 우클릭과 같은 것이 나와야 한다")
 
 
+# ------------------------------------------------- 캡처 대본을 검사가 읽는다
+
+
+## 캡처 도구를 **상수째로 읽는다.** 대본을 여기에 베껴 두면 한쪽만 고쳐진다.
+func _hand_script() -> Array:
+	var capture: GDScript = load("res://tools/capture_npc_sheet.gd")
+	return capture.get_script_constant_map()["_HAND"]
+
+
+func test_the_capture_script_aims_at_real_rows() -> void:
+	# **대본이 좌표를 안 박는 대신 칸 이름으로 겨눈다.** 칸 이름이 바뀌면 겨눌 데가
+	# 없어지는데, 그래도 그림은 나온다 — 그래서 창 없이 여기서 먼저 깨져야 한다.
+	assert_true(await _ready_screen(), "인구가 안 만들어졌다")
+	var linked := _first_linked_row()
+	assert_ne(linked, Vector2.ZERO, "가족이 있는 사람을 못 찾았다")
+
+	for step in _hand_script():
+		var title := str(step[2])
+		if title.is_empty():
+			continue
+		var field := int(step[3])
+		var where := _screen.linked_point() if field < 0 else _screen.point_of(title, field)
+		assert_ne(where, NpcSheetScreen.NOWHERE, "%s 가 겨눌 줄을 못 찾았다" % str(step[0]))
+
+
+func test_the_capture_script_names_only_real_gestures() -> void:
+	# 손짓 이름을 오타 내면 `match` 가 조용히 아무것도 안 하고 **같은 그림이 다섯 장** 나온다.
+	var known := ["", "hover", "tap", "inspect", "wheel"]
+	for step in _hand_script():
+		assert_true(known.has(str(step[1])), "%s 가 모르는 손짓이다" % str(step[1]))
+
+
 func test_dragging_cancels_the_long_press() -> void:
 	# 안 그러면 **끌기가 전부 정보 확인이 된다.**
 	assert_true(await _ready_screen(), "인구가 안 만들어졌다")

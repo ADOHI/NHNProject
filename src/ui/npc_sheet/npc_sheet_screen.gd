@@ -68,6 +68,10 @@ const ACTIONS := [
 	["metrics", "계측", KEY_F1],
 ]
 
+## 자리를 못 찾았을 때. `Vector2.ZERO` 를 쓰면 **화면 왼쪽 위 모서리**와 구분이 안 되고,
+## 대본이 아무 데나 누르고도 통과한다.
+const NOWHERE := Vector2(-1.0, -1.0)
+
 ## 길게 누르기가 정보 확인이 되는 시간(초). **터치에는 오른쪽 버튼이 없다** —
 ## §4.2 가 「우클릭 · 롱프레스」를 한 줄에 적은 이유다.
 const LONG_PRESS := 0.5
@@ -219,6 +223,32 @@ func is_ready() -> bool:
 ## 지금 인구. 도구가 찍을 인물을 고를 때 쓴다.
 func registry() -> PersonRegistry:
 	return _registry
+
+
+## 어느 칸 어느 줄의 한복판. 없으면 `NOWHERE`.
+##
+## **캡처 대본이 자리를 좌표로 박지 않게 한다.** 박아 두면 배치가 한 번 바뀔 때
+## 대본이 엉뚱한 데를 누르고, 그림은 여전히 나오므로 아무도 모른다 —
+## §20.22 의 병이 좌표로 돌아온 꼴이다.
+func point_of(section_title: String, field: int) -> Vector2:
+	var placed := _view.layout()
+	for i in placed.rows.size():
+		if _view.sections()[placed.row_section[i]].title != section_title:
+			continue
+		if placed.row_field[i] != field:
+			continue
+		return placed.rows[i].get_center() + _view.position
+	return NOWHERE
+
+
+## 눌러서 갈 곳이 있는 첫 줄의 한복판. 없으면 `NOWHERE`.
+func linked_point() -> Vector2:
+	var placed := _view.layout()
+	for i in placed.rows.size():
+		var field := _view.sections()[placed.row_section[i]].fields[placed.row_field[i]]
+		if field.has_link():
+			return placed.rows[i].get_center() + _view.position
+	return NOWHERE
 
 
 func _gui_input(event: InputEvent) -> void:
