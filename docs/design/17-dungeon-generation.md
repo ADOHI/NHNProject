@@ -2764,8 +2764,9 @@ godot --headless --path . -s res://tools/survey_agility_reach.gd
 
 | 박아 둔 곳 | 무엇 |
 | --- | --- |
-| `SampleDungeons.SQUAD_AGILITY := 2` | 편성이 붙기 전까지 쓰는 **자리값** |
-| `dungeon_metrics.measure()` 의 `reach_pct` | `costs <= 2` 가 **하드코딩**이다 |
+| `SampleDungeons.SQUAD_AGILITY := 2` | 편성이 붙기 전까지 쓰는 **자리값**. 셋 중 이것만 남았다 |
+| ~~`dungeon_metrics.measure()` 의 `reach_pct`~~ | **풀렸다 (2026-08-10).** `measure(board, agility)` 의 인자다. 기본값이 위 자리값을 가리키므로 숫자는 한 곳에만 있고, 결과 사전이 `reach_agility` 로 **누구 기준인지 같이 낸다** |
+| ~~`survey_proto_dungeon._SQUAD_AGILITY := 2`~~ | **풀렸다 (2026-08-10).** 위 자리값을 가리킨다. 훑다가 나온 넷째 자리였다 |
 | §17.12.6 「민첩 2 로 열리는 방 70~80%」 | **민첩 2 한 값만** 본 목표 |
 
 **셋 다 「민첩 2 짜리 스쿼드 하나」의 값이다.** 편성으로 민첩이 1 이 될 수 있다면
@@ -2783,8 +2784,10 @@ godot --headless --path . -s res://tools/survey_agility_reach.gd
 > - **성립 안 한다면** — 민첩 평균에 **하한**이 있어야 한다. 그러면 그것을
 >   `SampleDungeons.SQUAD_AGILITY` 가 아니라 **편성 규칙**이 정해야 한다
 >
-> **어느 쪽이든 `dungeon_metrics.reach_pct` 의 하드코딩 2 는 인자로 빼야 한다** —
-> 지금은 어느 스쿼드를 재는지가 자에 박혀 있다.
+> ~~**어느 쪽이든 `dungeon_metrics.reach_pct` 의 하드코딩 2 는 인자로 빼야 한다**~~
+> **뺐다 (2026-08-10).** 자는 이제 **누구를 재는지 묻고, 잰 값 옆에 그것을 적어 낸다.**
+> **답이 필요한 것은 여전히 위 두 갈래다** — 자를 고쳐도 「민첩 1 짜리 스쿼드가
+> 성립하는가」는 기획 판단이라 코드로 못 닫는다.
 
 ---
 
