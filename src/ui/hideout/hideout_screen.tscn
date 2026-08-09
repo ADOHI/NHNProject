@@ -1,0 +1,63 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://src/ui/hideout/hideout_screen.gd" id="1_root"]
+[ext_resource type="Script" path="res://src/ui/hideout/hideout_floor.gd" id="2_floor"]
+[ext_resource type="Script" path="res://src/ui/hideout/hideout_building_view.gd" id="3_building"]
+[ext_resource type="Script" path="res://src/ui/hideout/hideout_cursor.gd" id="4_cursor"]
+
+[node name="HideoutScreen" type="Node2D"]
+script = ExtResource("1_root")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -4096.0
+offset_top = -4096.0
+offset_right = 4096.0
+offset_bottom = 4096.0
+mouse_filter = 2
+color = Color(0.07, 0.08, 0.11, 1)
+
+[node name="Camera" type="Camera2D" parent="."]
+unique_name_in_owner = true
+
+[node name="FloorView" type="Node2D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("2_floor")
+
+[node name="BuildingView" type="Node2D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("3_building")
+
+[node name="CursorView" type="Node2D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("4_cursor")
+
+[node name="Ui" type="CanvasLayer" parent="."]
+
+[node name="StatusLabel" type="Label" parent="Ui"]
+unique_name_in_owner = true
+offset_left = 12.0
+offset_top = 8.0
+offset_right = 900.0
+offset_bottom = 60.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.88, 0.91, 0.96, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.05, 0.07, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 14
+
+[node name="HelpLabel" type="Label" parent="Ui"]
+unique_name_in_owner = true
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = -140.0
+offset_right = 720.0
+offset_bottom = -10.0
+grow_vertical = 0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.62, 0.66, 0.74, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.05, 0.07, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 13
