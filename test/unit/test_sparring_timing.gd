@@ -150,3 +150,34 @@ func test_strike_times_match_the_animation_lane() -> void:
 	var tuning := _tuning()
 	assert_almost_eq(tuning.strike_seconds_for(_sized(1)), 0.355, 0.005)
 	assert_almost_eq(tuning.strike_seconds_for(_sized(4)), 1.018, 0.005)
+
+
+# ---------------------------------------------------------------- 대기 키
+
+
+func test_holding_pushes_that_ally_back_and_nobody_else() -> void:
+	# **§28.4 의 대기 키를 아주 거칠게 흉내낸 것** (§28.20.59).
+	# 붙든 대원만 늦고 나머지는 제 박자로 간다.
+	var tuning := _tuning()
+	var chains: Array = [_items(1), _items(1)]
+	var loose := BoutScript.from_squad(chains, tuning)
+	var held := BoutScript.from_squad(chains, tuning)
+	loose.start()
+	held.start()
+	held.hold(1, 10.0)
+	for _frame in 200:
+		loose.tick(1.0 / 120.0)
+		held.tick(1.0 / 120.0)
+	assert_eq(held.ally_landed(0), loose.ally_landed(0), "안 붙든 대원은 그대로다")
+	assert_eq(held.ally_landed(1), 0, "붙든 대원은 아직 안 쳤다")
+
+
+func test_starting_again_lets_everyone_go() -> void:
+	# **`start()` 가 붙든 것을 전부 푼다.** 안 그러면 판을 다시 쏠 때마다 늦음이 쌓인다.
+	var bout := BoutScript.from_squad([_items(1)], _tuning())
+	bout.start()
+	bout.hold(0, 10.0)
+	bout.start()
+	for _frame in 200:
+		bout.tick(1.0 / 120.0)
+	assert_true(bout.ally_landed(0) > 0, "다시 쏘면 붙든 것이 풀린다")

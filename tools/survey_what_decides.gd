@@ -41,6 +41,16 @@ const _HARD := 56
 ## §28.20.56 이 계산한 문턱. 이 밑이면 1칸 무기가 앞 켜에 못 닿는다.
 const _PICKY_SCALE := 0.92
 
+## **대원이 제각기 붙는 폭 (초).**
+##
+## 처음 이 도구는 **대원 넷이 t=0 에 동시에** 치는 판에서 쟀다. §28.20.59 가 그 판이
+## **걸침이 통째로 겹치는 최악**임을 밝혔다 — 어긋내면 같은 판이 110초에서 68초가 된다.
+## 그리고 이동 레인 실측(§33)에서 대원은 **초 단위로 벌어져** 붙는다.
+##
+## **0.15 ~ 2.4 초 사이는 거의 평평하다**(68~73초). 그래서 어느 값이든 되는데,
+## 그러면 **0 이 아닌 것**을 고른다 — 0 만 특별히 나쁘기 때문이다.
+const _STAGGER := 0.3
+
 ## 칸 수별로 한 번만 짓는 체인.
 var _chains: Dictionary = {}
 
@@ -53,7 +63,8 @@ func _initialize() -> void:
 			% [_BASE_SQUAD, _BASE_SCALE, _BASE_CELLS]
 		)
 	)
-	print("  다가옴 켬 · 쓰러지면 빠짐 · 전진 안 남음. 판정 창 %.0f초." % _MAX_SECONDS)
+	print("  다가옴 켬 · 쓰러지면 빠짐 · 전진 안 남음 · 대원이 %.2f초씩 벌어져 붙는다." % _STAGGER)
+	print("  판정 창 %.0f초." % _MAX_SECONDS)
 	print("  **한 축만 움직이고 나머지는 기준판 그대로다.**")
 	print("")
 	_report_axes()
@@ -378,6 +389,7 @@ func _fight(shape: Callable, enemies: int) -> Array:
 		"squad": _BASE_SQUAD,
 		"scale": _BASE_SCALE,
 		"scales": PackedFloat32Array(),
+		"stagger": _STAGGER,
 	}
 	shape.call(plan)
 
@@ -404,6 +416,8 @@ func _fight(shape: Callable, enemies: int) -> Array:
 		chains.append(_uniform_chain(int(plan["cells"])))
 	var bout := SparringBout.from_squad(chains, tuning, field, _sized(2), scales)
 	bout.start()
+	for index in scales.size():
+		bout.hold(index, float(index) * float(plan["stagger"]))
 
 	var ours := PackedFloat32Array()
 	for _index in scales.size():
