@@ -139,12 +139,66 @@ func test_ring_unrolls_without_a_jump() -> void:
 		last = here
 
 
+## **가운데가 곧 선택됨이다.** 고른 번호를 주면 그 인물이 정확히 가운데 앞에 서야 한다.
+func test_the_picked_one_stands_dead_centre() -> void:
+	for total in [3, 6, 8]:
+		for who in total:
+			var here := RadialDeck.spot(who, total, float(who), Vector2(640.0, 400.0), 300.0)
+			assert_almost_eq(here.x, 640.0, 0.01, "%d 중 %d — 가로 한복판이 아니다" % [total, who])
+			assert_gt(here.y, 400.0, "고른 인물은 화면 아래쪽, 즉 앞에 선다")
+			assert_almost_eq(
+				RadialDeck.nearness(who, total, float(who)), 1.0, 0.001, "고른 인물이 맨 앞이다"
+			)
+
+
+## **인원수는 시험값이다.** 셋이든 여덟이든 같은 식이 돌아야 한다.
+func test_any_headcount_makes_a_ring() -> void:
+	for total in [3, 4, 5, 6, 8, 11]:
+		var seen := {}
+		for i in total:
+			var here := RadialDeck.spot(i, total, 0.0, Vector2(640.0, 400.0), 300.0)
+			seen["%d:%d" % [int(here.x), int(here.y)]] = true
+		assert_eq(seen.size(), total, "%d 명 — 두 사람이 같은 자리에 겹친다" % total)
+
+
+## **한 바퀴가 이어진다.** 끝에서 처음으로 넘어가는 자리를 따로 만들지 않았다.
+func test_the_ring_wraps_around() -> void:
+	var start := RadialDeck.spot(0, 6, 0.0, Vector2(640.0, 400.0), 300.0)
+	var round_trip := RadialDeck.spot(0, 6, 6.0, Vector2(640.0, 400.0), 300.0)
+	assert_lt(start.distance_to(round_trip), 0.01, "여섯 칸을 돌면 제자리다")
+	assert_eq(RadialDeck.front_index(6, 5.6), 0, "5 다음이 0 이다")
+	assert_eq(RadialDeck.front_index(6, -0.4), 0, "거꾸로 돌아도 이어진다")
+
+
 func test_the_front_figure_is_the_nearest_one() -> void:
-	for step in 12:
-		var spin := TAU * float(step) / 12.0
-		var front := RadialDeck.front_index(6, spin)
+	for step in 24:
+		var picked := float(step) / 24.0 * 6.0
+		var front := RadialDeck.front_index(6, picked)
 		for i in 6:
-			assert_lte(RadialDeck.nearness(i, 6, spin), RadialDeck.nearness(front, 6, spin))
+			assert_lte(
+				RadialDeck.nearness(i, 6, picked), RadialDeck.nearness(front, 6, picked) + 0.001
+			)
+
+
+## **가운데만 크다.** 옆 사람이 비슷하게 크면 누가 골렸는지 안 읽힌다.
+func test_only_the_centre_is_big() -> void:
+	var front := RadialDeck.figure_scale(2, 6, 2.0, 1.0)
+	for i in 6:
+		if i == 2:
+			continue
+		assert_lt(
+			RadialDeck.figure_scale(i, 6, 2.0, 1.0) * 1.25, front, "%d 번이 가운데와 너무 비슷하게 크다" % i
+		)
+
+
+## **가운데가 바뀌는 순간이 접힘과 펴짐의 경계다.** 그래서 창이 옮겨 붙는 것을 볼 일이 없다.
+func test_windows_are_folded_exactly_when_the_centre_changes() -> void:
+	assert_almost_eq(RadialDeck.settled(2.0), 1.0, 0.001, "멈춰 있으면 다 펴진다")
+	assert_almost_eq(RadialDeck.settled(2.5), 0.0, 0.001, "반 칸에서 완전히 접힌다")
+	assert_lt(RadialDeck.settled(2.25), 0.6, "도는 중에는 접혀 있다")
+	# 반 칸을 지나면 주인이 바뀐다 — 그때 창은 이미 접혀 있다.
+	assert_eq(RadialDeck.front_index(6, 2.4), 2)
+	assert_eq(RadialDeck.front_index(6, 2.6), 3)
 
 
 func test_slot_names_are_printable() -> void:

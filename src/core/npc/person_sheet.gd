@@ -112,6 +112,14 @@ static func _traits(registry: PersonRegistry, person: int) -> SheetSection:
 	for axis in NpcAxis.count():
 		var kind := axis as NpcAxis.Kind
 		var value := traits[axis]
+		# **극이 아닌 축에는 막대를 안 단다.** 생성기가 극이 아닌 축을 0~59 균등으로
+		# 뽑으므로(TraitDistribution) **45 와 12 는 같은 주사위의 다른 눈**이다.
+		# 45 에 막대를 그리면 굴림값을 신념으로 넘기게 된다 — 전체 축 칸의 29.1%가
+		# 그 구간이다. 경계를 POLE_MIN(60)에 맞추면 **딱지에 이름이 있는 축과 막대가
+		# 차는 축이 정확히 같은 집합**이 된다.
+		if not TraitDistribution.is_pole(value):
+			section.add(SheetField.filled(NpcAxis.label(kind), _axis_value(kind, value)))
+			continue
 		section.add(
 			SheetField.gauge(
 				NpcAxis.label(kind),

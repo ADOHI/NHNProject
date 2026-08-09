@@ -69,13 +69,32 @@ func test_traits_show_the_tag_and_every_axis() -> void:
 		assert_true(field.is_filled(), field.label)
 
 
-func test_axis_bars_are_signed_and_the_tag_has_none() -> void:
-	# 성향 축은 가운데가 0 이고 좌우로 자란다 (§24.17.5).
-	var traits := PersonSheet.section_of(_sheet(), "성향")
-	assert_false(traits.fields[0].has_bar(), "딱지는 막대가 아니다")
-	for slot in range(1, traits.fields.size()):
-		assert_true(traits.fields[slot].has_bar(), traits.fields[slot].label)
-		assert_true(traits.fields[slot].is_signed_bar, traits.fields[slot].label)
+## **막대가 차는 축과 딱지에 이름이 오르는 축이 정확히 같은 집합이어야 한다.**
+##
+## 생성기가 극이 아닌 축을 0~59 균등으로 뽑으므로 45 와 12 는 같은 주사위의 다른
+## 눈이다. 45 에 막대를 그리면 굴림값을 신념으로 넘기게 된다 — 전체 축 칸의 29.1%가
+## 그 구간이었다. 경계를 POLE_MIN 에 맞추면 두 집합이 겹친다.
+func test_only_pole_axes_get_a_bar() -> void:
+	var registry := _world()
+	for person in [0, 1, 2, 3, 4, 5, 6, 7]:
+		var traits := PersonSheet.section_of(PersonSheet.build(registry, person), "성향")
+		assert_false(traits.fields[0].has_bar(), "딱지는 막대가 아니다")
+		var values := registry.traits_of(person)
+		for axis in NpcAxis.count():
+			var field := traits.fields[axis + 1]
+			assert_eq(
+				field.has_bar(),
+				TraitDistribution.is_pole(values[axis]),
+				"%s 값 %d — 막대와 극이 갈라지면 안 된다" % [field.label, values[axis]]
+			)
+			if field.has_bar():
+				assert_true(field.is_signed_bar, field.label)
+	# **-1.0 은 정당한 축값이다.** 「없음」을 값으로 표시하면 축값 -100 인 사람의
+	# 막대가 조용히 사라진다 (인구 3000 중 98 명).
+	var full := SheetField.gauge("무모/신중", "-100 신중", -1.0)
+	assert_true(full.has_bar(), "-1.0 이 「막대 없음」과 같은 값이면 안 된다")
+	assert_almost_eq(full.bar, -1.0, 0.001, "값은 그대로 남는다")
+	assert_false(SheetField.filled("딱지", "은둔").has_bar(), "막대를 안 단 줄은 없다고 나온다")
 
 
 func test_fame_bar_is_unsigned() -> void:

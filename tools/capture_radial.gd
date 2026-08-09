@@ -1,9 +1,9 @@
 extends SceneTree
 ## 원형 인물 배치와 홀로그램 창을 뽑는다.
 ##
-##     godot --path . -s res://tools/capture_radial.gd -- .renders/35-radial still
+##     godot --path . -s res://tools/capture_radial.gd -- .renders/36-radial-center still
 ##     godot --path . -s res://tools/capture_radial.gd -- .renders/rad film
-##     python tools/make_gif.py .renders/rad .renders/35-radial.gif 0.33
+##     python tools/make_gif.py .renders/rad .renders/36-radial-center.gif 0.33
 ##
 ## **접힘과 펴짐은 정지로 판정이 아예 안 된다.** GIF 가 판정 매체다.
 

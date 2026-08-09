@@ -236,7 +236,7 @@ func _draw_field(field: SheetField, at: Vector2, wide: float, shown: float) -> f
 
 	_write(Vector2(at.x, at.y), field.label, wide * 0.5, LINE_SIZE, Color(FAINT_INK, shown))
 	var value_x := at.x + wide * 0.42
-	if field.bar >= 0.0:
+	if field.has_bar():
 		# 성향 6 축. **막대가 나란히 서야** 축끼리 비교가 된다.
 		var mid := at.y - 4.0
 		draw_rect(Rect2(value_x, mid, BAR_WIDTH, 5.0), Color(RULE_SOFT, 0.45 * shown))

@@ -221,15 +221,21 @@ func _field(
 	var label_wide := wide * LABEL_SHARE
 	_put(on, field.label, at, LINE_SIZE, Color(FAINT_INK, alpha), into)
 	var value_x := at.x + label_wide
-	if field.bar < 0.0:
+	if not field.has_bar():
 		return _flow(on, text, Vector2(value_x, at.y), wide - label_wide, Color(tone, alpha), into)
 
 	if on != null and _in_view(at.y - 13.0, 17.0):
 		on.draw_rect(Rect2(value_x, at.y - 9.0, BAR_WIDTH, 5.0), Color(RULE_SOFT, 0.45 * alpha))
-		on.draw_rect(
-			Rect2(value_x, at.y - 9.0, BAR_WIDTH * clampf(field.bar, 0.0, 1.0), 5.0),
-			Color(ACCENT, alpha)
-		)
+		# **부호 있는 막대는 가운데에서 좌우로 자란다.** 0 으로 자르면 축값이 음수인
+		# 사람의 막대가 통째로 빈 칸이 된다 — 그게 정확히 `NO_BAR` 사고의 짝이다.
+		var span := BAR_WIDTH * (0.5 if field.is_signed_bar else 1.0) * absf(field.bar)
+		var from_x := value_x
+		if field.is_signed_bar:
+			from_x = value_x + BAR_WIDTH * 0.5 - (span if field.bar < 0.0 else 0.0)
+			on.draw_rect(
+				Rect2(value_x + BAR_WIDTH * 0.5, at.y - 11.0, 1.0, 9.0), Color(RULE, 0.6 * alpha)
+			)
+		on.draw_rect(Rect2(from_x, at.y - 9.0, span, 5.0), Color(ACCENT, alpha))
 	# **막대 뒤에 값 글자가 붙는 줄이 앞 판을 터뜨렸다**(§20.13). 자리가 모자라면
 	# 자르지 않고 다음 줄로 내린다 — 잘린 글자는 넘친 것보다 나쁘다.
 	var rest := wide - label_wide - BAR_WIDTH - 6.0

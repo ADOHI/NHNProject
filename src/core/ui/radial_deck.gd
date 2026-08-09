@@ -104,24 +104,61 @@ static func on_side(which: int) -> Array[Slot]:
 	return out
 
 
-## 인물 `index` 가 원형에서 어디 서 있나. `spin` 은 라디안이다.
-static func spot(index: int, total: int, spin: float, center: Vector2, radius: float) -> Vector2:
-	var angle := TAU * float(index) / float(maxi(total, 1)) + spin
+## 인물 `index` 가 원형에서 어디 서 있나.
+##
+## `picked` 는 **고른 인물의 번호**다. 정수면 그 인물이 정확히 가운데 앞에 서고,
+## 2.5 처럼 사이값이면 도는 중이다.
+##
+## > **가운데가 곧 선택됨이다.** 별도 선택 표시가 필요 없다 — **자리가 상태다.**
+##
+## 각도에서 `picked` 를 빼고 4분의 1바퀴를 더한다. 그러면 `index == picked` 일 때
+## sin 이 1 이 되어 **화면 아래 한복판**에 선다. 각도가 주기함수라 **한 바퀴가 저절로
+## 이어진다** — 끝에서 처음으로 넘어가는 자리를 따로 만들 필요가 없고, 인원이
+## 셋이든 여덟이든 같은 식이다.
+static func spot(index: int, total: int, picked: float, center: Vector2, radius: float) -> Vector2:
+	var angle := _angle(index, total, picked)
 	return center + Vector2(cos(angle) * radius, sin(angle) * radius * TILT)
 
 
-## 앞에 있는 정도 0..1. 1 이 맨 앞이다. 크기와 밝기가 이걸 읽는다.
-static func nearness(index: int, total: int, spin: float) -> float:
-	var angle := TAU * float(index) / float(maxi(total, 1)) + spin
-	return (sin(angle) + 1.0) * 0.5
+## 앞에 있는 정도 0..1. **1 은 고른 인물 하나뿐이다.** 크기와 밝기가 이걸 읽는다.
+static func nearness(index: int, total: int, picked: float) -> float:
+	return (sin(_angle(index, total, picked)) + 1.0) * 0.5
 
 
-static func front_index(total: int, spin: float) -> int:
-	var best := 0
-	for i in total:
-		if nearness(i, total, spin) > nearness(best, total, spin):
-			best = i
-	return best
+## 지금 가운데 있는 인물. 도는 중이면 **더 가까운 쪽**이고, 그 바뀌는 순간이
+## 창이 접혔다 펴지는 경계다.
+static func front_index(total: int, picked: float) -> int:
+	return int(posmod(int(round(picked)), maxi(total, 1)))
+
+
+## 한 칸 안에서 얼마나 왔나 0..1. 0 이나 1 에 가까우면 멈춘 것이다.
+static func within_step(picked: float) -> float:
+	return fposmod(picked, 1.0)
+
+
+## 창이 붙어 있어도 되는 정도 0..1. **도는 동안 0 이다.**
+##
+## 가운데가 바뀌는 순간(반 칸)에서 0 이고 멈춘 자리에서 1 이다. 그래서 **창이 옮겨
+## 붙는 순간에는 창이 접혀 있다** — 옮겨 붙는 것을 볼 일이 아예 없어진다.
+## 회전과 접힘이 따로 노는 것이 아니라 **한 동작의 두 면이다.**
+static func settled(picked: float) -> float:
+	var within := within_step(picked)
+	return 1.0 - minf(within, 1.0 - within) * 2.0
+
+
+static func _angle(index: int, total: int, picked: float) -> float:
+	return TAU * (float(index) - picked) / float(maxi(total, 1)) + PI * 0.5
+
+
+## 인물이 서는 배율. **가운데만 크고 옆으로 갈수록 작다.**
+##
+## 밝기와 함께 이 값이 「누가 골렸는가」를 말한다. 표지를 따로 얹지 않는다.
+static func figure_scale(index: int, total: int, picked: float, zoom: float) -> float:
+	if zoom < TO_ONE:
+		return 0.62
+	var near := nearness(index, total, picked)
+	# 뒤쪽이 너무 크면 가운데가 안 도드라진다. 세제곱으로 눌러 앞만 크게 남긴다.
+	return 0.30 + 0.44 * (near * near * near)
 
 
 ## 여섯을 나란히 세우는 자리. **원형은 비교에 불리하다** — 뒤쪽이 안 보인다.
@@ -132,8 +169,8 @@ static func laid_out(index: int, total: int, screen: Vector2) -> Vector2:
 
 
 ## 배율에 따라 원형과 펼침 사이를 오간다. **연속이다** — 끊기면 「같은 공간」이 아니다.
-static func stand(index: int, total: int, spin: float, zoom: float, screen: Vector2) -> Vector2:
-	var ring := spot(index, total, spin, screen * Vector2(0.5, 0.62), screen.x * 0.235)
+static func stand(index: int, total: int, picked: float, zoom: float, screen: Vector2) -> Vector2:
+	var ring := spot(index, total, picked, screen * Vector2(0.5, 0.60), screen.x * 0.245)
 	var flat := laid_out(index, total, screen)
 	return flat.lerp(ring, clampf(zoom / TO_ONE, 0.0, 1.0))
 
