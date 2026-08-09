@@ -46,8 +46,10 @@ func _ready() -> void:
 	# 한 턴이 넘어갈 때마다 새 판을 찍는다. 전환 자체가 이 게임의 볼거리다.
 	_board.player_acted.connect(_print_edition)
 	_board.struck.connect(_plate.strike_at)
+	_board.struck.connect(_sound_on_strike)
 	for button in [_generate_button, _debug_button]:
 		(button as Button).pressed.connect(_strike_from.bind(button))
+		(button as Button).pressed.connect(_sound_on_press)
 	_size_slider.value_changed.connect(func(_value: float) -> void: _update_size_label())
 
 	_update_size_label()
@@ -171,3 +173,18 @@ func _build_status_text() -> String:
 			_seed,
 		]
 	)
+
+
+## 판이 울릴 때 소리를 낸다.
+##
+## **소리 층을 부르는 것은 화면이지 로직이 아니다.** `DungeonBoard` 도 `DungeonRun` 도
+## `Sfx` 를 모른다 — 순수 로직이 오토로드에 의존하면 헤드리스 테스트가 깨진다
+## (docs/conventions.md §3.1). 신호를 듣는 쪽에서 한 줄로 잇는다.
+##
+## 붙이는 자리 목록은 docs/design/29-sound.md §29.3.11 에 있다.
+func _sound_on_strike(_at: Vector2) -> void:
+	Sfx.play(SfxEvent.Kind.BOARD_STRUCK)
+
+
+func _sound_on_press() -> void:
+	Sfx.play(SfxEvent.Kind.UI_PRESS)

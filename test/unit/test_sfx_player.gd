@@ -48,7 +48,7 @@ func test_silencing_blocks_everything() -> void:
 func test_the_stagger_is_short_enough_to_be_inaudible() -> void:
 	# 겹친 소리를 앞에서부터 건너뛰어 위상을 어긋내는데, 너무 많이 건너뛰면
 	# 어택이 잘려 타격이 흐려진다. 어택 보존 구간(25 ms)보다 훨씬 짧아야 한다.
-	var total := SfxPlayer.STAGGER_SECONDS * (SfxPlayer.MAX_SAME_EVENT - 1)
+	var total := SfxSequencer.STAGGER_SECONDS * (SfxSequencer.MAX_SAME_EVENT - 1)
 	assert_lt(total, SfxVoice.KEEP_ATTACK_SECONDS, "어긋내기가 어택을 먹고 있다")
 
 
@@ -59,13 +59,16 @@ func test_variation_rotates_even_when_other_sounds_interleave() -> void:
 	# 조용할 때는 멀쩡하고 시끄러울 때만 변주가 죽는다.
 	var variations := 3
 	for interleave in [0, 1, 2, 3, 5]:
-		var player := SfxPlayer.new()
-		add_child_autofree(player)
+		var sequencer := SfxSequencer.new()
 		var picked: Array[int] = []
+		var now := 0.0
 		for step in 12:
-			picked.append(player._next_pick(SfxEvent.Kind.FOOT_WALK) % variations)
+			now += 0.30
+			picked.append(
+				int(sequencer.request(SfxEvent.Kind.FOOT_WALK, now)["variation"]) % variations
+			)
 			for other in interleave:
-				player._next_pick(SfxEvent.Kind.UI_PRESS)
+				sequencer.request(SfxEvent.Kind.UI_PRESS, now)
 		var seen := {}
 		for index in picked.size():
 			seen[picked[index]] = true
@@ -78,10 +81,33 @@ func test_variation_rotates_even_when_other_sounds_interleave() -> void:
 
 func test_each_event_counts_separately() -> void:
 	# 계수기가 사건마다여야 보폭이 1이 된다.
-	var first := _player._next_pick(SfxEvent.Kind.HIT_LANDED)
-	_player._next_pick(SfxEvent.Kind.UI_PRESS)
-	_player._next_pick(SfxEvent.Kind.FOOT_WALK)
-	assert_eq(_player._next_pick(SfxEvent.Kind.HIT_LANDED), first + 1, "다른 사건이 번호를 밀었다")
+	var sequencer := SfxSequencer.new()
+	var first := int(sequencer.request(SfxEvent.Kind.HIT_LANDED, 0.0)["variation"])
+	sequencer.request(SfxEvent.Kind.UI_PRESS, 0.1)
+	sequencer.request(SfxEvent.Kind.FOOT_WALK, 0.2)
+	assert_eq(
+		int(sequencer.request(SfxEvent.Kind.HIT_LANDED, 0.3)["variation"]),
+		first + 1,
+		"다른 사건이 번호를 밀었다"
+	)
+
+
+func test_the_sequencer_caps_a_burst_of_the_same_event() -> void:
+	# 규칙이 순수 클래스에 있으므로 노드 없이도 검사된다.
+	var sequencer := SfxSequencer.new()
+	var allowed := 0
+	for attempt in 8:
+		if sequencer.request(SfxEvent.Kind.HIT_REACTION, 0.0)["allowed"]:
+			allowed += 1
+	assert_eq(allowed, SfxSequencer.MAX_SAME_EVENT, "같은 순간에 상한을 넘어 났다")
+
+
+func test_the_cap_releases_after_the_window() -> void:
+	var sequencer := SfxSequencer.new()
+	for attempt in SfxSequencer.MAX_SAME_EVENT:
+		sequencer.request(SfxEvent.Kind.HIT_REACTION, 0.0)
+	var later := SfxSequencer.SAME_EVENT_WINDOW * 2.0
+	assert_true(sequencer.request(SfxEvent.Kind.HIT_REACTION, later)["allowed"], "창이 지나도 안 난다")
 
 
 func test_playing_never_raises_even_with_nothing_baked() -> void:
