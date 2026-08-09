@@ -2529,3 +2529,66 @@ GUT 은 코어를 붙들지만 **화면 스크립트를 `load` 하지 않는다.
 
 `approach_speed` 기본값 **0**, `_ally_scale` 기본값 **1.0**.
 **§28.20.36~52 의 표가 그대로 남는다.** 옛 표를 조용히 바꾸지 않는다.
+
+### 28.20.54 이어받는 사람에게 — **대화에만 있던 것**
+
+#### 도구가 무엇을 답하나
+
+전부 `godot --headless --path . -s res://tools/<이름>.gd`. **창도 GPU 도 안 쓴다.**
+
+| 도구 | 답하는 물음 | 절 |
+| --- | --- | --- |
+| `check_backpack_screen.gd` | **확인 화면이 도는가** (창 없이) | §28.20.51 |
+| `survey_backpack_chains.gd` | 배치가 얼마나 어려운가 (무작위 vs 작정) | §28.20.13 · §28.20.15 |
+| `survey_break_gauge.gd` | 빠짐 속도별로 몇 타에 무엇이 되나 | §28.20.19 |
+| `survey_break_thresholds.gd` | **문턱을 어디에 두나** | §28.20.35 |
+| `survey_weapon_motion.gd` | 전진 · 리치가 무엇을 바꾸나 | §28.20.30 |
+| `survey_squad_scale.gd` | 몇 명이 몇 명을 이기나 | §28.20.36 |
+| `survey_target_rules.gd` | 누구를 때리나 (규칙 넷) | §28.20.37 · §28.20.41 |
+| `survey_ranks.gd` | 켜가 생기면 답이 그대로인가 | §28.20.38 |
+| `survey_reach_cost.gd` | 뒷줄에 닿는 값 (칸 예산) | §28.20.40 |
+| `survey_victory.gd` | 승리 조건이 답을 바꾸나 | §28.20.43 |
+| `survey_mixed_enemies.gd` | 적에 따라 조건이 갈리면 | §28.20.44 |
+| `survey_leader_targeting.gd` | 우두머리를 어떻게 아나 | §28.20.47 |
+| `survey_guard_link.gd` | 자세 조건 · 자세 묶음 | §28.20.48 · §28.20.49 |
+| `survey_crowd_limit.gd` | **물량전 상한** | §28.20.52 |
+| `survey_scale_and_approach.gd` | 다가옴 · 몸집 | §28.20.53 |
+
+#### 검증 — 이 레인은 여섯 줄이다
+
+```
+godot --headless --path . --import                          # class_name 등록. 파싱은 못 잡는다
+godot --headless --path . -s res://addons/gut/gut_cmdln.gd  # 코어
+gdlint src test tools && gdformat --check src test tools     # 컨벤션
+godot --headless --path . -s res://tools/check_glyphs.gd     # 웹 두부
+godot --headless --path . -s res://tools/check_backpack_screen.gd   # 화면이 도는가
+tools/capture_backpack.gd                                    # 그림이 읽히는가 — GPU 를 쓴다
+```
+
+- **`--import` 는 파싱 에러를 하나도 못 잡는다** (§28.20.24). 정적으로 잡는 것은 `gdlint` 뿐
+- **`gdlint` 가 가끔 `TypeError: 'Sequence' object is not callable` 로 죽는다.** 그냥 다시 돌린다
+- **캡처만 GPU 를 쓴다.** 그림 생성이 도는 동안에는 나머지 다섯 줄로 간다
+
+#### 함정 — `max-public-methods: 20`
+
+`.gdlintrc` 가 클래스당 공개 메서드 **20개**로 막는다. **테스트 파일도 센다** —
+한 파일에 테스트가 스물이 넘으면 갈라야 한다 (`test_sparring_*.gd` 가 다섯으로 갈린 까닭).
+
+`SparringBout` 이 지금 **17개**다. 셋 남았다. 넘기게 되면 **값을 하나씩 꺼내 주지 말고
+객체를 통째로 건네라** — `ally_gauge()` · `enemy_gauge()` 가 그렇게 줄인 것이다 (§28.20.34).
+
+#### 손잡이 기본값은 **전부 「지금까지의 동작」**이다
+
+새로 만든 것이 많은데 **하나도 안 켜져 있다.** 켜면 옛 표가 안 맞는다 — 그것이 요점이다.
+
+| 손잡이 | 기본값 | 켜면 |
+| --- | --- | --- |
+| `BreakTuning.splash_*` | 한 명 | §28.20.34 |
+| `BreakTuning.chain_cut_at` | 안 끊는다 | §28.20.36 |
+| `BreakTuning.splash_spans_ranks` | 켜를 안 가림 | §28.20.38 |
+| `SparringField.target_choice` | `NEAREST` | §28.20.37 |
+| `SparringField.leader_knowledge` | `VISIBLE` | §28.20.47 |
+| `SparringField.downed_leave` | `false` | §28.20.52 |
+| `SparringField.approach_speed` | `0` | §28.20.53 |
+| `SparringField.advance_mode` | `RETURN` | §28.20.30 |
+| 대원 몸집 | `1.0` | §28.20.53 |
