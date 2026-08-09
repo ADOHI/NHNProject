@@ -375,6 +375,12 @@ func _order_targets(candidates: PackedInt32Array, ally: int) -> PackedInt32Array
 			return _rotated(candidates, ally % candidates.size())
 		SparringField.TargetChoice.LEAST_TARGETED:
 			return _sorted_by(candidates, func(enemy: int) -> float: return float(_taken_by(enemy)))
+		SparringField.TargetChoice.LEADER_FIRST:
+			# **우두머리는 특정한 하나다.** 아무 규칙도 안 노리면 사람 무리가 안 끝난다
+			# (§28.20.44). 우두머리가 없는 무리에서는 거리순 그대로다.
+			return _sorted_by(
+				candidates, func(enemy: int) -> float: return 0.0 if _is_leader(enemy) else 1.0
+			)
 		SparringField.TargetChoice.FINISH_OFF:
 			# **거의 눕은 놈을 마저.** 이미 다 누운 적은 뒤로 보낸다 — 더 때려야 소용이 없다.
 			return _sorted_by(
@@ -411,6 +417,14 @@ func _sorted_by(candidates: PackedInt32Array, score: Callable) -> PackedInt32Arr
 	for entry in keyed:
 		out.append(int(entry.z))
 	return out
+
+
+## 그 적이 이 무리의 우두머리인가.
+func _is_leader(enemy: int) -> bool:
+	if _field == null:
+		return false
+	var stood := _field.enemy_at(enemy)
+	return stood != null and stood.is_leader
 
 
 ## 그 적이 지금까지 몇 대 맞았나.

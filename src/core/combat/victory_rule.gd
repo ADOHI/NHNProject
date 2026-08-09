@@ -30,6 +30,18 @@ enum Kind {
 	MAJORITY,  ## 과반이 누우면 나머지는 흩어진다
 	ANY_ONE,  ## 하나만 눕히면 끝 — 지휘관 · 우두머리가 있는 판
 	TIMED,  ## 시간 안에 얼마나 눕혔나 — 버티기
+	LEADER,  ## **우두머리 하나** — 사람 무리는 제압하면 나머지가 물러난다 (§28.10)
+}
+
+## **한 판에 조건이 둘이면 어떻게 판정하나** (§28.20.44).
+##
+## 몬스터와 사람이 같이 나오는 판이다. §28.10 이 둘의 끝을 다르게 확정했으므로
+## **조건이 무리마다 달라진다.** 그것을 어떻게 합치느냐가 새 물음이다.
+##
+## **정하지 않는다.** 둘 다 재고 표를 낸다.
+enum Mixed {
+	EVERY_GROUP,  ## 무리가 다 정리돼야 끝 — 제일 늦은 무리가 정한다
+	ANY_GROUP,  ## 한 무리만 정리되면 끝
 }
 
 ## `TIMED` 에서 재는 시간. **표본이지 확정이 아니다.**
@@ -41,6 +53,7 @@ const _LABELS := {
 	Kind.MAJORITY: "과반",
 	Kind.ANY_ONE: "하나만",
 	Kind.TIMED: "시간 안에",
+	Kind.LEADER: "우두머리",
 }
 
 
@@ -76,3 +89,27 @@ static func decided_at(kind: Kind, down_times: PackedFloat32Array, total: int) -
 	if want > sorted.size():
 		return INF
 	return sorted[want - 1]
+
+
+## **우두머리가 누우면 그 무리는 정리된다** (§28.10 — 사람은 제압이다).
+##
+## `ANY_ONE`(아무나 하나)과 다르다. **특정한 하나**라서 아무 규칙도 그를 안 노리면
+## 훨씬 오래 걸린다 — 그것이 §28.20.44 가 잰 것이다.
+##
+## 우두머리가 없는 무리(몬스터)면 `INF` 다. 그 무리는 다른 조건으로 판정한다.
+static func leader_decided_at(down_times: PackedFloat32Array, leader: int) -> float:
+	if leader < 0 or leader >= down_times.size():
+		return INF
+	return down_times[leader]
+
+
+## 무리마다의 정리된 시각을 합쳐 **판이 끝난 시각**을 낸다.
+static func mixed_decided_at(kind: Mixed, group_times: PackedFloat32Array) -> float:
+	if group_times.is_empty():
+		return INF
+	var worst := 0.0
+	var best := INF
+	for at in group_times:
+		worst = maxf(worst, at)
+		best = minf(best, at)
+	return best if kind == Mixed.ANY_GROUP else worst

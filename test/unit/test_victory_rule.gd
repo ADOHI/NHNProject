@@ -58,3 +58,41 @@ func test_every_condition_has_a_name() -> void:
 		VictoryRule.Kind.TIMED
 	]:
 		assert_false(RuleScript.label(kind).is_empty())
+
+
+# ---------------------------------------------------------------- 우두머리와 섞인 판
+
+
+func test_a_leader_is_a_particular_one() -> void:
+	# **`ANY_ONE`(아무나 하나)과 다르다** — 그 하나가 누워야 한다 (§28.10 · §28.20.44).
+	var times := PackedFloat32Array([2.0, 9.0, 5.0])
+	assert_eq(RuleScript.leader_decided_at(times, 1), 9.0, "우두머리가 누운 시각이다")
+	assert_eq(RuleScript.decided_at(VictoryRule.Kind.ANY_ONE, times, 3), 2.0, "아무나 하나와 다르다")
+
+
+func test_a_group_without_a_leader_never_decides_that_way() -> void:
+	# 몬스터 무리에는 우두머리가 없다. 그 무리는 다른 조건으로 판정한다.
+	var times := PackedFloat32Array([2.0, 9.0])
+	assert_eq(RuleScript.leader_decided_at(times, -1), INF)
+	assert_eq(RuleScript.leader_decided_at(times, 5), INF, "범위를 벗어나도 마찬가지다")
+
+
+func test_every_group_waits_for_the_slowest() -> void:
+	var groups := PackedFloat32Array([3.0, 8.0])
+	assert_eq(RuleScript.mixed_decided_at(VictoryRule.Mixed.EVERY_GROUP, groups), 8.0)
+
+
+func test_any_group_takes_the_first() -> void:
+	var groups := PackedFloat32Array([3.0, 8.0])
+	assert_eq(RuleScript.mixed_decided_at(VictoryRule.Mixed.ANY_GROUP, groups), 3.0)
+
+
+func test_an_unfinished_group_holds_everything_up() -> void:
+	# **몬스터 전원이 발목을 잡는다** — 사람 쪽 지름길이 값을 잃는 자리다 (§28.20.44).
+	var groups := PackedFloat32Array([INF, 4.0])
+	assert_eq(RuleScript.mixed_decided_at(VictoryRule.Mixed.EVERY_GROUP, groups), INF)
+	assert_eq(RuleScript.mixed_decided_at(VictoryRule.Mixed.ANY_GROUP, groups), 4.0)
+
+
+func test_no_groups_at_all() -> void:
+	assert_eq(RuleScript.mixed_decided_at(VictoryRule.Mixed.EVERY_GROUP, PackedFloat32Array()), INF)

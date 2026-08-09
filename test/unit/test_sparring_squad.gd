@@ -213,3 +213,25 @@ func _crowd_bout(squad: int, enemies: int, rule: SparringField.TargetChoice) -> 
 	var bout := BoutScript.from_squad(_squad(squad, 60), _tuning(), field)
 	bout.start()
 	return bout
+
+
+# ---------------------------------------------------------------- 우두머리
+
+
+func test_an_enemy_is_a_monster_until_told_otherwise() -> void:
+	# §28.10 이 몬스터와 사람을 갈랐지만 **싸우는 방식은 안 갈린다** — 판정만 갈린다.
+	var enemy := SparringEnemy.new()
+	assert_eq(enemy.kind, SparringEnemy.Kind.MONSTER)
+	assert_false(enemy.is_leader)
+
+
+func test_leader_first_goes_for_the_one_at_the_back() -> void:
+	# **우두머리는 특정한 하나다.** 아무 규칙도 안 노리면 제일 늦게 눕는다 (§28.20.44).
+	var field := Fixtures.crowd(NEAR, TIGHT, 3)
+	field.enemy_at(2).is_leader = true
+	field.target_choice = SparringField.TargetChoice.LEADER_FIRST
+	var bout := BoutScript.from_squad(_squad(1, 40), _tuning(0.0), field)
+	bout.start()
+	Fixtures.run_to_end(bout)
+	assert_eq(bout.enemy_gauge(2).peak_state(), BreakState.Kind.KNOCKDOWN, "맨 뒤 우두머리를 먼저 눕힌다")
+	assert_eq(bout.enemy_gauge(0).peak(), 0.0, "가까운 적은 아직 안 맞았다")
