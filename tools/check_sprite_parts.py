@@ -89,18 +89,23 @@ def background_mask(image: Image.Image) -> bytearray:
     px = image.load()
     seen = bytearray(width * height)
     stack = []
+
+    def push(x: int, y: int) -> None:
+        # **넣을 때 표시한다.** 꺼낼 때 표시하면 같은 화소가 여러 번 쌓여서
+        # 쌓기가 화소 수의 몇 배로 커진다 -- 47 장을 이어 돌리다 메모리로 죽었다.
+        index = y * width + x
+        if not seen[index]:
+            seen[index] = 1
+            stack.append((x, y))
+
     for x in range(width):
-        stack.append((x, 0))
-        stack.append((x, height - 1))
+        push(x, 0)
+        push(x, height - 1)
     for y in range(height):
-        stack.append((0, y))
-        stack.append((width - 1, y))
+        push(0, y)
+        push(width - 1, y)
     while stack:
         x, y = stack.pop()
-        index = y * width + x
-        if seen[index]:
-            continue
-        seen[index] = 1
         here = px[x, y][:3]
         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
             nx, ny = x + dx, y + dy
@@ -113,7 +118,7 @@ def background_mask(image: Image.Image) -> bytearray:
                 abs(there[0] - here[0]) + abs(there[1] - here[1]) + abs(there[2] - here[2])
             )
             if step <= NEIGHBOUR_STEP:
-                stack.append((nx, ny))
+                push(nx, ny)
     return seen
 
 
