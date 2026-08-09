@@ -35,3 +35,6 @@ __pycache__/
 # 레인이 만든 렌더 결과물 - 저장소에 넣지 않는다
 .renders-*/
 build/web/
+
+# 웹 실측용으로 복사해 온 방 그림. **저장소에 넣지 않는다** — 방 레인이 다시 그린다
+src/proto/lighting/room_web/

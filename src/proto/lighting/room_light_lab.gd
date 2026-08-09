@@ -2,7 +2,8 @@ extends Node2D
 ## **진짜 방 판 위에서 라이팅을 켰다 껐다 하는 실험대.** 사람이 직접 띄워 만지는 화면이다.
 ##
 ##     godot --path . res://src/proto/lighting/room_light_lab.tscn
-##     godot --path . res://src/proto/lighting/room_light_lab.tscn -- shot   # 판마다 저장
+##     godot --path . res://src/proto/lighting/room_light_lab.tscn -- shot     # 판마다 저장
+##     godot --path . res://src/proto/lighting/room_light_lab.tscn -- ladder   # 어둠 단계
 ##
 ## `docs/design/26-2d-lighting.md` §26.6 의 두 항목을 한 장면이 같이 답한다 —
 ## 소품 알파에서 뽑은 가림 폴리곤이 **화면에서 그림자를 지우는가**, 그리고
@@ -18,7 +19,7 @@ extends Node2D
 ##
 ## | 키 | 무엇 |
 ## | --- | --- |
-## | `1` | 어둠 (`CanvasModulate`) — 켜면 구운 판이 눌리고 실시간 빛이 일할 자리가 생긴다 |
+## | `1` | **어둠 여섯 단계를 돈다.** 색조는 방이 정하고 사람은 세기만 고른다 (§26.10) |
 ## | `2` | **램프 자리의 실시간 빛** — 이걸 켜는 것이 §26.2.1 이 금지한 그 선택이다 |
 ## | `3` | **대원 빛** (마우스를 따라온다) — 경계가 허락한 유일한 실시간 빛 |
 ## | `4` | 가림 폴리곤 on/off |
@@ -50,9 +51,14 @@ const _FILTERS: Array[int] = [
 ]
 const _FILTER_NAMES: Array[String] = ["없음", "PCF5", "PCF13"]
 
+## **어둠의 단계.** 숫자는 방 자신의 채움광 색조에 곱하는 배수다 (§26.10 참고).
+## 값 자체를 여기 적지 않는 것이 요점이다 — 색조는 매니페스트에서 읽는다.
+const _DARK_STEPS: Array[float] = [1.0, 0.85, 0.70, 0.55, 0.42, 0.30]
+const _DARK_NAMES: Array[String] = ["없음", "0.85", "0.70", "0.55", "0.42", "0.30"]
+
 var _room := 0
 var _epsilon := 1.0
-var _dark := false
+var _dark_step := 0
 var _lamp_on := false
 var _squad_on := true
 var _occluders_on := true
@@ -81,18 +87,18 @@ var _shot := false
 
 
 func _ready() -> void:
-	_shot = OS.get_cmdline_user_args().has("shot")
+	var args := OS.get_cmdline_user_args()
+	_shot = args.has("shot") or args.has("ladder")
 	_build_nodes()
 	_load_room(_ROOMS[_room])
-	if _shot:
+	if args.has("ladder"):
+		_run_ladder()
+	elif _shot:
 		_run_shots()
 
 
 func _build_nodes() -> void:
 	_dark_node = CanvasModulate.new()
-	# 완전한 검정으로 누르지 않는다. 방 시각화가 구운 형태가 남아 있어야
-	# **무엇이 구운 것이고 무엇이 실시간인지** 사람이 가를 수 있다.
-	_dark_node.color = Color(0.30, 0.32, 0.42)
 	_dark_node.visible = false
 	add_child(_dark_node)
 
@@ -243,6 +249,31 @@ func _emitting_props() -> Dictionary:
 	return out
 
 
+## **어둠의 색조는 방이 가지고 있다.** 매니페스트 `lights[0].color` 가 그 방의
+## 채움광이고 (두 방 모두 `[146, 172, 200]`, 차가운 푸른빛이다), 어둠은 그 채움광이
+## 약해진 것이지 다른 색이 아니다.
+##
+## **이렇게 하는 이유는 값을 못 정해서가 아니라, 정한 값이 근거를 갖게 하려는 것이다.**
+## 앞 판에서 `(0.30, 0.32, 0.42)` 를 눈대중으로 적어 놓고 문서에 「근거 없는 값」이라고
+## 스스로 적어 뒀었다. 색조를 방에서 읽으면 **방마다 자동으로 맞고, 방 시각화가 색을
+## 바꾸면 따라온다.** 사람이 정할 것은 색이 아니라 **얼마나 누르는가** 하나로 준다.
+func _dark_hue() -> Color:
+	var rgb: Array = [146, 172, 200]
+	var room_lights: Array = _manifest.get("lights", [])
+	if not room_lights.is_empty():
+		rgb = (room_lights[0] as Dictionary).get("color", rgb)
+	var top := maxf(1.0, maxf(float(rgb[0]), maxf(float(rgb[1]), float(rgb[2]))))
+	return Color(float(rgb[0]) / top, float(rgb[1]) / top, float(rgb[2]) / top)
+
+
+func _apply_dark() -> void:
+	if _dark_step <= 0:
+		_dark_node.visible = false
+		return
+	_dark_node.visible = true
+	_dark_node.color = _dark_hue() * _DARK_STEPS[_dark_step]
+
+
 func _place_lamp() -> void:
 	var emitters: Array = _lights.get("emitters", [])
 	if emitters.is_empty():
@@ -274,7 +305,7 @@ func _process(_delta: float) -> void:
 		_squad.position = (mouse - _world.position) / _world.scale
 	_squad.visible = _squad_on
 	_lamp.visible = _lamp_on
-	_dark_node.visible = _dark
+	_apply_dark()
 	_occluder_root.visible = _occluders_on
 	for node in _occluder_root.get_children():
 		(node as LightOccluder2D).set_deferred("visible", _occluders_on)
@@ -289,7 +320,10 @@ func _status() -> String:
 	var lines := PackedStringArray()
 	lines.append("%s  (Tab 으로 바꾼다)" % _ROOMS[_room])
 	lines.append(
-		"1 어둠 %s   2 램프 실시간빛 %s   3 대원 빛 %s" % [_mark(_dark), _mark(_lamp_on), _mark(_squad_on)]
+		(
+			"1 어둠 %s   2 램프 실시간빛 %s   3 대원 빛 %s"
+			% [_DARK_NAMES[_dark_step], _mark(_lamp_on), _mark(_squad_on)]
+		)
 	)
 	lines.append(
 		(
@@ -337,7 +371,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	match (event as InputEventKey).keycode:
 		KEY_1:
-			_dark = not _dark
+			_dark_step = (_dark_step + 1) % _DARK_STEPS.size()
 		KEY_2:
 			_lamp_on = not _lamp_on
 		KEY_3:
@@ -391,18 +425,18 @@ func _run_shots() -> void:
 	# 화면에 안 나타나고, 그 그림을 보고 「그림자가 안 진다」로 결론지을 뻔한다.
 	var beside_prop := Vector2(300, 30)
 	var plans := [
-		# 이름, 어둠, 램프, 대원, 가림, 외곽선
-		["a_baked", false, false, false, true, false],
-		["b_dark_only", true, false, false, true, false],
-		["c_lamp_occluders", true, true, false, true, false],
-		["d_lamp_no_occluders", true, true, false, false, false],
-		["e_squad_over_baked", false, false, true, true, false],
-		["f_squad_dark_occluders", true, false, true, true, false],
-		["g_squad_dark_no_occluders", true, false, true, false, false],
-		["h_outlines", false, false, false, true, true],
+		# 이름, 어둠 단계, 램프, 대원, 가림, 외곽선
+		["a_baked", 0, false, false, true, false],
+		["b_dark_only", 4, false, false, true, false],
+		["c_lamp_occluders", 4, true, false, true, false],
+		["d_lamp_no_occluders", 4, true, false, false, false],
+		["e_squad_over_baked", 0, false, true, true, false],
+		["f_squad_dark_occluders", 4, false, true, true, false],
+		["g_squad_dark_no_occluders", 4, false, true, false, false],
+		["h_outlines", 0, false, false, true, true],
 	]
 	for plan in plans:
-		_dark = plan[1]
+		_dark_step = plan[1]
 		_lamp_on = plan[2]
 		_squad_on = plan[3]
 		_occluders_on = plan[4]
@@ -415,6 +449,73 @@ func _run_shots() -> void:
 		image.save_png("%s/%s.png" % [ProjectSettings.globalize_path(_SHOT_DIR), plan[0]])
 		print("찍었다: %s" % plan[0])
 	get_tree().quit()
+
+
+## **어둠 단계를 나란히 찍는다. 사람이 고르라고 만든 것이다.**
+##
+## 판마다 두 장을 찍는다 — 대원 빛이 **꺼진** 것과 **켜진** 것. 한 장만 찍으면
+## 「방이 예쁜가」만 보이고 **「대원 빛이 일할 자리가 있는가」가 안 보인다.**
+## 이 손잡이의 목적이 후자이므로 둘을 같이 봐야 고를 수 있다.
+##
+## 그림 옆에 숫자도 같이 낸다 — 램프 둘레와 먼 구석의 평균 밝기다.
+## 방 시각화가 램프 자리 벽을 **164/255** 로 구웠으므로 (LIGHTING.md §2-A),
+## 그 값이 단계마다 얼마로 눌리는지가 **저쪽과 맞추는 자**가 된다.
+func _run_ladder() -> void:
+	var out := ProjectSettings.globalize_path(_SHOT_DIR)
+	DirAccess.make_dir_recursive_absolute(out)
+	_lamp_on = false
+	_occluders_on = true
+	_outlines_on = false
+	_squad.position = _anchor_prop() + Vector2(300, 30)
+	print("| 단계 | 배수 | 램프 둘레 | 먼 구석 | 대비 |")
+	print("| --- | ---: | ---: | ---: | ---: |")
+	for step in _DARK_STEPS.size():
+		_dark_step = step
+		for squad in [false, true]:
+			_squad_on = squad
+			await get_tree().process_frame
+			await get_tree().process_frame
+			await RenderingServer.frame_post_draw
+			var image := get_viewport().get_texture().get_image()
+			var tag := "squad" if squad else "plain"
+			image.save_png("%s/dark_%d_%s_%s.png" % [out, step, _DARK_NAMES[step], tag])
+			if not squad:
+				var near := _mean_luma(image, _to_screen(_lamp.position), 90)
+				var far := _mean_luma(image, Vector2(120, 300), 90)
+				print(
+					(
+						"| %s | %.2f | **%.1f** | %.1f | %.2f |"
+						% [
+							_DARK_NAMES[step],
+							_DARK_STEPS[step],
+							near * 255.0,
+							far * 255.0,
+							near / maxf(0.001, far),
+						]
+					)
+				)
+	get_tree().quit()
+
+
+func _to_screen(world: Vector2) -> Vector2:
+	return _world.position + world * _world.scale
+
+
+## 한 상자 안의 평균 휘도 (0~1). **눈으로 고르는 일에도 자를 하나 붙여 둔다** —
+## 「어두워 보인다」와 「얼마나 어둡다」는 다른 말이고, 뒤엣것만 다음 사람에게 넘어간다.
+func _mean_luma(image: Image, at: Vector2, half: int) -> float:
+	var total := 0.0
+	var count := 0
+	var x0 := clampi(int(at.x) - half, 0, image.get_width() - 1)
+	var x1 := clampi(int(at.x) + half, 0, image.get_width() - 1)
+	var y0 := clampi(int(at.y) - half, 0, image.get_height() - 1)
+	var y1 := clampi(int(at.y) + half, 0, image.get_height() - 1)
+	for y in range(y0, y1 + 1):
+		for x in range(x0, x1 + 1):
+			var c := image.get_pixel(x, y)
+			total += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+			count += 1
+	return total / float(maxi(1, count))
 
 
 ## 화면 저장 때 대원 빛을 세울 기준 소품 — **가림 폴리곤이 있는 것 중 첫째**다.
