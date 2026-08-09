@@ -472,6 +472,84 @@ def nouns_in(text: str) -> list[str]:
     return sorted({w.lower() for w in re.findall(r"[A-Za-z][A-Za-z-]{3,}", text)})
 
 
+# ---------------------------------------------------------------------------
+# ③ 외형 슬롯 전용 관문 (§27.25.8, §27.26.2)
+# ---------------------------------------------------------------------------
+#
+# **`suspects_in` 과 따로 둔다.** 저쪽은 Klein 흉상 프롬프트 전체를 보는 자고
+# 이쪽은 **우리가 갈아 끼우는 한 칸만** 본다. 원본의 고정 문자열
+# (`No ground, no floor, no cast shadow ...`)에는 **절대 안 건다** — §27.24.2 의 규율,
+# *남의 검증된 문자열을 내 규칙으로 심판하지 않는다.*
+#
+# # 왜 이 관문이 화풍 결정보다 먼저인가
+#
+# §27.25.8 의 통제 시험이 원인을 둘로 갈랐다. 그중 ㉠ 이 이것이다 —
+# **③ 이 장소를 말하면 배경이 그 장소가 된다.** `tunnel` 과 `smoke` 두 낱말을 뺐더니
+# `noline` 의 배경 얼룩이 **30.93% 에서 0.12% 로** 떨어졌다.
+#
+# **㉠ 은 3000명 전부에 걸리고 조용히 깨진다.** 화풍이 정해진 뒤에 이게 터지면
+# 배치를 통째로 다시 돌린다. 그래서 **화풍보다 먼저 박는다.**
+#
+# # 거짓 경보를 안 낸다 (§27.21.5)
+#
+# `charcoal` 과 `ash-gray` 는 **색 이름**이고 지금 성한 슬롯들이 쓰고 있다.
+# 목록에서 뺀다. *"거짓 경보를 내는 관문은 사람이 관문을 무시하게 만들어 없는 것보다 나쁘다."*
+
+#: 원본 가이드의 규격. 넘치면 뒤의 규격 지시가 흘러 나간다 (§27.24.2).
+SLOT_MIN_WORDS, SLOT_MAX_WORDS = 12, 22
+
+_SLOT_SUSPECTS: list[tuple[str, str]] = [
+    # ㉠ **장소·대기** — 실측으로 얻은 것이다 (§27.25.8). 일은 **옷의 생김새**로만
+    # 드러낸다: `tunnel surveyor` 가 아니라 `in a reinforced heat-resistant coat`.
+    ("장소 명사", r"\b(?:tunnel|cave|cavern|mine|mineshaft|shaft|pit|quarry|dungeon|"
+                  r"ruin|ruins|rubble|corridor|chamber|vault|forge|workshop|smithy|"
+                  r"camp|battlefield|wasteland|street|city|village|forest|mountain|"
+                  r"underground|subterranean)\b"),
+    ("대기 명사", r"\b(?:smoke|smoky|soot|sooty|dust|dusty|grit|gritty|fog|mist|misty|"
+                  r"haze|hazy|steam|ember|embers|cinder|cinders)\b"),
+    # ㉡ ③ 은 ④ 보다 **앞**이라 규격을 이긴다. 화풍은 ② 의 몫이지 여기가 아니다.
+    ("화풍 어휘", r"\b(?:anime|illustration|artwork|drawing|painting|painted|rendered|"
+                  r"style|stylised|stylized|palette|watercolou?r|gouache|ink|inked|"
+                  r"outline|outlines|linework|line art|shading|shaded|cel-shaded|"
+                  r"brushwork|brush stroke|halftone|screentone|monochrome|"
+                  r"saturated|desaturated|muted tones)\b"),
+    ("구도, 배경 어휘", r"\b(?:background|backdrop|foreground|composition|framed|framing|"
+                        r"close-?up|full-?body|portrait|bust|three-?quarter|silhouette|"
+                        r"pose|posed|posing|standing|seated|sitting|kneeling|"
+                        r"camera|viewer|angle|view of)\b"),
+    ("조명 어휘", r"\b(?:lit|lighting|backlit|rim light|highlight|highlights|"
+                  r"cast shadow|shadows?\b(?!\s*-)|glow|glowing|gleam)\b"),
+]
+
+
+def slot_suspects_in(text: str) -> list[str]:
+    """③ 외형 칸 하나를 검사한다. **낱말 수까지 여기서 센다.**
+
+    **모델이 세는 것을 믿지 않는다** (§27.26.2). 하위 에이전트에게 12~22 낱말을
+    시키고 `WORDS:` 로 적어 내게 해도 그건 자기 신고다. 코드가 다시 센다.
+
+    같은 절에 실증이 있다 — 하위 에이전트가 §27.5 를 **시키지도 않았는데 읽고 지켰지만**,
+    내가 명시로 금지한 `soot` 은 어겼다. **읽는 것은 맡기고 지키는 것은 코드로 문다.**
+    """
+    hits: list[str] = []
+    n = len(text.split())
+    if n < SLOT_MIN_WORDS or n > SLOT_MAX_WORDS:
+        hits.append(f"낱말 수: {n} (규격 {SLOT_MIN_WORDS}~{SLOT_MAX_WORDS})")
+    # 사람으로 시작해야 한다 — 원본 가이드
+    if not re.match(r"^(?:a|an)\s+\w", text.strip(), re.IGNORECASE):
+        hits.append(f"사람으로 안 시작한다: {text.strip()[:28]!r}")
+    for label, pattern in _SLOT_SUSPECTS:
+        for m in re.finditer(pattern, text, re.IGNORECASE):
+            hits.append(f"{label}: {m.group(0)!r}")
+    # 도구·무기와 부정문·비유는 **저쪽 목록을 그대로 쓴다.** 두 벌로 갈라 두면 한쪽만 낡는다.
+    for label, pattern in _SUSPECTS:
+        if label not in ("도구, 무기", "부정문", "비유"):
+            continue
+        for m in re.finditer(pattern, text, re.IGNORECASE):
+            hits.append(f"{label}: {m.group(0)!r}")
+    return hits
+
+
 def audit() -> int:
     """모든 칸의 프롬프트를 긁어 용의자를 찍는다. 걸린 개수를 돌려준다.
 

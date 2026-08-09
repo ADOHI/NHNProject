@@ -225,17 +225,126 @@ STYLE_CANDIDATES: dict[str, tuple[str, str]] = {
         "Wispy grey outlines bleeding into soft chalky layers of sepia, periwinkle, and "
         "ochre, like 1970s manga"
     )),
+
+    # ── 3차 · **형식을 바꾼다** — 위 열넷이 「다 비슷하다」는 평을 받았다 ────────
+    #
+    # 사용자: *"지금 보면 화풍이 너무 안 드러나는데... `paint_bishoujo` 이 폴더에
+    # 생성하는 테스트 할때는 화풍이 잘 드러났는데"*, *"색보다는 화풍에 집중해줘"*
+    #
+    # **위 열넷은 전부 「선 + 음영 + 색」 형식이다.** 그 형식은 애니메 기본값 위에
+    # 얹히는 미세 조정이라 **뭘 넣어도 애니메로 수렴한다.** 기록에서 골랐다는 것이
+    # 갈린다는 뜻이 아니었다 — **그 기록 자체가 그 형식으로 돌린 판이다.**
+    # 실측이 그것을 뒷받침한다: `stylebench/bench.json` 의 `noise 27.8` 대
+    # `NEW spread 29.91` — **화풍 여섯을 바꾼 것이 시드 하나 바꾼 것과 거의 같았다.**
+    #
+    # `outputs/minimal-char/paint_bishoujo/index.html` 의 여섯은 형식이 다르다:
+    #
+    #     oil painting, thick impasto brushstrokes, painterly, no outlines
+    #
+    # **차이가 넷이다:**
+    #
+    # ㉠ **매체를 이름으로 부른다.** `oil painting` 은 모델 안의 사전분포가 거대해서
+    #    이름 하나로 화면 전체가 바뀐다. `Fine dotted outlines` 에는 그런 게 없다
+    # ㉡ **`no outlines` 가 있다.** 애니메 기본값은 선화다. **선을 안 끊으면 어떤
+    #    화풍을 시켜도 애니메로 수렴한다.** 위 열넷은 오히려 선을 서술한다 —
+    #    `hairline`, `varied`, `heavy` 는 **선을 유지하겠다고 말하고 있었다**
+    # ㉢ **색 이름이 하나도 없다.** 색 벌이 화풍을 안 만들면서 예산의 3분의 1을 먹고,
+    #    게다가 §27.25.6 대로 ③ 의 옷 색까지 이긴다
+    # ㉣ **3~4어절이다.** 우리는 15~20낱말이었다. 길면 서로 상쇄된다
+    #
+    # **§27.9 의 부정문 금지를 `no outlines` 에 걸지 않는다.** 그 규칙은 Klein 흉상
+    # 경로에서 얻었고 이것은 **zitani 경로에서 `paint_bishoujo` 가 실증한 문구**다.
+    # §27.24.2 의 규율 그대로 — *규칙은 그것을 얻은 경로 안에서만 유효하다.*
+
+    # ㉮ `paint_bishoujo` 여섯 **그대로.** 사용자가 「그때는 잘 나왔다」고 한 그 여섯이다
+    "p_oil": ("[기준선] 매체: 유화", "oil painting, thick impasto brushstrokes, painterly, no outlines"),
+    "p_water": ("[기준선] 매체: 수채", "watercolor painting, wet-on-wet, soft bleeding edges, no outlines"),
+    "p_gouache": ("[기준선] 매체: 과슈", "gouache painting, opaque brush marks, no outlines"),
+    "p_alla": ("[기준선] 매체: 알라프리마", "loose alla prima painting, visible brushwork, no outlines"),
+    "p_pastel": ("[기준선] 매체: 파스텔", "soft pastel painting, blended chalk strokes, no outlines"),
+    "p_digital": ("[기준선] 매체: 디지털", "digital painting, soft blended brushwork, no lineart"),
+
+    # ㉯ 매체를 더 벌린다. **같은 형식**(매체 이름 + 결과 상태 + `no outlines`)
+    "m_charcoal": ("매체: 목탄", "charcoal drawing, smudged soft blacks, no outlines"),
+    "m_pencil": ("매체: 색연필", "coloured pencil drawing, fine layered strokes, no outlines"),
+    "m_lino": ("매체: 판화", "linocut print, flat carved shapes, coarse grain, no outlines"),
+    "m_acrylic": ("매체: 아크릴", "acrylic painting, flat matte layers, hard edges, no outlines"),
+    "m_collage": ("매체: 콜라주", "cut paper collage, torn edges, flat layers, no outlines"),
+    # 스크린톤은 **선이 곧 정체성**이라 `no outlines` 를 안 붙인다. 매체 축의 반대 끝이다
+    "m_tone": ("매체: 스크린톤 (선을 남긴다)", "black and white manga screentone, halftone dot shading"),
+
+    # ㉰ **같은 매체를 `no outlines` 없이.** 그 구절이 실제로 일하는지 가르는 자리다.
+    #    붙인 것과 안 붙인 것의 차이가 곧 그 구절의 값이다
+    "k_oil": ("매체: 유화 — **`no outlines` 뺐다**", "oil painting, thick impasto brushstrokes, painterly"),
+    "k_gouache": ("매체: 과슈 — **`no outlines` 뺐다**", "gouache painting, opaque brush marks"),
+    "k_charcoal": ("매체: 목탄 — **`no outlines` 뺐다**", "charcoal drawing, smudged soft blacks"),
 }
 
 
-def compose_illust(character: str, style: str = "") -> str:
+# ---------------------------------------------------------------------------
+# 앵커 — **셋 다 원본에 있다.** 고르는 게 아니라 재는 자리다 (§27.27)
+# ---------------------------------------------------------------------------
+#
+# 맨 앞 문구는 **위치가 가중치라 가장 세다.** 그래서 매체를 불러도 애니메로 당길 수 있다.
+# `results.jsonl` 을 세어 보니 원본이 형식을 둘 썼고 **다수가 앵커 없는 쪽이다:**
+#
+#     Drawn in {화풍}. {인물}. {FRAME}                      189건  ← 다수
+#     A 2D Japanese anime illustration. {화풍}. {인물}. ...   19건
+#
+# 그리고 `outputs/minimal-char/noanchor_bishoujo/` 에 **앵커를 통째로 뺀** 실험이 있다.
+# 다만 그때 화풍이 여전히 「선·음영·색」 형식이라 **결론이 반쪽이다** —
+# 앵커 탓인지 형식 탓인지 안 갈린다. **네 칸을 다 채워야 갈린다.**
+
+#: `모드 이름 -> 화풍 앞에 붙는 것`. **`""` 는 앵커 없음이다.**
+ANCHORS: dict[str, str] = {
+    "anime": "",      # 아래 `compose_illust` 가 `ANIME_ANCHOR` 를 쓴다 (기록 19건)
+    "drawn": "Drawn in ",   # 기록 189건. **다수 형식이고 애니메 앵커가 없다**
+    "none": "",       # `noanchor_bishoujo` 와 같은 자리
+}
+
+
+# ---------------------------------------------------------------------------
+# 탐침용 규격 — **파이프라인이 쓰는 것이 아니다. 재려고만 쓴다** (§27.28)
+# ---------------------------------------------------------------------------
+#
+# `paint_bishoujo` 의 실물을 보고 알았다 — **그 판들의 배경은 흰색이 아니다.**
+# 회색 캔버스이고 `oil` 은 캔버스 올까지 보이고 `digipaint` 는 **검정**이다.
+# 벌어짐 22.6 의 대부분이 거기서 나온다 (`digipaint` 하나가 나머지에서 46 떨어져 있다).
+#
+# > **매체가 드러나던 자리가 배경이었다.** 그리고 우리 ④ 규격은
+# > `pure flat white background` + `Nothing else` 로 **그 자리를 지운다.**
+#
+# 그래서 우리 판에서 화풍은 **인물 안쪽에서만** 드러날 수 있고 폭이 좁다.
+# 실측이 그것을 그대로 말한다 — 매체 이름을 넣어도 벌어짐이 6~7 에 머물렀고,
+# 매체가 종이색을 내려 할 때마다 우리 자가 **「배경 깨짐 100%」**로 적었다.
+# **화풍을 보이게 하는 바로 그것을 우리가 금지하고 있다.**
+#
+# `FRAME_OPEN` 은 그 가설을 재려고만 만든 것이다. 구도는 그대로 두고
+# **배경 지시만 뺀다.** 여기서 벌어짐이 뛰면 진단이 맞은 것이다.
+# **`ILLUST_FRAME` 은 안 건드린다** — §27.24 대로 원본 고정 문자열이다.
+FRAME_OPEN = ("Full body from head to toe, standing straight in a neutral idle pose, "
+              "arms slightly away from the body, character centered.")
+
+
+def compose_illust(character: str, style: str = "", anchor: str = "anime",
+                   frame: str = "") -> str:
     """원본 조립 그대로. **갈아 끼우는 것은 `character` 한 칸뿐이다** (§27.24).
 
     순서가 곧 가중치다 — 앵커, 화풍, 인물, 규격. **바꾸지 마라.**
     품질 태그는 **안 붙인다** — 원본이 A/B 재고 사용자 결정으로 뺐다.
+
+    `anchor` 는 셋 다 **원본에 실물이 있는 조립**이다 (`ANCHORS` 주석).
+    기본은 `anime` — 지금까지 잰 판이 전부 그것이라 비교가 유지된다.
     """
+    if anchor not in ANCHORS:
+        raise ValueError(f"모르는 앵커: {anchor!r} (있는 것: {list(ANCHORS)})")
     style = (style or ILLUST_STYLE).rstrip(".")
-    return f"{ANIME_ANCHOR}. {style}. {character.rstrip('.')}. {ILLUST_FRAME}"
+    if anchor == "anime":
+        head = f"{ANIME_ANCHOR}. "
+    else:
+        head = ANCHORS[anchor]
+        style = style[0].upper() + style[1:] if (anchor == "none" and style) else style
+    return f"{head}{style}. {character.rstrip('.')}. {frame or ILLUST_FRAME}"
 
 
 def zitani_graph(prompt: str, seed: int, width: int, height: int,

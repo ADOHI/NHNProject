@@ -43,6 +43,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import comfy  # noqa: E402
 import console  # noqa: E402
 import illust  # noqa: E402
+import measure  # noqa: E402
 import prompts  # noqa: E402
 from gen_person import seed_of  # noqa: E402
 
@@ -86,44 +87,7 @@ def load_slot(folder: str, stem: str) -> str:
         return f.read().strip()
 
 
-# ── 배경이 깨졌나 — **눈보다 자가 정확하다** ────────────────────────────────
-#
-# `soft` 를 눈으로 잡았는데(§27.24.5) 눈은 옅은 것을 놓친다. 그래서 잰다.
-# 재는 곳은 **인물이 절대 안 닿는 좌우 바깥 띠**다 — 세로 규격(832x1216)에 전신을
-# 세우면 인물이 가운데 3분의 1을 넘지 않는다.
-
-#: 이보다 어두우면 흰 배경이 아니다. 255 에서 조금만 내려도 얼룩은 눈에 띈다.
-WHITE_CUT = 246
-#: 바깥 띠에서 이 비율을 넘게 더러우면 **깨진 것**이다 (실측: `soft` #2 가 5.9%).
-DIRTY_BREAK = 1.0
-DIRTY_WARN = 0.3
-
-
-def background_dirt(path: str) -> tuple[float, int]:
-    """`(바깥 띠의 얼룩 비율 %, 최대 편차)`. PIL 이 없으면 `(-1, -1)`."""
-    try:
-        from PIL import Image
-    except ImportError:
-        return -1.0, -1
-    im = Image.open(path).convert("L")
-    w, h = im.size
-    px = im.load()
-    xs = list(range(0, int(w * 0.18), 3)) + list(range(int(w * 0.82), w, 3))
-    band = [px[x, y] for y in range(0, h, 3) for x in xs]
-    if not band:
-        return -1.0, -1
-    return sum(1 for v in band if v < WHITE_CUT) / len(band) * 100.0, 255 - min(band)
-
-
-def verdict(dirt: float) -> str:
-    if dirt < 0:
-        return "?"
-    if dirt > DIRTY_BREAK:
-        return "깨짐"
-    return "의심" if dirt > DIRTY_WARN else "성함"
-
-
-def build_sheet(folder: str, people, tags) -> str:
+def build_sheet(folder: str, people, tags, suffix: str = "") -> str:
     """후보 × 인물 격자 한 장. **사람이 고르는 것은 눈이라 나란히 놓아야 한다.**"""
     from PIL import Image, ImageDraw
 
@@ -139,17 +103,17 @@ def build_sheet(folder: str, people, tags) -> str:
         x = pad + c * (cell_w + pad)
         dr.text((x + 2, 6), tag, fill="black")
         for r, stem in enumerate(people):
-            src = os.path.join(folder, f"{stem}_style_{tag}.png")
+            src = os.path.join(folder, f"{stem}_style_{tag}{suffix}.png")
             y = head + pad + r * (cell_h + pad)
             if not os.path.exists(src):
                 continue
             sheet.paste(Image.open(src).convert("RGB").resize((cell_w, cell_h)), (x, y))
-            dirt, _ = background_dirt(src)
-            mark = verdict(dirt)
+            dirt, _ = measure.background_dirt(src)
+            mark = measure.background_verdict(dirt)
             if mark != "성함":
                 dr.rectangle([x, y, x + cell_w - 1, y + cell_h - 1],
                              outline=(220, 0, 0), width=3)
-    dest = os.path.join(folder, "style_sheet.png")
+    dest = os.path.join(folder, f"style_sheet{suffix}.png")
     sheet.save(dest)
     return dest
 
@@ -166,6 +130,15 @@ def main() -> int:
                     help="후보를 쉼표로 골라 돈다. 기본은 아직 안 뽑은 것 전부")
     ap.add_argument("--redo", action="store_true", help="이미 있는 판도 다시 뽑는다")
     ap.add_argument("--steps", type=int, default=illust.ZITANI_STEPS)
+    ap.add_argument("--anchor", default="anime", choices=list(illust.ANCHORS),
+                    help="맨 앞 조립. **셋 다 원본에 실물이 있다** — `anime`(기록 19건), "
+                         "`drawn`(기록 189건, 다수), `none`(noanchor 실험)")
+    ap.add_argument("--open-frame", action="store_true",
+                    help="**탐침.** 배경 지시를 뺀 규격으로 뽑는다 (§27.28). "
+                         "화풍이 배경에서 드러나는지 재는 자리다 — 파이프라인은 안 바꾼다")
+    ap.add_argument("--jitter", type=int, default=0,
+                    help="**잡음 바닥을 재는 자리.** 화풍은 그대로 두고 시드만 N 번 흔든다. "
+                         "화풍을 바꾼 벌어짐이 이걸 못 넘으면 화풍이 안 갈린 것이다")
     ap.add_argument("--sheet-only", action="store_true",
                     help="안 뽑고 이미 있는 판으로 대조표와 배경 자만 다시 낸다")
     args = ap.parse_args()
@@ -188,6 +161,10 @@ def main() -> int:
         slots[stem] = slot
 
     log = os.path.join(args.folder, "style_sweep.jsonl")
+    suffix = "" if args.anchor == "anime" else f"_{args.anchor}"
+    if args.open_frame:
+        suffix += "_open"
+    frame = illust.FRAME_OPEN if args.open_frame else ""
     todo = [(t, s) for t in tags for s in args.people]
     print(f"=== 화풍 비교 — 후보 {len(tags)}, 인물 {len(args.people)}, "
           f"판 {len(todo)}장, zitani {args.steps}스텝 {illust.ILLUST_W}x{illust.ILLUST_H} ===")
@@ -199,11 +176,11 @@ def main() -> int:
     done = skipped = 0
     for tag, stem in todo:
         axis, style = illust.STYLE_CANDIDATES[tag]
-        dest = os.path.join(args.folder, f"{stem}_style_{tag}.png")
+        dest = os.path.join(args.folder, f"{stem}_style_{tag}{suffix}.png")
         if args.sheet_only or (os.path.exists(dest) and not args.redo):
             skipped += 1
             continue
-        prompt = illust.compose_illust(slots[stem], style)
+        prompt = illust.compose_illust(slots[stem], style, anchor=args.anchor, frame=frame)
         # 숫자만 뽑는다 — `2b` 는 **인물 2 의 시드**를 쓴다. 난수가 같아야 슬롯 한 낱말의
         # 차이를 슬롯 탓으로 돌릴 수 있다 (`gen_person.py` 와 같은 방식).
         seed = seed_of(int("".join(c for c in stem if c.isdigit()) or 0), 0, 0)
@@ -219,6 +196,7 @@ def main() -> int:
         with open(log, "a", encoding="utf-8") as f:
             f.write(json.dumps({
                 "file": os.path.basename(dest), "person": stem, "style": tag, "axis": axis,
+                "anchor": args.anchor,
                 "style_text": style, "prompt": prompt, "seed": seed, "steps": args.steps,
                 "w": illust.ILLUST_W, "h": illust.ILLUST_H, "model": illust.ZITANI_CKPT,
                 "elapsed_s": round(spent, 1),
@@ -229,20 +207,58 @@ def main() -> int:
         unload("일러스트 끝")
 
     # ── 배경 자 — **`soft` 를 눈으로 잡았지만 눈은 옅은 것을 놓친다** ────────
-    print(f"\n  배경 (좌우 바깥 띠, {WHITE_CUT} 미만을 얼룩으로 본다)")
+    print(f"\n  배경 (좌우 바깥 띠, {measure.WHITE_CUT} 미만을 얼룩으로 본다)")
     for tag in tags:
         marks = []
         for stem in args.people:
-            src = os.path.join(args.folder, f"{stem}_style_{tag}.png")
+            src = os.path.join(args.folder, f"{stem}_style_{tag}{suffix}.png")
             if not os.path.exists(src):
                 continue
-            dirt, worst = background_dirt(src)
-            marks.append(f"#{stem} {dirt:6.2f}% {verdict(dirt)}")
+            dirt, worst = measure.background_dirt(src)
+            marks.append(f"#{stem} {dirt:6.2f}% {measure.background_verdict(dirt)}")
         axis = illust.STYLE_CANDIDATES[tag][0]
         print(f"    {tag:<10} {'  '.join(marks):<40} {axis}")
 
+    # ── 화풍이 옷 색을 이기나 (§27.25.6 을 자로 만든 것) ────────────────────
+    #
+    # 인물 순서가 곧 뜻이다 — **첫째가 무채색이어야 할 사람, 둘째가 진홍이어야 할 사람.**
+    if len(args.people) >= 2:
+        neutral, vivid = args.people[0], args.people[1]
+        print(f"\n  옷 색 (#{neutral} 숯빛은 낮아야 맞고 #{vivid} 진홍은 높아야 맞다)")
+        for tag in tags:
+            a = os.path.join(args.folder, f"{neutral}_style_{tag}{suffix}.png")
+            b = os.path.join(args.folder, f"{vivid}_style_{tag}{suffix}.png")
+            if not (os.path.exists(a) and os.path.exists(b)):
+                continue
+            _, c_neutral = measure.garment_colour(a)
+            _, c_vivid = measure.garment_colour(b)
+            painted = c_neutral > measure.CHROMA_TINTED
+            killed = 0 <= c_vivid < measure.CHROMA_KILLED
+            mark = ("지배" if (painted and killed) else
+                    "물듦" if (painted or killed) else "지킴")
+            print(f"    {tag:<12} 숯빛 C* {c_neutral:5.1f}  진홍 C* {c_vivid:5.1f}   {mark}")
+
+    # ── 화풍끼리 갈리나 — **잡음 바닥과 견준다** ────────────────────────────
+    for stem in args.people:
+        got = [os.path.join(args.folder, f"{stem}_style_{t}{suffix}.png") for t in tags]
+        got = [g for g in got if os.path.exists(g)]
+        if len(got) < 2:
+            continue
+        sp = measure.spread(got)
+        base = [os.path.join(args.folder, f"{stem}_style_{tags[0]}{suffix}.png")]
+        base += [os.path.join(args.folder, f"{stem}_style_{tags[0]}{suffix}_j{k}.png")
+                 for k in range(1, args.jitter + 1)]
+        base = [b for b in base if os.path.exists(b)]
+        floor = measure.spread(base)
+        note = ""
+        if floor > 0:
+            note = (f"  (잡음 바닥 {floor:.2f})" +
+                    ("  **갈렸다**" if sp > floor * 1.5
+                     else "  [!] 잡음 바닥과 비슷하다 — 화풍이 안 갈렸다"))
+        print(f"\n  #{stem} 후보 {len(got)}개의 벌어짐 {sp:.2f}{note}")
+
     try:
-        print(f"\n  대조표: {build_sheet(args.folder, args.people, tags)}")
+        print(f"\n  대조표: {build_sheet(args.folder, args.people, tags, suffix)}")
     except ImportError:
         print("\n  [!] PIL 이 없어 대조표를 못 만든다")
     print(f"  뽑은 판 {done}장, 건너뛴 판 {skipped}장\n  결과: {args.folder}\n  로그: {log}\n")
