@@ -79,6 +79,10 @@ func _pick() -> Control:
 			_card = SlashSheet.CARD
 			_loop = SlashSheet.LOOP
 			return SlashSheet.new()
+		"field":
+			_card = FieldSheet.CARD
+			_loop = FieldSheet.LOOP
+			return FieldSheet.new()
 		"amber":
 			_card = AmberSheet.CARD
 			_loop = AmberSheet.LOOP

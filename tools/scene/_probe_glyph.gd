@@ -6,7 +6,9 @@ func _initialize() -> void:
 	var rids := font.get_rids()
 	print("rids: ", rids.size())
 	var rid: RID = rids[0]
-	var index := TextServerManager.get_primary_interface().font_get_glyph_index(rid, 48, "참".unicode_at(0), 0)
+	var index := TextServerManager.get_primary_interface().font_get_glyph_index(
+		rid, 48, "참".unicode_at(0), 0
+	)
 	print("glyph index: ", index)
 	var got := TextServerManager.get_primary_interface().font_get_glyph_contours(rid, 48, index)
 	print("keys: ", got.keys())
