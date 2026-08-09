@@ -12,10 +12,10 @@ const _POPULATION := 3000
 const _SEED := 20260808
 
 ## 몇 판을 돌리나. 데모 한 사이클이 스물 남짓이라 그 서너 배까지 본다.
-const _RUNS := 80
+const _RUNS := 400
 
 ## 표를 찍는 판 번호.
-const _MARKS := [0, 5, 20, 40, 80]
+const _MARKS := [0, 20, 80, 200, 400]
 
 ## 아는 얼굴 비율을 잴 때 굴리는 조우 수.
 const _ENCOUNTERS := 200
@@ -35,7 +35,10 @@ func _initialize() -> void:
 	rng.seed = _SEED
 
 	print(
-		"\n%-6s %8s %8s %10s %10s %10s %10s" % ["판", "관계", "차수90%", "세계호감", "대원호감", "외톨이", "아는얼굴"]
+		(
+			"\n%-5s %7s %6s %6s %6s %8s %8s %8s %8s"
+			% ["판", "관계", "중위", "90%", "최대", "세계호감", "외톨이", "한덩어리", "아는얼굴"]
+		)
 	)
 	_row(world, guild, 0)
 	for run in _RUNS:
@@ -109,29 +112,40 @@ func _row(world: NpcWorld, guild: Guild, run: int) -> void:
 		if not RivalSquad.draw(world, rng, ours).familiar_to(ours).is_empty():
 			met += 1
 
-	# **후유증은 세계 평균으로는 안 보인다** — 3000명 중 다섯 명만 겪는다.
-	# 그 다섯의 나가는 호감을 따로 재야 SHOCK 값을 정할 수 있다.
-	var mine := 0
-	var mine_count := 0
-	for viewer in ours:
-		for other in graph.targets_of(viewer):
-			mine += graph.affinity(viewer, other)
-			mine_count += 1
-
 	print(
 		(
-			"%-6d %8d %8d %10.1f %10.1f %9.1f%% %9.1f%%"
+			"%-5d %7d %6d %6d %6d %8.1f %7.1f%% %7.1f%% %7.1f%%"
 			% [
 				run,
 				graph.size(),
+				degrees[degrees.size() / 2],
 				degrees[degrees.size() * 9 / 10],
+				degrees[degrees.size() - 1],
 				float(total) / maxf(float(graph.size()), 1.0),
-				float(mine) / maxf(float(mine_count), 1.0),
 				100.0 * float(alone) / float(graph.person_count()),
+				100.0 * float(_largest_share(graph)),
 				100.0 * float(met) / float(_ENCOUNTERS),
 			]
 		)
 	)
+
+
+## 가장 큰 덩어리에 든 사람의 비율. **이것이 1 에 닿으면 세계가 한 덩어리다.**
+func _largest_share(graph: RelationGraph) -> float:
+	var parent := PackedInt32Array()
+	for person in graph.person_count():
+		parent.append(person)
+	for slot in graph.size():
+		_union(parent, graph.slot_from(slot), graph.slot_to(slot))
+	var sizes := {}
+	var biggest := 0
+	for person in graph.person_count():
+		if graph.degree_of(person) == 0:
+			continue
+		var root := _root(parent, person)
+		sizes[root] = int(sizes.get(root, 0)) + 1
+		biggest = maxi(biggest, int(sizes[root]))
+	return float(biggest) / float(graph.person_count())
 
 
 ## 섬이 생기나. **관계도가 끊기면 세계가 여러 조각이 된 것이다.**
