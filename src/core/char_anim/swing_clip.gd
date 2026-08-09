@@ -342,6 +342,9 @@ func sample(t: float, features: AnimFeatures) -> CharPose:
 	_apply_head(pose, at, features)
 	_apply_hand(pose, at, features)
 	_apply_travel(pose, at, features)
+	# **팔 길이를 먼저 조인다.** 뒤에 오면 검끝·접지 규칙이 잡아 둔 것을 다시 흐트러뜨린다 —
+	# 실제로 그렇게 했다가 검끝이 땅을 뚫었다 (§25.29.3).
+	rein_in_limbs(pose)
 	keep_weapon_off_floor(pose, weapon)
 	return pose
 

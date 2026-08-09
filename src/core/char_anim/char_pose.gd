@@ -16,6 +16,12 @@ extends RefCounted
 ## `Packed*Array` 로 둔 이유는 나중에 `sample_into()` 로 재사용 경로를 열 수 있게
 ## 하기 위해서다 (§25.8 — 웹은 평균이 아니라 꼬리가 나쁘다).
 
+## 어깨·엉덩이가 파츠의 쉬는 자리보다 몸통 쪽으로 얼마나 붙어 있나.
+const SOCKET_INSET := 0.35
+
+## 어깨·엉덩이가 파츠의 쉬는 자리에서 몸통 쪽으로 얼마나 올라가 있나.
+const SOCKET_RISE := 0.55
+
 var positions: PackedVector2Array
 var rotations: PackedFloat32Array
 var scales: PackedVector2Array
@@ -140,6 +146,40 @@ func part_lowest(part: CharPart.Id, rig: CharRig) -> float:
 
 
 ## 여섯 파츠 중 가장 깊이 파고든 정도. 접지 검증이 쓴다.
+## **손발이 매달린 자리.** 어깨(손) · 엉덩이(발)를 **몸통이 돈 만큼 같이 돌려서** 구한다.
+##
+## **고정 좌표로 재면 안 된다.** 몸통이 26° 돌면 어깨도 같이 돈다 — 밑창·검끝에서 이미
+## 겪은 함정이고 (§25.13.4), 여기서도 똑같다.
+func socket_of(part: CharPart.Id, rig: CharRig) -> Vector2:
+	var torso := CharPart.Id.TORSO
+	var rest := rig.rest_positions[part] - rig.rest_positions[torso]
+	# 어깨는 파츠가 쉬는 자리보다 몸통 쪽으로 붙어 있다. 손은 거기 매달린다.
+	var socket := Vector2(rest.x * SOCKET_INSET, rest.y * SOCKET_RISE)
+	return positions[torso] + socket.rotated(rotations[torso])
+
+
+## **손이 어깨에서 얼마나 떨어졌나** (발이면 엉덩이에서).
+func reach_of(part: CharPart.Id, rig: CharRig) -> float:
+	return positions[part].distance_to(socket_of(part, rig))
+
+
+## **팔이 닿는 거리를 얼마나 넘었나.** `0` 이면 안 넘었다.
+##
+## 파츠가 떠 있어도 이 안에 있으면 **매달려 있는 것**으로 읽히고,
+## 넘으면 **따로 노는 것**으로 보인다 (§25.29).
+func overreach(part: CharPart.Id, rig: CharRig, limit: float) -> float:
+	return maxf(0.0, reach_of(part, rig) - limit)
+
+
+## 어느 파츠든 가장 많이 넘어간 양.
+func worst_overreach(rig: CharRig, limits: Dictionary) -> float:
+	var worst := 0.0
+	for part in CharPart.COUNT:
+		if limits.has(part):
+			worst = maxf(worst, overreach(part, rig, limits[part]))
+	return worst
+
+
 func deepest_sink(rig: CharRig) -> float:
 	var deepest := -INF
 	for i in CharPart.COUNT:

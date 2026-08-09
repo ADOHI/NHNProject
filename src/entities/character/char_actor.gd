@@ -99,6 +99,9 @@ var _struck := false
 var _reaction := CharReaction.new()
 var _stagger := 0.0
 
+## 밀리기 전 제자리. 뿌리 이동을 여기서 잰다.
+var _home := Vector2.ZERO
+
 
 func _ready() -> void:
 	if _rig == null:
@@ -221,6 +224,7 @@ func _build() -> void:
 	_view = CharPartsView.new()
 	_view.name = "Parts"
 	add_child(_view)
+	_home = _view.position
 	_rebuild_weapon()
 
 
@@ -250,7 +254,11 @@ func _refresh() -> void:
 	if _view == null:
 		return
 	# **뷰가 자기 장식을 스스로 만든다.** 클립과 시각만 주면 되므로 캡처 도구도 같은 길을 쓴다.
-	_view.show_at(_clip(), _time, impact_seconds(), _reaction)
+	# **히트스톱** — 맞는 순간 동작이 멈춘다. 충격은 실제 시각으로 계속 잦아든다.
+	var play_t := _time - _reaction.stalled(_time)
+	_view.show_at(_clip(), play_t, impact_seconds(), _reaction, _time)
+	# **뿌리가 통째로 밀린다.**
+	_view.position = _home + _reaction.root_offset(_time)
 
 
 ## 검이 닿는 시각을 **지나쳤는지**로 낸다. 정확히 그 프레임을 밟기를 기다리면

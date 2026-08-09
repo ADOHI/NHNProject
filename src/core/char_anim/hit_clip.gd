@@ -150,6 +150,7 @@ func sample(t: float, features: AnimFeatures) -> CharPose:
 		_apply_part(pose, part, at, features, height, back, down, snap)
 	# 무기는 파츠가 아니라 접지 검사가 못 본다. 검끝이 박혔으면 든 손을 들어 띄운다.
 	keep_weapon_off_floor(pose, weapon)
+	rein_in_limbs(pose)
 	return pose
 
 

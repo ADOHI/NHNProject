@@ -96,6 +96,7 @@ func sample(t: float, features: AnimFeatures) -> CharPose:
 	_apply_head(pose, at, features, height, down, press, stretch)
 	_apply_hands(pose, at, features, height, down)
 	_apply_feet(pose, features, height, press)
+	rein_in_limbs(pose)
 	return pose
 
 

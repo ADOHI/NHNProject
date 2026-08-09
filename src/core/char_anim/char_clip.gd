@@ -16,6 +16,9 @@ extends RefCounted
 ## `get hit` · `jump` 이 오버슛과 되튐을 요구하므로 처음부터 이 구조로 짠다.
 ## (`docs/design/25-character-animation.md` §25.3)
 
+## 이 정도 안에 있으면 디딘 것으로 본다(px).
+const PLANTED_SLACK := 1.0
+
 var rig: CharRig
 
 
@@ -80,6 +83,35 @@ func keep_weapon_off_floor(pose: CharPose, weapon: CharWeapon) -> void:
 ## 면적을 보존하는 배율. `stretch` 가 0 이면 정확히 `Vector2.ONE` 이다.
 ##
 ## `1.0 / 1.0` 이 부동소수점에서도 정확히 `1.0` 이므로 "배율 끄기" 가 근사가 아니라 등식이다.
+## **손발을 팔이 닿는 거리 안으로 끌어당긴다** (§25.29).
+##
+## **방향은 안 건드리고 거리만 줄인다.** 자세가 무엇을 하려던 것인지는 방향에 들어 있고,
+## 그것은 그대로 두어야 하기 때문이다. 그래서 **과장이 사라지는 게 아니라 각도로 남는다.**
+##
+## 모든 클립이 자세를 내놓기 직전에 부른다.
+## **디딘 발은 안 건드린다.** 땅이 이긴다 (§25.13.4) — 발이 땅에 붙어 있는데 끌어당기면
+## 그 순간 **발이 미끄러진다.** 디딘 발이 멀면 그건 발이 아니라 **몸이 너무 간 것**이라,
+## 발을 옮겨서 고칠 문제가 아니다.
+func rein_in_limbs(pose: CharPose) -> void:
+	for part in CharPart.COUNT:
+		var limit := rig.reach_limit(part)
+		if limit == INF:
+			continue
+		if CharPart.is_foot(part) and foot_is_planted(pose, part):
+			continue
+		var socket := pose.socket_of(part, rig)
+		var arm := pose.positions[part] - socket
+		if arm.length() > limit:
+			pose.positions[part] = socket + arm.normalized() * limit
+
+
+## 그 발이 지금 **땅을 디디고 있나.**
+func foot_is_planted(pose: CharPose, part: CharPart.Id) -> bool:
+	if not CharPart.is_foot(part):
+		return false
+	return pose.part_lowest(part, rig) <= rig.ground_y(part) + PLANTED_SLACK
+
+
 static func volume_scale(stretch: float) -> Vector2:
 	var sy := 1.0 + stretch
 	return Vector2(1.0 / sy, sy)

@@ -36,6 +36,7 @@ func sample(t: float, features: AnimFeatures) -> CharPose:
 	_apply_hand(pose, t, features, CharPart.Id.HAND_NEAR)
 	_apply_foot(pose, t, features, CharPart.Id.FOOT_FAR)
 	_apply_foot(pose, t, features, CharPart.Id.FOOT_NEAR)
+	rein_in_limbs(pose)
 	return pose
 
 

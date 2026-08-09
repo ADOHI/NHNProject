@@ -84,6 +84,21 @@ var _flourish := "none"
 ## **때리는 중에 맞는 것**을 보여 주려고 미리 충격을 심어 둔다 (`hitat0.35` 처럼).
 var _reaction: CharReaction = null
 
+## 밀림 자국을 그릴까. 판정용이다.
+var _want_marker := false
+
+## **화면 연출** — 속도선 · 임팩트 · 카메라 (§25.28).
+var _fx := CharScreenFx.new()
+var _fx_layer: CharScreenFxLayer = null
+var _fx_back: CharScreenFxLayer = null
+
+## 밀리기 전 제자리. 뿌리 이동을 여기서 잰다.
+var _home := Vector2.ZERO
+
+## 밀림을 눈에 보이게 하는 자국. `mark` 를 줄 때만 생긴다.
+var _marker: PushMarker = null
+var _stage: Node2D = null
+
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -93,6 +108,23 @@ func _initialize() -> void:
 	for token: String in args.slice(1):
 		if token in CLIPS:
 			clip_name = token
+		elif token.begins_with("lines") or token.begins_with("impact") or token.begins_with("cam"):
+			# `lines=strong` · `impact=over` · `cam=weak` 처럼 축마다 눈금을 준다.
+			var pair := token.split("=")
+			var level := CharScreenFx.level_from(pair[1] if pair.size() > 1 else "strong")
+			if token.begins_with("lines"):
+				_fx.speed_lines = level
+			elif token.begins_with("impact"):
+				_fx.impact = level
+			else:
+				_fx.camera = level
+		elif token.begins_with("fxall"):
+			var pair2 := token.split("=")
+			_fx = CharScreenFx.all_at(
+				CharScreenFx.level_from(pair2[1] if pair2.size() > 1 else "strong")
+			)
+		elif token == "mark":
+			_want_marker = true
 		elif token.begins_with("hitat"):
 			# `hitat0.35,0.5` 처럼 「그 시각에 세기 얼마로 맞는다」를 심는다.
 			var when := token.substr(5).split(",")
@@ -125,17 +157,36 @@ func _initialize() -> void:
 
 	var stage := _make_stage()
 	_viewport.add_child(stage)
+	_stage = stage
 
 	_view = CharPartsView.new()
 	_view.weapon = CharWeapon.new(_cells, _span)
 	_view.flourish = CharFlourish.preset(_flourish)
 	# **가운데가 아니라 왼쪽에 세운다.** 내려치기에서 머리와 검이 앞으로 크게 나가는데
 	# 가운데에 두면 오른쪽 변에 잘린다 — 실제로 머리가 잘려 나갔다.
-	_view.position = Vector2(float(VIEW_SIZE.x) * 0.34, GROUND_Y)
+	_home = Vector2(float(VIEW_SIZE.x) * 0.34, GROUND_Y)
+	_view.position = _home
 	_view.scale = Vector2(VIEW_SCALE, VIEW_SCALE)
 	stage.add_child(_view)
 	# `_ready()` 를 기다리지 않는다 — 여기서 직접 세운다.
 	_view.setup(rig)
+	if _want_marker:
+		_marker = PushMarker.new()
+		_marker.z_index = 90
+		stage.add_child(_marker)
+	# **속도선은 배경 위, 캐릭터 뒤다** (§25.28.2).
+	#
+	# 무대 밖에 두면 **배경 칠에 가려 아예 안 보인다** — 처음에 그렇게 했다가 선이 사라졌다.
+	# 그래서 무대의 자식으로 넣고 캐릭터를 그 위로 올린다.
+	_fx_back = CharScreenFxLayer.new()
+	_fx_back.fx = _fx
+	_fx_back.setup(Vector2(VIEW_SIZE), false)
+	_stage.add_child(_fx_back)
+	_view.z_index = 10
+	_fx_layer = CharScreenFxLayer.new()
+	_fx_layer.fx = _fx
+	_fx_layer.setup(Vector2(VIEW_SIZE), true)
+	_viewport.add_child(_fx_layer)
 
 	DirAccess.make_dir_recursive_absolute(
 		ProjectSettings.globalize_path(_out_prefix).get_base_dir()
@@ -178,7 +229,14 @@ func _process(_delta: float) -> bool:
 	var t := _clip.loop_seconds() * float(_next_frame) / float(_frames)
 	var swing := _clip as CharSwingClip
 	var impact := -1.0 if swing == null else swing.anticipate + swing.still + swing.strike
-	_view.show_at(_clip, t, impact, _reaction)
+	# **히트스톱: 맞는 순간 동작 진행 자체가 멈춘다** (§25.27.2).
+	var play_t := t - _reaction.stalled(t) if _reaction != null else t
+	_view.show_at(_clip, play_t, impact, _reaction, t)
+	# **뿌리가 통째로 밀린다.** 이게 가장 크게 읽힌다.
+	if _reaction != null:
+		_view.position = _home + _reaction.root_offset(t)
+	_apply_screen_fx(play_t, impact)
+	_mark_push()
 	_pending = _next_frame
 	_next_frame += 1
 	return false
@@ -186,6 +244,28 @@ func _process(_delta: float) -> bool:
 
 ## 장수는 **한 바퀴 × fps** 로 정한다. 고정값으로 두면 클립마다 재생 속도가 달라지는데
 ## 그것을 알아챌 방법이 없다 — idle(4.0 s)은 100 장으로 전과 같고 walk(1.2 s)는 30 장이다.
+## 카메라는 **무대를 옮기고**, 속도선·임팩트는 **그 위에 덮는다.**
+func _apply_screen_fx(t: float, impact: float) -> void:
+	if _fx.is_idle():
+		return
+	var focus := _view.position + Vector2(0.0, -110.0)
+	_stage.transform = _fx.camera_transform(t, impact, focus)
+	var heading := _view.blade_heading(_clip, t)
+	_fx_back.show_at(t, impact, focus, heading)
+	_fx_layer.show_at(t, impact, focus, heading)
+
+
+## **판정용 표시.** 뿌리가 얼마나 밀렸는지 제자리에 자국을 남긴다.
+##
+## 캡처에만 그린다 — 밀림이 눈에 보여야 「맞았다」를 판정할 수 있기 때문이다.
+func _mark_push() -> void:
+	if _marker == null:
+		return
+	_marker.shift = _view.position.x - _home.x
+	_marker.home = _home
+	_marker.queue_redraw()
+
+
 static func frame_count(loop_seconds: float) -> int:
 	return maxi(1, int(roundf(loop_seconds * float(FPS))))
 
@@ -294,3 +374,27 @@ func _verify(image: Image) -> bool:
 		return false
 	print("확인: %dx%d, 캐릭터가 화면의 %.1f %%" % [image.get_width(), image.get_height(), ratio * 100.0])
 	return true
+
+
+## **밀림을 눈에 보이게 하는 자국.** 제자리에 세로선을 긋고 밀린 만큼 화살을 그린다.
+##
+## **판정용이라 캡처에만 나온다.** 게임에는 안 들어간다.
+class PushMarker:
+	extends Node2D
+
+	const HOME := Color(1.0, 1.0, 1.0, 0.30)
+	const ARROW := Color(1.0, 0.42, 0.36, 0.95)
+
+	var shift := 0.0
+	var home := Vector2.ZERO
+
+	func _draw() -> void:
+		var y := home.y + 8.0
+		draw_line(Vector2(home.x, y - 190.0), Vector2(home.x, y), HOME, 2.0)
+		if absf(shift) < 0.6:
+			return
+		var tip := Vector2(home.x + shift, y)
+		draw_line(Vector2(home.x, y), tip, ARROW, 4.0)
+		var back := signf(shift) * -8.0
+		draw_line(tip, tip + Vector2(back, -6.0), ARROW, 4.0)
+		draw_line(tip, tip + Vector2(back, 6.0), ARROW, 4.0)

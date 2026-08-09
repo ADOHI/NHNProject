@@ -109,14 +109,19 @@ func set_motion(echoes: Array[CharPose], arc: PackedVector2Array, flash: float) 
 ##
 ## 액터와 캡처 도구가 같은 길을 쓰게 하려는 것이다 — 둘이 갈리면 벤치에서 본 것과
 ## 게임에서 나오는 것이 달라진다.
-func show_at(clip: CharClip, at: float, impact := -1.0, reaction: CharReaction = null) -> void:
+## `at` 은 **동작 시각**(히트스톱으로 멈춘 뒤의 것), `wall` 은 **실제 시각**이다.
+##
+## 둘이 갈라지는 것이 히트스톱이다 — 동작은 멈춰 있는데 충격은 계속 잦아든다.
+func show_at(
+	clip: CharClip, at: float, impact := -1.0, reaction: CharReaction = null, wall := -1.0
+) -> void:
 	var f := AnimFeatures.all_on()
 	# **보간을 끈다.** 기본은 연속이다 — 사용자가 끊는 쪽을 뺐다 (§25.26.45).
 	at = held(at)
 	var pose := clip.sample(at, f)
 	# **반응 층을 자세 위에 더한다.** 자세가 무엇이든 상관없다 (§25.27).
 	if reaction != null:
-		reaction.apply(pose, at, rig)
+		reaction.apply(pose, at if wall < 0.0 else wall, rig)
 	apply_pose(pose)
 	_stretch_blade(clip, at, f)
 	set_motion(_past_poses(clip, at, f), _blade_sweep(clip, at, f), _flash_left(at, impact))
@@ -152,6 +157,21 @@ func _blade_speed(clip: CharClip, at: float, f: AnimFeatures) -> float:
 	var was := clip.sample(before, f).rotations[CharWeapon.HOLDER]
 	var now := clip.sample(at, f).rotations[CharWeapon.HOLDER]
 	return clampf(absf(now - was) / (at - before) / 12.0, 0.0, 1.0)
+
+
+## **검이 지금 어느 쪽으로 가고 있나.** 속도선이 방향을 여기서 얻는다 (§25.28.1).
+##
+## 자세를 **읽고** 나오는 것이라 박아 둔 값이 아니다 — 검이 왼쪽으로 지나가면
+## 선도 왼쪽으로 흐른다.
+func blade_heading(clip: CharClip, at: float) -> Vector2:
+	var f := AnimFeatures.all_on()
+	var step := 0.02
+	var before := maxf(at - step, 0.0)
+	if is_equal_approx(before, at):
+		return Vector2.ZERO
+	var was := weapon.tip_position(clip.sample(before, f), rig)
+	var now := weapon.tip_position(clip.sample(at, f), rig)
+	return now - was
 
 
 ## 파츠 노드. 나중에 `Sprite2D` 로 갈아 끼울 때의 접점이다.

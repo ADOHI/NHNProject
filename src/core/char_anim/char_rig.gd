@@ -92,6 +92,21 @@ const HAND_FAR_HALF := Vector2(9.5, 9.5)
 const HEAD_POS := Vector2(1.0, 81.0)
 const HEAD_HALF := Vector2(30.0, 30.0)
 
+## **손이 어깨에서 닿을 수 있는 거리의 상한** — idle 의 몇 배까지 허용하나 (§25.29).
+##
+## **기준은 idle 이다.** idle 이 「정상 인체」이고, 그 자세의 손-어깨 거리가 `x1.00` 이다.
+##
+## **손 `2.0`** — 쉬는 팔은 굽어 있고 다 펴면 대략 두 배가 된다. 그래서 「팔을 끝까지
+## 뻗은 것」이 상한이고, 그보다 멀면 **팔이 늘어난 것**이 된다.
+##
+## **발 `1.7`** — 다리는 쉬는 자세가 이미 거의 펴져 있어서 더 늘 자리가 적다.
+const REACH_LIMIT: Dictionary[CharPart.Id, float] = {
+	CharPart.Id.HAND_NEAR: 2.0,
+	CharPart.Id.HAND_FAR: 2.0,
+	CharPart.Id.FOOT_NEAR: 1.7,
+	CharPart.Id.FOOT_FAR: 1.7,
+}
+
 ## 파츠의 피벗 위치 (쉬는 자세, 캐릭터 공간).
 var rest_positions: PackedVector2Array
 
@@ -125,6 +140,29 @@ func _init() -> void:
 ## 정수리까지의 키. 화면에 맞춰 배율을 정할 때 쓴다.
 ##
 ## 상수로 두지 않는 이유는 리그 치수를 두 곳에 적으면 도구가 옛 수치로 거짓말하기 때문이다.
+## 그 파츠가 매달린 자리에서 **얼마까지 멀어져도 되나**(px).
+func reach_limit(part: CharPart.Id) -> float:
+	if not REACH_LIMIT.has(part):
+		return INF
+	return rest_reach(part) * REACH_LIMIT[part]
+
+
+## idle(= 쉬는 자세)에서의 손-어깨 거리. **상한의 기준자다.**
+func rest_reach(part: CharPart.Id) -> float:
+	var torso := CharPart.Id.TORSO
+	var rest := rest_positions[part] - rest_positions[torso]
+	var socket := Vector2(rest.x * CharPose.SOCKET_INSET, rest.y * CharPose.SOCKET_RISE)
+	return rest.distance_to(socket)
+
+
+## 상한 표. 자로 쓸 때 통째로 넘긴다.
+func reach_limits() -> Dictionary:
+	var limits := {}
+	for part in REACH_LIMIT:
+		limits[part] = reach_limit(part)
+	return limits
+
+
 func total_height() -> float:
 	return rest_positions[CharPart.Id.HEAD].y + half_sizes[CharPart.Id.HEAD].y * 2.0
 

@@ -1,18 +1,75 @@
 extends GutTest
-## **반응 층** — 때리다가 맞는 것을 절차적으로 처리한다 (§25.27).
+## **반응 층** — 때리다가 맞는 것 (§25.27).
 ##
-## 사용자가 물었다 — *"결국 액션이 뒤엉키잖아 때리다가 맞고 이런거."*
-## 핵심은 **피격을 클립이 아니라 힘으로** 만든 것이고, 이 파일이 그 주장을 검사한다.
-
-const RIG := preload("res://src/core/char_anim/char_rig.gd")
+## 첫 판은 **감쇠 진동**이었고 **불합격**했다. 타격은 떨림이 아니라 **밀림**이다.
+## 이 파일은 그 판정을 자로 굳혀 둔 것이다 — 다시 진동으로 돌아가면 여기서 막힌다.
+##
+## ```
+## 멈춤(히트스톱)  →  밀림(방향, 몸 전체)  →  회복  →  잔진동
+## ```
 
 
 func _swing() -> CharSwingClip:
 	return CharSwingClip.new(CharRig.new(), WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW)
 
 
-func test_being_hit_does_not_stop_the_swing() -> void:
-	# **전환이 없다는 것이 이 층의 전부다.** 맞아도 스윙 자세는 그대로 계산된다.
+func test_the_body_is_pushed_one_way_not_wobbled() -> void:
+	# **방향이 있어야 한다.** 진동은 좌우로 넘나들어 방향이 안 읽힌다.
+	var reaction := CharReaction.new()
+	reaction.strike(0.0, 1.0, -1.0)
+	var t := 0.0
+	while t < 0.09:
+		assert_lt(reaction.root_offset(t).x, 0.0, "t = %.3f 에서 밀린 방향이 뒤집혔다" % t)
+		t += 0.005
+
+
+func test_the_push_is_largest_at_the_moment_of_impact() -> void:
+	# **즉시 간다.** 서서히 커지면 「밀렸다」가 아니라 「끌려간다」로 읽힌다.
+	var reaction := CharReaction.new()
+	reaction.strike(0.0, 1.0)
+	var first := absf(reaction.root_offset(0.0).x)
+	assert_gt(first, 20.0, "맞는 순간 안 밀린다")
+	assert_lt(absf(reaction.root_offset(0.4).x), first * 0.4, "안 돌아온다")
+
+
+func test_the_root_moves_more_than_the_parts() -> void:
+	# **뿌리가 통째로 밀리는 것이 가장 크게 읽힌다.** 파츠 진동보다 먼저다.
+	assert_gt(CharReaction.ROOT_PUSH, CharReaction.PART_PUSH, "몸보다 파츠가 더 가면 분해된다")
+
+
+func test_all_six_parts_start_together() -> void:
+	# **밖에서 온 충격은 여섯에 한꺼번에 닿는다.** 시작이 다른 것은 `die` 의 축이다 —
+	# 그건 안에서 힘이 빠지는 것이라 축이 다르다.
+	var rig := CharRig.new()
+	var reaction := CharReaction.new()
+	reaction.strike(0.0, 1.0)
+	var pose := CharPose.from_rig(rig)
+	reaction.apply(pose, 0.0, rig)
+	for part in CharPart.COUNT:
+		assert_lt(pose.rotations[part], 0.0, "파츠 %d 가 같이 안 움직였다" % part)
+
+
+func test_hitstop_freezes_the_swing() -> void:
+	# **맞는 순간 동작 진행 자체가 멈춘다.** 안 그러면 「안 맞은 것 같다」.
+	var reaction := CharReaction.new()
+	assert_almost_eq(reaction.stalled(0.5), 0.0, 0.0001, "안 맞았는데 멈춘다")
+	reaction.strike(0.2, 1.0)
+	assert_almost_eq(reaction.stalled(0.2), 0.0, 0.0001, "맞기 전부터 멈춘다")
+	var held := reaction.stalled(0.5)
+	assert_gt(held, 0.03, "맞아도 안 멈춘다")
+	assert_almost_eq(held, CharReaction.STOP_SECONDS, 0.001, "멈춘 시간이 다르다")
+	# 멈춤은 **끝난다.** 안 풀리면 동작이 영영 안 나간다.
+	assert_almost_eq(reaction.stalled(2.0), held, 0.0001, "히트스톱이 안 풀린다")
+
+
+func test_the_wobble_only_comes_after_the_push() -> void:
+	# **진동은 꼬리에만.** 처음부터 떨면 밀림이 안 읽힌다.
+	assert_gt(CharReaction.WOBBLE_AFTER, 0.0, "꼬리 진동이 처음부터 나온다")
+	assert_lt(CharReaction.WOBBLE, 0.5, "꼬리가 밀림보다 크면 진동으로 읽힌다")
+
+
+func test_being_hit_does_not_stop_the_pose_from_being_computed() -> void:
+	# 전환이 없다는 것이 이 층의 전부다. 스윙 자세는 계속 계산된다.
 	var clip := _swing()
 	var f := AnimFeatures.all_on()
 	var at := clip.anticipate * 0.5
@@ -20,18 +77,10 @@ func test_being_hit_does_not_stop_the_swing() -> void:
 	var reaction := CharReaction.new()
 	reaction.strike(at, 0.8)
 	var shaken := clip.sample(at, f)
-	reaction.apply(shaken, at + 0.06, clip.rig)
-	# 자세는 계속 스윙이고, 그 위에 흔들림만 얹혔다.
+	reaction.apply(shaken, at + 0.02, clip.rig)
 	var moved := shaken.positions[CharPart.Id.TORSO].distance_to(clean.positions[CharPart.Id.TORSO])
 	assert_gt(moved, 0.5, "충격이 안 얹혔다")
-	assert_lt(moved, 20.0, "충격이 자세를 통째로 갈아치웠다")
-
-
-func test_the_shake_dies_out_on_its_own() -> void:
-	var reaction := CharReaction.new()
-	reaction.strike(0.0, 1.0)
-	assert_gt(reaction.load_at(0.06), 0.05, "맞은 직후에는 흔들려야 한다")
-	assert_lt(reaction.load_at(2.0), 0.01, "시간이 지나면 잦아들어야 한다")
+	assert_lt(moved, 30.0, "충격이 자세를 통째로 갈아치웠다")
 
 
 func test_many_hits_do_not_make_it_explode() -> void:
@@ -43,37 +92,17 @@ func test_many_hits_do_not_make_it_explode() -> void:
 	var pose := CharPose.from_rig(rig)
 	var rest := rig.rest_positions[CharPart.Id.TORSO]
 	reaction.apply(pose, 0.25, rig)
-	var thrown := pose.positions[CharPart.Id.TORSO].distance_to(rest)
-	assert_lt(thrown, CharReaction.SHIFT * CharReaction.MAX_LOAD + 1.0, "누적이 상한을 넘었다")
+	assert_lt(pose.positions[CharPart.Id.TORSO].distance_to(rest), CharReaction.PART_PUSH * 2.0)
+	assert_lt(absf(reaction.root_offset(0.25).x), CharReaction.ROOT_PUSH * 2.0, "뿌리가 폭주했다")
+
+
+func test_the_parts_do_not_all_settle_alike() -> void:
+	# 시작은 같고 **감쇠만 다르다** — 머리가 오래 남고 발이 먼저 선다.
 	assert_lt(
-		absf(pose.rotations[CharPart.Id.TORSO]), CharReaction.TWIST * CharReaction.MAX_LOAD + 0.01
+		CharReaction.RETURN[CharPart.Id.HEAD],
+		CharReaction.RETURN[CharPart.Id.FOOT_NEAR],
+		"머리가 발보다 오래 남아야 한다"
 	)
-
-
-func test_more_hits_shake_more_up_to_the_cap() -> void:
-	var one := CharReaction.new()
-	one.strike(0.0, 0.3)
-	var three := CharReaction.new()
-	for i in 3:
-		three.strike(float(i) * 0.005, 0.3)
-	assert_gt(three.load_at(0.05), one.load_at(0.05), "많이 맞으면 더 흔들려야 한다")
-
-
-func test_the_parts_do_not_all_shake_alike() -> void:
-	# `hit` 의 파츠별 감쇠를 그대로 쓴다 — 머리가 오래, 발이 짧게.
-	assert_lt(
-		CharReaction.DECAY[CharPart.Id.HEAD],
-		CharReaction.DECAY[CharPart.Id.FOOT_NEAR],
-		"머리가 발보다 오래 흔들려야 한다"
-	)
-	var reaction := CharReaction.new()
-	reaction.strike(0.0, 1.0)
-	var rig := CharRig.new()
-	var pose := CharPose.from_rig(rig)
-	reaction.apply(pose, 0.34, rig)
-	var head := absf(pose.rotations[CharPart.Id.HEAD])
-	var foot := absf(pose.rotations[CharPart.Id.FOOT_NEAR])
-	assert_gt(head, foot, "늦게까지 머리가 발보다 흔들려야 한다")
 
 
 func test_nothing_sinks_no_matter_what_is_added() -> void:
@@ -94,7 +123,26 @@ func test_nothing_sinks_no_matter_what_is_added() -> void:
 		t += 0.01
 
 
+func test_a_hit_cannot_stretch_the_arms_past_the_limit() -> void:
+	# **더한 뒤에 잰다.** 충격이 손을 팔 길이 밖으로 밀어낼 수 있다 (§25.29).
+	var rig := CharRig.new()
+	var clip := _swing()
+	var f := AnimFeatures.all_on()
+	var reaction := CharReaction.new()
+	reaction.strike(0.0, 2.0)
+	var t := 0.0
+	while t <= clip.loop_seconds():
+		var pose := clip.sample(t, f)
+		reaction.apply(pose, t, rig)
+		# **손만 본다.** 발은 땅이 잡고 있어서 반응 층도 안 끌어당긴다.
+		for part in [CharPart.Id.HAND_NEAR, CharPart.Id.HAND_FAR]:
+			var over := pose.overreach(part, rig, rig.reach_limit(part))
+			assert_almost_eq(over, 0.0, 0.5, "t = %.3f 에서 충격이 팔을 늘렸다" % t)
+		t += 0.01
+
+
 func test_spent_hits_are_forgotten_so_the_list_cannot_grow() -> void:
+	# 안 버리면 목록이 무한히 늘어 **오래 싸울수록 느려진다.**
 	var reaction := CharReaction.new()
 	for i in 20:
 		reaction.strike(float(i) * 0.001, 1.0)
