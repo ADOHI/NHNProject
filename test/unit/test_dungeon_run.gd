@@ -99,14 +99,20 @@ func test_descending_is_always_allowed() -> void:
 # ---------------------------------------------------------------- 이동과 기록
 
 
+## **턴 루프가 붙은 뒤로 한 번의 이동이 한 턴 전체가 된다.**
+##
+## 그래서 사건이 하나만 나는 것을 더는 단언하지 않는다 — 동쪽 방에는 몬스터가 있고,
+## 걸어 들어가면 조우가 함께 난다 (docs/design/05-rules.md §5.6 E1).
+## 여기서 잠그는 것은 **이동이 기록된다**는 것이고, 조우 쪽은
+## test_turn_encounter.gd 가 맡는다.
 func test_move_updates_position_turn_and_log() -> void:
 	var run := _make_fixed_run(1)
 	assert_true(run.move_player("east"))
 	assert_eq(run.player_room_id(), "east")
 	assert_eq(run.turn, 2)
-	assert_eq(run.event_log.count(), 1)
-	assert_eq(run.event_log.all()[0].kind, GameEvent.Kind.MOVED)
-	assert_eq(run.event_log.all()[0].room_name, "동쪽 방")
+	var moved := run.event_log.events_of_kind(GameEvent.Kind.MOVED)
+	assert_eq(moved.size(), 1)
+	assert_eq(moved[0].room_name, "동쪽 방")
 
 
 func test_illegal_move_changes_nothing() -> void:
