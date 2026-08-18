@@ -41,6 +41,15 @@ var skin: CharSkin = null
 ## 든 무기. **칸 수가 길이 · 두께를 정하고 그것이 다시 동작을 정한다** (§25.16).
 var weapon := CharWeapon.new(1)
 
+## **살의 흔들림.** `null` 이거나 세기 0 이면 완전히 꺼진다 (`docs/design/31-soft-body.md`).
+##
+## 꺼지면 셰이더 재질이 **아예 안 붙고** 그리는 사각형도 안 넓어진다 — 그래야
+## 지금과 같은 경로로 그려지고 픽셀이 같다 (§31.5.3).
+##
+## **합쳐 그릴 때(`merged`)는 안 붙인다.** 그쪽은 남의 캔버스에 찍어서 파츠의 재질이
+## 안 쓰이는데, 넓힌 사각형만 남으면 **그림이 커진다** (§31.6.1).
+var morph: MorphRig = null
+
 ## 얹는 연출 장치들. `null` 이면 아무것도 안 얹는다.
 var flourish := CharFlourish.none()
 
@@ -65,10 +74,24 @@ var _echoes: Array[CharPose] = []
 var _arc: PackedVector2Array = PackedVector2Array()
 var _flash := 0.0
 
+## 파츠마다 붙은 앵커의 **전역 색인.** `MorphState` 의 배열과 자리를 맞추는 데 쓴다.
+var _morph_index: Array[PackedInt32Array] = []
+
+## 지금 클립의 구동 하모닉. **셋업 때 한 번 뽑는다** (§31.1.3).
+var _morph_drives: Array[SoftDrive] = []
+var _morph_clip: CharClip = null
+var _morph_features: PackedFloat32Array = PackedFloat32Array()
+
 
 func setup(p_rig: CharRig) -> void:
 	rig = p_rig
 	_release()
+	_morph_clip = null
+	_morph_drives = []
+	_morph_index = []
+	_morph_index.resize(CharPart.COUNT)
+	for part in CharPart.COUNT:
+		_morph_index[part] = _anchor_indices(part)
 	_shapes.clear()
 	_shapes.resize(CharPart.COUNT)
 	# 뒤에서 앞으로 붙인다 — 자식 순서가 곧 그리는 순서다.
@@ -144,10 +167,77 @@ func _make_part(part: CharPart.Id) -> Node2D:
 		var flip_art: bool = skin != null and CharSkin.FACES_LEFT
 		var mirror: bool = flip_art != skin.borrowed.get(part, false)
 		sprite.setup(part, rig, skin.textures[part], mirror)
+		sprite.setup_morph(_anchors_of(part))
 		return sprite
 	var shape := CharPartShape.new()
 	shape.setup(part, rig)
 	return shape
+
+
+## 그 파츠에 붙은 앵커의 전역 색인. **합쳐 그릴 때는 비어 있다** (§31.6.1).
+func _anchor_indices(part: CharPart.Id) -> PackedInt32Array:
+	if morph == null or merged:
+		return PackedInt32Array()
+	return morph.indices_of(part)
+
+
+func _anchors_of(part: CharPart.Id) -> Array[MorphAnchor]:
+	var out: Array[MorphAnchor] = []
+	for i in _morph_index[part]:
+		out.append(morph.anchors[i])
+	return out
+
+
+## **모핑을 그 시각으로 맞춘다.** `apply_pose()` 뒤에 부른다.
+##
+## `at` 은 동작 시각(히트스톱으로 멈춘 뒤의 것), `wall` 은 실제 시각이다 — 둘이
+## 갈라지는 것이 히트스톱이고, 충격은 멈춰 있는 동안에도 계속 잦아들어야 한다.
+##
+## 구동 하모닉은 **클립이나 조절판이 바뀔 때만** 다시 뽑는다. 매 프레임 뽑으면
+## 앵커 하나당 클립을 64 번 표본하게 된다 (§31.1.3).
+func morph_at(
+	clip: CharClip,
+	at: float,
+	features: AnimFeatures,
+	pose: CharPose,
+	reaction: CharReaction = null,
+	wall := -1.0
+) -> void:
+	if morph == null or morph.is_off() or merged:
+		return
+	var fingerprint := _fingerprint(features)
+	if clip != _morph_clip or fingerprint != _morph_features:
+		_morph_clip = clip
+		_morph_features = fingerprint
+		_morph_drives = morph.drives_for(clip, features)
+	var state := MorphState.solve(morph, _morph_drives, at, reaction, wall)
+	for part in CharPart.COUNT:
+		var indices := _morph_index[part]
+		if indices.is_empty():
+			continue
+		var sprite := _shapes[part] as CharPartSprite
+		if sprite == null or not sprite.has_morph():
+			continue
+		var shifts := PackedVector2Array()
+		var bulges := PackedFloat32Array()
+		for i in indices:
+			shifts.append(state.local_shift(i, part, pose))
+			bulges.append(state.bulges[i])
+		sprite.apply_morph(shifts, bulges)
+
+
+## 조절판의 여섯 축을 값 하나로 묶는다. 이것이 바뀌면 구동을 다시 뽑아야 한다.
+static func _fingerprint(features: AnimFeatures) -> PackedFloat32Array:
+	return PackedFloat32Array(
+		[
+			features.delay,
+			features.arc,
+			features.squash,
+			features.asymmetry,
+			features.depth,
+			features.plant
+		]
+	)
 
 
 ## 그림을 리그 방향에 맞추는 뒤집기. 그림이 없으면 항등이다.
@@ -216,6 +306,7 @@ func show_at(
 	if reaction != null:
 		reaction.apply(pose, at if wall < 0.0 else wall, rig)
 	apply_pose(pose)
+	morph_at(clip, at, f, pose, reaction, wall)
 	_stretch_blade(clip, at, f)
 	set_motion(
 		past_poses(clip, at, f), blade_sweep(clip, at, f), _flash_left(at, impact, reaction, wall)

@@ -15,8 +15,21 @@ const _PROTO := "res://src/proto/unit_move/unit_move_proto.tscn"
 const _FRAMES := 300
 const _WARMUP := 60
 const _BUDGET := 16.7
-## 200 명은 안전선 밖이고 웹에서는 한 판에 몇 분이 걸린다. 40 과 100 만 잰다.
-const _COUNTS: Array[int] = [40, 100]
+## **천장을 찾는 훑기.** 40 은 웹에서 되고 100 은 안 된다 - 그 사이 경계가 어디인가.
+##
+## 웹에서 몇 명까지 되는지를 모르면 최적화가 필요한지도 모른다. 스쿼드 정원이 서넛이고
+## 100 명은 소환수와 여러 스쿼드 조우를 상정한 숫자이므로, **"수십 명"이 되는지가 답이다.**
+## 천장이 72 면 기획이 그 안에서 놀면 되고 24 면 기획을 고쳐야 한다.
+##
+## 200 명은 넣지 않는다. wasm 이 `memory access out of bounds` 로 죽은 조건이다.
+const _COUNTS: Array[int] = [8, 16, 24, 40, 56, 72, 100]
+
+## 판정선 - 계산 95 분위가 예산의 이 비율을 넘으면 그 인원은 웹에서 못 쓴다.
+##
+## **우리 계산이 예산의 절반을 넘으면 렌더와 브라우저에 남는 여유가 없다.** 웹 40 명에서
+## 우리 계산이 3.20 ms 인데 프레임은 24.80 ms 였다 - 남의 몫이 그만큼 크고, 우리가 절반을
+## 넘으면 그 위에 얹힌다.
+const _CEILING_RATIO := 0.5
 
 var _proto: Node2D
 var _label: Label
@@ -100,7 +113,7 @@ func _record() -> void:
 	# 앞의 결과도 못 본다 - 웹에서 실제로 그렇게 막혔다.
 	_emit(
 		(
-			"| %d | %.2f | %.2f | %.2f | %.2f | %.2f | %.2f | %d / %d | %d |"
+			"| %d | %.2f | %.2f | %.2f | %.2f | %.2f | %.2f | %d / %d | %d | %s |"
 			% [
 				_COUNTS[_index],
 				_at(steps, 0.50),
@@ -112,6 +125,7 @@ func _record() -> void:
 				over,
 				_frame_ms.size(),
 				ours,
+				"통과" if _at(steps, 0.95) <= _BUDGET * _CEILING_RATIO else "초과",
 			]
 		)
 	)

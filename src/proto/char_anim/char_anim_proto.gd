@@ -38,6 +38,7 @@ var _show_guides := false
 
 var _view: CharPartsView
 var _panel: AnimTuningPanel
+var _morph := MorphRig.none()
 var _help: Label
 var _status: Label
 
@@ -191,6 +192,7 @@ func _build_overlay() -> void:
 	_panel.position = PANEL_POSITION
 	_panel.features_changed.connect(_on_panel_features)
 	_panel.speed_changed.connect(_set_speed)
+	_panel.soft_body_changed.connect(_on_panel_soft_body)
 	layer.add_child(_panel)
 
 	_status = Label.new()
@@ -220,7 +222,9 @@ func _refresh() -> void:
 	if _view == null:
 		return
 	var clip := current_clip()
-	_view.apply_pose(clip.sample(_time, _features))
+	var pose := clip.sample(_time, _features)
+	_view.apply_pose(pose)
+	_view.morph_at(clip, _time, _features, pose)
 	_status.text = (
 		"%s   %.2f / %.2f 초   %s"
 		% [clip.clip_name(), _time, clip.loop_seconds(), "멈춤" if _paused else "재생"]
@@ -263,4 +267,18 @@ func _set_speed(speed: float) -> void:
 
 func _on_panel_features(features: AnimFeatures) -> void:
 	_features = features
+	_refresh()
+
+
+## 살의 흔들림 축이 움직였다. **뷰를 다시 세운다** — 재질을 붙이고 떼는 일이라서다.
+##
+## 세기가 0 이면 재질이 **아예 안 붙는다.** 붙여 놓고 0 을 넣는 것과 다르고,
+## 그 차이가 「끄면 지금 화면과 같다」를 성립시킨다 (§31.5.3).
+func _on_panel_soft_body(strength: float, hz: float, damping: float) -> void:
+	_morph = MorphRig.default_for(_rig, strength)
+	for anchor in _morph.anchors:
+		anchor.hz = hz
+		anchor.damping = damping
+	_view.morph = _morph
+	_view.setup(_rig)
 	_refresh()

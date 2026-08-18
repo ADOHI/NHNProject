@@ -14,9 +14,27 @@ enum State {
 	IDLE,  ## 명령이 없다
 	MOVING,  ## 자기 자리로 가는 중
 	HOLDING,  ## 앞을 막은 아군이 이미 자리를 잡아 기다린다. 비키면 다시 간다
-	ARRIVED,  ## 자리에 섰다
+	ARRIVED,  ## **제 자리에 섰다.** 도착 반경 안이다
+	STOPPED,  ## **여기서 그만두었다.** 제 자리는 아니지만 더 갈 수 없거나 갈 이유가 없다
 	BLOCKED,  ## 갈 수 없다고 판단하고 그만두었다
 }
+
+## **`ARRIVED` 와 `STOPPED` 를 왜 갈랐나.**
+##
+## 한 낱말이 두 가지를 가리키면 그 낱말로는 아무 계약도 못 쓴다. §9 는 "서 있는 유닛은
+## 밀리지 않는다"를 요구하고 §12 는 "자리 잡은 유닛을 밀어 길을 연다"를 요구하는데,
+## 둘이 **같은 상태 하나**를 가리키고 있었다(README §27).
+##
+## 되는 길이 다섯인데 **넷은 「제 자리에 왔다」가 아니라 「여기서 그만둔다」**였다.
+## 실제로 뒤진동에 잡힌 유닛들은 제 자리에서 17~31 픽셀 떨어져 있었다.
+##
+## | 뜻 | 언제 | 밀려도 되나 |
+## | --- | --- | --- |
+## | `ARRIVED` | 도착 반경 안에 들었다 | **안 된다.** 제 자리에 선 유닛이다 |
+## | `STOPPED` | 눌려서 · 자리를 뺏겨서 · 못 가서 · 무리가 다 서서 | **된다.** 그 몸이 길을 막고 있을 수 있다 |
+##
+## **둘 다 "다시 안 움직인다"는 같다.** 그러니 「끝났는가」를 묻는 자리는 둘 다 받아야 하고,
+## 그때 쓰는 것이 `is_settled()` 다. `== ARRIVED` 로 물으면 그 자리가 조용히 반쪽이 된다.
 
 ## 종류별 이름. 더블클릭으로 같은 종류를 전부 고를 때의 기준이기도 하다.
 const KIND_NAMES: Array[String] = ["보병", "사수", "정찰병"]
@@ -122,6 +140,25 @@ var yield_mark_push: float = 0.0
 ## 투영해야** "밀어 준 그 방향으로 실제로 남아 있는가"가 갈린다.
 var yield_mark_dir: Vector2 = Vector2.ZERO
 
+## **문 차례를 기다리는 중인가.** 0 이 아니면 그 좁은 목의 줄에 서 있다(칸 번호 + 1).
+##
+## `yield_goal` 과 **같은 구조다** - 상태로 걸고, 자리에 닿을 때까지 그쪽으로 가고,
+## 조건이 풀리면 놓는다. 새 층이 아니라 그 기계를 한 번 더 쓰는 것이다(README §28).
+## 자리를 따로 든 이유는 비켜서기와 문 차례가 같은 프레임에 서로 다른 곳을 가리킬 수 있어서다.
+var gate_id: int = 0
+var gate_goal: Vector2 = Vector2.ZERO
+
+## 길이 막혔다고 적혀 있어 **비켜선 자리에서 기다리는 중인가.**
+##
+## 의뢰인이 시연을 보고 짚은 것이다 - "뒷자리 애들 길 비키다가 바로 되돌아가더라."
+##
+## 맞다. **비켜선 유닛은 자기가 막힌 게 아니다.** 막힌 것은 앞의 유닛이고 비켜선 놈은 길이
+## 트여 있으니, 비킨 직후 제 목적지로 다시 간다. 지금 구조가 "내가 막혔나"만 물었기 때문이다.
+##
+## 그래서 **길에 적힌 통행 상태를 읽는다.** 직접 부딪혀 보지 않아도 "저 앞이 지금 막혔다"를
+## 알 수 있고, 그러면 비켜선 자리에서 기다린다. 뚫리면 표시가 풀리고 다시 간다.
+var waiting_for_path: bool = false
+
 ## 내가 "비켜라"를 건넨 상대의 번호와, 그것이 몇 프레임 전인지, 어느 간선이었는지.
 ##
 ## **화면에 사슬을 그리려고 있는 값이다.** 주황 고리만으로는 의뢰인이 못 봤다 —
@@ -192,6 +229,24 @@ var stall_frames: int = 0
 ## 시간에 멎는다"는 성질이 무너졌다. 몇 번 다시 해 보고 그래도 안 되면 정말 그만둔다.
 var hold_retries: int = 0
 
+## **정체를 재는 시계.** 목적지가 가까워지지 않은 채 흘려보낸 프레임 수와, 그때까지의 최단 거리.
+##
+## 사용자가 직접 짚은 요구가 출발점이다 - **"막히면 막혔다는 걸 직접 안 가보고도 알 수 있는
+## 거 아니야?"** 막힘 기억(`unit_jam.gd`)이 **멎은 유닛 칸만** 비싸게 매기고 있었다.
+## 느리게라도 가는 중인 유닛은 안 세는데, 실제로 가장 오래 걸리는 칸은 거기다.
+##
+## **`grind_frames` 로는 못 센다.** 그쪽은 아군에 눌리면 0 으로 되돌아간다 - 줄을 서서
+## 못 가는 것과 지형에 낀 것을 가르려고 일부러 그렇게 두었고, 그 판단은 지금도 옳다.
+## 여기서는 눌렸든 아니든 **목적지가 가까워졌는가만** 본다.
+##
+## **줄이 나아가는 동안에는 이 값이 안 오른다.** 앞이 한 몸씩 빠지면 뒤도 그만큼 가까워지고,
+## 그때마다 0 으로 되돌아간다. 제자리에서 맴돌 때만 오른다 - 그것이 정체와 줄서기의 차이다.
+##
+## `best_distance` 를 안 쓰고 따로 든 이유는, 그쪽이 지형 낌을 잡는 안전망(`_watch_grinding`)의
+## 값이라 건드리면 그 안전망의 판정까지 같이 움직이기 때문이다. **한 번에 하나씩 바꾼다.**
+var creep_best: float = INF
+var creep_frames: int = 0
+
 ## 이번 프레임에 **아군의 몸**이 가려던 방향을 막고 있는가. 서 있든 가고 있든 상관없다.
 ##
 ## 지형에 낀 것을 알아채는 안전망(`_watch_grinding`)이 이 값을 본다. 줄을 서서 못 가는 것과
@@ -236,6 +291,7 @@ func is_yielding() -> bool:
 func end_yield() -> void:
 	yield_for = 0
 	yield_goal = Vector2.ZERO
+	waiting_for_path = false
 	if yield_was_holding and state == State.MOVING:
 		state = State.HOLDING
 		velocity = Vector2.ZERO
@@ -251,6 +307,14 @@ func is_moving() -> bool:
 	return state == State.MOVING
 
 
+## **더 안 움직이는가.** 제 자리에 섰든 그냥 그만뒀든 다시는 스스로 안 간다.
+##
+## 「끝났는가」를 묻는 자리는 전부 이것을 써야 한다. `== ARRIVED` 로 물으면 `STOPPED` 를
+## 놓쳐서 조용히 반쪽이 된다.
+func is_settled() -> bool:
+	return state == State.ARRIVED or state == State.STOPPED
+
+
 ## 명령을 새로 받는다. 이전 명령의 흔적(막힘 판정, 대형 속도)을 반드시 지운다.
 ##
 ## 지우지 않으면 직전에 막혀 포기한 유닛이 새 명령에도 그대로 서 있는다.
@@ -261,12 +325,17 @@ func accept_order(new_order_id: int, slot: Vector2, sight_interval: float) -> vo
 	state = State.MOVING
 	goal_distance = position.distance_to(slot)
 	best_distance = goal_distance
+	creep_best = goal_distance
+	creep_frames = 0
 	grind_frames = 0
 	press_frames = 0
 	hold_retries = 0
 	yield_for = 0
 	yield_goal = Vector2.ZERO
 	yield_was_holding = false
+	waiting_for_path = false
+	gate_id = 0
+	gate_goal = Vector2.ZERO
 	pace = 1.0
 	speed = velocity.length()
 	detour = 0.0
@@ -308,6 +377,8 @@ func hold() -> void:
 func resume() -> void:
 	state = State.MOVING
 	best_distance = position.distance_to(goal)
+	creep_best = best_distance
+	creep_frames = 0
 	grind_frames = 0
 	press_frames = 0
 	# **묵은 조향을 버린다.** 기다리는 동안 `steer_dir` 은 갱신되지 않으므로, 그대로 두면
@@ -332,6 +403,8 @@ func state_name() -> String:
 			return "양보"
 		State.ARRIVED:
 			return "도착"
+		State.STOPPED:
+			return "멈춤"
 		State.BLOCKED:
 			return "막힘"
 		_:

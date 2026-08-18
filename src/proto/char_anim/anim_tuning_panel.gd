@@ -14,6 +14,9 @@ extends PanelContainer
 signal features_changed(features: AnimFeatures)
 signal speed_changed(speed: float)
 
+## 살의 흔들림 축이 바뀌었다 — 세기 · 고유 진동수 · 감쇠 (`docs/design/31-soft-body.md`).
+signal soft_body_changed(strength: float, hz: float, damping: float)
+
 const ROWS: Array[Array] = [
 	["delay", "지연", "파츠가 몸을 늦게 따라오는 정도"],
 	["arc", "호", "경로의 좌우 성분 - 머리의 8 자"],
@@ -26,11 +29,33 @@ const ROWS: Array[Array] = [
 const SPEED_MIN := 0.1
 const SPEED_MAX := 2.0
 
+## 살의 흔들림 축 셋. **셋이 서로 겹치지 않는다** — 겹치면 조절판이 거짓말한다 (§25.5.2).
+##
+## | 축 | 무엇만 바꾸나 |
+## | --- | --- |
+## | 세기 | 진폭 전체. `0` 이면 완전히 꺼진다 (재질도 안 붙는다) |
+## | 무름 | 고유 진동수. **낮을수록 무르다** — 낮은 구동에도 반응하지만 walk 에서 공진한다 |
+## | 감쇠 | 얼마나 빨리 멎나. 진폭은 거의 안 건드린다 |
+##
+## 「무름」은 화면에 뿌리는 이름이고 값은 Hz 다. 축이 **거꾸로** 걸려 있다 —
+## 슬라이더를 올리면 물러진다.
+const SOFT_ROWS: Array[Array] = [
+	["strength", "흔들림", "가슴과 머리카락이 몸을 늦게 따라오는 양", 0.0, 2.0, 0.05],
+	["softness", "무름", "낮은 진동수 = 무르다. 올리면 걸을 때 크게 흔들린다", 0.0, 1.0, 0.05],
+	["damping", "감쇠", "얼마나 빨리 멎나. 낮으면 오래 남는다", 0.05, 0.9, 0.05],
+]
+
+## 「무름」 슬라이더가 훑는 고유 진동수 범위(Hz). 위가 단단한 쪽이다.
+const SOFT_HZ_STIFF := 7.0
+const SOFT_HZ_LIMP := 1.2
+
 var _features := AnimFeatures.all_on()
 var _sliders: Dictionary[String, HSlider] = {}
 var _values: Dictionary[String, Label] = {}
 var _speed_slider: HSlider
 var _speed_value: Label
+var _soft: Dictionary[String, HSlider] = {}
+var _soft_values: Dictionary[String, Label] = {}
 
 
 func _init() -> void:
@@ -53,6 +78,13 @@ func _init() -> void:
 
 	column.add_child(HSeparator.new())
 	_add_speed_row(column)
+
+	column.add_child(HSeparator.new())
+	var soft_title := Label.new()
+	soft_title.text = "살의 흔들림"
+	column.add_child(soft_title)
+	for row: Array in SOFT_ROWS:
+		_add_soft_row(column, row)
 
 	var note := Label.new()
 	note.text = "다 0 으로 내리면 관절 없는 인형이 된다"
@@ -138,6 +170,58 @@ func _add_speed_row(column: VBoxContainer) -> void:
 	row.add_child(_speed_value)
 
 	column.add_child(row)
+
+
+## 살의 흔들림 축 하나. 축이 서로 겹치지 않게 **따로** 만든다.
+func _add_soft_row(column: VBoxContainer, row: Array) -> void:
+	var field := row[0] as String
+	var head := HBoxContainer.new()
+	var name_label := Label.new()
+	name_label.text = row[1] as String
+	name_label.custom_minimum_size = Vector2(64.0, 0.0)
+	head.add_child(name_label)
+
+	var slider := HSlider.new()
+	slider.min_value = row[3] as float
+	slider.max_value = row[4] as float
+	slider.step = row[5] as float
+	slider.value = soft_defaults()[field]
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.focus_mode = Control.FOCUS_NONE
+	slider.value_changed.connect(_on_soft_changed.bind(field))
+	head.add_child(slider)
+
+	var value := Label.new()
+	value.text = _format(slider.value)
+	value.custom_minimum_size = Vector2(48.0, 0.0)
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	head.add_child(value)
+
+	column.add_child(head)
+
+	var hint_label := Label.new()
+	hint_label.text = "  " + (row[2] as String)
+	column.add_child(hint_label)
+
+	_soft[field] = slider
+	_soft_values[field] = value
+
+
+## 조절판이 처음 들고 시작하는 값. **기본은 꺼짐이다** — 켜는 것은 사람이 한다.
+static func soft_defaults() -> Dictionary[String, float]:
+	return {"strength": 0.0, "softness": 0.0, "damping": 0.30}
+
+
+## 「무름」 슬라이더를 고유 진동수로 편다. 올리면 물러진다.
+static func hz_from_softness(softness: float) -> float:
+	return lerpf(SOFT_HZ_STIFF, SOFT_HZ_LIMP, clampf(softness, 0.0, 1.0))
+
+
+func _on_soft_changed(value: float, field: String) -> void:
+	_soft_values[field].text = _format(value)
+	soft_body_changed.emit(
+		_soft["strength"].value, hz_from_softness(_soft["softness"].value), _soft["damping"].value
+	)
 
 
 func _on_feature_changed(value: float, field: String) -> void:
