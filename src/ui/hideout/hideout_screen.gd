@@ -275,7 +275,7 @@ func _status_lines() -> PackedStringArray:
 	var lines := PackedStringArray()
 	lines.append(
 		(
-			"아지트  %d x %d 칸 · 건물 %d · 빈 칸 %d"
+			"아지트  %d x %d 칸 • 건물 %d • 빈 칸 %d"
 			% [_grid.cols, _grid.rows, _grid.buildings().size(), _grid.free_cell_count()]
 		)
 	)
@@ -285,10 +285,10 @@ func _status_lines() -> PackedStringArray:
 	var cell := _cursor_view.cell()
 	var building := _grid.building_at(cell)
 	if building == null:
-		lines.append("가리키는 칸: (%d, %d) · 빈 칸" % [cell.x, cell.y])
+		lines.append("가리키는 칸: (%d, %d) • 빈 칸" % [cell.x, cell.y])
 	else:
 		lines.append(
-			"가리키는 칸: (%d, %d) · %s — %s" % [cell.x, cell.y, building.label(), building.note()]
+			"가리키는 칸: (%d, %d) • %s — %s" % [cell.x, cell.y, building.label(), building.note()]
 		)
 	lines.append(_placement_line())
 	return lines
@@ -320,14 +320,14 @@ func _placement_line() -> String:
 func _help_text() -> String:
 	var lines := PackedStringArray(
 		[
-			"④ 시점 · ③ 배치 · ① 배회가 선다. 끌어 넣기 · 말풍선 · 메뉴는 아직 없다",
+			"(4) 시점 • (3) 배치 • (1) 배회가 선다. 끌어 넣기 • 말풍선 • 메뉴는 아직 없다",
 			"docs/design/30-hideout.md",
 			"",
-			"1 2 3           공방 · 정보실 · 접선처 짓기",
-			"왼클릭          놓는 중이면 확정 · 아니면 건물 집기",
-			"오른클릭 · ESC  그만두기",
-			"WASD · 방향키   화면 이동",
-			"휠              확대 · 축소",
+			"1 2 3           공방 • 정보실 • 접선처 짓기",
+			"왼클릭          놓는 중이면 확정 • 아니면 건물 집기",
+			"오른클릭 • ESC  그만두기",
+			"WASD • 방향키   화면 이동",
+			"휠              확대 • 축소",
 			"가운데 버튼 끌기  화면 끌기",
 		]
 	)
