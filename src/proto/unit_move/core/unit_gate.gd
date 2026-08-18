@@ -227,7 +227,7 @@ static func _wants_gate(
 	# 문보다 비싼 자리에 서 있으면 아직 문 이쪽이다. 넘은 유닛은 문보다 싸다.
 	var mine := order.flow.cost_at(field.grid.world_to_cell(agent.position))
 	var gate_cost := order.flow.cost_at(cell)
-	if mine >= ProtoFlowField.UNREACHABLE * 0.5:
+	if mine >= FlowField.UNREACHABLE * 0.5:
 		return false
 	return mine > gate_cost
 
