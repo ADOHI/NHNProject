@@ -36,6 +36,16 @@ enum Plate {
 ## 두 판이 어긋난 정도. UiTokens.SLIP 에 곱해진다.
 @export var slip_amount: float = UiTokens.SLIP_STORY
 
+## 폭에 맞춰 글자를 접는다.
+##
+## 기본이 접지 않는 것인 이유는, 이 부품이 처음 쓰인 자리가 **숫자와 짧은 이름**이라
+## 접을 일이 없었기 때문이다. 렉카 게시글의 제목은 한 줄짜리 문장이고 피드는 좁은 단이라
+## (docs/design/08-ui-ux.md 8.2) 접지 않으면 단 밖으로 나간다.
+##
+## 접을 때는 높이를 실제 줄 수에서 다시 잰다. 접힌 라벨의 최소 크기는 한 줄 기준이라
+## 그대로 두면 **두 줄짜리 제목이 한 줄 높이 칸에 눌려** 아래가 잘린다.
+@export var wrap: bool = false
+
 ## 정합이 미세하게 떠다닌다. **인쇄기는 멈추지 않는다.**
 ## 매 프레임 자리를 다시 잡으므로 화면에서 몇 개만 켠다.
 @export var drift: bool = false
@@ -51,6 +61,9 @@ func _ready() -> void:
 	_ink.theme_type_variation = variation
 	_apply_text()
 	set_process(drift)
+	# 폭은 담는 쪽이 정한다. 폭이 정해질 때마다 줄 수가 바뀌므로 높이를 다시 잰다.
+	resized.connect(_reflow)
+	_reflow()
 
 
 func _process(_delta: float) -> void:
@@ -120,3 +133,22 @@ func _apply_text() -> void:
 	custom_minimum_size = _ink.get_combined_minimum_size()
 	_ink.size = custom_minimum_size
 	_ghost.size = custom_minimum_size
+	_reflow()
+
+
+## 접기로 했으면 폭에 맞추고 높이를 줄 수에서 다시 잰다.
+##
+## 어긋난 판이 오른쪽으로 밀려 나가므로 그만큼 폭에서 뺀다. 안 빼면 별색판의
+## 마지막 글자가 단 밖으로 나간다 — **어긋남은 이 부품의 서명이지 여백이 아니다.**
+func _reflow() -> void:
+	if not wrap or _ink == null or size.x <= 0.0:
+		return
+	var width := maxf(size.x - absf(UiTokens.slip(slip_amount).x), 1.0)
+	for label in [_ghost, _ink]:
+		var target := label as Label
+		target.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		target.size = Vector2(width, target.size.y)
+	var height := float(_ink.get_line_count() * _ink.get_line_height())
+	for label in [_ghost, _ink]:
+		(label as Label).size = Vector2(width, height)
+	custom_minimum_size = Vector2(0.0, height + absf(UiTokens.slip(slip_amount).y))

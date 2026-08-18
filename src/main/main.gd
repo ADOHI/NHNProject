@@ -9,6 +9,9 @@ const FIRST_SEED := 1
 
 const _SHEET_SHADER := preload("res://src/ui/style/shaders/press_sheet.gdshader")
 
+## 조작 막대가 아래에서 차지하는 높이. 피드가 그 위를 덮으면 버튼을 못 누른다.
+const _CONTROL_BAR_HEIGHT := 132.0
+
 var _seed := FIRST_SEED
 
 ## 지금 보고 있는 던전 성격 (DungeonCatalog 의 색인).
@@ -19,6 +22,13 @@ var _character := 0
 
 ## 지금 판의 설계도. 등급을 띄우려고 들고 있는다.
 var _plan: DungeonBlueprint = null
+
+## 지금 판. 화면들에 나눠 준 것과 같은 것을 여기서도 들고 있는다 —
+## 사건을 피드에 넘기려면 로그를 읽을 수 있어야 한다.
+var _run: DungeonRun = null
+
+## 이 판의 렉카 피드. **판마다 새로 만든다** — 접두어와 닉네임 고리가 다시 섞여야 한다.
+var _feed: RekkaFeed = null
 var _debug_visible := false
 
 ## 보스까지의 두 길을 그리고 있는가.
@@ -34,6 +44,7 @@ var _sheet: ShaderMaterial
 @onready var _board: DungeonBoard = %DungeonBoard
 @onready var _page: PressPage = %Page
 @onready var _plate: PressPlate = %PressPlate
+@onready var _feed_view: RekkaFeedView = %Feed
 @onready var _overlay: DebugOverlay = %DebugOverlay
 @onready var _debug_button: Button = %DebugButton
 @onready var _routes_button: Button = %RoutesButton
@@ -60,12 +71,18 @@ func _ready() -> void:
 	_board.player_acted.connect(_print_edition)
 	_board.struck.connect(_plate.strike_at)
 	_board.struck.connect(_sound_on_strike)
+	# 행동이 끝나면 그 턴이 기사가 된다. 계획 페이즈에 읽으라고 만든 장치다 (08 8.1).
+	_board.player_acted.connect(_publish_turn)
+	# **판과 피드는 서로의 내부를 들여다보지 않는다.** 여기서 한 줄로 잇는다 (32 32.5.3).
+	_feed_view.room_selected.connect(_board.highlight_room)
+	resized.connect(_layout_feed)
 	for button in [_generate_button, _routes_button, _debug_button]:
 		(button as Button).pressed.connect(_strike_from.bind(button))
 		(button as Button).pressed.connect(_sound_on_press)
 	_size_slider.value_changed.connect(func(_value: float) -> void: _update_size_label())
 
 	_build_run()
+	_layout_feed()
 	# **판을 만든 뒤에 라벨을 쓴다.** 등급은 만들어진 판을 재서 나오므로(DungeonGrade),
 	# 순서를 뒤집으면 **첫 판만 등급이 빈칸**이 된다 — 새 판을 한 번 찍어야 나타났다.
 	_update_size_label()
@@ -137,9 +154,17 @@ func _generate_new() -> void:
 
 
 func _build_run() -> void:
-	# 판은 여기서 만들어 화면 둘에 나눠 준다. 화면끼리 서로의 내부를 들여다보지 않는다.
+	# 판은 여기서 만들어 화면 셋에 나눠 준다. 화면끼리 서로의 내부를 들여다보지 않는다.
 	var run := SampleDungeons.create_run(_seed, int(_size_slider.value), _character)
 	_plan = run.blueprint
+	_run = run
+	# 소금으로 시드를 준다. 판이 바뀌면 접두어와 닉네임 배열도 바뀌어야 한다
+	# (docs/design/19-rekka-voice.md 19.B.9 2차).
+	_feed = RekkaFeed.new(_seed)
+	_feed_view.bind(_feed)
+	# **판이 시작하자마자 한 편이 걸린다.** 사건이 없는 턴에도 기사는 나가고
+	# (32 32.1), 빈 목록은 이 장치가 무엇인지 설명하지 못한다.
+	_feed.record_turn(run, [] as Array[GameEvent])
 	_board.setup(run, _seed)
 	_overlay.bind(run, _seed)
 	if not _board.player_acted.is_connected(_overlay.refresh):
@@ -149,6 +174,35 @@ func _build_run() -> void:
 	_overlay.refresh()
 	_page.set_edition("제 %d 판" % _board.turn_number())
 	_page.set_folio(_build_folio_text())
+
+
+## 방금 끝난 턴을 기사로 낸다.
+##
+## **직전 턴의 사건을 읽는다.** `DungeonRun.move_player()` 는 사건을 기록한 뒤에
+## 턴을 올리므로, 지금 `turn` 은 이미 다음 턴을 가리킨다. 그대로 읽으면 빈 턴이 나간다.
+func _publish_turn() -> void:
+	if _run == null or _feed == null:
+		return
+	_feed.record_turn(_run, _run.event_log.events_in_turn(_run.turn - 1))
+
+
+## 피드를 화면 어디에 둘 것인가.
+##
+## 08-ui-ux.md 8.2 — **판 · 피드 · 상태를 한 화면에서 본다. 탭으로 나누지 않는다.**
+## 매 턴 판단이 이 셋의 대조에서 나오기 때문이다.
+## 세로 화면(모바일)에서는 옆에 세울 자리가 없으므로 **판 위에 피드를 쌓는다.**
+func _layout_feed() -> void:
+	if _feed_view == null:
+		return
+	var margin := float(UiTokens.SPACE_GAP)
+	if size.x >= size.y:
+		var width := clampf(size.x * 0.30, 300.0, 460.0)
+		_feed_view.position = Vector2(size.x - width - margin, margin)
+		_feed_view.size = Vector2(width, size.y - margin * 2.0 - _CONTROL_BAR_HEIGHT)
+		return
+	var height := size.y * 0.42
+	_feed_view.position = Vector2(margin, size.y - height - margin)
+	_feed_view.size = Vector2(size.x - margin * 2.0, height - _CONTROL_BAR_HEIGHT)
 
 
 func _update_size_label() -> void:

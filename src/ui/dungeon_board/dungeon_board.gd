@@ -79,6 +79,12 @@ const _ROUTE_DETOUR_SCALE := 1.0
 ## 우회로 파선의 한 칸 길이. 통로 점선(DASH_LENGTH)보다 길어야 **띠**로 읽힌다.
 const _ROUTE_DASH_SCALE := 3.0
 
+## 기사가 짚은 방을 표시로 남겨 두는 시간.
+##
+## 계속 남겨 두면 판에 붉은 표가 쌓여 무엇이 **지금 짚은 것**인지 알 수 없게 된다.
+## 사라지는 표시여야 "방금 그 기사가 여기를 말한 것" 이 된다.
+const _MARK_TIME := 2.6
+
 ## 개발 모드에서는 숨김을 걷어낸다.
 ##
 ## 플레이 화면은 정보를 숨기는 것이 곧 재미라서(docs/design/13-information-design.md),
@@ -115,6 +121,13 @@ var _last_threat := -1
 ## 판마다 한 번만 잰다. 매 프레임 다시 재면 방 50개짜리 판에서 너비 우선 탐색이
 ## 두 번씩 돌아간다 — 그리는 것은 이미 정해진 길을 따라가는 일뿐이다.
 var _routes: Dictionary = {}
+
+## 기사가 짚은 방과 그 표시가 남은 시간.
+##
+## 피드가 이 화면의 내부를 들여다보지 않는다 — 신호가 `main` 을 거쳐 여기로 온다
+## (docs/design/32-rekka-feed.md 32.5.3). 이 화면이 아는 것은 방 id 하나뿐이다.
+var _marked_id := ""
+var _mark_life := 0.0
 
 @onready var _room_layer: Control = %RoomLayer
 @onready var _room_label: Label = %RoomLabel
@@ -197,6 +210,31 @@ func center_on_player() -> void:
 	redraw()
 
 
+## 기사가 가리킨 방을 짚는다. **기사와 판이 이어지는 자리다.**
+##
+## docs/design/13-information-design.md 13.7 이 필수로 못 박았다 —
+## *"기사에 나온 방 이름을 클릭하면 판 위에서 강조되는 정도의 연결은 필수다.
+## 안 그러면 기사는 장식이 된다."*
+##
+## **배율은 건드리지 않는다.** 지금 보고 있는 배율은 플레이어가 고른 것이고,
+## 기사를 하나 눌렀다고 그 선택을 되돌리면 판을 다시 훑어야 한다.
+func highlight_room(room_id: String) -> void:
+	if _run == null or not _run.graph.has_room(room_id):
+		return
+	_marked_id = room_id
+	_mark_life = _MARK_TIME
+	center_on_room(room_id)
+
+
+## 그 방이 화면 가운데 오도록 지도를 옮긴다.
+func center_on_room(room_id: String) -> void:
+	if _run == null or not _positions.has(room_id):
+		return
+	_pan = size * 0.5 - (_positions[room_id] as Vector2) * _zoom
+	_clamp_pan()
+	redraw()
+
+
 func _gui_input(event: InputEvent) -> void:
 	# 방 위젯은 Button 이라 자기 클릭을 먼저 가져간다.
 	# 여기까지 온 입력은 빈 곳에서 일어난 것이므로 지도 조작으로 해석한다.
@@ -215,7 +253,14 @@ func _gui_input(event: InputEvent) -> void:
 ## 끌지 않고도 지도를 훑을 수 있어야 한다. 지도가 화면보다 큰 판에서
 ## 매번 끌어다 놓는 것은 번거롭다.
 func _process(delta: float) -> void:
-	if _run == null or _dragging or not _pointer_moved or not is_visible_in_tree():
+	if _run == null:
+		return
+	# 짚은 표시는 끌든 안 끌든 사그라든다. 아래 이른 반환보다 먼저 처리해야
+	# 손을 놓고 있는 동안 표시가 영영 남지 않는다.
+	if _mark_life > 0.0:
+		_mark_life = maxf(0.0, _mark_life - delta)
+		queue_redraw()
+	if _dragging or not _pointer_moved or not is_visible_in_tree():
 		return
 	# 창이 활성 상태가 아니면 멈춘다. 다른 창을 보는 동안 지도가 계속 흘러가면 안 된다.
 	if not get_window().has_focus() or _pointer_blocked_by_ui():
@@ -391,6 +436,26 @@ func _draw() -> void:
 		var length := (UiTokens.DASH_LENGTH * 2.0 * _zoom) if blocked else dash
 		for segment in UiShape.dash_segments(from_pos, to_pos, length, gap):
 			draw_line(segment[0], segment[1], color, width, true)
+	_draw_mark()
+
+
+## 기사가 짚은 방에 판 맞춤표를 찍는다.
+##
+## 방 위젯 자체를 물들이지 않는 이유는, 위젯의 색이 **판이 잰 값**을 말하고 있기
+## 때문이다 (`room_node.gd`). 거기에 다른 뜻의 색을 얹으면 두 정보가 섞인다.
+## 맞춤표는 위젯 바깥에 찍히므로 값을 가리지 않는다.
+func _draw_mark() -> void:
+	if _mark_life <= 0.0 or _marked_id.is_empty() or not _positions.has(_marked_id):
+		return
+	var center := _map_to_screen(_marked_id)
+	# 방 위젯의 **바깥**에 걸리는 크기여야 한다. 위젯은 자기 종이를 칠하는 자식이고
+	# 자식은 이 그리기보다 나중에 그려지므로, 안쪽에 그리면 통째로 가려진다.
+	# 실제로 0.9 로 그렸다가 한 획도 안 보였다.
+	var radius := maxf(_node_extent().length(), 1.0) * 1.25
+	var color := UiTokens.fade(UiTokens.SPOT, _mark_life / _MARK_TIME)
+	draw_polyline(UiShape.register_ring(center, radius), color, UiTokens.RULE_TEXT * _zoom)
+	for stroke in UiShape.register_mark(center, radius * 1.35, radius * 0.75):
+		draw_polyline(stroke, color, UiTokens.RULE_HAIR * _zoom)
 
 
 ## 보스까지의 두 길. **우회로를 먼저, 지름길을 나중에** 그린다.
