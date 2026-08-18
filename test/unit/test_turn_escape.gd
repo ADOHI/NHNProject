@@ -40,7 +40,7 @@ func test_holding_long_enough_gets_you_out() -> void:
 		run.hold_at_exit()
 
 	assert_true(run.finished, "버텼는데 못 나갔다")
-	assert_eq(run.escape_turns_left(), 0)
+	assert_eq(run.turn, TurnResolver.ESCAPE_TURNS + 1, "버틴 턴 수가 다르다")
 
 
 func test_getting_out_is_an_event() -> void:

@@ -103,7 +103,7 @@ func plan_for(actor: Actor, room_id: String) -> TurnIntent:
 	var step := _first_step_toward(actor, room_id, _loot.remaining_room_ids())
 	if step.is_empty():
 		return _head_for_exit(actor, room_id)
-	return _step_or_flinch(actor, step)
+	return TurnIntent.move(actor.id, step)
 
 
 ## 나갈 때가 됐는가. **성향이 정하는 유일한 판단이다.**
@@ -116,7 +116,7 @@ func target_value_of(actor_id: String) -> int:
 	return maxi(1, DEFAULT_TARGET_VALUE + reckless / TEMPERAMENT_SWING)
 
 
-## 자기보다 큰 방 앞에서 멈추는가.
+## 위험한 방을 **길에서 빼고 도는가.**
 ##
 ## 신중한 쪽(`RECKLESS` 가 음수)만 그렇다. 무모한 쪽은 그대로 걸어 들어간다 —
 ## 그것이 곧 렉카 기사의 소재가 된다.
@@ -135,17 +135,18 @@ func _head_for_exit(actor: Actor, room_id: String) -> TurnIntent:
 	var step := _first_step_toward(actor, room_id, _rooms_of_kind(Room.Kind.EXIT))
 	if step.is_empty():
 		return TurnIntent.stay(actor.id)
-	return _step_or_flinch(actor, step)
+	return TurnIntent.move(actor.id, step)
 
 
-## 그 방으로 갈 것인가, 움츠릴 것인가.
+## 그 주체가 그 방에 발을 들일 것인가.
 ##
-## 신중한 NPC 는 **자기 전투력보다 큰 방에 들어가지 않는다.** 대신 제자리를 지킨다 —
-## 다른 길로 돌게 만들면 판 위에서 왔다 갔다 하는 그림이 되고, 그건 회피가 아니라 소음이다.
-func _step_or_flinch(actor: Actor, step_room_id: String) -> TurnIntent:
-	if is_cautious(actor.id) and _graph.threat_at(step_room_id) > actor.threat:
-		return TurnIntent.stay(actor.id)
-	return TurnIntent.move(actor.id, step_room_id)
+## 신중한 쪽만 가린다 — **자기 전투력보다 큰 방에는 들어가지 않는다.**
+## 무모한 쪽은 그대로 걸어 들어가고, 그것이 곧 렉카 기사의 소재가 된다.
+##
+## 플레이어도 방의 위험도에 들어가므로(§13.5.3), 이 한 줄이 그대로
+## **신중한 NPC 가 강한 스쿼드를 피한다**가 된다. 규칙을 따로 쓰지 않았다.
+func _will_enter(actor: Actor, room_id: String) -> bool:
+	return not is_cautious(actor.id) or _graph.threat_at(room_id) <= actor.threat
 
 
 ## 목표 방들 중 **가장 가까운 곳을 향한 첫 걸음.** 갈 수 없으면 빈 문자열.
@@ -153,6 +154,16 @@ func _step_or_flinch(actor: Actor, step_room_id: String) -> TurnIntent:
 ## 너비 우선 탐색이고 간선은 **그 주체의 민첩으로 지날 수 있는 것만** 쓴다.
 ## 민첩을 무시하면 못 오르는 방을 목표로 잡고 매 턴 벽에 부딪힌다
 ## (docs/design/07-level-design.md §7.2.6).
+##
+## ## 위험한 방은 길에서 빼고 **경로를 다시 뽑는다**
+##
+## 처음에는 다음 한 칸만 보고 위험하면 제자리를 지키게 했다. **캡처가 그것을 깼다** —
+## 경쟁자가 위험한 방 앞에서 멈춘 뒤 **판이 끝날 때까지 그 자리에 서 있었다.**
+## 그러면 위험도 변화량이 사라지고 §13.5 의 추론이 다시 죽는다.
+##
+## 지금은 위험한 방을 **길이 아닌 것으로 치고** 탐색한다. 돌아갈 길이 있으면 돌아가고,
+## 없으면 목표를 못 찾은 것이 되어 **탈출구로 향한다.** 회피가 멈춤이 아니라
+## 판단이 되고, 경쟁자는 계속 움직인다.
 func _first_step_toward(actor: Actor, from_id: String, targets: Array[String]) -> String:
 	if targets.is_empty() or from_id.is_empty():
 		return ""
@@ -169,7 +180,7 @@ func _first_step_toward(actor: Actor, from_id: String, targets: Array[String]) -
 			reached = current
 			break
 		for next_id in _graph.traversable_neighbors(current, actor.agility):
-			if came.has(next_id):
+			if came.has(next_id) or not _will_enter(actor, next_id):
 				continue
 			came[next_id] = current
 			queue.append(next_id)

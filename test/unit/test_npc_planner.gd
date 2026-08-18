@@ -118,7 +118,10 @@ func test_the_careful_one_leaves_earlier() -> void:
 	assert_lt(run.planner.target_value_of("rival"), NpcPlanner.DEFAULT_TARGET_VALUE)
 
 
-func test_the_careful_one_stops_in_front_of_something_bigger() -> void:
+func test_the_careful_one_goes_around_instead_of_in() -> void:
+	# **처음에는 멈추게 했다가 캡처에서 깨졌다** — 경쟁자가 위험한 방 앞에 서서
+	# 판이 끝날 때까지 안 움직였고, 그러면 위험도 변화량이 사라진다 (§13.5).
+	# 지금은 위험한 방을 길에서 빼고 다시 뽑는다. 갈 데가 없으면 나간다.
 	var run := Fixtures.run("hall")
 	var rival := Fixtures.rival(run, "hall", "rival", 2)
 	Fixtures.monster(run, "vault", "warden", 9)
@@ -126,7 +129,21 @@ func test_the_careful_one_stops_in_front_of_something_bigger() -> void:
 
 	var intent := run.planner.plan_for(rival, "hall")
 
-	assert_eq(intent.kind, TurnIntent.Kind.STAY, "자기보다 큰 방으로 걸어 들어갔다")
+	assert_ne(intent.target_room_id, "vault", "자기보다 큰 방으로 걸어 들어갔다")
+	assert_eq(intent.target_room_id, "gate", "돌아갈 길이 없으면 나가야 한다")
+
+
+func test_the_careful_one_only_stops_when_it_is_boxed_in() -> void:
+	# 사방이 다 위험하면 그때는 제자리를 지킨다. **갇힌 것**이지 얼어붙은 것이 아니다.
+	var run := Fixtures.run("hall")
+	var rival := Fixtures.rival(run, "hall", "rival", 2)
+	Fixtures.monster(run, "vault", "warden", 9)
+	Fixtures.monster(run, "gate", "gatekeeper", 9)
+	run.planner.set_temperament("rival", Fixtures.temper(NpcAxis.Kind.RECKLESS, -80))
+
+	var intent := run.planner.plan_for(rival, "hall")
+
+	assert_eq(intent.kind, TurnIntent.Kind.STAY)
 
 
 func test_the_reckless_one_walks_straight_in() -> void:

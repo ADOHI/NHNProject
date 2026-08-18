@@ -112,9 +112,13 @@ var _dragging := false
 ## 카메라가 저 혼자 흘러간다. 사용자가 지도를 만지기 전에는 가만히 있어야 한다.
 var _pointer_moved := false
 
-## 직전에 보여 준 인접 위험도 합. 변화량을 화면이 대신 기억하기 위한 값이다.
-## 음수는 "아직 보여 준 적 없음"이다.
-var _last_threat := -1
+## 변화량을 이미 띄운 턴. **기억이 아니라 연출 기록이다.**
+##
+## 예전에는 이 화면이 직전 위험도 자체를 들고 있었는데, 그러면 교정쇄를 닫았다 열 때
+## 기억이 지워져 증감이 사라졌다. 기억은 판이 든다 (`BoardMemory`).
+## 여기 남은 것은 "같은 턴의 증감을 두 번 튀기지 마라" 하나뿐이다 —
+## 지도를 끌거나 확대할 때마다 _refresh() 가 돌기 때문이다.
+var _delta_shown_turn := -1
 
 ## 지금 판의 보스까지 두 길. DungeonRoutes.to_boss() 의 결과를 그대로 들고 있는다.
 ##
@@ -146,7 +150,8 @@ var _mark_life := 0.0
 ## 판 하나를 이 화면에 붙인다.
 func setup(run: DungeonRun, layout_seed: int) -> void:
 	_run = run
-	_last_threat = -1
+	# 새 판이면 증감 연출도 처음부터다. 판이 기억을 새로 들고 오기 때문이다.
+	_delta_shown_turn = -1
 	_threat_delta_label.text = ""
 	_routes = DungeonRoutes.to_boss(run.blueprint)
 	_positions = run.blueprint.layout(layout_seed, _SPACING)
@@ -576,19 +581,35 @@ func _update_threat() -> void:
 	var threat := _run.adjacent_threat()
 	# PlateLabel 이 값이 바뀐 것을 알아채고 별색판을 튀긴다. 서명은 여기서 가장 크게 보인다.
 	_threat_label.set_text(str(threat))
-	if _last_threat >= 0 and threat != _last_threat:
-		var difference := threat - _last_threat
-		_threat_delta_label.text = ("+%d" % difference) if difference > 0 else str(difference)
-		_threat_delta_label.add_theme_color_override("font_color", UiTokens.SPOT)
-		UiMotion.rise_and_fade(_threat_delta_label, UiTokens.SPACE_SNUG)
-	_last_threat = threat
+	var change := _run.threat_change
+	if change == 0 or _delta_shown_turn == _run.turn:
+		return
+	_delta_shown_turn = _run.turn
+	_threat_delta_label.text = ("+%d" % change) if change > 0 else str(change)
+	_threat_delta_label.add_theme_color_override("font_color", UiTokens.SPOT)
+	UiMotion.rise_and_fade(_threat_delta_label, UiTokens.SPACE_SNUG)
 
 
 func _update_hint() -> void:
 	if reveal_everything:
 		_hint_label.text = "교정쇄 — 모든 방의 실제 값이 드러나 있다"
 		return
-	_hint_label.text = "끌거나 가장자리로 이동      휠 확대 %d%%" % int(round(_zoom * 100.0))
+	if _run.finished:
+		_hint_label.text = "판이 끝났다 — 가지고 나온 것은 확정됐다"
+		return
+	_hint_label.text = (
+		"%s      끌거나 가장자리로 이동      휠 확대 %d%%" % [_here_hint(), int(round(_zoom * 100.0))]
+	)
+
+
+## 서 있는 방을 누르면 무슨 일이 나는가.
+##
+## 조작은 포인터 하나로 끝나야 하고(docs/design/04-controls.md §4.1),
+## 그러려면 **누르면 무엇이 되는지가 글로 적혀 있어야** 한다.
+func _here_hint() -> String:
+	if _run.is_at_exit():
+		return "이 방을 눌러 탈출 (%d턴 더 버틴다)" % _run.escape_turns_left()
+	return "이 방을 눌러 탐색"
 
 
 ## 두 길 범례. **켜져 있을 때만 뜬다.**
@@ -670,11 +691,35 @@ func _climb_text(current_id: String, room_id: String) -> String:
 
 
 func _on_room_selected(room_id: String) -> void:
+	if not _run.accepts_input():
+		return
+	if room_id == _run.player_room_id():
+		_act_in_place(room_id)
+		return
 	if not _run.can_move_to(room_id):
 		return
-	var node: RoomNode = _room_nodes.get(room_id)
-	if node != null:
-		struck.emit(node.global_position + node.size * 0.5 * _zoom)
+	_strike_room(room_id)
 	_run.move_player(room_id)
 	redraw()
 	player_acted.emit()
+
+
+## 서 있는 방을 누르면 그 자리에서 한 턴을 쓴다.
+##
+## 버튼을 새로 만들지 않는 이유는 조작이 포인터 하나로 끝나야 하기 때문이다 (§4.1).
+## **무엇을 할지는 방이 정한다** — 탈출 지점이면 버티고, 아니면 뒤진다.
+## 화면은 방의 성격을 읽어 판에 넘길 뿐이고, 그 결과를 정하는 것은 여전히 판이다
+## (docs/conventions.md §3.1).
+func _act_in_place(room_id: String) -> void:
+	var acted := _run.hold_at_exit() if _run.is_at_exit() else _run.search_here()
+	if not acted:
+		return
+	_strike_room(room_id)
+	redraw()
+	player_acted.emit()
+
+
+func _strike_room(room_id: String) -> void:
+	var node: RoomNode = _room_nodes.get(room_id)
+	if node != null:
+		struck.emit(node.global_position + node.size * 0.5 * _zoom)
