@@ -1,10 +1,19 @@
 extends SceneTree
-## 실제 판을 굴려서 렉카 게시글 프롬프트의 **사용자 메시지**를 뽑아낸다.
+## 실제 판을 굴려서 렉카 게시글의 **입력과 산출을 함께** 뽑아낸다.
 ##
 ##     godot --headless --path . -s res://tools/dump_rekka_prompts.gd
 ##
-## 결과는 `user://rekka_prompts.json` 이고 경로를 표준 출력에 찍는다.
-## 그 파일을 언어 모델에 넣은 산출이 `docs/design/samples/rekka/` 의 표본이다.
+## | 나오는 것 | 무엇 |
+## | --- | --- |
+## | `user://rekka_prompts.json` | 언어 모델에게 넘길 사용자 메시지 |
+## | `docs/design/samples/rekka/feed-final.txt` | **게임이 실제로 화면에 올리는 글** |
+##
+## 둘을 같은 몰이꾼에서 뽑는 이유는 **비교할 수 있어야 하기 때문이다.** 하나는
+## 모델이 있었다면 나왔을 글의 재료이고, 하나는 모델 없이 자산과 규칙이 낸 글이다
+## (docs/design/32-rekka-feed.md). 서로 다른 판에서 뽑으면 무엇이 나빠졌는지 알 수 없다.
+##
+## 표본이 `docs/design/samples` 아래 `.txt` 라 `tools/check_glyphs_text.gd` 가
+## 그대로 훑는다 — 화면에 나갈 글자가 폰트에 없으면 웹 빌드에서 두부(□)가 된다.
 ##
 ## ## 왜 손으로 안 적는가
 ##
@@ -39,6 +48,9 @@ const QUIET_LIMIT := 1
 
 const OUT_PATH := "user://rekka_prompts.json"
 
+## 게임이 실제로 낸 글. 이어서 읽었을 때 기계 같은지를 여기서 본다 (19-rekka-voice.md 19.B.9).
+const FEED_PATH := "res://docs/design/samples/rekka/feed-final.txt"
+
 var _seed := 0
 
 var _run: DungeonRun
@@ -49,6 +61,8 @@ var _hauls: Dictionary = {}
 var _searched: Dictionary = {}
 var _retired: Dictionary = {}
 var _turn_events: Array[GameEvent] = []
+var _feed: RekkaFeed
+var _posts: Array[String] = []
 
 
 func _initialize() -> void:
@@ -56,6 +70,7 @@ func _initialize() -> void:
 	for seed_value in SEEDS:
 		dumped.append_array(_play(seed_value))
 	_write(dumped)
+	_write_feed()
 	quit(0)
 
 
@@ -70,6 +85,10 @@ func _play(seed_value: int) -> Array:
 	_hauls = {}
 	_searched = {}
 	_retired = {}
+	# 피드도 판마다 새로 만든다. 접두어와 닉네임 고리는 **판이 바뀌면 다시 섞여야**
+	# 한다 — 안 그러면 앞 판이 끝난 자리에서 뒷 판이 이어져 배열이 그대로 읽힌다
+	# (19-rekka-voice.md 19.B.9 2차).
+	_feed = RekkaFeed.new(seed_value)
 	_add_walkers()
 
 	var dumped: Array = []
@@ -84,6 +103,9 @@ func _play(seed_value: int) -> Array:
 		if quiet > QUIET_LIMIT:
 			break
 		dumped.append(_message_for(turn))
+		var entry := _feed.record_turn(_run, _turn_events)
+		_posts.append("---- %d. 시드 %d 턴 %d ----
+%s" % [_posts.size() + 1, seed_value, turn, entry.text])
 		# **스쿼드가 나가면 판이 끝난다.** 계획 페이즈가 없는 턴의 기사는
 		# 플레이어가 아무것도 결정할 수 없는 글이다. 심사자 둘이 각각
 		# "24편 중 10편이 내가 이미 던전 밖인 시점의 방송" 을 최대 결함으로 짚었다.
@@ -303,6 +325,27 @@ func _message_for(turn: int) -> Dictionary:
 		# 후처리가 방 이름 띄어쓰기를 되돌리는 데 쓴다 (RekkaPost.normalize_names).
 		"rooms": rooms,
 	}
+
+
+## 게임이 낸 글을 표본으로 남긴다.
+##
+## **손으로 고치지 않는다.** 여기 있는 모든 글은 `RekkaFeed` 가 실제 판에서 낸 것이고
+## `RekkaPost.clean()` 을 그대로 통과했다. 손대는 순간 표본이 코드를 검증하지 못한다
+## (19-rekka-voice.md 19.B.0 이 같은 이유로 5차 표본을 폐기했다).
+func _write_feed() -> void:
+	var file := FileAccess.open(FEED_PATH, FileAccess.WRITE)
+	if file == null:
+		print("표본을 쓰지 못했습니다: %s" % FEED_PATH)
+		return
+	file.store_line("렉카 피드 표본. tools/dump_rekka_prompts.gd 가 실제 판을 굴려 뽑았다.")
+	file.store_line("문안은 assets/rekka/rekka_library.tres, 사실 줄은 RekkaStock 이 낸 것이고")
+	file.store_line("전부 RekkaPost.clean() 을 그대로 통과했다. 사람이 손댄 곳은 없다.")
+	file.store_line("")
+	for post in _posts:
+		file.store_line(post)
+		file.store_line("")
+	file.close()
+	print("표본 %d 편: %s" % [_posts.size(), FEED_PATH])
 
 
 func _write(dumped: Array) -> void:

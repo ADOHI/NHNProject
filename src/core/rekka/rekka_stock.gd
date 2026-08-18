@@ -34,7 +34,20 @@ extends RefCounted
 ## 문장을 고쳐 쓰지 않고 뒤에 붙이기만 하는 이유는, 한국어 종결어미를 기계가 갈아
 ## 끼우면 `헤어진 사이다` 가 `헤어진 사임` 이 되기 때문이다. **못 잡은 것은 어색할
 ## 뿐이지만 잘못 잡은 것은 문장을 부순다** (§19.B.3 이 같은 결론을 이미 냈다).
-const TAILS: Array[String] = ["", " ㅋㅋ", "", " ㄷㄷ", "", "...", " ㅋ", "", " ㄹㅇ", ""]
+## **말줄임표는 뺐다.** 사실 줄 끝에 붙으니 말투가 아니라 **글이 잘린 것**으로 읽혔다 —
+## `칼날의 요한이 가스 저장고 2로 옮겼다...` 는 뒤가 더 있는 문장처럼 보인다.
+const TAILS: Array[String] = ["", " ㅋㅋ", "", " ㄷㄷ", "", " ㅋ", "", " ㄹㅇ", "", " ㅇㅇ"]
+
+## 본문 줄 수의 폭. **편마다 달라야 한다.**
+##
+## 실측에서 28편의 본문이 **전부 정확히 여섯 줄**이었다 (19-rekka-voice.md 19.B.8).
+## 길이 분산이 0 이면 목록을 훑을 때 글이 아니라 표로 보인다.
+##
+## 상한을 두는 이유는 따로 있다. 사건 넷에 문맥 넷을 그대로 다 실으면 아홉 줄이 되고,
+## 그 아홉 줄은 **읽는 글이 아니라 로그 뷰어**다. 규칙 문안은 편집을 못 하므로
+## 편집 대신 자른다.
+const BODY_MIN := 4
+const BODY_MAX := 7
 
 ## 제목. 자리표시는 `RekkaSlots` 가 채우고, 못 채우면 다음 것으로 넘어간다.
 ##
@@ -106,17 +119,26 @@ const COMMENT_MAX := 4
 ##
 ## 순서를 바꾸면 이번 턴에 벌어진 일보다 배경이 앞에 서서, 읽는 사람이
 ## 무엇이 새 소식인지 못 가린다.
+##
+## **자르는 것은 언제나 문맥 쪽이다.** 사건은 이번 턴의 새 소식이고 문맥은 배경이다.
+## 다만 문맥이 있는데 **한 줄도 안 나가는 일은 없다** — 사건만 나열된 편은
+## 판을 읽을 재료가 없어서 정보원이 아니라 로그가 된다 (19-rekka-voice.md 19.B.9 1차).
 static func fact_lines(
 	events: Array[GameEvent], facts: Array[String], names: Dictionary, index: int, salt: int
 ) -> Array[String]:
 	var lines: Array[String] = []
 	for event in events:
 		lines.append(RekkaPrompt.serialize_event(event, names))
-	lines.append_array(facts)
+	lines.append_array(facts.slice(0, maxi(1, body_limit(index, salt) - lines.size())))
 	var dressed: Array[String] = []
 	for i in lines.size():
 		dressed.append(_dress(lines[i], index + i, salt))
 	return dressed
+
+
+## 이 편의 본문 줄 수 상한. 편마다 다르다.
+static func body_limit(index: int, salt: int) -> int:
+	return BODY_MIN + RekkaRing.slot(index, salt, BODY_MAX - BODY_MIN + 1)
 
 
 ## 제목. 채울 수 있는 첫 후보를 쓴다.
