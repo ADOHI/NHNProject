@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://src/main/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://src/ui/dungeon_board/dungeon_board.tscn" id="2_board"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://src/ui/style/press_panel.gd" id="4_panel"]
 [ext_resource type="Script" path="res://src/ui/style/press_page.gd" id="5_page"]
 [ext_resource type="Script" path="res://src/ui/style/press_plate.gd" id="6_plate"]
+[ext_resource type="Script" path="res://src/ui/rekka/rekka_feed_view.gd" id="7_feed"]
 
 [node name="Main" type="Control"]
 anchor_right = 1.0
@@ -34,6 +35,10 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("5_page")
+
+[node name="Feed" type="Control" parent="."]
+unique_name_in_owner = true
+script = ExtResource("7_feed")
 
 [node name="DebugOverlay" parent="." instance=ExtResource("3_debug")]
 unique_name_in_owner = true
