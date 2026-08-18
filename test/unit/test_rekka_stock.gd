@@ -24,7 +24,10 @@ func before_each() -> void:
 
 
 func _event(kind: GameEvent.Kind, magnitude: int = 0, with_other: bool = false) -> GameEvent:
-	var related: Array[String] = ["mina"] if with_other else [] as Array[String]
+	# 삼항으로 쓰면 무형 배열이 나와 대입에서 터진다. `_init` 이 Array[String] 을 받는다.
+	var related: Array[String] = []
+	if with_other:
+		related.append("mina")
 	return EventScript.new(4, kind, _johan, _room, magnitude, related)
 
 

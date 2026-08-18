@@ -8,7 +8,6 @@ extends GutTest
 
 const SlotsScript := preload("res://src/core/rekka/rekka_slots.gd")
 
-
 # ---------------------------------------------------------------- 조사
 
 

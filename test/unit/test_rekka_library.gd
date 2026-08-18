@@ -74,9 +74,7 @@ func test_an_empty_library_never_crashes() -> void:
 
 func test_several_posts_under_one_key_all_get_used() -> void:
 	# 같은 상황이 두 번 나왔을 때 같은 글이 나오면 안 된다.
-	var library := _library(
-		[["QUIET", "가"], ["QUIET", "나"], ["QUIET", "다"], ["FOUGHT:한줌", "라"]]
-	)
+	var library := _library([["QUIET", "가"], ["QUIET", "나"], ["QUIET", "다"], ["FOUGHT:한줌", "라"]])
 	var seen: Dictionary = {}
 	for index in 3:
 		seen[library.pick("QUIET", index, 20260808)] = true

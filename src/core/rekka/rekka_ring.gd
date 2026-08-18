@@ -48,18 +48,43 @@ static func slot(index: int, salt: int, size: int) -> int:
 	return posmod(index * stride + posmod(mixed / STRIDES.size(), size), size)
 
 
-## 이 크기에 쓸 걸음. **목록 길이와 서로소인 것만 쓴다.**
+## 이 크기에 쓸 걸음. 서로소이면서 **행진하지 않는** 것을 고른다.
 ##
-## 서로소가 아니면 고리가 짧아진다 — 걸음 5 에 크기 5 면 언제나 같은 자리다.
-## 접두어(12)와 닉네임(36)은 후보 전부가 이미 서로소라 첫 후보가 그대로 뽑히고,
-## **그 둘의 배열은 이 검사를 넣기 전과 똑같다.**
+## | 거르는 것 | 왜 |
+## | --- | --- |
+## | 서로소가 아닌 걸음 | 고리가 짧아진다. 걸음 5 에 크기 5 면 언제나 같은 자리다 |
+## | 나머지가 1 인 걸음 | **걸음 1 과 똑같이 행진한다.** 크기 12 에 걸음 13 이 그렇다 |
+## | 나머지가 크기-1 인 걸음 | 거꾸로 행진한다. 뒤집힌 목록도 목록이다 |
+##
+## **가운데 줄이 이 함수의 존재 이유다.** 목록에서 1 을 빼 놓았으니 행진은 없다고
+## 여겼는데, 나머지가 1 이면 값이 다르든 말든 결과가 같다. 크기 12 · 소금 20260808 이
+## 실제로 걸음 13 을 골라 접두어가 목록 순서 그대로 나왔다 —
+## **심사자가 두 차수 연속으로 잡아낸 바로 그 결함이 다른 문으로 다시 들어와 있었다**
+## (docs/design/19-rekka-voice.md 19.B.9).
+##
+## **크기 1 · 2 · 3 · 4 · 6 에는 행진 아닌 걸음이 아예 없다.** 그 크기에서는 서로소인
+## 값의 나머지가 1 아니면 크기-1 밖에 안 나온다 (크기 6 이면 1 과 5 뿐이다).
+## 그때는 서로소인 것으로 물러선다 — **없는 것을 찾다가 걸음 1 로 떨어지면
+## 한 바퀴가 온전히 돈다는 보장까지 함께 잃는다.**
+##
+## 크기 다섯부터는 여섯만 빼고 언제나 행진 아닌 걸음이 있다.
 static func stride_for(mixed: int, size: int) -> int:
+	var found := _search(mixed, size, true)
+	return found if found > 0 else maxi(_search(mixed, size, false), 1)
+
+
+## 걸음 후보를 훑는다. `strict` 면 행진하는 것까지 거른다. 없으면 0.
+static func _search(mixed: int, size: int, strict: bool) -> int:
 	var start := posmod(mixed, STRIDES.size())
 	for offset in STRIDES.size():
 		var candidate: int = STRIDES[(start + offset) % STRIDES.size()]
-		if _coprime(candidate, size):
-			return candidate
-	return 1
+		if not _coprime(candidate, size):
+			continue
+		var rest := posmod(candidate, size)
+		if strict and size > 1 and (rest <= 1 or rest == size - 1):
+			continue
+		return candidate
+	return 0
 
 
 static func _coprime(a: int, b: int) -> bool:

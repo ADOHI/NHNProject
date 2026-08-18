@@ -51,7 +51,11 @@ func test_empty_list_does_not_crash() -> void:
 
 
 func test_the_ring_never_walks_the_list_in_order() -> void:
-	# 걸음이 1 이면 목록 순서 그대로 나온다. 그것이 심사자가 잡아낸 결함이다.
+	# 걸음이 1 이거나 **크기로 나눈 나머지가 1** 이면 목록 순서 그대로 나온다.
+	# 뒤쪽이 이 시험이 잡아낸 것이다 — 크기 12 에 걸음 13 은 걸음 1 과 결과가 같다.
+	#
+	# 크기가 넷 이하인 목록은 넣지 않는다. 서로소이면서 행진 아닌 걸음이 **존재하지 않는다** —
+	# 크기 4 에 쓸 수 있는 걸음은 나머지가 1 아니면 3 뿐이다.
 	for size in [5, 7, 12, 36]:
 		for salt in [0, 3, 771, 20260808]:
 			var walked := true
@@ -92,13 +96,26 @@ func test_stride_is_always_coprime_with_the_list() -> void:
 			assert_eq(_gcd(stride, size), 1, "크기 %d 에 걸음 %d" % [size, stride])
 
 
-func test_lists_of_twelve_and_thirtysix_keep_the_first_candidate() -> void:
-	# 접두어(12)와 닉네임(36)은 후보 전부가 이미 서로소다. 서로소 검사를 넣기 전과
-	# **배열이 똑같아야 한다** — 안 그러면 이미 검증된 표본이 통째로 무효가 된다.
-	for mixed in [0, 1, 5, 77, 1234, 99991]:
-		for size in [12, 36]:
-			var first: int = RingScript.STRIDES[posmod(mixed, RingScript.STRIDES.size())]
-			assert_eq(RingScript.stride_for(mixed, size), first, "크기 %d 섞은값 %d" % [size, mixed])
+func test_the_chosen_stride_never_marches() -> void:
+	# 나머지가 1 이면 걸음 1 과 같고, 크기-1 이면 거꾸로 행진한다. 뒤집힌 목록도 목록이다.
+	#
+	# 여섯을 뺀 이유는 **그 크기에 행진 아닌 걸음이 존재하지 않기** 때문이다 —
+	# 6 과 서로소인 값의 나머지는 1 아니면 5 뿐이다. 없는 것을 요구하는 시험은 시험이 아니다.
+	for size in range(5, 40):
+		if size == 6:
+			continue
+		for mixed in [0, 1, 5, 77, 1234, 99991]:
+			var stride := RingScript.stride_for(mixed, size)
+			assert_ne(posmod(stride, size), 1, "크기 %d 섞은값 %d 가 행진한다" % [size, mixed])
+			assert_ne(posmod(stride, size), size - 1, "크기 %d 섞은값 %d 가 거꾸로 행진한다" % [size, mixed])
+
+
+func test_tiny_lists_fall_back_instead_of_dropping_to_one() -> void:
+	# 크기 넷 이하에는 행진 아닌 걸음이 없다. 찾다 못 찾고 걸음 1 로 떨어지는 것이 제일 나쁘다 —
+	# 그러면 한 바퀴가 온전히 돈다는 보장까지 함께 잃는다.
+	for size in [2, 3, 4, 6]:
+		for mixed in [0, 7, 1234]:
+			assert_eq(_gcd(RingScript.stride_for(mixed, size), size), 1, "크기 %d" % size)
 
 
 func _gcd(a: int, b: int) -> int:

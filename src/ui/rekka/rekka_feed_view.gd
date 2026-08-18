@@ -55,6 +55,9 @@ func rebuild() -> void:
 	if _column == null:
 		return
 	for child in _column.get_children():
+		# **떼어 내고 나서 버린다.** `queue_free()` 만 부르면 이번 프레임 동안 자식으로
+		# 남아 있어서, 판을 갈아 끼운 직후에 지난 판의 편이 목록에 그대로 세어진다.
+		_column.remove_child(child)
 		child.queue_free()
 	if _feed == null:
 		return

@@ -131,9 +131,7 @@ func test_the_card_shows_the_title_and_every_comment() -> void:
 
 
 func test_room_names_in_the_body_become_links() -> void:
-	var entry: RekkaFeedEntry = EntryScript.new(
-		1, "제목\n\n요한이 수장고를 수색했다", {"수장고": "vault"}
-	)
+	var entry: RekkaFeedEntry = EntryScript.new(1, "제목\n\n요한이 수장고를 수색했다", {"수장고": "vault"})
 	var card: RekkaPostCard = CardScript.new()
 	add_child_autofree(card)
 	card.show_entry(entry)

@@ -126,16 +126,19 @@ func _known_key(key: String) -> bool:
 	var kind := _kind_named(parts[0])
 	if kind < 0:
 		return false
-	var grade: String = parts[1]
-	if grade.is_empty():
-		return true
+	# 등급이 비는 것은 축이 없는 종류(이동)와 인원이 안 적힌 사건이다. 둘 다 실제로 나온다.
+	return parts[1].is_empty() or _grades_of(kind).has(parts[1])
+
+
+## 그 종류의 축에 있는 등급들. 축이 없으면 빈 목록이다.
+func _grades_of(kind: int) -> Array[String]:
 	match RekkaPrompt.axis_of(kind):
 		RekkaPrompt.Axis.HAUL:
-			return RekkaPrompt.HAUL_GRADES.has(grade)
+			return RekkaPrompt.HAUL_GRADES
 		RekkaPrompt.Axis.CROWD:
-			return RekkaPrompt.CROWD_GRADES.has(grade)
+			return RekkaPrompt.CROWD_GRADES
 		_:
-			return false
+			return [] as Array[String]
 
 
 func _kind_named(name: String) -> int:

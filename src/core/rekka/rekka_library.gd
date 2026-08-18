@@ -55,6 +55,8 @@ const KIND_NAMES := {
 	GameEvent.Kind.ESCAPED: "ESCAPED",
 }
 
+static var _cached: RekkaLibrary = null
+
 ## 문안의 열쇠들. `posts` 와 같은 길이이고 같은 자리끼리 짝이다.
 ##
 ## 같은 열쇠가 여러 번 나올 수 있다. 그것이 곧 "결" 이다 (§19.10.1) —
@@ -63,8 +65,6 @@ const KIND_NAMES := {
 
 ## 문안 본문들. 한 칸이 게시글 한 편의 **제목 · 논평 · 댓글**이다.
 @export var posts: PackedStringArray = PackedStringArray()
-
-static var _cached: RekkaLibrary = null
 
 
 ## 실려 있는 자산. 없으면 `null` 이 아니라 **빈 자산**을 돌려준다.
