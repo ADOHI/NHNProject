@@ -4,7 +4,7 @@
 >
 > **④ 시점(2:1) · ③ 배치 · ① 배회가 선다.** 건물 그림은 **그리드 규격 + fit** (§30.10.7).
 > 다음 작업: 생성 산출물 도착 → `fit` → 그리드 배치·캡처. 이어받기 요약은 **§30.14** 와
-> [`HANDOFF-hideout.md`](../HANDOFF-hideout.md).
+> [`../handoff/hideout.md`](../handoff/hideout.md).
 >
 > [`22-guild-base.md`](22-guild-base.md) 와 **다른 층이다.** 22 는 아지트의 *규칙*
 > (자원 · 시설 효과 · 정산)을 정했고 `src/ui/base/` 에 배선 확인용 사각형 화면을 두었다.
@@ -902,7 +902,7 @@ text, logo, watermark, frame, UI, multiple buildings, collage, cropped roof, cro
    godot --headless --path . --import
    godot --headless --path . -s res://addons/gut/gut_cmdln.gd
    ```
-7. 문서: 이 절·`HANDOFF-hideout.md` 에 fit 결과·캡처 경로 기록
+7. 문서: 이 절·`../handoff/hideout.md` 에 fit 결과·캡처 경로 기록
 
 ### 하지 말 것 (다시)
 
