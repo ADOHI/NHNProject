@@ -38,6 +38,16 @@ extends RefCounted
 ## 극의 절댓값 하한. 표집 경계이자 "그런 사람" 이라 불리는 경계다.
 const POLE_MIN := 60
 
+## 이 절댓값 아래는 **쪽이 없다.** 「약하게 무모하다」가 아니라 「무모·신중에 의견이 없다」다.
+##
+## docs/design/24-npc-relations.md §24.25.1. 초상 레인이 실호출로 잡았다 —
+## 위계 5 를 넘겼더니 GPT 가 **"자유를 중시한다"** 로 읽어 열전에 넣었다.
+## **5 는 위계에 대해 아무 의견이 없다는 뜻인데 반대쪽 신념이 됐다.**
+##
+## 30 인 이유: 축값이 -100~100 이므로 30 은 한쪽 폭(100)의 **3할**이다.
+## 이 아래로는 사람이 그 축을 두고 어느 쪽이라 부르지 않는다.
+const NEUTRAL_MAX := 30
+
 ## 극 축을 k 개 가질 상대 가중치 (k = 0 ~ 6).
 ##
 ## 기대값 2.5개. 봉우리를 2에 두고 양쪽으로 흘린다 —
@@ -75,6 +85,11 @@ static func pick_pole_count(rng: RandomNumberGenerator) -> int:
 		if roll < running:
 			return count
 	return POLE_COUNT_WEIGHTS.size() - 1
+
+
+## 이 값은 쪽이 없는가. **말하지 않아야 하는 구간이다.**
+static func is_neutral(value: int) -> bool:
+	return absi(value) < NEUTRAL_MAX
 
 
 ## 이 값이 극인가. 도구 · 테스트 · 표시가 같은 기준을 쓰게 하려고 함수로 둔다.

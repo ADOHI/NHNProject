@@ -123,3 +123,41 @@ func test_families_are_frozen_too() -> void:
 	assert_eq(graph.size(), again.size())
 	for slot in graph.size():
 		assert_eq(graph.slot_to(slot), again.slot_to(slot))
+
+
+# ---------------------------------------------------------------- LLM 입력 형식
+
+
+func test_weak_axes_never_name_a_side() -> void:
+	# 값 5 에 "약하게 무모하다" 라고 하면 모델이 성격으로 읽는다 (설계 24.25.1).
+	# 실제로 위계 5 가 "자유를 중시한다" 가 됐다.
+	var registry := _world()
+	var factions := FactionIndex.new(registry)
+	for person in 60:
+		var text := PersonDossier.text(registry, person, factions)
+		for axis in NpcAxis.count():
+			var kind := axis as NpcAxis.Kind
+			if not TraitDistribution.is_neutral(registry.trait_of(person, kind)):
+				continue
+			var line := "- %s 축: 뚜렷한 쪽이 없다" % NpcAxis.label(kind)
+			assert_string_contains(text, line, "인덱스 %d" % person)
+
+
+func test_strong_axes_do_name_a_side() -> void:
+	var registry := _world()
+	var factions := FactionIndex.new(registry)
+	for person in 60:
+		var text := PersonDossier.text(registry, person, factions)
+		for axis in NpcAxis.count():
+			var kind := axis as NpcAxis.Kind
+			var value := registry.trait_of(person, kind)
+			if TraitDistribution.is_neutral(value):
+				continue
+			assert_string_contains(text, NpcAxis.pole_label(kind, value), "인덱스 %d" % person)
+
+
+func test_neutral_band_sits_below_the_pole_band() -> void:
+	# 딱지와 축 줄이 같은 경계를 써야 한 줄 요약과 어긋나지 않는다.
+	assert_lt(TraitDistribution.NEUTRAL_MAX, TraitDistribution.POLE_MIN)
+	assert_false(TraitDistribution.is_neutral(TraitDistribution.NEUTRAL_MAX))
+	assert_true(TraitDistribution.is_neutral(TraitDistribution.NEUTRAL_MAX - 1))

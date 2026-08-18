@@ -42,6 +42,15 @@ var _bond := PackedInt32Array()
 var _kind := PackedInt32Array()
 var _cause := PackedInt32Array()
 
+## 이 관계를 **직접 봤나 전해 들었나** (설계 24.10).
+##
+## **근거 사건만으로는 못 가른다.** 같은 사건이 누구에게는 목격이고 누구에게는 소문이다 —
+## 그러므로 이것은 사건의 성질이 아니라 **관계의 성질**이고 여기 있어야 한다.
+##
+## 안 가르면 화면이 *"나는 목격자였다"* 를 소문으로 안 사람에게도 쓰게 되고,
+## 그러면 **모두가 모든 것을 목격한 것처럼 보인다.**
+var _heard := PackedInt32Array()
+
 
 ## 인물 수만큼 자리를 잡는다. 관계는 하나도 없는 상태다 —
 ## **기본은 「모르는 사이」** 이고 명시적으로 만든 것만 존재한다 (설계 24.2).
@@ -59,8 +68,9 @@ func size() -> int:
 	return _to.size()
 
 
-## `from → to` 슬롯. 없으면 NO_RELATION.
-func find(from: int, to: int) -> int:
+## `from → to` 슬롯. 없으면 NO_RELATION. **밖에서는 knows() 를 쓴다** —
+## 슬롯 번호는 이 클래스 안의 이야기다.
+func _find(from: int, to: int) -> int:
 	if from < 0 or from >= _head.size():
 		return NO_RELATION
 	var slot := _head[from]
@@ -72,7 +82,7 @@ func find(from: int, to: int) -> int:
 
 
 func knows(from: int, to: int) -> bool:
-	return find(from, to) != NO_RELATION
+	return _find(from, to) != NO_RELATION
 
 
 ## 관계를 만든다. 이미 있으면 그 슬롯을 돌려주고 값은 안 건드린다.
@@ -81,7 +91,7 @@ func link(
 ) -> int:
 	if from == to or from < 0 or from >= _head.size() or to < 0 or to >= _head.size():
 		return NO_RELATION
-	var existing := find(from, to)
+	var existing := _find(from, to)
 	if existing != NO_RELATION:
 		return existing
 
@@ -92,9 +102,31 @@ func link(
 	_bond.append(clampi(bond, BOND_MIN, BOND_MAX))
 	_kind.append(int(kind))
 	_cause.append(cause)
+	# 기본은 직접 안 것이다. 소문으로 생긴 관계만 따로 표시한다 (set_heard).
+	_heard.append(0)
 	_next.append(_head[from])
 	_head[from] = slot
 	return slot
+
+
+## 이 관계를 전해 들은 것으로 표시하거나 지운다.
+##
+## **직접 겪으면 지워진다.** 소문으로 알던 사람을 나중에 직접 보면 그것은 더 이상
+## 들은 이야기가 아니다 — 표시가 안 지워지면 화면이 계속 *"들었다"* 라고 한다.
+func set_heard(slot: int, heard: bool) -> void:
+	if slot < 0 or slot >= _heard.size():
+		return
+	_heard[slot] = 1 if heard else 0
+
+
+## 전해 들은 관계인가. 관계가 없으면 거짓이다.
+func is_heard(from: int, to: int) -> bool:
+	var slot := _find(from, to)
+	return slot != NO_RELATION and _heard[slot] == 1
+
+
+func slot_is_heard(slot: int) -> bool:
+	return _heard[slot] == 1
 
 
 ## 사건이 관계를 움직인다. 없으면 만든다 — **관계는 사건의 찌꺼기다** (설계 24.5).
@@ -109,7 +141,7 @@ func adjust(
 	kind: RelationKind.Kind,
 	cause: int = NO_CAUSE
 ) -> int:
-	var slot := find(from, to)
+	var slot := _find(from, to)
 	if slot == NO_RELATION:
 		return link(from, to, kind, affinity_delta, maxi(bond_delta, 0), cause)
 
@@ -125,23 +157,23 @@ func adjust(
 
 ## 호감. 관계가 없으면 0 — 모르는 사이는 좋지도 싫지도 않다.
 func affinity(from: int, to: int) -> int:
-	var slot := find(from, to)
+	var slot := _find(from, to)
 	return 0 if slot == NO_RELATION else _affinity[slot]
 
 
 ## 유대. 관계가 없으면 0.
 func bond(from: int, to: int) -> int:
-	var slot := find(from, to)
+	var slot := _find(from, to)
 	return 0 if slot == NO_RELATION else _bond[slot]
 
 
 func kind_of(from: int, to: int) -> RelationKind.Kind:
-	var slot := find(from, to)
+	var slot := _find(from, to)
 	return RelationKind.Kind.NONE if slot == NO_RELATION else _kind[slot] as RelationKind.Kind
 
 
 func cause_of(from: int, to: int) -> int:
-	var slot := find(from, to)
+	var slot := _find(from, to)
 	return NO_CAUSE if slot == NO_RELATION else _cause[slot]
 
 
@@ -159,6 +191,20 @@ func targets_of(from: int) -> PackedInt32Array:
 
 func degree_of(from: int) -> int:
 	return targets_of(from).size()
+
+
+## **서로 아는 사람들.** 한쪽만 아는 관계를 걷어낸다.
+##
+## 차수만 세면 「내가 아는 사람」이 나오는데, 그것은 연줄이 아니다 —
+## 사건의 목격자는 유대 0 짜리 한쪽 관계를 남기고(설계 24.21.5) 전멸의 인솔자는
+## **죽은 사람들에게** 한쪽 관계를 남긴다. 그래서 차수가 큰 사람이
+## *"사람을 많이 죽인 사람"* 일 수 있다. 연줄을 묻는 자리에서는 이쪽을 써야 한다.
+func mutuals_of(from: int) -> PackedInt32Array:
+	var found := PackedInt32Array()
+	for other in targets_of(from):
+		if knows(other, from):
+			found.append(other)
+	return found
 
 
 ## 슬롯 하나를 읽는다. 도구가 전체를 훑을 때 쓴다.

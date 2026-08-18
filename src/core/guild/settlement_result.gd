@@ -15,6 +15,9 @@ var levels_gained: int = 0
 ## 이번에 접선처가 찾아낸 후보들.
 var prospects_found: Array[RecruitProspect] = []
 
+## 후유증을 입은 대원 수. **제거되고 돌아온 사람들이다** (설계 2.6.1.5).
+var shocked: int = 0
+
 ## 정산 시점의 공방 / 접선처 잔류 인원. 왜 이만큼 들어왔는지를 화면이 설명할 수 있게 한다.
 var workshop_staff: int = 0
 var contact_staff: int = 0

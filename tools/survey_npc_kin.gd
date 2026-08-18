@@ -86,7 +86,7 @@ func _print_fame_by_age(registry: PersonRegistry) -> void:
 				continue
 			count += 1
 			total += float(registry.fame_of(person))
-			if registry.fame_of(person) >= 50:
+			if registry.fame_of(person) >= PersonGenerator.FAME_KNOWN:
 				known += 1
 		if count > 0:
 			print(
