@@ -198,7 +198,9 @@ func draw_rect_local() -> Rect2:
 	if _morph == null:
 		return box
 	return box.grow_individual(
-		box.size.x * MORPH_PAD, box.size.y * MORPH_PAD, box.size.x * MORPH_PAD,
+		box.size.x * MORPH_PAD,
+		box.size.y * MORPH_PAD,
+		box.size.x * MORPH_PAD,
 		box.size.y * MORPH_PAD
 	)
 

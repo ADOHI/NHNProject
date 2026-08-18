@@ -58,8 +58,7 @@ static func rest(count: int) -> MorphState:
 ## `wall` 은 **실제 시각**이다. 히트스톱 동안 동작 시각(`t`)은 멈춰 있는데 충격은 계속
 ## 잦아들어야 한다 — `CharPartsView` 가 이미 같은 이유로 두 시각을 갈라 들고 있다.
 static func solve(
-	morph: MorphRig, drives: Array[SoftDrive], t: float, reaction: CharReaction = null,
-	wall := -1.0
+	morph: MorphRig, drives: Array[SoftDrive], t: float, reaction: CharReaction = null, wall := -1.0
 ) -> MorphState:
 	var count := 0 if morph == null else morph.anchors.size()
 	var state := MorphState.rest(count)

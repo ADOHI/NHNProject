@@ -155,9 +155,12 @@ func _report() -> bool:
 	if off_zero[1] > SAME:
 		push_error(
 			(
-				"**꺼짐이 진짜 꺼짐이 아니다.** 변위 0 인데 화소가 다르다 (최대 차 %.5f). "
-				+ "COLOR 를 두 번 곱했거나 여백 되돌리기가 어긋났다"
-			) % off_zero[1]
+				(
+					"**꺼짐이 진짜 꺼짐이 아니다.** 변위 0 인데 화소가 다르다 (최대 차 %.5f). "
+					+ "COLOR 를 두 번 곱했거나 여백 되돌리기가 어긋났다"
+				)
+				% off_zero[1]
+			)
 		)
 		failed = true
 	if off_push[0] < 200:
@@ -178,7 +181,8 @@ func _difference(a: Image, b: Image) -> Array:
 			var pa := a.get_pixel(x, y)
 			var pb := b.get_pixel(x, y)
 			var gap := maxf(
-				maxf(absf(pa.r - pb.r), absf(pa.g - pb.g)), maxf(absf(pa.b - pb.b), absf(pa.a - pb.a))
+				maxf(absf(pa.r - pb.r), absf(pa.g - pb.g)),
+				maxf(absf(pa.b - pb.b), absf(pa.a - pb.a))
 			)
 			if gap > SAME:
 				count += 1

@@ -18,9 +18,12 @@ func _initialize() -> void:
 	var f := AnimFeatures.all_on()
 	print("앵커       클립     최대(날것)  상한   비율")
 	for anchor in morph.anchors:
-		print("--- %s  (%.2f Hz, z=%.2f, gain=%.2f)" % [
-			anchor.anchor_name, anchor.hz, anchor.damping, anchor.gain
-		])
+		print(
+			(
+				"--- %s  (%.2f Hz, z=%.2f, gain=%.2f)"
+				% [anchor.anchor_name, anchor.hz, anchor.damping, anchor.gain]
+			)
+		)
 	for name: String in ["idle", "walk", "run", "jump", "swing", "hit", "die"]:
 		var clip := _clip(rig, name)
 		var drives := morph.drives_for(clip, f)
@@ -34,25 +37,21 @@ func _initialize() -> void:
 		for k in worst.size():
 			var anchor := morph.anchors[k]
 			print(
-				"%-9s %-8s %7.3f  %6.3f  %5.2f"
-				% [anchor.anchor_name, name, worst[k], anchor.limit, worst[k] / anchor.limit]
+				(
+					"%-9s %-8s %7.3f  %6.3f  %5.2f"
+					% [anchor.anchor_name, name, worst[k], anchor.limit, worst[k] / anchor.limit]
+				)
 			)
 	quit()
 
 
 func _clip(rig: CharRig, name: String) -> CharClip:
-	match name:
-		"walk":
-			return CharWalkClip.new(rig)
-		"run":
-			return CharRunClip.new(rig)
-		"jump":
-			return CharJumpClip.new(rig)
-		"swing":
-			return CharSwingClip.new(rig, WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW)
-		"hit":
-			return CharHitClip.new(rig)
-		"die":
-			return CharDieClip.new(rig)
-		_:
-			return CharIdleClip.new(rig)
+	var made: Dictionary[String, CharClip] = {
+		"walk": CharWalkClip.new(rig),
+		"run": CharRunClip.new(rig),
+		"jump": CharJumpClip.new(rig),
+		"swing": CharSwingClip.new(rig, WeaponGuard.Id.HIGH, WeaponGuard.Id.LOW),
+		"hit": CharHitClip.new(rig),
+		"die": CharDieClip.new(rig),
+	}
+	return made.get(name, CharIdleClip.new(rig))

@@ -145,9 +145,7 @@ func test_a_non_looping_clip_gives_no_driven_response() -> void:
 	# `die` 는 루프가 아니라 주기 분해가 성립하지 않는다. 그런 클립은 충격으로만 흔들린다.
 	var clip := CharDieClip.new(CharRig.new())
 	assert_false(clip.is_looping(), "이 테스트의 전제가 깨졌다 — die 가 루프가 됐다")
-	var drive := SoftDrive.from_clip(
-		clip, CharPart.Id.TORSO, Vector2.ZERO, AnimFeatures.all_on()
-	)
+	var drive := SoftDrive.from_clip(clip, CharPart.Id.TORSO, Vector2.ZERO, AnimFeatures.all_on())
 	assert_true(drive.is_still())
 	assert_eq(drive.response(SoftBody.new(5.0, 0.3), 0.7), Vector2.ZERO)
 

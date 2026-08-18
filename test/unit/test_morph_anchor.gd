@@ -76,9 +76,7 @@ func test_the_hair_anchor_never_touches_the_face() -> void:
 	var rig := _rig()
 	var anchor := _hair()
 	for point: Vector2 in _face_points(rig):
-		assert_eq(
-			anchor.weight_at(point), 0.0, "얼굴 자리 %s 가 휜다 — 이목구비가 녹는다" % point
-		)
+		assert_eq(anchor.weight_at(point), 0.0, "얼굴 자리 %s 가 휜다 — 이목구비가 녹는다" % point)
 
 
 func test_the_hair_anchor_does_reach_the_crown_and_the_back() -> void:

@@ -40,7 +40,7 @@ const SPEED_MAX := 2.0
 ## 「무름」은 화면에 뿌리는 이름이고 값은 Hz 다. 축이 **거꾸로** 걸려 있다 —
 ## 슬라이더를 올리면 물러진다.
 const SOFT_ROWS: Array[Array] = [
-	["strength", "흔들림", "가슴 · 머리카락이 몸을 늦게 따라오는 양", 0.0, 2.0, 0.05],
+	["strength", "흔들림", "가슴과 머리카락이 몸을 늦게 따라오는 양", 0.0, 2.0, 0.05],
 	["softness", "무름", "낮은 진동수 = 무르다. 올리면 걸을 때 크게 흔들린다", 0.0, 1.0, 0.05],
 	["damping", "감쇠", "얼마나 빨리 멎나. 낮으면 오래 남는다", 0.05, 0.9, 0.05],
 ]
@@ -220,9 +220,7 @@ static func hz_from_softness(softness: float) -> float:
 func _on_soft_changed(value: float, field: String) -> void:
 	_soft_values[field].text = _format(value)
 	soft_body_changed.emit(
-		_soft["strength"].value,
-		hz_from_softness(_soft["softness"].value),
-		_soft["damping"].value
+		_soft["strength"].value, hz_from_softness(_soft["softness"].value), _soft["damping"].value
 	)
 
 

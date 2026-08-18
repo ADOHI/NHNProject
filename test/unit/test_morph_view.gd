@@ -161,7 +161,8 @@ func test_a_borrowed_sprite_flips_sideways_and_only_sideways() -> void:
 	var at := rig.local_centers[CharPart.Id.HEAD] + Vector2(12.0, 7.0)
 	assert_almost_eq(flipped.uv_of(at).x, 1.0 - plain.uv_of(at).x, EPS)
 	assert_almost_eq(flipped.uv_of(at).y, plain.uv_of(at).y, EPS, "좌우만 뒤집혀야 한다")
-	assert_almost_eq(flipped.uv_delta_of(Vector2(3.0, 0.0)).x, -plain.uv_delta_of(Vector2(3.0, 0.0)).x, EPS)
+	var step := Vector2(3.0, 0.0)
+	assert_almost_eq(flipped.uv_delta_of(step).x, -plain.uv_delta_of(step).x, EPS)
 
 
 # --- 셰이더가 받은 것이 코어가 잰 것과 같은가 -----------------------------------
@@ -192,9 +193,7 @@ func _check_mask_agrees(part: CharPart.Id, mirror: bool) -> void:
 			var point := centre + Vector2(half.x * ix * 0.1, half.y * iy * 0.1)
 			var want := anchor.mask_at(point)
 			var got := _mask_from_uniform(masks[0], sprite.uv_of(point))
-			assert_almost_eq(
-				got, want, 0.002, "%s 에서 마스크가 갈렸다 (뒤집기 %s)" % [point, mirror]
-			)
+			assert_almost_eq(got, want, 0.002, "%s 에서 마스크가 갈렸다 (뒤집기 %s)" % [point, mirror])
 
 
 func test_the_shader_mask_sees_what_the_core_ruler_sees() -> void:

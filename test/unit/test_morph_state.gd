@@ -168,12 +168,8 @@ func test_the_loop_closes_with_the_physics_on() -> void:
 		var start := MorphState.solve(morph, drives, 0.0)
 		var lap := MorphState.solve(morph, drives, clip.loop_seconds())
 		for k in start.shifts.size():
-			assert_almost_eq(
-				lap.shifts[k].x, start.shifts[k].x, 1e-5, "%s 의 이음매가 가로로 끊긴다" % name
-			)
-			assert_almost_eq(
-				lap.shifts[k].y, start.shifts[k].y, 1e-5, "%s 의 이음매가 세로로 끊긴다" % name
-			)
+			assert_almost_eq(lap.shifts[k].x, start.shifts[k].x, 1e-5, "%s 의 이음매가 가로로 끊긴다" % name)
+			assert_almost_eq(lap.shifts[k].y, start.shifts[k].y, 1e-5, "%s 의 이음매가 세로로 끊긴다" % name)
 
 
 # --- 좌표계 -------------------------------------------------------------------
