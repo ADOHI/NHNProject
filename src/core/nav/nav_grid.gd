@@ -47,12 +47,16 @@ const _WALL_CLEAR_TARGET := 3
 ## 값이 아니다. 0.6 이면 벽에 붙은 칸이 한 칸 반의 값을 치른다.
 const _WALL_PENALTY := 0.6
 
-## 막힌 칸이 무는 추가 비용의 비율.
+## 막힌 칸이 무는 추가 비용의 비율. **기본값이고, 부르는 쪽이 돌린다.**
 ##
 ## **이 값이 곧 "얼마나 멀면 돌아갈 만한가"다.** 3.0 이면 막힌 칸 하나가 네 칸 값을 하므로,
 ## 막힌 곳 세 칸을 피하려고 아홉 칸까지 돌아간다. 무한대로 두면(아예 막으면) 길이 하나뿐일 때
 ## 갈 곳이 없어지고, 0 이면 기억이 없는 것과 같다.
-const _JAM_PENALTY := 1.2
+##
+## **상수에서 슬라이더로 옮긴 이유가 있다.** 이 값을 고른 근거였던 측정이 전부 무효였다
+## (README §25 - 막힘 표를 읽는 쪽이 뒤집혀 있었다). 다시 고르려면 돌려 볼 수 있어야 하고,
+## 돌려 볼 수 있으면 사람이 직접 띄워서도 견줄 수 있다.
+const JAM_COST_DEFAULT := 3.0
 
 ## 벽에서 밀어낼 때 훑는 방향 수와 고리 수. 걸음 크기는 `push_out` 이 몸 크기에서 정한다.
 const _PUSH_OUT_DIRECTIONS := 12
@@ -75,11 +79,23 @@ var _blocked: PackedByteArray
 ## 벽은 안 움직이므로 여기 담아 두고 계속 쓴다. 명령당 추가 비용은 배열 조회 한 번이다.
 var _clearance: PackedInt32Array
 
+## 칸마다 **좁은 목인가**. 벽 거리와 같이 굽는다.
+##
+## **「벽에 붙어 있다」와 「좁다」는 다른 말이다.** 벽 거리로 물었더니 벽 하나로 둘러싼
+## 열린 방에서도 176 칸이 잡혔다 - 방 둘레가 전부 벽에 붙어 있기 때문이다(README §28).
+## 좁다는 것은 **마주 보는 두 쪽이 다 막혔다**는 뜻이고, 그것만 고르면 한 칸 문에서
+## 정확히 문 한 칸, 두 칸 문과 열린 곳에서 0 칸이다.
+var _corridor: PackedByteArray
+
+## 좁은 목 칸의 번호 목록. 대개 비어 있거나 한둘이라 훑는 값이 없다.
+var _choke_list: PackedInt32Array
+
 ## 위 값이 지금 지형과 맞는가. 벽이 바뀌면 내려간다.
 var _clearance_ready := false
 
-## 흐름장을 만드는 동안만 들고 있는 막힘 표. 만들고 나면 비운다.
+## 흐름장을 만드는 동안만 들고 있는 막힘 표와 그때 쓸 비용. 만들고 나면 비운다.
 var _jam: PackedByteArray = PackedByteArray()
+var _jam_cost := JAM_COST_DEFAULT
 
 
 func _init(grid_cols: int, grid_rows: int, size: float) -> void:
@@ -228,6 +244,32 @@ func clearance_at(cell: Vector2i) -> int:
 	return _clearance[cell_index(cell)]
 
 
+## 이 칸이 **좁은 목**인가. 마주 보는 두 이웃만 트여 있으면 복도다.
+##
+## **벽 거리와 같이 굽는다.** 지형이 바뀔 때 한 번이고, 그 뒤로는 배열 조회 한 번이다 -
+## 자리 배정은 명령마다 도는데 굽는 것은 지형마다 한 번이어야 한다. 2040 칸을 훑는 데
+## 13 밀리초쯤 드는 계산이라 **명령마다 부르면 안 된다.**
+func is_choke(cell: Vector2i) -> bool:
+	if not is_inside(cell):
+		return false
+	_ensure_clearance()
+	return _corridor[cell_index(cell)] == 1
+
+
+## 이 지점이 좁은 목 위인가. 자리 배정이 쓰는 얼굴이다.
+func is_choke_at(point: Vector2) -> bool:
+	return is_choke(world_to_cell(point))
+
+
+## 좁은 목 칸 전부. **대개 비어 있다** - 열린 곳과 두 칸 문에서 0 개다(README §28).
+##
+## 비어 있으면 문 차례 규칙이 통째로 안 돈다. **그 판을 건드릴 수 없다는 것이 규칙이 아니라
+## 구조로 보장되는 자리다.**
+func choke_cells() -> PackedInt32Array:
+	_ensure_clearance()
+	return _choke_list
+
+
 ## 벽에서 바깥으로 퍼지는 너비 우선 탐색. 모든 벽 칸에서 동시에 출발한다.
 ##
 ## 벽마다 따로 재면 칸 수 곱하기 벽 수가 되는데, 전부 한 큐에 넣고 한 번만 퍼뜨리면
@@ -268,6 +310,32 @@ func _ensure_clearance() -> void:
 	for index in count:
 		if _clearance[index] < 0:
 			_clearance[index] = _WALL_CLEAR_TARGET
+	_bake_corridors()
+
+
+## 좁은 목을 굽는다. **마주 보는 두 이웃만 트인 칸이 복도다.**
+##
+## `_blocked` 를 직접 읽는다 - `is_walkable` 은 칸마다 범위 검사를 다시 하므로 2040 칸에서
+## 그 값이 그대로 쌓인다. 격자 밖은 벽으로 친다(둘레가 이미 벽이라 뜻이 같다).
+func _bake_corridors() -> void:
+	var count := cols * rows
+	_corridor = PackedByteArray()
+	_corridor.resize(count)
+	_choke_list = PackedInt32Array()
+	for row in rows:
+		for column in cols:
+			var index := row * cols + column
+			if _blocked[index] == 1:
+				continue
+			var west := column > 0 and _blocked[index - 1] == 0
+			var east := column < cols - 1 and _blocked[index + 1] == 0
+			var north := row > 0 and _blocked[index - cols] == 0
+			var south := row < rows - 1 and _blocked[index + cols] == 0
+			var horizontal := west and east and not north and not south
+			var vertical := north and south and not west and not east
+			if horizontal or vertical:
+				_corridor[index] = 1
+				_choke_list.append(index)
 
 
 ## 벽을 피하는 것이 곧 지터를 피하는 것이다.
@@ -279,10 +347,13 @@ func _ensure_clearance() -> void:
 ##
 ## 다익스트라를 완전한 우선순위 큐로 짜지 않고 큐 기반 완화(SPFA)로 둔 이유는
 ## 칸이 이천 개 수준이라 상수 차이가 의미 없고, 힙보다 코드가 짧아 틀릴 여지가 적어서다.
-## `jam` 은 칸마다 "여기 막혀 있다"를 담은 표다(칸 수와 같은 길이, 1 이면 막힘).
+## `jam` 은 칸마다 "여기 막혀 있다"를 담은 표다(칸 수와 같은 길이, **0 보다 크면 막힘**).
 ## 비어 있으면 지형만 보고 만든다.
-func build_flow_field(target: Vector2, jam: PackedByteArray = PackedByteArray()) -> FlowField:
+func build_flow_field(
+	target: Vector2, jam: PackedByteArray = PackedByteArray(), jam_cost: float = JAM_COST_DEFAULT
+) -> FlowField:
 	_jam = jam
+	_jam_cost = maxf(jam_cost, 0.0)
 	var field := FlowField.new(self, target)
 	var count := cols * rows
 	field.costs.resize(count)
@@ -296,6 +367,7 @@ func build_flow_field(target: Vector2, jam: PackedByteArray = PackedByteArray())
 	_integrate(field)
 	_derive_directions(field)
 	_jam = PackedByteArray()
+	_jam_cost = JAM_COST_DEFAULT
 	return field
 
 
@@ -360,8 +432,13 @@ func _cell_step(index: int, step: float) -> float:
 	#
 	# 아예 못 가게 막으면 길이 하나뿐일 때 갈 곳이 없어진다. 값을 물리면 돌아갈 길이 있을
 	# 때만 돌아가고, 없으면 비싸도 그리로 간다 - 판단이 저절로 난다.
-	if index < _jam.size() and _jam[index] == 1:
-		step *= 1.0 + _JAM_PENALTY
+	# **0 보다 크면 막힘이다. `== 1` 이 아니다.**
+	#
+	# 이 표를 쓰는 쪽(`unit_jam.gd`)은 막힌 칸에 `_JAM_FORGET`(3)을 적고 비면 하나씩 깎는다.
+	# 그런데 여기서 `== 1` 로 물어서, **지금 막힌 칸(3)은 값을 안 물고 두 번 확인 동안 비어
+	# 있던 칸(1)만 값을 물었다.** 기억이 정확히 뒤집혀 있었다. README §25.
+	if index < _jam.size() and _jam[index] > 0:
+		step *= 1.0 + _jam_cost
 	var clear := _clearance[index]
 	if clear >= _WALL_COST_SPAN:
 		return step

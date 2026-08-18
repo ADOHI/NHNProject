@@ -32,6 +32,17 @@ const _JAM_FORGET := 3
 ## **얻을 것이 없으면 굽지 않는 것이 이득이다.**
 const _JAM_AWAY := 1.5
 
+## 멎지는 않았는데 목적지가 안 가까워진 채 이만큼 지나면 **정체**로 친다(프레임).
+##
+## 사용자가 세 번 짚은 요구다 - **"막히면 막혔다는 걸 직접 안 가보고도 알 수 있는 거 아니야?"**
+## 여기가 `HOLDING` 과 `BLOCKED` 만 세고 있었다. 그래서 「안 가보고 안다」가 절반이었다 -
+## **정체 유닛(느리게 가는 중)이 선 칸은 기억에 안 남는데, 실제로 가장 오래 걸리는 칸이 거기다.**
+##
+## 한 번의 확인 주기(`_JAM_REVIEW` 20 프레임)보다 넉넉해야 한 프레임 스친 것에 안 속는다.
+## 1.5 초면 줄이 나아가는 판에서는 거의 안 걸리고(앞이 빠질 때마다 시계가 0 으로 돌아간다)
+## 정말 맴도는 유닛만 걸린다.
+const _JAM_CREEP := 90
+
 
 ## **막힘을 기억하고, 기억이 바뀌면 길을 다시 찾는다.**
 ##
@@ -69,18 +80,23 @@ static func review(field: ProtoUnitField, frame: int) -> void:
 		if order.jam.size() != count:
 			order.jam = PackedByteArray()
 			order.jam.resize(count)
-		# 지금 막혀 선 유닛이 어느 칸에 있는가. 기다림과 포기만 센다 - 가는 중인 유닛은
-		# 지나가는 중이라 길을 막았다고 할 수 없다.
+		# 지금 막혀 선 유닛이 어느 칸에 있는가.
+		#
+		# **멎은 유닛만 세면 절반이다.** 기다림과 포기에 더해 **정체**도 센다 - 목적지가
+		# 안 가까워진 채 `_JAM_CREEP` 프레임을 흘려보낸 유닛이다. 그냥 가는 중인 유닛은
+		# 지나가는 중이라 길을 막았다고 할 수 없으므로 그대로 안 센다.
 		var stuck := PackedByteArray()
 		stuck.resize(count)
 		for id in order.member_ids:
 			var agent: ProtoUnitAgent = field.agent_of(id)
 			if agent == null:
 				continue
-			if (
-				agent.state != ProtoUnitAgent.State.HOLDING
-				and agent.state != ProtoUnitAgent.State.BLOCKED
-			):
+			var halted := (
+				agent.state == ProtoUnitAgent.State.HOLDING
+				or agent.state == ProtoUnitAgent.State.BLOCKED
+			)
+			var creeping := agent.is_moving() and agent.creep_frames >= _JAM_CREEP
+			if not halted and not creeping:
 				continue
 			if agent.position.distance_to(agent.goal) < away:
 				continue
@@ -103,7 +119,9 @@ static func review(field: ProtoUnitField, frame: int) -> void:
 			continue
 		order.baked_frame = frame
 		var started := Time.get_ticks_usec()
-		order.flow = grid.build_flow_field(order.target, order.jam)
+		order.flow = grid.build_flow_field(
+			order.target, order.jam, field.tuning.get_value("jam_cost")
+		)
 		field.flow_build_usec = Time.get_ticks_usec() - started
 		field.flow_build_peak = maxi(field.flow_build_peak, field.flow_build_usec)
 		field.rebake_count += 1

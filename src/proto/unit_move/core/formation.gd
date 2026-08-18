@@ -37,14 +37,37 @@ const _GROW_ATTEMPTS := 3
 ##
 ## 고리를 하나씩 바깥으로 넓히며 필요한 만큼만 모은다. **정렬은 다 모은 뒤 한 번만 한다** -
 ## 예전처럼 후보 전체를 정렬하면 격자를 넓힐 때마다 정렬 비용이 제곱으로 뛴다(§2 의 교훈).
+## **좁은 목에는 자리를 안 놓는다.** `spacious` 가 그 조건이다.
+##
+## §29 가 짚은 자리다 - 자리를 놓을 때 통행 가능한지만 보고 **그 칸이 유일한 길목인지는
+## 안 봤다.** 그래서 문 앞이나 문 안에 자리가 잡히고, 거기 **제대로 도착한** 유닛이 뒤를
+## 통째로 막았다. 「제 자리에 선 유닛은 안 밀린다」와 「길을 여는 밀기」가 부딪히던 것이
+## 상태 이름 문제가 아니라 여기였다.
+##
+## **엄한 조건으로 먼저 찾고, 모자라면 푼다.** 세 물음에 이렇게 답한다.
+##
+## | 물음 | 답 |
+## | --- | --- |
+## | 좁은 목이 목적지 한가운데면 | 엄한 쪽이 못 채우고 **푼 쪽이 지금과 똑같이 답한다** |
+## | 자리를 뒤로 물리면 대열이 늘어진다 | 넓히는 횟수는 그대로다. **엄한 쪽이 실패해도 지금보다 더 넓히지 않는다** |
+## | 모든 자리가 좁은 목이면 | 푼 쪽으로 떨어지므로 **최악이 지금과 같다** |
 static func build_slots(
-	count: int, center: Vector2, spacing: float, walkable: Callable
+	count: int, center: Vector2, spacing: float, walkable: Callable, spacious := Callable()
 ) -> PackedVector2Array:
 	var slots := PackedVector2Array()
 	if count <= 0:
 		return slots
 	var step := maxf(spacing, 1.0)
-	var radius := int(ceil(sqrt(float(count)))) + 2
+	var base_radius := int(ceil(sqrt(float(count)))) + 2
+	# **먼저 좁은 목을 뺀 자리로만 채워 본다.**
+	if not spacious.is_null():
+		var radius := base_radius
+		for _attempt in _GROW_ATTEMPTS:
+			var strict := _gather(count, center, step, spacious, radius)
+			if strict.size() >= count:
+				return strict
+			radius *= 2
+	var radius := base_radius
 	for _attempt in _GROW_ATTEMPTS:
 		slots = _gather(count, center, step, walkable, radius)
 		if slots.size() >= count:

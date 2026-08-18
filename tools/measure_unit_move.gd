@@ -3,9 +3,29 @@ extends SceneTree
 ##
 ##     godot --headless --path . -s res://tools/measure_unit_move.gd
 ##     godot --headless --path . -s res://tools/measure_unit_move.gd -- probe
+##     godot --headless --path . -s res://tools/measure_unit_move.gd -- jam 3 4 5
 ##
 ## 눈으로 "좋아졌다"고 말하는 것은 증거가 아니다. 고치기 전과 후에 같은 숫자를 뽑아
 ## 나란히 놓아야 무엇이 나아졌고 무엇이 나빠졌는지 갈린다.
+##
+## # **이 표에서 믿을 수 있는 칸과 못 믿는 칸**
+##
+## | | 칸 |
+## | --- | --- |
+## | **믿는다** | 초, 픽셀, 인원 - 정지, 90%, 통과, 뒤진동, 막힘, 꺾임, 반전, 겹침 |
+## | **못 믿는다** | `흐름장`, `step 평균`, `step 최악` 세 칸 |
+##
+## **왜 갈리는가.** 시뮬레이션은 고정 간격(1/60 초)으로 돌고 난수를 안 쓴다. 그래서 위칸은
+## **결정론**이다 - 같은 판을 다시 굴리면 소수점까지 같은 값이 나오고, 실제로 그것을 확인했다
+## (`probe_open40.gd` 5 회, 그리고 리팩토링 전후 지표 열두 칸 동일).
+##
+## 반면 밀리초는 **이 기계가 그 순간 무엇을 하고 있었는가**를 잰다. 같은 코드로 같은 판을
+## 두 번 돌려 `열린 곳 40` 의 step 최악이 11.99 와 28.82 밀리초로 나온 적이 있다 - **2.4 배다.**
+## 통합자가 GPU 로 다른 일을 돌리고 있으면 더 흔들린다.
+##
+## > **그러므로 밀리초로 채택 여부를 가르지 마라.** 성능을 판정하려면 이 도구가 아니라
+## > 조용한 기계에서 `bench_frame_budget.gd` 같은 전용 측정으로 따로 재야 한다.
+## > 여기 밀리초 칸은 "자릿수가 갑자기 열 배로 뛰었나"를 보는 눈금일 뿐이다.
 ##
 ## `probe` 를 붙이면 항을 하나씩 꺼 보며 **어느 항이 지터를 만드는지**를 가른다.
 ## 원인을 짚지 않고 고치면 증상만 옮겨 다닌다.
@@ -23,10 +43,12 @@ extends SceneTree
 ## | 정지밀림 | **서 있는 유닛이 제 뜻과 무관하게 옮겨진 총 거리. 0 이어야 한다** |
 ## | 최대겹침 | 몸이 서로 파고든 최대 깊이. 통과하려면 몸 지름까지 자라야 한다 |
 ## | 막힌이동 | 가려 했으나 앞이 막혀 못 간 거리. 밀치기를 걷어낸 값이다 |
-## | 정지 | 명령부터 전원이 멎기까지의 시간 |
+## | 정지 | 명령부터 **`이동` 상태가 없어지기까지**의 시간. `양보`는 안 센다 |
+## | **전원끝** | **`이동`도 `양보`도 없어지기까지**의 시간. 이쪽이 "전원이 끝났다"이다 |
 ## | 90% | 열에 아홉이 멎기까지의 시간. 정지와의 차이가 뒤끝이다 |
 ## | 통과 | 전원이 벽 너머로 넘어가기까지의 시간(괄호는 못 넘은 인원) |
-## | 뒤진동 | 멎은 뒤 3 초 동안 움직인 총 거리 |
+## | 뒤진동 | 멎은 뒤 3 초 동안 움직인 총 거리. **밀려서 제 자리에 가까워진 것도 센다** |
+## | **이탈** | 멎은 뒤 3 초 동안 **제 자리에서 멀어진** 거리만. **이쪽이 해로운 몫이다** |
 ##
 ## **꺾임에서 옆걸음을 빼야 한다.** 비켜주기가 들어가면서 몸이 초당 140 픽셀로 옆으로
 ## 옮겨지는데, 위치만 보면 그 프레임의 진행 방향은 옆이고 지표는 그것을 "방향이 꺾였다"로
@@ -75,9 +97,69 @@ func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0 and args[0] == "probe":
 		_run_probe()
+	elif args.size() > 0 and args[0] == "jam":
+		var costs: Array[float] = []
+		for index in range(1, args.size()):
+			costs.append(float(args[index]))
+		_run_jam_sweep(costs)
 	else:
 		_run_cases()
 	quit()
+
+
+## **막힘 비용을 훑는다.** 값 하나를 고르려면 이웃한 값들을 나란히 놓아야 한다.
+##
+## 이 훑기가 필요한 이유가 있다. 지금까지 이 값을 3.0 과 1.2 로 견준 측정이 **전부 무효**였다 -
+## 막힘 표를 읽는 쪽이 뒤집혀 있어서 값이 실제로 안 걸렸다(README §25). 고친 표 위에서
+## 처음부터 다시 고른다.
+##
+## **판정에 쓰는 것은 초와 인원뿐이다.** `step` 밀리초는 이 기계에서 같은 코드로도 두 배씩
+## 흔들려(README §25) 값을 가르지 못한다. 초는 고정 시간 간격으로 도는 결정론이라 쓸 수 있다.
+func _run_jam_sweep(wanted: Array[float]) -> void:
+	var target := Vector2(1500, 545)
+	var gate := 30 * _CELL
+	var costs: Array[float] = wanted
+	if costs.is_empty():
+		costs = [0.0, 1.0, 1.5, 2.0, 3.0, 4.0]
+	print("| 막힘 비용 | 상황 | 통과 | 정지 | 막힘 | 뒤진동 |")
+	print("| --- | --- | --- | --- | --- | --- |")
+	for cost in costs:
+		var rows: Array[Dictionary] = []
+		for count in [4, 8, 12, 24, 40, 100]:
+			var field := _tuned(_choke_field(count, 2), "jam_cost", cost)
+			rows.append(_measure("좁은 통로 %d" % count, field, target, gate))
+		for count in [4, 8, 12, 24, 40, 100]:
+			var field := _tuned(_open_field(count), "jam_cost", cost)
+			rows.append(_measure("열린 곳 %d" % count, field, target, -1.0))
+		rows.append(
+			_measure("한 칸 문 40", _tuned(_choke_field(40, 1), "jam_cost", cost), target, gate)
+		)
+		rows.append(
+			_measure("구석 24", _tuned(_open_field(24), "jam_cost", cost), Vector2(60, 60), -1.0)
+		)
+		rows.append(
+			_measure(
+				"맞교차 40",
+				_tuned(_facing_field(40), "jam_cost", cost),
+				target,
+				-1.0,
+				Vector2(200, 545)
+			)
+		)
+		for row in rows:
+			print(
+				(
+					"| %.1f | %s | %s | %s | %d | %.1f px |"
+					% [
+						cost,
+						row["label"],
+						_crossing(row["cross"], row["stranded"]),
+						_seconds(row["settle"]),
+						row["blocked"],
+						row["after"],
+					]
+				)
+			)
 
 
 ## **흔한 규모부터 잰다.** 40 과 100 만 재던 것을 4 · 8 · 12 · 24 로 넓혔다.
@@ -283,6 +365,8 @@ func _measure(
 	var cycle_longest := 0
 	var elapsed := 0.0
 	var settle_time := -1.0
+	# **`이동`도 `양보`도 없는 시각.** 「정지」와 다르다 - 그쪽은 `이동`만 센다.
+	var done_time := -1.0
 	var ninety_time := -1.0
 	var cross_time := -1.0
 	var worst_usec := 0
@@ -351,18 +435,31 @@ func _measure(
 			ninety_time = elapsed
 		if cross_time < 0.0 and cross_x > 0.0 and _all_past(field, cross_x):
 			cross_time = elapsed
+		if done_time < 0.0 and moving == 0 and _waiting_count(field) == 0:
+			done_time = elapsed
 		if moving == 0:
 			settle_time = elapsed
 			break
 
 	var resting := PackedVector2Array()
+	# **제 자리까지의 거리도 함께 적는다.** 뒤진동은 "움직였나"만 보는데, 밀려서 제 자리에
+	# 가까워진 것은 해가 아니다. 둘을 못 가르면 막을 것과 안 막을 것을 못 고른다.
+	var resting_gap := PackedFloat32Array()
 	for agent in field.agents:
 		resting.append(agent.position)
+		resting_gap.append(agent.position.distance_to(agent.goal))
 	for _i in int(_AFTER_SECONDS / _STEP):
 		field.step(_STEP)
+		elapsed += _STEP
+		if done_time < 0.0 and field.moving_count() == 0 and _waiting_count(field) == 0:
+			done_time = elapsed
 	var after := 0.0
+	# **제 자리에서 멀어진 몫만 따로 센다.** 가까워진 유닛은 0 으로 친다.
+	var drift := 0.0
 	for index in count:
 		after += resting[index].distance_to(field.agents[index].position)
+		var gap := field.agents[index].position.distance_to(field.agents[index].goal)
+		drift += maxf(gap - resting_gap[index], 0.0)
 
 	var wiggle := 0.0
 	for index in count:
@@ -381,6 +478,17 @@ func _measure(
 			giving_up += 1
 		elif agent.state == ProtoUnitAgent.State.HOLDING:
 			waiting += 1
+
+	# **`전원끝` 만 마저 찾는다.** 위 칸을 전부 뽑은 뒤에 도는 자리라 옛 칸은 하나도 안 건드린다.
+	#
+	# 「정지」는 `이동` 상태가 없어진 시각이고, `양보`로 선 유닛은 그 뒤에도 남아 있다.
+	# 「정지」를 고치면 이 레인의 표가 §11 부터 통째로 끊기므로, **옛 칸은 그대로 두고
+	# 진실을 적는 칸을 하나 더 붙인다.** 둘을 나란히 실으면 그 차이가 그대로 증거다.
+	while done_time < 0.0 and elapsed < _MAX_SECONDS:
+		field.step(_STEP)
+		elapsed += _STEP
+		if field.moving_count() == 0 and _waiting_count(field) == 0:
+			done_time = elapsed
 	return {
 		"label": label,
 		"units": count,
@@ -413,10 +521,12 @@ func _measure(
 		"wiggle": wiggle / float(count),
 		"push": field.overlap_push_total,
 		"settle": settle_time,
+		"done": done_time,
 		"ninety": ninety_time,
 		"cross": cross_time,
 		"stranded": stranded,
 		"after": after,
+		"drift": drift,
 		"blocked": giving_up,
 		"waiting": waiting,
 		"peak": field.overlap_push_peak,
@@ -475,6 +585,18 @@ func _smallest_body(field: ProtoUnitField) -> float:
 	return 0.0 if smallest == INF else smallest * 2.0
 
 
+## `양보`(HOLDING)로 선 유닛 수. **`moving_count()` 가 안 세는 쪽이다.**
+##
+## `양보`는 §8 이 "되돌아올 수 있는 정지"라고 못 박은 상태다. 그런데 지표는 `이동`만 세어
+## 멎었는지를 물어 왔고, 그래서 아홉 명이 살아 있는 판을 "전원 멎음"으로 적었다.
+func _waiting_count(field: ProtoUnitField) -> int:
+	var waiting := 0
+	for agent in field.agents:
+		if agent.state == ProtoUnitAgent.State.HOLDING:
+			waiting += 1
+	return waiting
+
+
 func _all_past(field: ProtoUnitField, cross_x: float) -> bool:
 	for agent in field.agents:
 		if agent.position.x < cross_x:
@@ -493,21 +615,21 @@ func _print_table(rows: Array[Dictionary]) -> void:
 	print(
 		(
 			"| 상황 | 걸음꺾임 | 방향반전 /초 | 옆걸음 px | 눌림 % | 역주행 % | 굽이 | 튕김 최대 "
-			+ "| 정지 | 90% | 통과 | 뒤진동 | 막힘 | 양보 | 흐름장 | step 평균 | step 최악 |"
+			+ "| 정지 | 전원끝 | 90% | 통과 | 뒤진동 | 이탈 | 막힘 | 양보 | 흐름장 | step 평균 | step 최악 |"
 		)
 	)
 	print(
 		(
 			"| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- "
-			+ "| --- | --- | --- | --- |"
+			+ "| --- | --- | --- | --- | --- | --- |"
 		)
 	)
 	for row in rows:
 		print(
 			(
 				(
-					"| %s | %.0f | %.2f | %.0f | %.0f | %.1f | %.2f | %.1f px | %s | %s | %s "
-					+ "| %.1f px | %d | %d | %.1f ms | %.3f ms | %.2f ms |"
+					"| %s | %.0f | %.2f | %.0f | %.0f | %.1f | %.2f | %.1f px | %s | %s | %s | %s "
+					+ "| %.1f px | %.1f px | %d | %d | %.1f ms | %.3f ms | %.2f ms |"
 				)
 				% [
 					row["label"],
@@ -519,9 +641,11 @@ func _print_table(rows: Array[Dictionary]) -> void:
 					row["wiggle"],
 					row["peak"],
 					_seconds(row["settle"]),
+					_seconds(row["done"]),
 					_seconds(row["ninety"]),
 					_crossing(row["cross"], row["stranded"]),
 					row["after"],
+					row["drift"],
 					row["blocked"],
 					row["waiting"],
 					row["flow_ms"],
