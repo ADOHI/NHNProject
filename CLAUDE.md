@@ -84,6 +84,24 @@ git worktree remove --force <경로> && git branch -D <브랜치> && git worktre
 그때 **VRAM 은 16.4GB 중 9.8GB 가 물려 있었고** ComfyUI 가 모델을 올린 채였다.
 OS 는 재부팅되지 않았다 — 앱만 죽었다.
 
+> ### ⚠ 2026-08-18 정정 — **VRAM 은 원인이 아니었다. 상관을 인과로 읽었다**
+>
+> 같은 증상을 **VRAM 이 깨끗한 상태에서** 다시 만났다 (여유 15.5GB / 16.4GB, ComfyUI 안 떠 있음).
+>
+> - Godot 뿐 아니라 **`gdformat`(Python)** 도 같은 코드로 죽는다 — 같은 파일 12회 중 2회
+> - **셸과 무관하다** — Git Bash 2/12, PowerShell 2/12
+> - **CPU 가 직접 보고했다** — `WHEA-Logger` 19: *Corrected Machine Check,
+>   **Translation Lookaside Buffer Error**, reported by **Processor Core***
+> - **최근 3주 커널 버그체크 5회** — `0x1E`·`0x50`×3·`0x3B`, 전부 메모리 오염 계열
+> - 기계는 **13th Gen Intel Core i9-13900H**, RAM 은 정격(오버클럭 아님)
+>
+> **원인은 기계다** (증거·처방: [`docs/test-stability.md`](docs/test-stability.md)).
+> 위 표의 2026-08-07 도 같은 사건이었을 가능성이 높다.
+>
+> **아래 규칙 셋은 그대로 지킨다** — 원인이 아니어도 셋 다 그 자체로 옳다.
+> 바뀌는 것은 하나다: **테스트가 무작위로 죽어도 먼저 코드를 의심하지 마라.**
+> 실패가 `0xc0000005`/신호 11 이고 단정 실패가 없으면 **기계를 먼저 의심하고 다시 돌려라.**
+
 **규칙 셋.**
 
 1. **이미지 생성 모델은 하나만 올린다.** 인스턴스를 새로 띄우지 말고 체크포인트도 갈아 끼우지 마라.
