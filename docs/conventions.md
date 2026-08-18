@@ -144,7 +144,30 @@ func apply_damage(amount):                # X
 @onready var _title_label = $UI/Root/Layout/Title  # X — 구조 바꾸면 깨진다
 ```
 
-### 3.6 스크립트 내부 순서
+### 3.6 묶음 배열 안의 `Packed*Array` 는 **꺼낼 때 복사본이다**
+
+`Array` 나 `Dictionary` 안에 `PackedInt32Array` 를 넣어 두고 꺼내서 고치면
+**고쳐지는 것은 복사본이고 원본은 그대로다.** 에러도 경고도 안 난다.
+
+```gdscript
+var _rows: Array = [PackedInt32Array()]
+
+(_rows[0] as PackedInt32Array).append(1)   # X — 조용히 사라진다
+_rows[0] = PackedInt32Array([1])           # O — 통째로 다시 넣는다
+
+var _rows2: Array = [[] as Array[int]]
+(_rows2[0] as Array).append(1)             # O — Array 는 참조다
+```
+
+`Packed*Array` 는 값 타입이고 `Array` 는 참조 타입이다.
+**클래스 변수로 바로 들고 있을 때는 `_rows[0] += 1` 이 멀쩡히 동작하므로**
+「Packed 는 원래 그렇다」로 기억해 두면 안 되고, **묶어 둘 때만** 이렇다.
+
+> 실제로 `SparringBout` 에서 대원마다의 기록을 이렇게 넣었다가
+> `append` 가 통째로 사라졌다. 테스트가 아니었으면 못 잡았다.
+> **묶어 둘 것은 `Array` 로 둔다.**
+
+### 3.7 스크립트 내부 순서
 
 `class_name` → `extends` → 문서 주석 → 시그널 → enum → 상수 → `@export` →
 공개 변수 → 비공개 변수 → `@onready` → `_init` → `_ready` → 그 외 `_` 콜백 →
