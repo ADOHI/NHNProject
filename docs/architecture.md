@@ -5,7 +5,26 @@
 무엇을 만드는지는 [game-design.md](game-design.md) 참고.
 
 **판이 화면에 그려지고 클릭으로 이동한다. 아지트에서 게이트를 골라 원정을 돌리고 정산까지 온다.**
-턴 페이즈 해결기와 NPC 는 아직 없다 — `TurnIntent`·`TurnPhase` 라는 어휘만 서 있다.
+그 위에 **세계 3000명**(인구·가족·사건·유명세), **레이맨 절차 애니메이션**,
+**전투 시험대**(백팩 격자·체이닝·대련), **효과음**, **아지트 아이소 격자**,
+**UI 킷**이 각각 서 있다.
+
+> **아직 안 이어진 자리가 이 문서에서 가장 중요하다.**
+> **턴 페이즈 해결기가 없다** — `TurnIntent`·`TurnPhase` 라는 어휘만 서 있다.
+> 위 여섯은 각자 돌아가지만 **한 판 안에서 서로를 부르지 않는다.**
+> 그것이 [16](design/16-build-order.md) §16.4 의 2단계이고, 남은 것 중 가장 위험하다.
+
+### 2026-08-18 통합 — 레인 열을 접었다
+
+`char-anim` · `dungeon-gen` · `npc-relations` · `sound` · `hideout` · `lighting-2d` ·
+`portraits` · `combat` · `ui-kit-2` · `test-stability`. 테스트 **623 → 1717**.
+
+**git 이 깨끗하다고 답한 자리에서 의미 충돌이 둘 나왔다** — 두 레인이 같은 함수의
+같은 자리에 서로 다른 인자를 밀어 넣었는데 diff 가 안 겹쳤다. 경위는
+[`integration-2026-08-18.md`](integration-2026-08-18.md).
+
+> **이 기계는 무작위로 프로세스를 죽인다** (하드웨어 결함 — [`test-stability.md`](test-stability.md)).
+> 검증은 `tools/run_gut_retry.py` · `tools/run_lint_retry.py` 로 돌린다.
 
 ---
 
@@ -13,90 +32,52 @@
 
 ```
 src/
-├── autoload/
-│   └── game_config.gd          # 전역 설정 · 실행 환경 판별
-├── core/                       # 노드 비의존 순수 로직
-│   ├── dungeon/
-│   │   ├── actor.gd            # 던전 안의 행동 주체 (몬스터 · NPC · 스쿼드)
-│   │   ├── room.gd             # 방 하나. 점유자와 위험도
-│   │   ├── dungeon_graph.gd    # 방 연결 · 고도 통과 판정 · 인접 위험도 조회
-│   │   ├── dungeon_blueprint.gd  # 던전 설계도 (방 · 고도 · 종류 · 연결 · 배치 산출)
-│   │   ├── dungeon_generator.gd  # 절차 생성 (아래 generation/ 을 엮는다)
-│   │   ├── generation/         # 생성 파이프라인 단계별
-│   │   │   ├── poisson_disk_sampler.gd   # 자리 뿌리기 (블루 노이즈)
-│   │   │   ├── delaunay_triangulation.gd # 평면 후보 간선 (Bowyer-Watson)
-│   │   │   ├── proximity_graphs.gd       # RNG · 가브리엘 · MST 부분그래프
-│   │   │   ├── dungeon_terrain.gd        # 고도를 지형으로 (거리 + 저주파 노이즈)
-│   │   │   ├── dungeon_edge_selector.gd  # 간선 선택 (고도차 · 깊이 가중)
-│   │   │   └── room_kind_planner.gd      # 방 종류 배정
-│   │   ├── squad_stats.gd      # 대원 능력치를 스쿼드 하나로 접는 규칙
-│   │   ├── dungeon_run.gd      # 진행 중인 잠입 한 판
-│   │   └── sample_dungeons.gd  # 생성된 판에 존재를 배치해 조립
-│   ├── event/
-│   │   ├── game_event.gd       # 사건 하나 (누가 · 어디서 · 무엇을 · 얼마나)
-│   │   └── event_log.gd        # 사건의 시간순 기록
-│   ├── turn/
-│   │   ├── turn_intent.gd      # 한 주체가 이번 턴에 하려는 일 (2단계 공유 어휘)
-│   │   └── turn_phase.gd       # 계획 / 행동 두 국면
-│   ├── rekka/                  # 렉카 게시글 - 사건을 언어 모델 입력으로
-│   │   ├── rekka_prompt.gd     # 직렬화. 등급 변환. 중의어 배제
-│   │   ├── rekka_context.gd    # **판 문맥 수집** - 방 상태 · 인접 · 이력 · 위상
-│   │   └── rekka_post.gd       # 후처리 (허용 문자 · 괄호 · 숫자 · 반복 제거)
+├── autoload/game_config.gd     # 전역 설정 · 실행 환경 판별 (유일한 싱글톤)
+├── core/                       # 노드 비의존 순수 로직. 전부 RefCounted
+│   ├── dungeon/                # 판 — 방 · 위험도 · 고도 · 절차 생성
+│   │   └── generation/         # 생성 파이프라인 (샘플링 → 삼각분할 → 간선 → 지형 → 구역 → 종류)
+│   ├── event/                  # 사건 하나와 그 기록. **소비자가 둘이라 먼저 세웠다**
+│   ├── turn/                   # ⚠ 어휘만 있다 — `TurnIntent` · `TurnPhase`. 해결기가 없다
 │   ├── gate/                   # 게이트 = 열린 문. 아웃게임 대상
-│   │   ├── gate.gd             # 게이트 하나. 씨앗을 물고 던전을 만든다
-│   │   ├── gate_rank.gd        # 등급 -> 크기 · 보상
-│   │   ├── gate_disclosure.gd  # 정보 공개 수준 (소문 / 정찰 / 해부)
-│   │   └── gate_board.gd       # 목록 생성. 원정 1회 = 목록 1회 갈림
-│   └── guild/                  # 길드 아지트. `gate/` 를 알지만 `gate/` 는 여기를 모른다
-│       ├── guild.gd            # 등급 · 자금 · 대원 · 아지트 진척
-│       ├── guild_member.gd     # 대원. **`Actor` 가 아니다**
-│       ├── squad.gd            # 대원 N -> `Actor` 하나 (14 §14.2)
-│       ├── facility.gd         # 시설 셋 (공방 · 정보실 · 접선처)
-│       ├── facility_assignment.gd  # 배치. **출전자는 안 센다**
-│       ├── expedition.gd       # 편성 -> 진입 -> 결과 -> 정산
-│       ├── guild_settlement.gd # 정산. 두 번 적용되지 않는다
-│       └── guild_balance.gd    # **수치와 계산식이 전부 여기** 한 파일
-├── proto/
-│   └── unit_move/              # 이동 조작감 프로토타입 (본 게임과 독립 씬)
-│       ├── unit_move_proto.tscn / .gd   # 진입점 · 입력 해석
-│       ├── terrain_view.gd · field_view.gd · debug_draw.gd · tuning_panel.gd
-│       └── core/               # 흐름장 · 대형 · 선택 · 부대. 노드 비의존
+│   ├── guild/                  # 길드 아지트 — 대원 · 스쿼드 · 시설 · 원정 · 정산 · 수치표
+│   ├── npc/                    # **세계 3000명** — 인구 생성 · 가족 · 관계 · 사건 · 유명세 · 인물 상세
+│   ├── combat/                 # 전투 시험대 — 백팩 격자 · 체이닝 · 브레이크 · 대련
+│   ├── char_anim/              # **레이맨 절차 애니메이션** — 파츠 여섯, 클립 아홉
+│   ├── hideout/                # 아지트 아이소 격자 — 건물 · 배치 · 배회
+│   ├── nav/                    # 흐름장 · 격자. 이동 프로토에서 끌어올렸다
+│   ├── sfx/                    # 효과음 — 사건 → 층 쌓기 → 합성
+│   ├── rekka/                  # 렉카 게시글 — 사건을 언어 모델 입력으로
+│   ├── ui/                     # **UI 를 그리는 규칙**(픽셀 아님) — 배치 · 조형 · 팔레트
+│   │   └── motion/             # 동작 곡선 다섯 (잔상 · 정지 · 전단 · 내리침 · 눌림)
+│   └── text/korean_josa.gd     # 조사 처리
+├── entities/character/         # 리그를 노드로 세우는 층. 자리표시자 도형 ↔ 진짜 그림
+├── systems/audio/              # 소리를 실제로 내는 층 (`core/sfx/` 는 무엇을 낼지만 정한다)
 ├── ui/
-│   ├── kit/                    # **UI 원자 단위 실험.** 버튼과 팝업만. 방향 미정
-│   │   ├── kit_showcase.tscn   # 견본 화면. 1/2/3 으로 조형 방향 전환
-│   │   ├── kit_field.gd        # 세 방향을 갈아 끼우는 자리
-│   │   ├── kit_terrain/facet/grain.gdshader   # 등고선 / 파편 / 알갱이
-│   │   └── kit_button.gd · kit_popup.gd · kit_tokens.gd
-│   ├── base/                   # 길드 아지트 화면. **도형만.** 조형은 kit 이 정한다
-│   │   └── base_screen.tscn    # 기둥 셋 - 길드·시설 / 대원·편성 / 게이트·원정
-│   ├── style/                  # 「호외」 시각 언어. **보류** - 반려되어 kit 으로 넘어감
-│   ├── dungeon_board/
-│   │   ├── dungeon_board.tscn  # 판 화면 (방 배치 · 연결선 · HUD)
-│   │   ├── dungeon_board.gd
-│   │   ├── room_node.tscn      # 방 하나의 위젯
-│   │   └── room_node.gd
-│   └── debug_overlay/
-│       ├── debug_overlay.tscn  # 개발 정보 패널 (F1)
-│       └── debug_overlay.gd
-└── main/
-    ├── main.tscn               # 부트 씬 (project.godot 의 main_scene)
-    └── main.gd
+│   ├── dungeon_board/          # 판 화면
+│   ├── base/                   # 길드 아지트 화면
+│   ├── hideout/                # 아지트 아이소 화면
+│   ├── backpack/               # 백팩 격자 화면
+│   ├── npc_sheet/              # 인물 상세 열람기 (개발용 — 전부 보인다)
+│   ├── kit/                    # UI 킷 — 조형 실험과 견본 화면들
+│   ├── style/                  # 「호외」 시각 언어 (보류 — kit 이 대체)
+│   ├── title/                  # 타이틀
+│   └── debug_overlay/          # 개발 정보 패널 (F1)
+├── proto/                      # **본 게임과 독립된 씬.** 조작감·기법을 재는 자리
+│   ├── unit_move/              # 이동 조작감
+│   ├── char_anim/              # 애니메이션 조절판
+│   ├── lighting/               # 2D 조명 조사
+│   └── sfx/                    # 효과음 데모
+└── main/                       # 부트 씬 (진입점)
 
-assets/fonts/song_myung/        # SongMyung Regular (SIL OFL) + OFL.txt
-test/unit/                      # GUT 단위 테스트 72개 파일 (현재 409개 통과)
-test/support/segment_crossing.gd  # 선분 교차 판정. 생성기를 안 믿고 따로 검사한다
-tools/  (전부 빌드에 포함되지 않는다)
-  capture_scene.gd              # 본 화면 캡처. showcase · debug · zoomN · perf · film 인자
-  capture_dungeon_maps.gd       # 여러 시드의 판을 한꺼번에 캡처
-  capture_kit.gd                # UI 킷 세 방향 캡처
-  capture_base_screen.gd        # 아지트 화면 한 바퀴를 일곱 장으로
-  capture_unit_move.gd          # 이동 프로토 캡처
-  measure_unit_move.gd          # 이동 지표 실측 (꺾임 · 튕김 · 정지 · 막힘)
-  bench_dungeon_generation.gd   # 생성 소요 시간 실측
-  check_glyphs.gd               # src/ 문자열이 폰트에 있는지 검사
-  check_glyphs_text.gd          # 화면에 나갈 표본 .txt 도 같은 검사
-  dump_rekka_prompts.gd         # 렉카 입력 블록을 실제 판에서 뽑아 본다
-  clean_rekka_posts.gd          # 모델 산출물에 후처리를 걸어 본다
+assets/fonts/song_myung/        # SongMyung Regular (SIL OFL) — 한글 글리프
+assets/audio/sfx/               # CC0 녹음물 65개 + CREDITS.md
+test/unit/                      # GUT 단위 테스트 (현재 149 스크립트 / 1717 통과)
+test/support/                   # 생성기를 안 믿고 따로 검사하는 자들
+tools/                          # 전부 빌드에 포함되지 않는다
+  capture_*.gd                  # 화면 캡처 (창을 한 번 띄워 여러 장을 몰아 뽑는다)
+  check_glyphs*.gd              # 폰트에 없는 글자를 잡는다 — 없으면 두부(□)가 된다
+  run_gut_retry.py              # ⚠ 이 기계 전용 — 폭사에만 재시도하는 테스트 러너
+  run_lint_retry.py             # ⚠ 이 기계 전용 — 파일 하나씩 린트하고 폭사만 재시도
   build_docs.py · verify_pdf.py # 제출용 PDF
 addons/gut/                     # GUT 9.7.1 (벤더링). 빌드에서 제외된다
 web/shell.html                  # 웹 빌드용 커스텀 HTML 셸
@@ -244,17 +225,38 @@ Godot 기본 폰트에는 한글 글리프가 없어 그대로 두면 UI 가 전
 
 ## 아직 없는 것
 
-`conventions.md` §1 에 정의된 아래 폴더는 **필요해질 때 만든다.**
+> `conventions.md` §1 이 「필요해질 때 만든다」고 적어 둔 폴더 넷은 **전부 생겼다** —
+> `src/entities/` · `src/systems/` · `src/ui/` · `assets/`. 그 표는 이제 지웠다.
 
-| 폴더 | 들어갈 것 |
-| --- | --- |
-| `src/entities/` | 플레이어, 적 등 게임 오브젝트 |
-| `src/systems/` | 씬 전환, 저장, 오디오 |
-| `src/ui/` | HUD, 메뉴 |
-| `assets/` | 여러 기능이 공유하는 원본 에셋 |
+### 🔴 이어 붙는 자리가 없다 — 지금 가장 큰 구멍
 
-`src/core/` 에 아직 없는 것 (구현 순서는 [16](design/16-build-order.md)):
-턴 진행(계획/행동 페이즈), 조우 절차, 렉카 기사 생성기, 스쿼드, 세계 갱신.
+부품은 많은데 **한 판이 안 돈다.** [16](design/16-build-order.md) §16.4 의 2단계다.
+
+| 없는 것 | 없으면 | 어디에 |
+| --- | --- | --- |
+| **턴 페이즈 해결기** | 계획/행동이 안 갈리고 동시 해결이 없다. **이 게임이 아니게 된다**(M2) | `src/core/turn/` 에 어휘만 |
+| **NPC 탐험가의 판 위 행동** | 위험도가 안 변한다 → 추리할 것이 없다(M4) | 세계는 있는데 판에 안 들어온다 |
+| **조우 절차** (전투/협상/도주 분기) | NPC 가 장애물로 전락한다(M5) | `core/combat/` 은 시험대뿐 |
+| **렉카 피드 화면** | 개성이 사라지고 정보원을 하나 잃는다(M6) | 입력층만 있고 화면이 없다 |
+
+**넷 다 §16.8 의 「절대 자르지 않는 여섯」에 든다.**
+
+### 서로 안 부르는 부품들
+
+각자는 도는데 아직 한 판 안에서 안 만난다.
+
+| 부품 | 지금 도는 곳 | 안 이어진 자리 |
+| --- | --- | --- |
+| `core/char_anim/` | `proto/char_anim/` 조절판 | 판·전투 화면에 안 선다 |
+| `core/combat/` | 대련 시험대 | 조우 절차가 없어 판에서 안 불린다 |
+| `core/sfx/` | `proto/sfx/` 데모 · 호출부 2개 | 사건 대부분이 소리를 안 낸다 |
+| `core/npc/` | 인물 상세 열람기(개발용) | 던전 판에 NPC 로 안 들어간다 |
+| `core/hideout/` | 아지트 화면 | 길드 진행과 안 묶였다 |
+
+### 그 밖에 아직 없는 것
+
+세계 갱신(던전 1회 = 세계 1틱은 `NpcWorld.tick()` 이 있으나 호출부가 없다),
+영입, 스쿼드 편성 화면, 저장.
 
 ---
 
@@ -276,3 +278,8 @@ Forward+ / Mobile 렌더러는 Vulkan 기반이라 브라우저에서 동작하�
 | 2026-08-07 | `src/core/dungeon/` · `src/core/event/` 신설 | 구현 0단계. 위험도 합산은 순수 함수라 씬 없이 검증되고, 이벤트 로그는 기사·세계갱신의 공통 입력이라 먼저 세워야 재작업이 없다 ([16 §16.2](design/16-build-order.md)) |
 | 2026-08-07 | `src/ui/dungeon_board/` 신설, `main.tscn` 을 Node2D → Control 로 교체 | 구현 1단계. 이 게임의 화면은 판과 텍스트라 Control 트리가 맞다. 웹 검증용 상태 표시줄은 하단에 남겼다 |
 | 2026-08-07 | 좌표를 `Room` 이 아니라 `DungeonBlueprint` 에 둠 | 좌표는 판의 규칙이 아니라 표현이다. 같은 판을 다르게 그릴 수는 있어도 같은 판이 다르게 이어질 수는 없다 |
+| 2026-08-18 | **레인 열을 접었다** — `char-anim`·`dungeon-gen`·`npc-relations`·`sound`·`hideout`·`lighting-2d`·`portraits`·`combat`·`ui-kit-2`·`test-stability` | 병렬로 갈라 둔 것이 main 에 없으면 서로를 못 부른다. 테스트 623 → 1717. 경위는 [integration-2026-08-18.md](integration-2026-08-18.md) |
+| 2026-08-18 | `src/core/nav/` 신설 (이동 프로토에서 끌어올림) | 흐름장·격자를 아지트가 같이 쓴다. 프로토 안에 두면 본 게임이 프로토에 의존한다 |
+| 2026-08-18 | `src/core/ui/` 신설 — **UI 를 그리는 규칙을 픽셀에서 떼어냈다** | 배치·조형·팔레트가 순수 함수라 씬 없이 검증된다. 노드가 들고 있으면 화면을 띄워야만 검사가 된다 |
+| 2026-08-18 | `docs/HANDOFF.md` → `docs/handoff/<레인>.md` | 레인 여덟이 같은 파일명을 써서 병합 때마다 충돌했고, 이긴 하나 말고는 전부 사라졌다 |
+| 2026-08-18 | `tools/run_gut_retry.py` · `tools/run_lint_retry.py` 도입 | **이 개발 기계가 무작위로 프로세스를 죽인다**(하드웨어 — [test-stability.md](test-stability.md)). 긴 실행 하나를 짧은 실행 여럿으로 쪼갠다. CI 는 멀쩡한 러너라 날것 그대로 둔다 |
