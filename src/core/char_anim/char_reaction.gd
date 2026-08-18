@@ -108,6 +108,19 @@ func strike(at: float, power: float, direction := -1.0) -> void:
 	_impacts.append(Vector3(at, maxf(power, 0.0), signf(direction) if direction != 0.0 else -1.0))
 
 
+## 지금 쌓여 있는 충격의 수. **소프트바디가 같은 목록을 읽는다** (§31.1).
+##
+## **목록을 두 벌로 두지 않는다.** 두 벌이면 하나가 `forget_spent()` 로 버린 것을
+## 다른 하나가 안 버려서 조용히 갈린다 — 오래 싸울수록 벌어진다.
+func impact_count() -> int:
+	return _impacts.size()
+
+
+## `i` 번째 충격 `(시각, 세기, 방향)`. **사본을 안 만든다** — 프레임마다 도는 자리다.
+func impact_at(index: int) -> Vector3:
+	return _impacts[index]
+
+
 ## **밀림의 세기.** `1` 에서 시작해 부드럽게 `0` 으로 돌아온다. **음수로 안 넘어간다.**
 func _push(t: float, impact: Vector3, back: float) -> float:
 	var age := t - impact.x
