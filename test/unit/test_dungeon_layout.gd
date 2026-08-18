@@ -11,8 +11,16 @@ extends GutTest
 
 const Crossing := preload("res://test/support/segment_crossing.gd")
 
-## 화면(dungeon_board.gd)이 쓰는 간격. 같은 값으로 재야 실제 화면을 검증한 것이 된다.
-const _SPACING := 280.0
+## 화면이 쓰는 간격. **베껴 적지 않고 읽어 온다.**
+##
+## 예전에는 `280.0` 을 적어 뒀는데 화면이 240 으로 내려가도 그대로 남아 있었다.
+## 좌표가 간격에 정비례하고 임계값도 같은 값을 곱하므로 **테스트는 척도 무관이라
+## 통과/실패가 한 판도 안 바뀌었다** — 깨진 것은 판정이 아니라 보장이었다.
+## `tools/check_board_capacity.gd` 는 이미 읽어 오고 있었고 CI 관문인 여기만 낡아 있었다.
+const _SPACING := DungeonBoard._SPACING
+
+## 방 위젯. 통로가 얼마나 떨어져야 하는지를 **여기서 재기 위해** 들고 온다.
+const RoomNodeScene := preload("res://src/ui/dungeon_board/room_node.tscn")
 
 ## 크기마다 검사할 시드 수. 무작위 생성이라 한 판만 봐서는 아무것도 증명되지 않는다.
 const _SEEDS := 12
@@ -30,11 +38,21 @@ const _MAX_HOLE_RATIO := 1.6
 ## 구멍을 찾을 때 격자를 얼마나 잘게 훑을지 (간격 대비).
 const _PROBE_STEP := 0.35
 
-## 통로가 상관없는 방에서 최소한 떨어져 있어야 할 거리 (간격 대비).
+## 통로가 방 위젯을 파고들지 않으려면 방 중심에서 이만큼은 떨어져야 한다 (픽셀).
 ##
-## 방 위젯은 146x76 이라 중심에서 세로로 38, 가로로 73 만큼 뻗는다.
-## 이 값(간격 280 기준 84)이면 어느 방향에서 지나가도 위젯을 건드리지 않는다.
-const _ROOM_CLEARANCE := 0.30
+## **위젯 크기에서 직접 잰다.** 예전에는 `간격 x 0.30` 이라는 비율을 적어 뒀는데,
+## 간격 240 에서 그 값이 72 px 이라 **위젯 가로 반너비 73 px 도 못 덮었다** —
+## 통로가 방 이름을 파고들어도 초록불이었다.
+##
+## 진짜 기준은 위젯의 대각 반지름이다. 146x76 이면 82.3 px 이고, 그보다 멀면
+## 어떤 방향에서 와도 위젯에 닿지 않는다. 위젯이 커지면 이 값도 따라 커진다.
+var _room_clearance := 0.0
+
+
+func before_all() -> void:
+	var node: Control = RoomNodeScene.instantiate()
+	_room_clearance = node.custom_minimum_size.length() * 0.5
+	node.free()
 
 
 func _positions(seed_value: int, size: int) -> Dictionary:
@@ -118,7 +136,7 @@ func test_no_corridor_runs_through_a_room() -> void:
 			var closest := _closest_room_to_a_corridor(run.blueprint, positions)
 			assert_gt(
 				closest,
-				_SPACING * _ROOM_CLEARANCE,
+				_room_clearance,
 				"시드 %d 크기 %d 에서 통로가 방을 %.1f 까지 스친다" % [seed_value + 1, size, closest]
 			)
 

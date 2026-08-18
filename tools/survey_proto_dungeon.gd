@@ -12,7 +12,8 @@ const Proto := preload("res://tools/proto_organic_dungeon.gd")
 const _RUNS := 60
 
 ## 스쿼드 기본 민첩. 판의 몇 %가 이 값으로 열리는지 본다.
-const _SQUAD_AGILITY := 2
+## **숫자를 다시 적지 않는다** — 게임 쪽이 바뀌면 이 도구만 옛 값으로 조용히 재게 된다 (§6.5).
+const _SQUAD_AGILITY := SampleDungeons.SQUAD_AGILITY
 
 
 func _initialize() -> void:

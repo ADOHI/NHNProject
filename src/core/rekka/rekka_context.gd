@@ -271,7 +271,7 @@ static func _role_of(run: DungeonRun, room_id: String) -> String:
 			]
 		)
 
-	if graph.neighbors_of(room_id).size() == 1:
+	if graph.is_dead_end(room_id):
 		return "%s%s 막다른 방이라 들어가면 왔던 길로 되돌아 나와야 한다" % [name, topic]
 	return ""
 

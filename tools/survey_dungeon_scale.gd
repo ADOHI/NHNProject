@@ -43,6 +43,8 @@ func _initialize() -> void:
 	print("")
 	_table("설계안 프로토타입", false)
 	print("")
+	print("행 이름표가 「방50」 처럼 붙는다 — **행을 줄 번호로 집지 마라.**")
+	print("줄 번호로 집었다가 32방 행을 50방으로 읽고 없는 회귀를 보고한 적이 있다.")
 	print("cycles=E-V+1 · diam=지름 · reach=민첩 2 로 닿는 방 %")
 	print("alt=귀중 방 중 대안 경로 보유 % · dom=최단이 더 완만하기까지 한 %")
 	print("bossDeg=보스 방 차수(P3, 4 이상 목표) · trDeg=부차 귀중품 차수(P4, 1 목표)")
@@ -56,7 +58,7 @@ func _table(title: String, current: bool) -> void:
 		(
 			"%-6s %6s %6s %6s %5s %5s %5s %5s %5s %6s %5s %6s %5s %6s %6s %6s %6s %6s %6s"
 			% [
-				"want",
+				"목표",
 				"rooms",
 				"edges",
 				"cycles",
@@ -104,7 +106,7 @@ func _row(wanted: int, current: bool) -> void:
 	print(
 		(
 			(
-				"%-6d %6.1f %6.1f %6.1f %5.2f %5.1f %5.1f %5.1f %5.1f %6.1f"
+				"방%-4d %6.1f %6.1f %6.1f %5.2f %5.1f %5.1f %5.1f %5.1f %6.1f"
 				+ " %5.1f %6.1f %5.1f %6.2f %6.2f %6.2f %6.2f %6.1f %6.2f"
 			)
 			% [

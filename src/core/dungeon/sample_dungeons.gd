@@ -30,7 +30,12 @@ const SIZE_MAX := 5
 static func params_for_size(size: int, character: int = 0) -> DungeonGenerator.Params:
 	var clamped := clampi(size, SIZE_MIN, SIZE_MAX)
 	var params := DungeonGenerator.Params.new()
-	params.room_count = 7 + clamped * 5
+	# **크기 5 가 방 50개 안팎이 되도록 잡았다.** 예전 `7 + 크기 x 5` 는 크기 5 에서
+	# 32 개였고, 사용자가 요구한 50 개는 **게임에서 한 번도 나오지 않았다** —
+	# 50 개짜리 판을 재고 화면까지 맞춰 놓고 정작 그 크기를 만들지 않고 있었다.
+	#
+	# 12 / 22 / 32 / 42 / 52. 작은 판(크기 1)은 그대로 두고 위쪽만 늘린다.
+	params.room_count = 12 + (clamped - 1) * 10
 	# 크기가 방 개수를 정하고 **성격이 나머지를 손본다** (DungeonCatalog 참고).
 	return DungeonCatalog.apply(params, character)
 

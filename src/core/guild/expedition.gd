@@ -107,6 +107,10 @@ func garrison_ids() -> Array[String]:
 func enter() -> DungeonRun:
 	if stage != Stage.PLANNING or squad == null:
 		return null
+	# **민첩이 모자라면 여기서 막는다.** 들어간 뒤에 「보스까지 못 간다」를 알게 되면
+	# 그 판은 편성 실수가 아니라 **알 수 없었던 실패**가 된다 (Gate.can_enter).
+	if not gate.can_enter(squad.agility()):
+		return null
 	run = gate.create_run()
 	_swap_in_squad(run, squad)
 	stage = Stage.DEPLOYED

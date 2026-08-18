@@ -62,11 +62,26 @@ class Character:
 ## **이름과 성격은 기획이라 뒤집힐 수 있다. 구조는 이름을 모른다** — 생성기는 축 값만 받는다.
 static func all() -> Array[Character]:
 	return [
-		Character.new(
-			"shallow_pit",
-			"얕은 갱도",
-			"선이 성기고 고도 숫자가 작다. 인접 합이 잘 갈려 숫자 추리가 쉽다",
-			{"extra_edge_ratio": 0.10, "elevation_gain": 1.0}
+		(
+			Character
+			. new(
+				"shallow_pit",
+				"얕은 갱도",
+				# **「고도 숫자가 작다」는 약속을 지킨 적이 없다.** 단차 1.0 은 기본 2.0 과 너무
+				# 가까워 판 하나만 봐서는 25% 만 알아봤다(§17.34.3). 단차를 **0 으로** 내리자
+				# 65% 가 됐고, 그때 가장 센 지표가 「최고 고도」가 아니라 **「평지%」**로 바뀐다
+				# — 다른 넷과 겹치지 않는 지표다(§17.35).
+				#
+				# **중간값은 안 듣는다.** 0.6 · 0.3 은 25% · 20% 로 같거나 나쁘다. 고도가
+				# 정수라 반올림되면 층이 생기기 때문이고, **0 에서만 판이 통째로 평평해진다.**
+				# 계단 함수라 「조금 더 밀어 보기」로는 못 찾는다.
+				#
+				# **곁가지는 그대로 둔다.** 이름("선이 성기다")이 그쪽을 가리켜서 밀어 봤는데
+				# 25 -> 30% 로 안 듣고 갈림길만 목표에서 멀어졌다 — 효과 없는 손잡이를 함께
+				# 당기면 대가만 치른다(§17.35.1).
+				"층이 없다시피 평평하다. 오름은 보장된 한 군데뿐이라 숫자 추리가 쉽다",
+				{"extra_edge_ratio": 0.10, "elevation_gain": 0.0}
+			)
 		),
 		Character.new(
 			"hive", "벌집", "선이 촘촘하다. 차수가 높아 인접 합이 뭉쳐 확신이 안 선다", {"extra_edge_ratio": 0.46}
@@ -91,14 +106,31 @@ static func all() -> Array[Character]:
 				# **이 축은 상대값이다.** 그 판의 최대 깊이에 대한 비율이라 "다른 던전보다 멀다"
 				# 를 뜻하지 않는다. 그래서 요약을 "판 반대편" 이 아니라 "그 판의 가장 먼 끝"
 				# 으로 적는다 — 이름이 약속하는 것과 실제로 주는 것을 맞춘다.
-				{"exit_distance_ratio": 0.95, "dead_end_ratio_min": 0.30}
+				#
+				# **하한은 0.30 이 아니라 0.22 다 (2026-08-10).** 0.30 은 **생성기가
+				# 못 닿는 값**이라 40 판 중 20 판이 미달이었고, 못 맞추는 값을 요구하면
+				# 평균은 안 오르고 **흩어짐만 는다**(변동계수 0.096 -> 0.181).
+				# **덜 밀어야 갈린다** (§17.34.2 · §17.36.3). 기본 `max` 0.30 과 같아
+				# **띠 폭이 0** 이던 것도 함께 풀린다.
+				{"exit_distance_ratio": 0.95, "dead_end_ratio_min": 0.22}
 			)
 		),
-		Character.new(
-			"vault",
-			"금고층",
-			"위험방이 흔하고 귀중품은 드물다. 하나를 노리고 들어간다",
-			{"treasure_ratio": 0.05, "hazard_ratio": 0.36}
+		(
+			Character
+			. new(
+				"vault",
+				"금고층",
+				"위험방이 흔하고 귀중품은 드물다. 하나를 노리고 들어간다",
+				# **위험방 0.36 -> 0.55 (2026-08-10).** 얕은 갱도를 평평하게 만들자 그쪽 귀중 방이
+				# 4.0 에서 2.9±1.4 로 내려가 금고층의 1.1 을 제 띠 안에 삼켰다. 금고층의 유일한
+				# 「홀로 떨어지는 지표」가 **귀중 방**이었는데 그것이 죽어 식별율이 100 -> 80% 가 됐다
+				# (§17.39.3).
+				#
+				# **다른 축에서 단독 지표를 되찾는 쪽을 골랐다.** 위험방을 밀면 이 성격의 이름이
+				# 약속하는 것("위험방이 흔하다")이 더 뚜렷해지므로 대가 없이 되사는 것이다.
+				# 0.45 는 95%(단독 지표 없음), **0.55 에서 100% 와 단독 지표가 함께 돌아온다**(§17.41).
+				{"treasure_ratio": 0.05, "hazard_ratio": 0.55}
+			)
 		),
 	]
 
@@ -134,5 +166,26 @@ static func summary_of(index: int) -> String:
 ## 반대로 하면 성격이 방 개수를 덮어써 게이트 등급이 뜻을 잃는다.
 static func apply(params: DungeonGenerator.Params, index: int) -> DungeonGenerator.Params:
 	for field in character_at(index).axes:
-		params.set(String(field), float(character_at(index).axes[field]))
+		var name := String(field)
+		# **`set()` 은 없는 이름을 말없이 삼킨다.** 오타가 나면 그 축이 죽는데 로그 한 줄
+		# 없고, 그래프만 보는 테스트로는 방 종류 축(귀중품·위험방·탈출구 거리)의 죽음이
+		# 원리적으로 안 잡힌다. 그래서 여기서 확인한다.
+		if params.get(name) == null:
+			push_error("던전 성격이 없는 축을 흔들려 합니다: %s" % name)
+			continue
+		params.set(name, float(character_at(index).axes[field]))
 	return params
+
+
+## 성격이 흔드는 축 이름이 전부 실재하는가. 테스트와 개발 도구가 쓴다.
+static func unknown_axes() -> Array[String]:
+	var known := {}
+	for entry in DungeonGenerator.Params.new().get_property_list():
+		known[String(entry["name"])] = true
+
+	var result: Array[String] = []
+	for character in all():
+		for field in character.axes:
+			if not known.has(String(field)):
+				result.append("%s/%s" % [character.id, field])
+	return result

@@ -176,7 +176,7 @@ func test_dead_ends_exist_but_do_not_take_over() -> void:
 		var graph := blueprint.build()
 		var dead_ends := 0
 		for id in blueprint.room_ids():
-			if graph.neighbors_of(id).size() <= 1:
+			if graph.is_dead_end(id):
 				dead_ends += 1
 		var ratio := float(dead_ends) / float(blueprint.room_ids().size())
 		assert_between(ratio, 0.05, 0.35, "시드 %d 의 막다른 방 비율이 %.2f" % [seed_value, ratio])

@@ -146,3 +146,30 @@ func test_npc_explorer_is_mobile_but_monsters_are_not() -> void:
 			elif actor.kind == Actor.Kind.MONSTER:
 				assert_false(actor.is_mobile())
 	assert_true(found_rival, "경쟁자가 판에 없다")
+
+
+# ---------------------------------------------------------------- 걸음 기록
+
+
+func test_the_walk_record_starts_on_the_room_we_stand_in() -> void:
+	# 판이 만들어진 순간 이미 한 방에 서 있다. 그 방은 본 방이다.
+	var run := _make_fixed_run(9)
+	assert_false(run.walk.has_walked(), "안 걸었는데 걸은 것으로 나온다")
+	assert_eq(run.walk.seen_room_count(), 1, "선 방이 본 방에 안 들어갔다")
+
+
+## **기록은 이동과 같은 함수에 묶여 있다.** 신호를 듣는 쪽에 맡기면 안 듣는 판이 생긴다.
+func test_moving_leaves_a_trace_in_the_walk_record() -> void:
+	var run := _make_fixed_run(9)
+	run.move_player("east")
+	run.move_player("home")
+	assert_eq(run.walk.steps(), 2, "이동이 걸음으로 안 남았다")
+	assert_eq(run.walk.backtracks(), 1, "되돌아 나왔는데 안 셌다")
+	assert_eq(run.walk.retraced_corridors(), 1, "같은 통로를 양쪽으로 걸었는데 안 셌다")
+
+
+func test_a_refused_move_never_touches_the_walk_record() -> void:
+	# 막힌 이동까지 세면 "되돌아섬"이 손가락 실수와 섞인다.
+	var run := _make_fixed_run(0)
+	assert_false(run.move_player("ledge"), "막힌 방으로 이동이 성사됐다")
+	assert_eq(run.walk.steps(), 0, "성사되지 않은 이동이 걸음으로 남았다")

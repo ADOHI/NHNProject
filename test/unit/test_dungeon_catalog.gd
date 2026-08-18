@@ -107,3 +107,18 @@ func _signature(index: int) -> String:
 	for id in blueprint.room_ids():
 		parts.append("%s:%d" % [id, blueprint.elevation_of(id)])
 	return "|".join(parts)
+
+
+func test_every_axis_name_is_a_real_parameter() -> void:
+	# `Params.set()` 은 없는 이름을 말없이 삼킨다. 오타가 나면 그 축이 죽는데
+	# **그래프만 보는 테스트로는 방 종류 축의 죽음이 원리적으로 안 잡힌다** —
+	# 귀중품·위험방·탈출구 거리를 꺼도 판의 서명이 바이트 단위로 같다.
+	# 그래서 이름 자체를 확인한다.
+	assert_eq(CatalogScript.unknown_axes(), [] as Array[String], "없는 축을 흔드는 성격이 있다")
+
+
+func test_a_typo_in_an_axis_name_is_caught() -> void:
+	# 검사가 실제로 잡는지 본다. 아무것도 못 잡는 검사기면 위 시험은 늘 통과한다.
+	var params := DungeonGenerator.Params.new()
+	assert_null(params.get("treasure_ratio_TYPO"), "없는 이름인데 값이 나온다")
+	assert_not_null(params.get("treasure_ratio"), "있는 이름인데 값이 없다")

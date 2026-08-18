@@ -14,7 +14,7 @@ const _RUNS := 30
 
 
 func _initialize() -> void:
-	print("size | rooms(min/avg/max) | edges | dead-end | msec(avg/max)")
+	print("size | rooms(min/avg/max) | edges | dead-end | msec(avg/max) | routes(avg/max)")
 	for size in range(SampleDungeons.SIZE_MIN, SampleDungeons.SIZE_MAX + 1):
 		_measure(size)
 	quit()
@@ -28,6 +28,10 @@ func _measure(size: int) -> void:
 	var dead_ends := 0
 	var elapsed_total := 0.0
 	var elapsed_max := 0.0
+	# **화면이 판마다 한 번 더 내는 값이다.** DungeonBoard.setup() 이 두 길을 여기서 잰다.
+	# 생성 시간에 얹히는 몫이라 같이 재야 "판 하나가 한 프레임에 들어가나"의 답이 맞는다.
+	var routes_total := 0.0
+	var routes_max := 0.0
 
 	for run in _RUNS:
 		var started := Time.get_ticks_usec()
@@ -44,9 +48,18 @@ func _measure(size: int) -> void:
 		edges_total += blueprint.connections().size()
 		dead_ends += _dead_ends(run_state.graph, blueprint)
 
+		var routes_started := Time.get_ticks_usec()
+		var routes := DungeonRoutes.to_boss(blueprint)
+		var routes_elapsed := float(Time.get_ticks_usec() - routes_started) / 1000.0
+		routes_total += routes_elapsed
+		routes_max = maxf(routes_max, routes_elapsed)
+		# 결과를 안 쓰면 최적화로 사라질 수 있다.
+		if routes.is_empty():
+			push_error("두 길 계산이 빈 사전을 냈다")
+
 	print(
 		(
-			"%d | %d/%.1f/%d | %.1f | %.0f%% | %.2f/%.2f"
+			"%d | %d/%.1f/%d | %.1f | %.0f%% | %.2f/%.2f | %.3f/%.3f"
 			% [
 				size,
 				rooms_min,
@@ -56,6 +69,8 @@ func _measure(size: int) -> void:
 				100.0 * float(dead_ends) / float(rooms_total),
 				elapsed_total / float(_RUNS),
 				elapsed_max,
+				routes_total / float(_RUNS),
+				routes_max,
 			]
 		)
 	)
@@ -64,6 +79,6 @@ func _measure(size: int) -> void:
 func _dead_ends(graph: DungeonGraph, blueprint: DungeonBlueprint) -> int:
 	var count := 0
 	for id in blueprint.room_ids():
-		if graph.neighbors_of(id).size() <= 1:
+		if graph.is_dead_end(id):
 			count += 1
 	return count

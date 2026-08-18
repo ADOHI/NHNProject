@@ -43,6 +43,7 @@ const _EVENT_LABELS := {
 var _run: DungeonRun
 var _seed := 0
 
+@onready var _walk_label: Label = %WalkLabel
 @onready var _summary_label: Label = %SummaryLabel
 @onready var _rooms_label: Label = %RoomsLabel
 @onready var _log_label: Label = %LogLabel
@@ -57,9 +58,29 @@ func bind(run: DungeonRun, seed_value: int) -> void:
 func refresh() -> void:
 	if _run == null or not visible:
 		return
+	_walk_label.text = _build_walk()
 	_summary_label.text = _build_summary()
 	_rooms_label.text = _build_rooms()
 	_log_label.text = _build_log()
+
+
+## 걸음 기록 두 줄. **판정이 아니라 기록이다**
+## (docs/design/17-dungeon-generation.md §17.28.1).
+##
+## 「본 방」에 판 전체를 함께 적는 이유는, 9 라는 수 하나로는 그것이 다 본 것인지
+## 겨우 시작한 것인지 알 수 없기 때문이다. **분모 없는 분자는 읽히지 않는다.**
+func _build_walk() -> String:
+	var walk := _run.walk
+	var rooms := _run.blueprint.room_ids().size()
+	if not walk.has_walked():
+		return "아직 안 걸었다   (방 %d개짜리 판)" % rooms
+
+	var seen := walk.seen_room_count()
+	var share := 100.0 * float(seen) / maxf(float(rooms), 1.0)
+	var lines: Array[String] = []
+	lines.append("걸음 %d   본 방 %d/%d (%d%%)" % [walk.steps(), seen, rooms, int(round(share))])
+	lines.append("되돌아섬 %d   왕복 통로 %d" % [walk.backtracks(), walk.retraced_corridors()])
+	return "\n".join(lines)
 
 
 func _build_summary() -> String:
