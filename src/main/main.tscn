@@ -82,6 +82,12 @@ max_value = 5.0
 step = 1.0
 value = 3.0
 
+[node name="RoutesButton" type="Button" parent="ControlBar/Content/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+text = "두 길 (F2)"
+
 [node name="DebugButton" type="Button" parent="ControlBar/Content/Row"]
 unique_name_in_owner = true
 layout_mode = 2

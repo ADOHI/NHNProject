@@ -73,25 +73,34 @@ static func _section_lines(section: SheetSection) -> PackedStringArray:
 	return lines
 
 
-## 성향은 부호가 아니라 **쪽 이름으로** 낸다.
+## 성향은 부호가 아니라 **쪽 이름으로** 내되, **약한 값은 쪽을 아예 안 말한다.**
 ##
 ## `+52` 는 NpcAxis 배열 순서를 알아야 읽히고 모델은 그 배열을 본 적이 없다.
 ## 코드가 이미 아는 것을 모델에게 다시 알아내라고 시키지 않는다.
+##
+## **그리고 칸이 셋이어야 한다** (설계 24.25.1). 값 5 에 "약하게 무모하다" 라고 하면
+## 모델이 그것을 성격으로 읽는다 — 실제로 위계 5 가 "자유를 중시한다" 가 됐다.
+## **5 는 그 축에 의견이 없다는 뜻이다.** 그러면 아무 말도 하지 않는 것이 맞다.
 static func _axis_lines(registry: PersonRegistry, person: int) -> PackedStringArray:
 	var traits := registry.traits_of(person)
 	var lines := PackedStringArray()
 	lines.append("- 한 줄 요약: %s" % PersonTag.of(traits))
 	for axis in NpcAxis.count():
-		var kind := axis as NpcAxis.Kind
-		var value := traits[axis]
-		var strength := "뚜렷하게" if TraitDistribution.is_pole(value) else "약하게"
-		lines.append(
-			(
-				"- %s 축: %s 쪽으로 %d (%s)"
-				% [NpcAxis.label(kind), NpcAxis.pole_label(kind, value), absi(value), strength]
-			)
-		)
+		lines.append(_axis_line(axis as NpcAxis.Kind, traits[axis]))
 	return lines
+
+
+## 축 한 줄. 칸이 셋이다 — 쪽 없음 / 약함 / 뚜렷함.
+static func _axis_line(kind: NpcAxis.Kind, value: int) -> String:
+	var name := NpcAxis.label(kind)
+	if TraitDistribution.is_neutral(value):
+		# **쪽을 말하지 않는다.** 여기서 쪽을 말하면 모델이 신념으로 읽는다.
+		return "- %s 축: 뚜렷한 쪽이 없다" % name
+	var strength := "뚜렷하게" if TraitDistribution.is_pole(value) else "약하게"
+	return (
+		"- %s 축: %s 쪽으로 %s 기운다 (%d)"
+		% [name, NpcAxis.pole_label(kind, value), strength, absi(value)]
+	)
 
 
 ## 관계는 상대의 이름이 필요해서 칸 밖에서 만든다.

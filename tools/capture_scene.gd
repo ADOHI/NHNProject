@@ -9,6 +9,7 @@ extends SceneTree
 ##   <방 id>    그 방을 눌러 이동한다
 ##   zoom3      휠을 3번 굴린다 (음수면 축소: zoom-3)
 ##   debug      교정쇄(개발 정보) 패널을 켠다
+##   routes     보스까지의 두 길(지름길 • 우회로)을 판 위에 그린다
 ##   showcase   메인 씬 대신 스타일 확인용 씬을 띄운다
 ##   sketch_a   방향 스케치를 띄운다 (a / b / c)
 ##   perf       수직동기를 끄고 프레임 시간을 잰다 (웹 60fps 제약 확인용)
@@ -106,7 +107,9 @@ func _process(delta: float) -> bool:
 		_pressed = true
 		for room_id in _room_path:
 			if room_id == "debug":
-				_press_debug_button()
+				_press_bar_button("교정쇄")
+			elif room_id == "routes":
+				_press_bar_button("두 길")
 			elif room_id in ["showcase", "film", "boot", "perf"]:
 				continue
 			elif room_id.begins_with("sketch_"):
@@ -191,16 +194,16 @@ func _press_named_button(label: String) -> void:
 	push_warning("버튼을 찾지 못했습니다: %s" % label)
 
 
-## 개발 패널을 켠 상태도 캡처할 수 있어야 한다.
+## 조작줄의 버튼을 눌러 개발 표시를 켠다.
 ##
 ## 키 입력을 주입하는 대신 버튼을 직접 누른다. SceneTree 스크립트에서 넣은 입력은
-## 씬의 _unhandled_input 까지 닿지 않는다.
-func _press_debug_button() -> void:
+## 씬의 _unhandled_input 까지 닿지 않는다 — F1 • F2 로는 캡처를 켤 수 없다.
+func _press_bar_button(prefix: String) -> void:
 	for node in root.find_children("*", "Button", true, false):
-		if node.get("room_id") == null and (node.text as String).begins_with("교정쇄"):
+		if node.get("room_id") == null and (node.text as String).begins_with(prefix):
 			node.pressed.emit()
 			return
-	push_warning("교정쇄 버튼을 찾지 못했습니다")
+	push_warning("버튼을 찾지 못했습니다: %s" % prefix)
 
 
 ## 판 위 방들의 id 를 찍어 둔다.

@@ -126,19 +126,35 @@ func _add_extras(chosen: Array[Vector2i], pool: Array[Vector2i], wanted: int) ->
 	var degrees := _degrees(chosen)
 	var remaining := _dead_ends_in(degrees)
 	var floor_count := int(ceil(float(_points.size()) * dead_end_ratio_min))
+	# **갈림길을 가장 싸게 얻는 간선부터 받는다.**
+	#
+	# 곁가지 하나는 언제나 순환을 하나 만든다. 그런데 **갈림길은 하나 만들 수도 둘 만들 수도
+	# 있다** — 양쪽 끝이 다 차수 2 면 둘 다 차수 3 이 되어 갈림길이 둘 늘고, 한쪽이 이미
+	# 갈림길이면 하나만 는다.
+	#
+	# 실측에서 순환 17.5 (목표 12~15 초과) 인데 갈림길은 57.6% (목표 55~60) 였다.
+	# 같은 갈림길을 **더 적은 순환으로** 얻을 수 있다는 뜻이고, 그 방법이 이 두 겹이다.
 	var added := 0
 	var index := 0
-	while added < wanted and index < pool.size():
-		var edge := pool[index]
-		index += 1
-		var cost := _dead_end_cost(degrees, edge)
-		if cost > 0 and remaining - cost < floor_count:
-			continue
-		chosen.append(edge)
-		degrees[edge.x] = int(degrees.get(edge.x, 0)) + 1
-		degrees[edge.y] = int(degrees.get(edge.y, 0)) + 1
-		remaining -= cost
-		added += 1
+	for pass_index in 2:
+		index = 0
+		while added < wanted and index < pool.size():
+			var edge := pool[index]
+			index += 1
+			if chosen.has(edge):
+				continue
+			# 첫 겹은 양쪽 다 차수 2 이하인 것만 받는다. 둘째 겹은 남은 것을 받는다.
+			var both_plain := int(degrees.get(edge.x, 0)) <= 2 and int(degrees.get(edge.y, 0)) <= 2
+			if pass_index == 0 and not both_plain:
+				continue
+			var cost := _dead_end_cost(degrees, edge)
+			if cost > 0 and remaining - cost < floor_count:
+				continue
+			chosen.append(edge)
+			degrees[edge.x] = int(degrees.get(edge.x, 0)) + 1
+			degrees[edge.y] = int(degrees.get(edge.y, 0)) + 1
+			remaining -= cost
+			added += 1
 	return index
 
 

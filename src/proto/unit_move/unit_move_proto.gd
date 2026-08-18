@@ -29,7 +29,7 @@ var field: ProtoUnitField
 var selection: ProtoUnitSelection
 var groups: ProtoControlGroups
 
-var _grid: ProtoNavGrid
+var _grid: NavGrid
 var _obstacle_seed := 20260807
 var _unit_count := DEFAULT_UNIT_COUNT
 var _drag_active := false
@@ -51,7 +51,7 @@ var _last_group_slot := -1
 
 
 func _ready() -> void:
-	_grid = ProtoNavGrid.new(GRID_COLS, GRID_ROWS, CELL_SIZE)
+	_grid = NavGrid.new(GRID_COLS, GRID_ROWS, CELL_SIZE)
 	_build_obstacles(_obstacle_seed)
 	tuning = ProtoMoveTuning.new()
 	field = ProtoUnitField.new(_grid, tuning)

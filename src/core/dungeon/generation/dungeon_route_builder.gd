@@ -55,10 +55,16 @@ static func pick_prize(
 	ranks: PackedInt32Array,
 	entrance: int
 ) -> int:
-	var neighbours := _adjacency(points.size(), delaunay)
 	# **여유 검사를 한 번만 한다.** 후보마다 다시 하면 방 개수 x 간선 수 만큼 거리를 재게 되고,
 	# 방 50개에서 생성이 7.1 ms 에서 14.6 ms 로 두 배가 됐다 (프레임 예산 16.7 의 88%).
 	var usable := _readable_only(points, delaunay)
+
+	# **이웃도 그 집합으로 센다.**
+	#
+	# 예전에는 들로네 전체로 셌다. 그런데 `expose` 는 읽히는 간선만 붙이므로, 들로네 이웃이
+	# 넷이어도 그중 셋만 읽히면 차수 4 를 못 채운다. **자격을 재는 자와 실제로 쓰는 자가
+	# 달랐던 것**이고, 그래서 보스 차수가 3.7 에 머물렀다 (§17.17.9 의 교훈).
+	var neighbours := _adjacency(points.size(), usable)
 	var deepest := 0
 	for index in points.size():
 		deepest = maxi(deepest, _rank_of(zones, ranks, index))
@@ -133,7 +139,7 @@ static func _second_route(
 		return PackedInt32Array()
 	var reduced: Array[Vector2i] = []
 	for edge in usable:
-		if not _on_path(first, edge):
+		if not on_path(first, edge):
 			reduced.append(edge)
 	return _path(count, reduced, entrance, target)
 
@@ -204,7 +210,7 @@ static func ensure_two_routes(
 
 	var reduced: Array[Vector2i] = []
 	for edge in result:
-		if not _on_path(fast, edge):
+		if not on_path(fast, edge):
 			reduced.append(edge)
 	if _path(points.size(), reduced, entrance, target).size() >= 2:
 		return result
@@ -212,7 +218,7 @@ static func ensure_two_routes(
 	# 빠른 길의 간선만 뺀 들로네에서 두 번째 길을 찾아 없는 간선을 채운다.
 	var reservoir: Array[Vector2i] = []
 	for edge in _readable_only(points, delaunay):
-		if not _on_path(fast, edge):
+		if not on_path(fast, edge):
 			reservoir.append(edge)
 	var carved := _path(points.size(), reservoir, entrance, target)
 	if carved.size() < 2:
@@ -234,7 +240,7 @@ static func routes(count: int, edges: Array[Vector2i], entrance: int, target: in
 	var fast := _path(count, edges, entrance, target)
 	var reduced: Array[Vector2i] = []
 	for edge in edges:
-		if not _on_path(fast, edge):
+		if not on_path(fast, edge):
 			reduced.append(edge)
 	return {"fast": fast, "slow": _path(count, reduced, entrance, target)}
 
@@ -304,7 +310,13 @@ static func _path(count: int, edges: Array[Vector2i], start: int, target: int) -
 	return result
 
 
-static func _on_path(route: PackedInt32Array, edge: Vector2i) -> bool:
+## 그 간선이 길 위에 놓여 있는가. 방향은 보지 않는다.
+##
+## **공개해 둔다.** 같은 판정이 `tools/dungeon_metrics.gd` 에 한 글자도 안 틀리고 한 벌 더
+## 있었다. 도구는 `src/` 를 불러도 되므로(반대는 안 된다) 그쪽이 이 함수를 쓴다.
+## 갈리면 **화면이 그리는 두 길과 계측기가 재는 두 길이 달라진다** — 그리고 아무 데도
+## 안 빨개진다 (docs/design/17-dungeon-generation.md §17.32).
+static func on_path(route: PackedInt32Array, edge: Vector2i) -> bool:
 	for index in range(1, route.size()):
 		var a := route[index - 1]
 		var b := route[index]

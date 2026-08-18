@@ -30,6 +30,13 @@ var threat: int
 ## 민첩. 스쿼드에서 **평균**된다 (§14.3.1).
 var agility: int
 
+## 세계의 인물 번호. **NO_PERSON 이면 세계 없이 만들어진 대원이다.**
+##
+## 이것이 있어야 대원에게 **가족과 원수가 있다.** 없으면 이름뿐인 사람이고,
+## 조우 화면에서 *"저쪽에 내 대원의 형이 있다"* 가 성립하지 않는다
+## (docs/design/24-npc-relations.md §24.29).
+var person: int = PersonRegistry.NO_PERSON
+
 
 func _init(
 	member_id: String,
@@ -47,6 +54,11 @@ func _init(
 	agility = (
 		MemberDiscipline.base_agility(member_discipline) if member_agility < 0 else member_agility
 	)
+
+
+## 세계의 인물인가. 아니면 관계를 볼 수 없다.
+func is_in_world() -> bool:
+	return person != PersonRegistry.NO_PERSON
 
 
 ## 목록에 한 줄로 나가는 요약.

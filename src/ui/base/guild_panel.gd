@@ -72,12 +72,44 @@ func _facility_box(guild: Guild, kind: Facility.Kind, absent: Array[String]) -> 
 
 
 ## 접선처가 찾아낸 후보들. **영입 실행은 없다** (RecruitProspect, §22.7).
+##
+## 후보마다 **판정 한 줄**을 같이 낸다. 예전에는 첫 후보의 사유 한 줄만 냈는데,
+## 그때는 사유가 전부 같았기 때문이다 — 관계도가 붙은 지금은 후보마다 다르다.
+##
+## **연줄을 적는 이유**는 그것이 이 화면에서 관계도가 하는 일이기 때문이다.
+## *"박다성을 통해"* 가 붙으면 후보가 어디서 왔는지가 정보가 된다
+## (docs/design/24-npc-relations.md §24.8).
 func _prospect_box(guild: Guild) -> BaseBox:
 	var box := BaseBox.new("영입 후보")
 	if guild.prospects.is_empty():
 		box.line("아직 없음", BaseWidgets.INK_DIM)
 		return box
 	for prospect in guild.prospects:
-		box.line(prospect.summary())
-	box.line(guild.prospects[0].blocked_reason(), BaseWidgets.INK_DIM)
+		box.line(prospect.summary(), _prospect_ink(prospect))
+		box.line(_prospect_note(guild, prospect), BaseWidgets.INK_DIM)
 	return box
+
+
+## 영입 가능한 후보만 밝게. **명단에서 눈에 띄어야 하는 것이 그것 하나다.**
+func _prospect_ink(prospect: RecruitProspect) -> Color:
+	return BaseWidgets.INK_MARK if prospect.can_recruit() else BaseWidgets.INK
+
+
+## 후보 한 줄 아래에 붙는 말 — **누구를 통해 왔고, 되는가 안 되는가.**
+func _prospect_note(guild: Guild, prospect: RecruitProspect) -> String:
+	var judged := prospect.blocked_reason()
+	if prospect.can_recruit():
+		judged = "영입 가능 (호감 %+d 유대 %d)" % [prospect.standing.affinity, prospect.standing.bond]
+	var introducer := _introducer(guild, prospect)
+	return judged if introducer.is_empty() else "%s • %s" % [introducer, judged]
+
+
+## 누구의 연줄인가. 연줄 없이 걸린 사람이면 빈 문자열이다.
+func _introducer(guild: Guild, prospect: RecruitProspect) -> String:
+	if guild.world == null or prospect.introduced_by == PersonRegistry.NO_PERSON:
+		return ""
+	if not guild.world.registry.has(prospect.introduced_by):
+		return ""
+	# 조사를 받침으로 고른다 — `양은담를` 이 나오면 이름이 이름으로 안 읽힌다.
+	var who := guild.world.registry.name_of(prospect.introduced_by)
+	return "%s%s 통해" % [who, KoreanParticle.object_of(who)]

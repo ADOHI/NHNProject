@@ -25,7 +25,15 @@ enum State {
 }
 
 ## 막대가 없는 필드의 값. 0 을 쓰면 "막대 길이 0" 과 구분되지 않는다.
+##
+## **이 값만으로는 못 가른다.** 성향 축은 부호 있는 막대라 -1.0 이 **정당한 값**이다
+## (축값 -100 인 인물이 인구 3000 중 98 명, 3.3%). 그 사람들의 막대가 조용히 안
+## 그려지고 있었다 — 화면에는 값 글자만 남아서 「막대가 없는 줄」로 보였다.
+## 그래서 **있고 없음은 `has_meter` 가 들고 값은 `bar` 가 든다.**
 const NO_BAR := -1.0
+
+## 이 줄이 아무도 안 가리킬 때의 `link`.
+const NO_LINK := -1
 
 ## 왼쪽에 적히는 이름. 비어 있으면 값만 한 줄로 나간다 (문장처럼).
 var label: String
@@ -45,6 +53,9 @@ var reason: String
 ## 크기 비교가 안 읽히는** 자리가 있기 때문이다.
 var bar: float = NO_BAR
 
+## 막대가 있는가. **값과 따로 둔다** — 어떤 값도 「없음」을 겸할 수 없다.
+var has_meter := false
+
 ## 막대에 부호가 있는가.
 ##
 ## **성향 축은 가운데가 0 이고 좌우로 자란다** — 부호가 방향으로 읽혀야 두 극이
@@ -52,6 +63,21 @@ var bar: float = NO_BAR
 ##
 ## 뷰가 칸 종류로 짐작하게 두지 않는다. 짐작하면 칸을 하나 더할 때 조용히 틀린다.
 var is_signed_bar := false
+
+## 막대 위에 눈금이 설 자리 0..1. `NO_BAR` 면 눈금이 없다.
+##
+## **인구의 가운데 값이다**(`PersonNorms`). 눈금이 없는 막대는 「크다」를 못 말하고
+## **「길다」만 말한다** (§20.25.3). 60 이 높은 값인지는 인구 안의 자리로만 읽힌다.
+var mark := NO_BAR
+
+## 이 줄이 가리키는 인물. `NO_LINK` 면 아무도 안 가리킨다.
+##
+## **누르면 그 사람으로 간다** — 관계 줄이 쓴다 (§20.23.4). 화면에 나가는 값이 아니라
+## **줄이 들고 있는 목적지**다.
+##
+## 이름 글자에서 인물을 되찾는 길(문자열 검색)을 안 쓴 이유는 §24.22.7 이 성 분포를
+## 일부러 치우치게 했기 때문이다 — **동명이인에서 조용히 틀린다.**
+var link := NO_LINK
 
 
 func _init(
@@ -79,12 +105,15 @@ static func gauge(field_label: String, field_value: String, ratio: float) -> She
 		field_label, field_value, State.FILLED, "", clampf(ratio, -1.0, 1.0)
 	)
 	field.is_signed_bar = true
+	field.has_meter = true
 	return field
 
 
 ## 부호 없는 막대. 0 부터 차오른다. 유명세 · 소속 인원이 쓴다.
 static func meter(field_label: String, field_value: String, ratio: float) -> SheetField:
-	return SheetField.new(field_label, field_value, State.FILLED, "", clampf(ratio, 0.0, 1.0))
+	var field := SheetField.new(field_label, field_value, State.FILLED, "", clampf(ratio, 0.0, 1.0))
+	field.has_meter = true
+	return field
 
 
 ## 아직 만들지 않은 자료. **사유가 반드시 있어야 한다** — 없으면 고장으로 읽힌다.
@@ -108,8 +137,27 @@ func display_text() -> String:
 			return value
 
 
+## 인구 눈금이 붙은 막대. 「크다」를 말하려면 가운데가 어딘지 같이 나가야 한다.
+static func gauged(
+	field_label: String, field_value: String, ratio: float, middle: float
+) -> SheetField:
+	var field := SheetField.meter(field_label, field_value, ratio)
+	field.mark = middle
+	return field
+
+
+## 눈금이 있는가.
+func has_mark() -> bool:
+	return has_meter and mark >= 0.0
+
+
+## 누르면 갈 곳이 있는가.
+func has_link() -> bool:
+	return link != NO_LINK
+
+
 func has_bar() -> bool:
-	return bar != NO_BAR
+	return has_meter
 
 
 func is_filled() -> bool:

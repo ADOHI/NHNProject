@@ -49,9 +49,7 @@ func test_each_part_is_scaled_to_its_own_box() -> void:
 	for part in CharPart.COUNT:
 		var got: Vector2 = skin.rig.half_sizes[part]
 		var want: Vector2 = target.half_sizes[part]
-		assert_almost_eq(
-			got.x * got.y, want.x * want.y, want.x * want.y * 0.001, "넓이가 리그 상자와 다르다"
-		)
+		assert_almost_eq(got.x * got.y, want.x * want.y, want.x * want.y * 0.001, "넓이가 리그 상자와 다르다")
 
 
 func test_the_aspect_ratio_of_the_art_survives() -> void:
@@ -64,9 +62,7 @@ func test_the_aspect_ratio_of_the_art_survives() -> void:
 		[CharPart.Id.FOOT_NEAR, 136.0, 181.0],
 	]:
 		var half: Vector2 = skin.rig.half_sizes[pair[0]]
-		assert_almost_eq(
-			half.x / half.y, float(pair[1]) / float(pair[2]), 0.01, "가로세로비가 찌그러졌다"
-		)
+		assert_almost_eq(half.x / half.y, float(pair[1]) / float(pair[2]), 0.01, "가로세로비가 찌그러졌다")
 
 
 func test_a_hand_written_scale_overrides_and_shows_itself() -> void:

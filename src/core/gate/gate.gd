@@ -27,6 +27,18 @@ var rank: GateRank.Kind
 ## 안쪽 던전의 씨앗. 이 값이 고정이라 같은 게이트가 같은 판을 낸다.
 var dungeon_seed: int
 
+## 같은 등급 안에서의 크기 흔들림 (-1 / 0 / +1).
+##
+## **등급만으로는 목록이 갈리지 않는다.** 길드 등급 1 에서는 E급 게이트만 열 수 있으므로
+## (`GateRank.is_open_to`) 네 게이트가 전부 같은 등급이 된다. 그러면 「어느 걸 갈까」가
+## 성립하지 않는다 — 첫 판에서 보는 화면이 그렇다.
+##
+## 등급 상한을 올릴 수는 없다. 못 들어가는 게이트를 목록에 올리면
+## "고르는 재미" 가 "안 되는 것 구경" 이 된다 (GateRank 주석).
+## 그래서 **같은 등급 안에서 크기를 흔든다** — 넓은 판은 방이 많아 귀중품도 많고
+## 그만큼 오래 머문다. 위험과 보상이 같이 움직이므로 저울이 돈다.
+var size_offset := 0
+
 ## 안쪽 던전의 **성격** (DungeonCatalog 의 색인).
 ##
 ## 등급이 크기를 정하는 것과 **다른 축**이다. 같은 등급의 「벌집」과 「수직 회랑」이
@@ -47,7 +59,9 @@ func _init(gate_id: String, name: String, gate_rank: GateRank.Kind, seed_value: 
 
 ## 안쪽 던전의 크기 단계. SampleDungeons 의 크기 축과 같다.
 func dungeon_size() -> int:
-	return GateRank.dungeon_size(rank)
+	return clampi(
+		GateRank.dungeon_size(rank) + size_offset, SampleDungeons.SIZE_MIN, SampleDungeons.SIZE_MAX
+	)
 
 
 ## 안쪽 던전을 실제로 세운다.
@@ -56,6 +70,28 @@ func dungeon_size() -> int:
 ## "어떤 판을 열 것인가" 이지 "판을 어떻게 만드는가" 가 아니다.
 func create_run() -> DungeonRun:
 	return SampleDungeons.create_run(dungeon_seed, dungeon_size(), dungeon_character)
+
+
+## **이 게이트를 끝내려면 필요한 민첩.** 입장 판정의 기준이다.
+##
+## 안쪽 보스에 닿는 경로의 최소 고도차다 — 「모든 방」이 아니다.
+## 왜 보스인지는 `DungeonGrade.required_agility` 에 적었다.
+func required_agility() -> int:
+	return DungeonGrade.required_agility(blueprint())
+
+
+## **다 보려면 필요한 민첩.** 막는 값이 아니라 화면에 뜨는 값이다.
+func full_agility() -> int:
+	return DungeonGrade.full_agility(blueprint())
+
+
+## 이 스쿼드가 들어갈 수 있는가.
+##
+## **「들어가서 못 가는 것」이 아니라 「애초에 못 들어가는 것」으로 바꾸는 자리다.**
+## 예전에는 민첩이 모자라도 들어갈 수 있었고, 판의 절반이 잠긴 것을 **들어가 봐야**
+## 알았다(§17.38.2 — 민첩 한 칸에 20~49%p 가 닫힌다). 그건 선택이 아니라 사고다.
+func can_enter(squad_agility: int = SampleDungeons.SQUAD_AGILITY) -> bool:
+	return required_agility() <= squad_agility
 
 
 ## 설계도만 본다. 처음 한 번만 만들고 이후에는 같은 것을 돌려준다.
@@ -83,7 +119,39 @@ func preview_lines(level: GateDisclosure.Level) -> Array[String]:
 		lines.append("성격 %s" % DungeonCatalog.name_of(dungeon_character))
 	if GateDisclosure.needs_blueprint(level):
 		var plan := blueprint()
+		# **잰 값은 해부 수준에서만 나올 수 있다.** 재려면 설계도가 있어야 하고
+		# 설계도는 이 수준에서만 만든다(22-guild-base.md). 구현 제약과 정보 설계가
+		# 같은 곳을 가리킨다 (docs/design/17-dungeon-generation.md §17.20.5).
+		var grade := DungeonGrade.of(plan)
 		lines.append("실제 방 %d 개" % plan.room_ids().size())
+		(
+			lines
+			. append(
+				(
+					"규모 %d/%d • 복잡 %d/%d • 험난 %d/%d"
+					% [
+						grade["scale"],
+						DungeonGrade.SCALE_MAX,
+						grade["complexity"],
+						DungeonGrade.COMPLEXITY_MAX,
+						grade["hardship"],
+						DungeonGrade.HARDSHIP_MAX,
+					]
+				)
+			)
+		)
+		# 등급만 보여 주면 왜 그 등급인지 알 수 없다. 근거를 한 줄 붙인다.
+		lines.append(
+			(
+				"갈림길 %d%% • 한 걸음 평균 상승 %.1f"
+				% [int(round(float(grade["junction_pct"]))), float(grade["average_climb"])]
+			)
+		)
+		# **두 수를 같이 낸다.** 앞은 못 들어가는 조건이고 뒤는 들어가서 얼마나 열리나다.
+		# 하나로 합치면 「필요 민첩 8」이 입장 불가로 읽혀 성격 하나가 화면에서 사라진다.
+		lines.append(
+			"필요 민첩 %d • 다 보려면 %d" % [int(grade["required_agility"]), int(grade["full_agility"])]
+		)
 		lines.append("고가치 방 %d 개" % plan.rooms_of_kind(Room.Kind.TREASURE).size())
 		lines.append(
 			"보스 %s" % ("있음" if not plan.rooms_of_kind(Room.Kind.BOSS).is_empty() else "없음")

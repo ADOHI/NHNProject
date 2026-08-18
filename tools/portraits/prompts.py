@@ -1,0 +1,611 @@
+"""초상 프롬프트 — 근거는 전부 `docs/design/27-portraits.md` 에 있다.
+
+# 이 파일을 고치기 전에 읽을 것
+
+**모델은 문장의 논리가 아니라 낱말을 읽는다** (`21-title.md` §21.13.13).
+부정도 비유도 방향 지시도 안 통한다 — `NOT screaming` 은 비명 지르는 그림을,
+`like a pillow` 의 `skull` 은 소품 두개골을, `toward us` 는 좌우 대칭을 만들었다.
+
+> **점검법: 문법을 다 지우고 명사만 남겨 읽어라. 그 목록이 화면에 나올 것들이다.**
+
+`python tools/portraits/prompts.py` 로 그 점검을 돌릴 수 있다 —
+부정어, 비유어, 정면 지시어를 긁어서 찍는다. **문자열을 고쳤으면 돌려라.**
+
+# 지금 이 파일이 지키고 있는 것
+
+| 규칙 | 상태 |
+| --- | --- |
+| 부정문 (`no`, `not`, `without`) | **하나도 없다** (§27.9) |
+| 비유 (`like a`, `as if`) | **하나도 없다** |
+| 정면 지시 (`toward us`, `facing the camera`) | **하나도 없다.** 사분의 삼을 **도형**으로 서술한다 (§27.8) |
+| 크로마, 램프 명사 | **하나도 없다.** 컷아웃을 안 하므로 필요가 없다 |
+
+`STYLE` 과 `SHADY` 는 타이틀 레인의 `tools/gen_layers.py` 에서 **한 글자도 안 고치고**
+가져왔다. 그 문자열이 심사를 통과한 인물 넷을 만들었다 (§27.6).
+**베끼는 것이지 고쳐 쓰는 것이 아니다** — 같은 낱말이 같은 그림을 부른다.
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+
+# ---------------------------------------------------------------------------
+# 화풍 — 타이틀에서 그대로 가져온 둘. **고치지 마라** (§27.6)
+# ---------------------------------------------------------------------------
+
+STYLE = (
+    "dramatic video game key art, rich saturated colour, painterly digital illustration "
+    "with crisp animation-background rendering, strong chiaroscuro, "
+    "warm gold key light against deep cold teal shadow"
+)
+
+SHADY = (
+    "grubby and slightly seedy, worn and greasy surfaces, "
+    "the faint sense that this whole arrangement is crooked"
+)
+
+# ---------------------------------------------------------------------------
+# 규격 — §24.20.4 가 정했다. 이 레인은 바꾸지 않는다
+# ---------------------------------------------------------------------------
+
+SIZE = 512
+
+#: 흉상. **어깨가 규격의 일부다** — 어깨가 보여야 옷과 장비로 계열이 읽힌다
+#: (§24.20.4 근거 3). 얼굴만 크게 잡으면 계열이 화면에서 사라진다.
+#:
+#: **`both shoulders` 를 뺐다 — 1차 탐침의 범인이다** (§27.15.1).
+#: 「어깨 둘」은 어깨 둘이 다 보이는 각도, 즉 정면을 부르는 낱말이었다.
+#: `GEOMETRY` 가 사분의 삼을 시키는 동안 이 문장이 반대로 당기고 있었다.
+FRAME = (
+    "A head-and-shoulders portrait of one single person. "
+    "The head and shoulders fill the picture and the crop ends at the chest."
+)
+
+#: 얼굴이 타이틀의 인간 넷과 같은 사람들이어야 한다 (§27.15.1).
+#: 1차 탐침의 얼굴은 **어리고 말끔했다** — `SHADY` 가 옷에만 앉고 얼굴에는 안 앉았다.
+#: 그래서 얼굴에 직접 건다. 살빛이 따뜻해지면서 **차가운 배경과의 대비도 같이 오른다**.
+#:
+#: **화풍 B 로 손봤다** (§27.16.2, §27.18.2). 잔결을 부르던 두 자리를 뺐다 —
+#: `old sweat and small healed nicks` 와 `the face lined and lived-in` 이
+#: 살에 계조를 불러 타이틀의 **평평한 색면**과 반대로 당기고 있었다.
+#: 닳음의 근거를 **잔결에서 검댕과 흉터 하나로 갈아 끼운다** (§21.13.14 의 처방).
+#: 검댕과 흉터는 평평한 색면으로 그릴 수 있고 주름은 그릴 수 없다.
+#:
+#: **나이는 `{age}` 로 갈린다** (§27.18.1). 전에는 `a grown adult` 하나로 뭉갰는데
+#: 이제 레코드에 나이가 있다. **코드가 아는 것을 GPT 에게 다시 쓰게 하지 않는다** —
+#: 그래서 이 자리는 코드 고정 칸이고 GPT 의 겉모습에서는 나이를 뺐다.
+#: 관사를 낱말 쪽에 둔다 — `a old greying` 이 나왔다. 붙여 쓰는 자리를 하나로 모은다.
+WEATHER_TEMPLATE = (
+    "This is {age} adult who works underground for a living: the skin is ruddy and "
+    "warm, dusted with grime, and one old healed scar marks the face."
+)
+
+#: 나이를 말로 옮긴다. **숫자를 그대로 주지 않는다** — `a 52 year old` 는 낱말이 아니라
+#: 셈이고, §21.13.13 이 확인한 것은 모델이 **낱말**을 읽는다는 것이다.
+#: 경계는 `survey_npc_kin.gd` 의 실측 분포(16~58, 중위 28)를 그대로 쓴다.
+_AGE_WORDS: list[tuple[int, str]] = [
+    (22, "a young"),
+    (30, "a young grown"),
+    (40, "a middle-aged"),
+    (50, "a greying middle-aged"),
+    (200, "an old greying"),
+]
+
+
+def weather(age: int = 0) -> str:
+    """닳음 문장. 나이를 받으면 그 나이의 낱말이 들어간다 (§27.18.1).
+
+    `age` 가 0 이면 나이를 모르는 것이라 `grown` 으로 뭉갠다 — **지어내지 않는다.**
+    """
+    word = "a grown"
+    if age > 0:
+        word = next(w for edge, w in _AGE_WORDS if age < edge)
+    return WEATHER_TEMPLATE.format(age=word)
+
+
+#: 나이를 모를 때의 문장. 격자 경로(`compose()`)와 자기 점검이 쓴다.
+WEATHER = weather()
+
+#: **사분의 삼을 방향이 아니라 도형으로 시킨다** (§27.8).
+#:
+#: `toward us` 가 좌우 대칭을 만든 것이 §21.13.16 ⑥ 의 기록이고, 그 대칭이
+#: `demon_b` 의 외눈 규칙을 두 판 연속 이겼다 (§21.13.14). 초상은 얼굴 하나가
+#: 판을 다 쓰는 그림이라 이 함정에 가장 깊이 걸린다 — 대칭인 얼굴은 개성이 죽고,
+#: 개성이 죽으면 변형 100장이 서로 구분되지 않아 **격자 전체가 헛일이 된다.**
+#:
+#: **1차 탐침에서 도형 서술만으로는 졌다** (§27.15.1). 세 장 다 정면 대칭이었다.
+#: 그래서 §21.13.13 을 다시 읽고 **내가 그 절을 넓게 잘못 읽었다는 것**을 찾았다 —
+#: 그 절이 확인한 것은 *"`toward us` 가 정면 대칭을 만든다"* 이고, 그것은
+#: **정면 지시가 실제로 잘 먹혔다**는 뜻이다. 안 통한 것은 방향 지시 일반이 아니라
+#: **부정으로 방향을 미는 것**이었다.
+#:
+#: 그리고 반증이 판에 남아 있다 — `hunter_left` 의
+#: `Seen in THREE-QUARTER view from their front-left` 는 **제대로 사분의 삼을 냈다.**
+#: 같은 모델, 같은 화풍, 같은 레인의 실측이다.
+#:
+#: **그래서 그 문구를 그대로 앞에 세우고, 도형 서술은 뒤에 받침으로 남긴다.**
+GEOMETRY = (
+    "Seen in THREE-QUARTER view, the head turned well round onto one side: the far cheek "
+    "is narrow and cut short by the line of the nose, the far ear stays hidden behind the "
+    "cheek, and the near cheek is broad and open. The near shoulder comes forward while "
+    "the far shoulder is set back behind the jaw."
+)
+
+#: **빛은 방향만 말하고 출처를 말하지 않는다** (§27.9).
+#: room-studio 의 결함이 `lamp`, `flame`, `fire` 가 소품마다 등불을 그려 넣은 것이었다.
+#: `key light` 는 지시어라 안전하다 — `STYLE` 이 이미 들고 있는데 `hunter_*` 넷에
+#: 등불이 하나도 안 그려져 있다 (§21.13.16 ⑦ 의 「먹여도 되는 낱말」).
+#:
+#: **화풍 B 로 손봤다** (§27.16.2, §27.18.2). `rakes across` 가 계조를 부르고 있었다 —
+#: 훑는 빛은 밝기가 이어지는 그림이고, 타이틀의 인간 넷은 **평평한 색면 + 딱 떨어지는
+#: 그림자 경계**다(§27.6.1). 그래서 **빛의 세기는 그대로 두고 경계만 세운다.**
+#: 방향은 그대로다 — 방향이 바뀌면 §27.8 의 비대칭이 같이 죽는다.
+LIGHT = (
+    "A warm gold key light falls on one side of the face and the near shoulder, and the "
+    "shade on the other side sits as one flat shape with a crisp clean edge. The colour "
+    "is laid down in flat blocks held together by a firm dark outline."
+)
+
+#: **테두리를 재는 관문이 이 문장을 검사한다** (§27.12).
+#: room-studio 가 얻은 것 — 프롬프트가 요구하는 것이 *"배경이 프레임의 모든 변과
+#: 모서리까지 이어진다"* 이면, **테두리를 재면 그 요구를 그대로 검사하게 된다.**
+#: 그래서 요구를 테두리의 말로 적는다.
+#:
+#: **화풍 B 로 손봤다** (§27.16.2, §27.18.2). 청록을 **따뜻한 토프**로 바꿨다.
+#: 시안이 타이틀보다 어둡고 찬 이유가 이 문장이었다 — 청록 배경이 판의 절반을 덮고
+#: 살빛까지 끌어내렸다. 타이틀에서는 배경이 마젠타였다가 컷아웃으로 빠져서
+#: **청록이 화면을 덮은 적이 없다.**
+#:
+#: **`evenly dark` 는 그대로 둔다.** 테두리 관문의 평균 밝기 상한이 78 이고(§27.15.3)
+#: 밝은 토프로 가면 성한 판이 통째로 걸린다. **밝기가 아니라 색온도만 옮긴다.**
+BACKGROUND = (
+    "Behind the shoulders there is only plain deep warm taupe, evenly dark and smooth "
+    "all the way out to every edge and corner of the picture."
+)
+
+# ---------------------------------------------------------------------------
+# 계열 — `src/core/guild/member_discipline.gd` 의 `Kind` 순서다 (§27.10)
+# ---------------------------------------------------------------------------
+
+#: 순서가 `MemberDiscipline.Kind` 와 같아야 한다. 색인이 곧 계열 번호다.
+DISCIPLINES: list[tuple[str, str, str]] = [
+    (
+        "combat", "전투",
+        # `hunter_*` 넷이 이미 입고 있는 것이다. **한쪽 어깨에만** 두면 §27.8 의
+        # 비대칭이 공짜로 생긴다 — 조형으로 지키는 것이 낱말로 지키는 것보다 세다.
+        "a hardened human treasure hunter. One heavy scavenged steel pauldron is strapped "
+        "over the near shoulder while the other shoulder carries only cloth. A thick "
+        "leather gorget wraps the throat with its chin strap running up past the jaw. "
+        "The hair is cropped close and an old scar crosses the face.",
+    ),
+    (
+        "scout", "정찰",
+        # 민첩이 가장 높은 계열 (`_AGILITIES` 4). **금속을 빼는 것**이 전투와 가장
+        # 크게 갈리는 지점이다. 두건은 **젖혀 놓는다** — 올린 두건은 은둔의 것이다.
+        "a lean human treasure hunter. A deep cloth hood is pushed back off the head and "
+        "bunched behind the neck, and a long wound scarf covers the throat. The hair is "
+        "tied back tight. Everything worn here is cloth and soft worn leather.",
+    ),
+    (
+        "engineer", "기공",
+        # *"고도 차이와 통로 상태를 읽는다"* (`_EYES`). 감식의 외눈렌즈와 갈리도록
+        # **두 알 + 검댕 + 앞치마** 셋으로 묶는다 — 한 축으로 가르면 판 하나가
+        # 애매하게 나올 때 계열이 안 읽힌다 (§27.10).
+        #
+        # **어깨에 감은 줄을 두려다 뺐다.** `cable`, `wiring` 은 §21.13.4 가 폐기한
+        # 방송 스튜디오 설정의 낱말이고, 줄 감은 기술자는 그 설정으로 읽힌다.
+        #
+        # **`both shoulders` 를 뺐다** (§27.18.3). §27.15.1 이 `FRAME` 에서 같은 낱말을
+        # 1차 탐침의 범인으로 잡았는데 **여기 남아 있던 것을 그때 못 봤다.**
+        # 셈을 없애면서 §27.8 의 비대칭도 같이 벌었다 — 멜빵을 한쪽 어깨로 보낸다.
+        #
+        # **망치 자루를 뺐다** (§27.20). 초상이 스프라이트의 원본이 되고 무기는
+        # 손에 따로 붙으므로, 초상에 연장이 있으면 **연장이 둘이 된다.**
+        # 기공을 세 갈래(두 알 고글, 검댕, 앞치마)로 이미 갈라 뒀으므로
+        # 망치를 빼도 감식과 안 헷갈린다 — **가름의 근거를 연장에서 뺀 적이 없다.**
+        "a soot-marked human treasure hunter. A thick canvas apron bib is buckled up "
+        "across the chest with its strap crossing the near shoulder, and a pair of heavy "
+        "two-lens goggles is pushed up onto the forehead. Soot streaks the face and a "
+        "scorched leather guard covers the near shoulder.",
+    ),
+    (
+        "broker", "교섭",
+        # *"상대의 성향 단서를 얻는다"*. **폐허에서 유일하게 차려입은 사람**이라는 읽기.
+        # 귀고리 한쪽이 비대칭을 공짜로 만든다.
+        "a well-turned-out human treasure hunter. A good coat with a heavy fur-trimmed "
+        "collar sits over a worn shirt, and a thick chain hangs at the throat. The hair "
+        "is oiled and combed back, and one ear carries a fat metal ring.",
+    ),
+    (
+        "appraiser", "감식",
+        # *"고가치 방의 위치를 좁힌다"*. **보는 도구**가 그 말의 조형이다.
+        #
+        # **1차,2차 탐침에서 기공의 고글이 여기로 샜다** (§27.15.2). 범인은 낱말이 아니라
+        # **자리**였다 — 둘 다 `pushed up onto the forehead` 였고, 이마 한가운데는
+        # 알이 둘 앉는 자리다. `single` 이라고 세 번 말해도 조형이 이긴다
+        # (§21.13.14 — 좌우 대칭은 낱말을 이긴다. 이마 정중앙은 대칭 자리다).
+        #
+        # 그래서 **낱말이 아니라 자리를 옮겼다.** 관자놀이 한쪽 위는 알이 하나만 앉는
+        # 자리라 고글이 될 수 없고, 덤으로 §27.8 의 비대칭이 공짜로 생긴다.
+        "a neat and careful human treasure hunter. A single round brass jeweller's loupe "
+        "on a slim band rides high above one temple, off to one side of the head. A high "
+        "collar is buttoned right up under the chin and a slim strap crosses the throat. "
+        "The hair is combed flat.",
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# 계열이 몸에 요구하는 것 — **착장 부름에 재료로 넘어간다** (§27.21.4)
+# ---------------------------------------------------------------------------
+
+#: 1차 배치에서 **다섯 계열이 전부 같은 외투를 입고 나왔다**
+#: (`charcoal wool coat with a high collar` 다섯 번). 원인은 GPT 가 아니라
+#: 시스템 프롬프트였다 — *"직업만 보고 옷을 고르지 마라"* 라고 적어 놓고
+#: **계열이 무엇을 하는 일인지는 한 줄도 안 줬다.** 없는 것을 안 쓴 것이 맞다.
+#:
+#: ## 옷 이름을 주지 않는다. **일의 성질을 준다**
+#:
+#: 사용자가 못 박은 규율이다 — **프롬프트 안에 카탈로그를 나열하지 마라.**
+#: 값을 늘어놓으면 모델이 **고르기만 하고 지어내지 않는다.**
+#: `minimal-char-studio` 가 같은 것을 실측했다 (`PROMPTS.md` §6-2) —
+#: 시스템 프롬프트 안의 예시 목록이 코드 카탈로그와 똑같이 탐색 공간을 가뒀고
+#: 산출물이 전부 그 목록의 재조합이었다.
+#:
+#: 그래서 §27.10 이 정한 조형(고글, 외눈렌즈, 두건, 앞치마, 견갑)을 **이름으로
+#: 주지 않고** 그 조형이 나온 **근거**를 준다. 근거를 주면 모델이 조형을 다시 유추하고
+#: 그 사람의 삶에 맞춰 변주한다 — §27.19.4 의 「삶에서 나온 옷」을 안 잃는다.
+#:
+#: **`charcoal wool coat` 가 다섯 번 나올 수가 없다. 다섯 일이 몸에 다른 것을 요구한다.**
+#:
+#: 순서가 `MemberDiscipline.Kind` 와 같아야 한다. 색인이 곧 계열 번호다.
+DISCIPLINE_WORK: list[str] = [
+    # 전투 — "이길 수 있는 방인지 감이 온다"
+    "앞에 서서 부딪히는 일이다. 맞는 것이 일의 일부라 급소를 덮어야 하고, "
+    "그러면서도 한쪽 팔은 완전히 자유로워야 한다. 무게를 한쪽으로 몰아서 진다. "
+    "성한 천만 걸친 사람으로 보이면 이 일을 하는 사람이 아니다.",
+    # 정찰 — "인접 방의 개체 수가 보인다"
+    "먼저 들어가서 보고 돌아오는 일이다. 들키면 죽는다. "
+    "소리가 나면 안 되고, 걸리거나 펄럭이는 것이 있으면 안 되고, 빛을 되쏘면 안 된다. "
+    "머리와 목이 시야를 가리지 않게 정리돼 있다.",
+    # 기공 — "고도 차이와 통로 상태를 읽는다"
+    "무너질 곳을 짚고 길을 뚫는 일이다. 불과 돌가루 옆에서 오래 있는다. "
+    "눈을 지켜야 하고 앞을 덮어야 한다. 그을음과 열이 몸과 옷에 남아 안 지워진다.",
+    # 교섭 — "상대의 성향 단서를 얻는다"
+    "다른 탐험대와 마주 앉아 말로 결론을 내는 일이다. 첫인상이 곧 값이다. "
+    "남 앞에 보이는 자리를 손질하고, 값나가는 것을 몸에 지녀서 신용을 보인다. "
+    "폐허에서 갓 기어 나온 꼴이면 상대가 값을 낮춘다.",
+    # 감식 — "고가치 방의 위치를 좁힌다"
+    "물건을 눈앞까지 당겨 진짜인지 가르는 일이다. 어두운 데서 작은 자국을 봐야 한다. "
+    "눈을 키워 주는 것이 필요하고, 작은 것을 흘리지 않게 몸을 여민다. "
+    "손끝과 옷깃이 더러우면 물건을 버린다.",
+]
+
+#: 계열 이름에서 색인으로. 브리프의 `- 계열: 감식 — ...` 에서 앞 낱말을 받는다.
+DISCIPLINE_INDEX: dict[str, int] = {
+    "전투": 0, "정찰": 1, "기공": 2, "교섭": 3, "감식": 4,
+}
+
+
+def discipline_work(label: str) -> str:
+    """계열 이름 하나의 일. 모르는 이름이면 **빈 문자열이다 — 지어내지 않는다.**"""
+    slot = DISCIPLINE_INDEX.get(label.strip())
+    return DISCIPLINE_WORK[slot] if slot is not None else ""
+
+
+# ---------------------------------------------------------------------------
+# 인상 — 성향 6축 중 흉상이 나를 수 있는 둘 + 무색 (§27.3, §27.11)
+# ---------------------------------------------------------------------------
+
+#: 조형은 §21.13.8 의 표를 옮겨 온 것이다. 그 표의 축이
+#: **힘이 들어간 얼굴 ↔ 힘이 빠진 얼굴**이고, **무모 ↔ 신중이 정확히 그 축이다.**
+#: 새로 발명하지 않는다.
+#:
+#: (이름, 한글, 문장, 계열당 변형 수)
+#: 변형 수는 §27.5 — 인상 비율에 맞춘다. 무색이 34% 라 가장 많다.
+IMPRESSIONS: list[tuple[str, str, str, int]] = [
+    (
+        "plain", "무색",
+        # **가장 큰 칸이므로 가장 평범해야 한다.** §24.16.3 을 뒤집으면 —
+        # 평범이 다수여야 극단이 눈에 띈다.
+        "This is an ordinary working face: the head is level, the closed mouth sits easy, "
+        "and the eyes rest steady and level. Tired, plain and unremarkable.",
+        6,
+    ),
+    (
+        "reckless", "무모",
+        # **광기로 보내면 안 된다.** §21.13.8 이 *"눈이 완전히 동그랗게 열려 있다"* 를
+        # 광기의 첫 줄로 꼽았고, 활짝 열린 눈은 무슨 표정을 붙여도 광기로 간다.
+        # 그래서 무모는 **눈썹 한쪽, 이 한쪽**의 비대칭으로 만든다.
+        # 대칭으로 활짝 열면 미친 사람이 되고, 그러면 §21.13.15 대로 심사가 흔들린다.
+        "The chin is lifted high and one eyebrow is hauled up far higher than the other. "
+        "The eyes are lit up and eager, and the open grin bares the teeth on one side only. "
+        "The cords of the neck stand out and the near shoulder is thrown forward.",
+        4,
+    ),
+    (
+        "cautious", "신중",
+        # §21.13.8 의 「여유」 칸 그대로 — 늘어진 윗눈꺼풀, 다문 평평한 입.
+        # **머리는 더 돌아가 있는데 눈만 이쪽에 남는다** 가 「재고 있다」의 조형이고,
+        # 덤으로 §27.8 의 사분의 삼을 한 번 더 밀어 준다.
+        "The upper eyelids hang halfway down across the eyes and the chin is tucked in "
+        "toward the throat. The mouth is one flat closed line. The head is turned well "
+        "round while the eyes stay level and steady, weighing up what is in front of them.",
+        4,
+    ),
+    (
+        "vain", "과시",
+        # **어깨를 각 잡고 펴는 것이 가장 쉬운 과시 표현인데 그것이 §27.8 을 어긴다.**
+        # §21.13.14 의 *"진 쪽 요구의 근거를 갈아 끼워라"* 를 그대로 쓴 자리 —
+        # 과시의 근거를 **턱과 치장**에서 가져온다.
+        "The chin is raised to show off the better side of the face, and one corner of the "
+        "closed mouth is pulled up into a pleased little smile. The hair is freshly "
+        "arranged, the metal is polished bright, and an extra trinket or two is worked "
+        "into the gear.",
+        3,
+    ),
+    (
+        "reclusive", "은둔",
+        # **정찰과 겹친다** — 정찰의 두건은 젖힌 것이고 은둔의 두건은 올린 것이다.
+        # `정찰 × 은둔` 칸에서는 두 배로 두건이 강조된다. **받아들인다** (§27.11) —
+        # 계열이 안 읽히는 것보다 낫고 그 칸은 전체의 2.4% 다.
+        "The head is lowered so the brow shades most of the face, and the gaze slides off "
+        "to one side. The shoulders are drawn up toward the ears and the collar is pulled "
+        "high against the jaw.",
+        3,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# 조립
+# ---------------------------------------------------------------------------
+
+def _join(*parts: str) -> str:
+    return " ".join(p.strip() for p in parts if p.strip())
+
+
+def compose(discipline: int, impression: int) -> str:
+    """칸 하나의 프롬프트.
+
+    순서에 뜻이 있다 — **`FRAME` 이 계열보다 먼저다.** 모델이 구도를 정하기 전에
+    흉상이라는 것을 알아야 한다. 계열을 먼저 두면 전신 인물화가 나오고
+    그 뒤에 오는 프레임 지시가 크롭으로만 작동한다.
+    """
+    return _join(
+        STYLE + ".",
+        FRAME,
+        "The subject is " + DISCIPLINES[discipline][2],
+        WEATHER,
+        IMPRESSIONS[impression][2],
+        GEOMETRY,
+        LIGHT,
+        BACKGROUND,
+        SHADY + ".",
+    )
+
+
+# ---------------------------------------------------------------------------
+# 자기 점검 — §21.13.13 의 점검법을 코드로
+# ---------------------------------------------------------------------------
+
+#: 그 낱말을 모델에 먹이는 구조들. **`21-title.md` §21.13.16 이 손으로 한 것을 자동화한다.**
+_SUSPECTS: list[tuple[str, str]] = [
+    ("부정문", r"\b(?:no|not|never|without|nothing|none|neither|nor)\b\s+\w+"),
+    ("비유", r"\b(?:like a|like an|as if|as though|resembling)\b\s+\w+"),
+    ("정면 지시", r"\b(?:toward us|towards us|facing the camera|at the camera|"
+                  r"facing the viewer|head-?on|full frontal|symmetrical)\b"),
+    # **낱말이 아니라 셈과 자세가 정면을 부르는 자리** (§27.18.3).
+    #
+    # §27.15.1 이 `FRAME` 의 `both shoulders` 를 1차 탐침의 범인으로 잡고
+    # *"셈이 방향을 뜻하는 자리는 명사 목록으로 안 걸린다"* 고 적었는데,
+    # **그때는 규칙으로 만들지 않고 그 한 줄만 고쳤다.**
+    #
+    # 2차 실호출에서 GPT 가 `the shoulders are squared` 를 썼다 — 같은 부류의
+    # 두 번째 사례다. 어깨 둘이 나란하다는 것은 **어깨 둘이 다 보이는 각도**,
+    # 곧 정면이고, `GEOMETRY` 가 사분의 삼을 시키는 동안 반대로 당긴다.
+    # **사례가 둘이 되면 규칙이다.** 명사 목록이 못 잡으므로 정규식으로 내린다.
+    ("정면 부르는 어깨", r"\bboth shoulders\b|"
+                        r"\bshoulders?\s+(?:are\s+|is\s+|held\s+)?(?:squared|square|even|level)\b|"
+                        r"\bsquared?\s+shoulders\b|"
+                        r"\bshoulders?\s+back\b|"
+                        r"\bshoulders?\s+(?:are\s+)?(?:drawn\s+|pulled\s+)?straight\b"),
+    ("램프 명사", r"\b(?:lamp|lantern|torch|candle|brazier|sconce|flame|fire|wick|bulb)\b"),
+    ("크로마", r"\b(?:magenta|chroma|gradient|vignette)\b"),
+    # **초상에 도구와 무기를 그리지 않는다** (§27.20).
+    #
+    # 초상이 캐릭터 스프라이트의 원본이 되고, 그 스프라이트는 머리, 몸, 손, 발
+    # 여섯 파츠의 레이맨식이다. **무기는 §28.7 대로 손에 따로 붙는 별개 스프라이트다.**
+    # 초상에 도구가 그려져 있으면 **무기가 이중으로 붙는다.**
+    #
+    # 「가슴 위만」으로는 안 걸린다 — 어깨에 멘 것도 목에 건 것도 가슴 위다.
+    # **그래서 프레임과 따로 거른다.** 남는 것은 옷, 방어구, 흉터, 머리, 장신구,
+    # 곧 **몸에 붙어 있고 손에 안 든 것**이다.
+    #
+    # **`shield` 를 홑낱말로 잡으면 거짓 경보가 난다** (§27.21.5). 1차 배치에서
+    # *"its front layered to shield her from falling grit"* 가 걸려 성한 판을 막았다 —
+    # 거기서 `shield` 는 **동사**다. room-studio 의 규율이 이 자리에 그대로 걸린다:
+    # *"거짓 경보를 내는 관문은 사람이 관문을 무시하게 만들어 없는 것보다 나쁘다."*
+    # 그래서 **관사나 소유격이 앞에 붙은 것만** 잡는다 — 그때가 물건이다.
+    ("도구, 무기", r"\b(?:pickaxe|pick-axe|hammer|mallet|axe|hatchet|sword|blade|knife|"
+                    r"dagger|spear|halberd|staff|club|crossbow|gun|"
+                    r"pistol|rifle|buckler|haft|hilt|scabbard|sheath|holster|"
+                    r"rope|satchel|backpack|rucksack|knapsack|pouch|toolbelt|"
+                    r"wrench|chisel|crowbar|lockpick|weapon)\b|"
+                    r"\b(?:a|an|the|his|her|their|its|one|small|large|round|wooden|steel|"
+                    r"iron)\s+(?:shields?|tools?|bows?|arrows?|quivers?)\b"),
+    ("폐기 설정", r"\b(?:truss|trusses|spotlight|loudspeaker|cable|wiring|scaffold|"
+                  r"audience|signage)\b"),
+]
+
+
+def suspects_in(text: str) -> list[str]:
+    """한 문자열에서 용의자를 긁는다. **GPT 산출을 검사하는 자리가 여기다.**
+
+    파이프라인이 바뀌면서 이 함수의 무게가 달라졌다 (§27.9.1). 전에는 내가 쓴
+    문자열 25개를 검사했는데, 이제는 **GPT 가 인물마다 새로 쓴 문장**을 검사한다.
+
+    **GPT 는 부정문과 비유를 아주 잘 쓴다.** 사람이 읽기에 좋은 글의 습관이 여기서는
+    전부 함정이다 — `a face that is not cruel` 은 모델에 `cruel` 을 먹이고
+    `eyes like a hawk's` 는 매를 그린다.
+
+    **걸리면 Klein 에 넣지 마라.** 문장을 고칠 게 아니라 낱말을 지워야 한다
+    (`21-title.md` §21.13.13).
+    """
+    hits: list[str] = []
+    for label, pattern in _SUSPECTS:
+        for m in re.finditer(pattern, text, re.IGNORECASE):
+            hits.append(f"{label}: {m.group(0)!r}")
+    return hits
+
+
+def nouns_in(text: str) -> list[str]:
+    """문법을 지우고 남은 낱말. **§21.13.13 의 점검법을 그대로 돌린 것이다.**
+
+    *"프롬프트를 다 쓰고 나서 문법을 전부 지우고 명사만 남겨 읽어 봐라.
+    그 목록이 곧 화면에 나올 것들이다."*
+
+    **정규식이 못 잡는 것을 사람이 여기서 잡는다.** §27.15.1 의 `both shoulders` 가
+    그 예다 — `shoulders` 는 화면에 나와야 하는 명사라 목록에서 무해해 보이는데,
+    「어깨 둘」이 정면을 부르고 있었다. **셈이 방향을 뜻하는 자리는 목록으로 안 걸린다.**
+    """
+    return sorted({w.lower() for w in re.findall(r"[A-Za-z][A-Za-z-]{3,}", text)})
+
+
+# ---------------------------------------------------------------------------
+# ③ 외형 슬롯 전용 관문 (§27.25.8, §27.26.2)
+# ---------------------------------------------------------------------------
+#
+# **`suspects_in` 과 따로 둔다.** 저쪽은 Klein 흉상 프롬프트 전체를 보는 자고
+# 이쪽은 **우리가 갈아 끼우는 한 칸만** 본다. 원본의 고정 문자열
+# (`No ground, no floor, no cast shadow ...`)에는 **절대 안 건다** — §27.24.2 의 규율,
+# *남의 검증된 문자열을 내 규칙으로 심판하지 않는다.*
+#
+# # 왜 이 관문이 화풍 결정보다 먼저인가
+#
+# §27.25.8 의 통제 시험이 원인을 둘로 갈랐다. 그중 ㉠ 이 이것이다 —
+# **③ 이 장소를 말하면 배경이 그 장소가 된다.** `tunnel` 과 `smoke` 두 낱말을 뺐더니
+# `noline` 의 배경 얼룩이 **30.93% 에서 0.12% 로** 떨어졌다.
+#
+# **㉠ 은 3000명 전부에 걸리고 조용히 깨진다.** 화풍이 정해진 뒤에 이게 터지면
+# 배치를 통째로 다시 돌린다. 그래서 **화풍보다 먼저 박는다.**
+#
+# # 거짓 경보를 안 낸다 (§27.21.5)
+#
+# `charcoal` 과 `ash-gray` 는 **색 이름**이고 지금 성한 슬롯들이 쓰고 있다.
+# 목록에서 뺀다. *"거짓 경보를 내는 관문은 사람이 관문을 무시하게 만들어 없는 것보다 나쁘다."*
+
+#: 원본 가이드의 규격. 넘치면 뒤의 규격 지시가 흘러 나간다 (§27.24.2).
+SLOT_MIN_WORDS, SLOT_MAX_WORDS = 12, 22
+
+_SLOT_SUSPECTS: list[tuple[str, str]] = [
+    # ㉠ **장소·대기** — 실측으로 얻은 것이다 (§27.25.8). 일은 **옷의 생김새**로만
+    # 드러낸다: `tunnel surveyor` 가 아니라 `in a reinforced heat-resistant coat`.
+    ("장소 명사", r"\b(?:tunnel|cave|cavern|mine|mineshaft|shaft|pit|quarry|dungeon|"
+                  r"ruin|ruins|rubble|corridor|chamber|vault|forge|workshop|smithy|"
+                  r"camp|battlefield|wasteland|street|city|village|forest|mountain|"
+                  r"underground|subterranean)\b"),
+    ("대기 명사", r"\b(?:smoke|smoky|soot|sooty|dust|dusty|grit|gritty|fog|mist|misty|"
+                  r"haze|hazy|steam|ember|embers|cinder|cinders)\b"),
+    # ㉡ ③ 은 ④ 보다 **앞**이라 규격을 이긴다. 화풍은 ② 의 몫이지 여기가 아니다.
+    ("화풍 어휘", r"\b(?:anime|illustration|artwork|drawing|painting|painted|rendered|"
+                  r"style|stylised|stylized|palette|watercolou?r|gouache|ink|inked|"
+                  r"outline|outlines|linework|line art|shading|shaded|cel-shaded|"
+                  r"brushwork|brush stroke|halftone|screentone|monochrome|"
+                  r"saturated|desaturated|muted tones)\b"),
+    ("구도, 배경 어휘", r"\b(?:background|backdrop|foreground|composition|framed|framing|"
+                        r"close-?up|full-?body|portrait|bust|three-?quarter|silhouette|"
+                        r"pose|posed|posing|standing|seated|sitting|kneeling|"
+                        r"camera|viewer|angle|view of)\b"),
+    ("조명 어휘", r"\b(?:lit|lighting|backlit|rim light|highlight|highlights|"
+                  r"cast shadow|shadows?\b(?!\s*-)|glow|glowing|gleam)\b"),
+]
+
+
+def slot_suspects_in(text: str) -> list[str]:
+    """③ 외형 칸 하나를 검사한다. **낱말 수까지 여기서 센다.**
+
+    **모델이 세는 것을 믿지 않는다** (§27.26.2). 하위 에이전트에게 12~22 낱말을
+    시키고 `WORDS:` 로 적어 내게 해도 그건 자기 신고다. 코드가 다시 센다.
+
+    같은 절에 실증이 있다 — 하위 에이전트가 §27.5 를 **시키지도 않았는데 읽고 지켰지만**,
+    내가 명시로 금지한 `soot` 은 어겼다. **읽는 것은 맡기고 지키는 것은 코드로 문다.**
+    """
+    hits: list[str] = []
+    n = len(text.split())
+    if n < SLOT_MIN_WORDS or n > SLOT_MAX_WORDS:
+        hits.append(f"낱말 수: {n} (규격 {SLOT_MIN_WORDS}~{SLOT_MAX_WORDS})")
+    # 사람으로 시작해야 한다 — 원본 가이드
+    if not re.match(r"^(?:a|an)\s+\w", text.strip(), re.IGNORECASE):
+        hits.append(f"사람으로 안 시작한다: {text.strip()[:28]!r}")
+    for label, pattern in _SLOT_SUSPECTS:
+        for m in re.finditer(pattern, text, re.IGNORECASE):
+            hits.append(f"{label}: {m.group(0)!r}")
+    # 도구·무기와 부정문·비유는 **저쪽 목록을 그대로 쓴다.** 두 벌로 갈라 두면 한쪽만 낡는다.
+    for label, pattern in _SUSPECTS:
+        if label not in ("도구, 무기", "부정문", "비유"):
+            continue
+        for m in re.finditer(pattern, text, re.IGNORECASE):
+            hits.append(f"{label}: {m.group(0)!r}")
+    return hits
+
+
+def audit() -> int:
+    """모든 칸의 프롬프트를 긁어 용의자를 찍는다. 걸린 개수를 돌려준다.
+
+    **격자는 폐기됐지만(§27.2) 이 함수는 산다** — `DISCIPLINES` 와 `IMPRESSIONS` 는
+    이제 칸이 아니라 **GPT 에게 줄 조형 어휘**이고, 그 어휘 자체도 함정이 없어야 한다.
+    """
+    bad = 0
+    print("=== 프롬프트 자기 점검 (§21.13.13 의 점검법) ===\n")
+    for di, (dname, dko, _) in enumerate(DISCIPLINES):
+        for ii, (iname, iko, _, _n) in enumerate(IMPRESSIONS):
+            hits = suspects_in(compose(di, ii))
+            if hits:
+                bad += len(hits)
+                print(f"  [x] {dname}/{iname} ({dko}/{iko})")
+                for h in hits:
+                    print(f"        {h}")
+    cells = len(DISCIPLINES) * len(IMPRESSIONS)
+    plates = len(DISCIPLINES) * sum(n for *_r, n in IMPRESSIONS)
+    print(f"  칸 {cells}개, 판 {plates}장, 용의자 {bad}개"
+          f" → {'통과' if not bad else '**손봐야 한다**'}\n")
+
+    # 명사만 남겨 읽은 목록도 같이 낸다 — 사람이 눈으로 보는 것이 최종 판정이다.
+    print("  전투/무색 한 칸의 낱말 (중복 제외, 알파벳순):")
+    _print_words(nouns_in(compose(0, 0)))
+    return bad
+
+
+def _print_words(words: list[str]) -> None:
+    for i in range(0, len(words), 8):
+        print("    " + " ".join(words[i:i + 8]))
+    print()
+
+
+def audit_file(path: str) -> int:
+    """파일 하나에 든 프롬프트를 검사한다. **GPT 산출을 여기에 물린다** (§27.9.1).
+
+        python tools/portraits/prompts.py --check gpt_output.txt
+    """
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    hits = suspects_in(text)
+    print(f"=== {path} — 함정 검사 ===\n")
+    for h in hits:
+        print(f"  [x] {h}")
+    print(f"\n  용의자 {len(hits)}개 → "
+          f"{'통과' if not hits else '**Klein 에 넣지 마라. 낱말을 지워라**'}\n")
+    print("  명사만 남겨 읽은 목록 (**여기 있으면 안 될 것이 보이면 그 낱말을 지워라**):")
+    _print_words(nouns_in(text))
+    return len(hits)
+
+
+if __name__ == "__main__":
+    sys.path.insert(0, __file__.rsplit("prompts.py", 1)[0])
+    import console
+
+    console.utf8()
+    if len(sys.argv) > 2 and sys.argv[1] == "--check":
+        raise SystemExit(1 if audit_file(sys.argv[2]) else 0)
+    raise SystemExit(1 if audit() else 0)

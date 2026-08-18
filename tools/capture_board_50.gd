@@ -16,9 +16,6 @@ const _SHOTS := [
 	[0.4, "limit", "확대 하한. 판 전체를 보려는 배율"],
 ]
 
-const _ROOMS := 50
-const _SEED := 11
-
 ## 화면이 자리를 잡을 때까지 기다릴 프레임. 중앙 정렬이 다음 프레임으로 미뤄져 있다.
 const _SETTLE_FRAMES := 10
 
@@ -58,34 +55,21 @@ func _process(_delta: float) -> bool:
 	return false
 
 
-## 방 50개짜리 판을 만들어 화면에 붙인다. SampleDungeons.create_run 과 같은 순서다.
+## **게임이 실제로 만드는 가장 큰 판**을 화면에 올린다.
+##
+## 판을 직접 만들어 끼우지 않고 **크기 슬라이더를 올려 게임이 제 경로로 만들게** 한다.
+## 그래야 HUD 의 등급 표시까지 함께 검증된다 — 판만 갈아 끼우면 라벨은 옛 판의 것이다.
 func _install() -> void:
-	var params := DungeonGenerator.Params.new()
-	params.room_count = _ROOMS
-	var blueprint := DungeonGenerator.new(_SEED, params).generate()
-	var graph := blueprint.build()
-
-	var rng := RandomNumberGenerator.new()
-	rng.seed = _SEED
-	var entrances := blueprint.rooms_of_kind(Room.Kind.ENTRANCE)
-	var entrance: String = entrances[0] if not entrances.is_empty() else blueprint.room_ids()[0]
-	SampleDungeons._populate(graph, blueprint, entrance, rng)
-
-	var squad := Actor.new(
-		"player_squad",
-		"우리 스쿼드",
-		Actor.Kind.PLAYER_SQUAD,
-		SampleDungeons.SQUAD_THREAT,
-		SampleDungeons.SQUAD_AGILITY
-	)
-	graph.place_actor(squad, entrance)
-
-	var board := _board()
-	if board == null:
-		push_error("DungeonBoard 를 찾지 못했습니다")
+	var slider := _main.find_child("SizeSlider", true, false)
+	if slider == null:
+		push_error("크기 슬라이더를 찾지 못했습니다")
 		return
-	board.setup(DungeonRun.new(blueprint, graph, squad), _SEED)
-	print("방 %d개 · 간선 %d" % [blueprint.room_ids().size(), blueprint.connections().size()])
+	(slider as Range).value = float(SampleDungeons.SIZE_MAX)
+	_main.call("_build_run")
+	_main.call("_update_size_label")
+	var board := _board()
+	if board != null:
+		print("방 %d 개" % (board.get("_positions") as Dictionary).size())
 
 
 ## 배율을 맞추고 지도 전체가 화면 가운데 오도록 옮긴다.

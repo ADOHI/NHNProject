@@ -20,6 +20,13 @@ func _gate() -> Gate:
 	return GateScript.new("gate_0", "무너진 지하도", GateRank.Kind.E, _SEED)
 
 
+## **이 게이트를 끝낼 수 있는 한 명.** 시작 길드의 0 번 대원은 민첩 1 이라
+## 이 게이트(필요 민첩 2)에 못 들어간다 — 그것을 확인하는 자는 따로 아래에 있다.
+## 진입 이후를 재는 자들은 **막히지 않는 편성**으로 들어가야 물음이 성립한다.
+func _able(guild: Guild) -> Array[String]:
+	return [guild.members[1].id] as Array[String]
+
+
 func _start(guild: Guild, deployed: Array[String]) -> Expedition:
 	var expedition: Expedition = ExpeditionScript.new(guild, _gate())
 	expedition.deploy(deployed)
@@ -70,14 +77,14 @@ func test_entering_swaps_in_the_formed_squad() -> void:
 
 func test_entering_starts_at_the_entrance() -> void:
 	var guild := _guild()
-	var expedition := _start(guild, [guild.members[0].id] as Array[String])
+	var expedition := _start(guild, _able(guild))
 	var run := expedition.enter()
 	assert_eq(int(run.player_room().kind), int(Room.Kind.ENTRANCE))
 
 
 func test_only_one_player_actor_on_the_board() -> void:
 	var guild := _guild()
-	var expedition := _start(guild, [guild.members[0].id] as Array[String])
+	var expedition := _start(guild, _able(guild))
 	var run := expedition.enter()
 	var count := 0
 	for room_id in run.graph.room_ids():
@@ -90,16 +97,53 @@ func test_only_one_player_actor_on_the_board() -> void:
 ## 같은 게이트는 같은 판을 연다 — 편성이 달라도 구조는 그대로다.
 func test_same_gate_gives_the_same_board_regardless_of_squad() -> void:
 	var guild := _guild()
-	var one := _start(guild, [guild.members[0].id] as Array[String]).enter()
-	var other := _start(guild, [guild.members[1].id] as Array[String]).enter()
+	var one := _start(guild, _able(guild)).enter()
+	var other := _start(guild, [guild.members[2].id] as Array[String]).enter()
 	assert_eq(one.blueprint.room_ids(), other.blueprint.room_ids())
 	for id in one.blueprint.room_ids():
 		assert_eq(one.blueprint.kind_of(id), other.blueprint.kind_of(id))
 
 
+## **민첩이 모자라면 들어가기 전에 막힌다.**
+##
+## 예전에는 누구든 들어갈 수 있었고, 보스까지 못 간다는 것을 **들어가 봐야** 알았다.
+## 그건 편성 실수가 아니라 알 수 없었던 실패다
+## (docs/design/17-dungeon-generation.md §17.40).
+func test_a_slow_squad_is_turned_away_at_the_gate() -> void:
+	var guild := _guild()
+	var slow := guild.members[0]
+	assert_lt(slow.agility, _gate().required_agility(), "이 대원이 느리다는 전제가 깨졌다")
+
+	var expedition := _start(guild, [slow.id] as Array[String])
+	assert_null(expedition.enter(), "민첩이 모자란 스쿼드는 못 들어간다")
+	assert_eq(int(expedition.stage), int(Expedition.Stage.PLANNING), "막혔으면 편성 단계에 남는다")
+
+
+## **막는 값과 보여 주는 값은 다르다.**
+##
+## 막는 것은 보스에 닿느냐 하나뿐이고, 「다 보려면」은 그보다 크거나 같다.
+## 둘을 하나로 합치면 수직 회랑처럼 안쪽이 깊은 성격이 통째로 입장 불가가 된다.
+func test_seeing_it_all_costs_at_least_as_much_as_clearing_it() -> void:
+	for seed_value in [3, 11, 31, 57]:
+		for character in DungeonCatalog.count():
+			var gate: Gate = GateScript.new("gate_0", "시험", GateRank.Kind.E, seed_value)
+			gate.dungeon_character = character
+			assert_true(
+				gate.full_agility() >= gate.required_agility(),
+				(
+					"%s: 다 보는 값(%d)이 끝내는 값(%d)보다 작다"
+					% [
+						DungeonCatalog.name_of(character),
+						gate.full_agility(),
+						gate.required_agility()
+					]
+				)
+			)
+
+
 func test_cannot_deploy_twice() -> void:
 	var guild := _guild()
-	var expedition := _start(guild, [guild.members[0].id] as Array[String])
+	var expedition := _start(guild, _able(guild))
 	expedition.enter()
 	assert_false(expedition.deploy([guild.members[1].id] as Array[String]), "들어간 뒤에는 못 바꾼다")
 
@@ -135,7 +179,7 @@ func test_full_lap_changes_the_base() -> void:
 
 func test_settling_twice_does_nothing() -> void:
 	var guild := _guild()
-	var expedition := _start(guild, [guild.members[0].id] as Array[String])
+	var expedition := _start(guild, _able(guild))
 	expedition.enter()
 	expedition.finish(ExpeditionReport.Outcome.ESCAPED)
 	expedition.settle()
@@ -146,14 +190,14 @@ func test_settling_twice_does_nothing() -> void:
 
 func test_cannot_settle_before_finishing() -> void:
 	var guild := _guild()
-	var expedition := _start(guild, [guild.members[0].id] as Array[String])
+	var expedition := _start(guild, _able(guild))
 	expedition.enter()
 	assert_null(expedition.settle())
 
 
 func test_cannot_finish_twice() -> void:
 	var guild := _guild()
-	var expedition := _start(guild, [guild.members[0].id] as Array[String])
+	var expedition := _start(guild, _able(guild))
 	expedition.enter()
 	expedition.finish(ExpeditionReport.Outcome.ESCAPED)
 	assert_null(expedition.finish(ExpeditionReport.Outcome.DOWNED))
@@ -173,7 +217,7 @@ func test_taking_the_intel_staff_dims_the_next_board() -> void:
 	guild.assignment.assign(guild.members[1].id, Facility.Kind.INTEL_ROOM)
 	assert_eq(guild.gate_disclosure(), GateDisclosure.Level.MAPPED)
 
-	var expedition := _start(guild, [guild.members[0].id] as Array[String])
+	var expedition := _start(guild, _able(guild))
 	assert_eq(
 		guild.gate_disclosure(expedition.deployed_ids()),
 		GateDisclosure.Level.SURVEYED,
@@ -184,7 +228,7 @@ func test_taking_the_intel_staff_dims_the_next_board() -> void:
 func test_failed_run_pays_nothing_but_still_advances() -> void:
 	var guild := _guild()
 	guild.assignment.assign(guild.members[2].id, Facility.Kind.WORKSHOP)
-	var expedition := _start(guild, [guild.members[0].id] as Array[String])
+	var expedition := _start(guild, _able(guild))
 	expedition.enter()
 	expedition.finish(ExpeditionReport.Outcome.DOWNED)
 	var result := expedition.settle()

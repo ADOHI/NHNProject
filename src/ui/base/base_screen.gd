@@ -31,6 +31,10 @@ const _GUILD_WIDTH := 268
 const _MEMBER_WIDTH := 396
 
 var _guild: Guild
+
+## 인물과 관계의 세계. **길드가 여기에 발을 딛어야 영입 판정이 선다** (Guild.bind_world).
+var _world: NpcWorld
+
 var _gates: Array[Gate] = []
 
 ## 지금 고른 게이트의 자리 번호.
@@ -54,7 +58,12 @@ var _expedition_panel: BaseExpeditionPanel
 
 func _ready() -> void:
 	_build_layout()
-	_guild = Guild.create_starting(CAMPAIGN_SEED)
+	# **세계를 한 번에 세운다.** 3000명 + 가족 + 사건이 데스크톱에서 50ms 남짓이고
+	# (docs/design/24-npc-relations.md §24.26.4) 화면을 여는 순간 한 번뿐이다.
+	# 웹에서 이 멈춤이 거슬리면 `NpcWorld.build_chunk()` 로 나눠 돌리면 된다 —
+	# 인물 상세 화면이 그렇게 하고 있고 결과는 같다 (§24.16.2).
+	_world = NpcWorld.create(CAMPAIGN_SEED)
+	_guild = Guild.create_starting(CAMPAIGN_SEED, "새벽 길드", _world)
 	_open_new_board()
 	_refresh()
 
@@ -145,8 +154,14 @@ func _current_gate() -> Gate:
 
 
 ## 지금 들어갈 수 있는가. 정원 검사는 Guild.form_squad 가 하므로 여기서 다시 하지 않는다.
+##
+## **민첩 검사도 여기서 한다.** `Expedition.enter()` 가 막기는 하지만 그쪽은 `null` 을
+## 돌려줄 뿐이라, 버튼이 눌리는데 아무 일도 안 일어나는 화면이 된다 —
+## **조용히 실패하는 것이 가장 나쁘다.** 잠그고 이유를 적는다.
 func _can_enter() -> bool:
-	return _current_gate() != null and _guild.form_squad(_deployed) != null
+	var squad := _guild.form_squad(_deployed)
+	var gate := _current_gate()
+	return gate != null and squad != null and gate.can_enter(squad.agility())
 
 
 ## 왜 못 들어가는지, 혹은 들어가면 무슨 일이 벌어지는지 한 줄.
@@ -156,8 +171,12 @@ func _entry_note() -> String:
 		return "갈 게이트를 고른다"
 	if _deployed.is_empty():
 		return "데려갈 대원을 고른다"
-	if _guild.form_squad(_deployed) == null:
+	var squad := _guild.form_squad(_deployed)
+	if squad == null:
 		return "정원 %d 명을 넘었다" % _guild.squad_capacity()
+	if not gate.can_enter(squad.agility()):
+		# **모자란 값을 그대로 보여 준다.** "못 들어간다" 만 적으면 무엇을 바꿔야 할지 모른다.
+		return "민첩이 모자라다 — 이 게이트는 %d, 지금 스쿼드는 %d" % [gate.required_agility(), squad.agility()]
 	return "%s 로 %d 명을 데려간다" % [gate.display_name, _deployed.size()]
 
 

@@ -44,6 +44,10 @@ static func apply(
 	result.base_progress_gained = GuildBalance.base_progress_for(result.workshop_staff)
 	result.levels_gained = guild.add_base_progress(result.base_progress_gained)
 
+	# **판을 돌면 세계가 달라진다** (설계 24.30). 후보를 찾기 전에 반영해야
+	# 이번 판에서 생긴 관계가 이번 영입 판정에 들어간다.
+	result.shocked = ExpeditionAftermath.apply(guild, report, guild.expeditions_settled)
+
 	result.prospects_found = _find_prospects(guild, result.contact_staff, prospect_seed)
 	for prospect in result.prospects_found:
 		guild.add_prospect(prospect)
@@ -54,8 +58,12 @@ static func apply(
 
 ## 접선처가 이번에 찾아낸 후보들.
 ##
-## **여기까지가 접선처의 일이다.** 영입 실행은 관계도가 필요하므로 없다
+## **여기까지가 접선처의 일이다.** 영입 실행은 없다
 ## (RecruitProspect 참고, docs/design/06-progression.md §6.1).
+##
+## 세계가 물려 있으면 **인구에서 뽑고**, 없으면 예전처럼 이름을 지어낸다.
+## 두 길을 남긴 이유는 세계 없이 도는 시험과 화면이 아직 있기 때문이다 —
+## **지어낸 후보는 관계가 없어서 영입이 영원히 안 열린다.** 그것이 화면에 사유로 나간다.
 static func _find_prospects(
 	guild: Guild, contact_staff: int, prospect_seed: int
 ) -> Array[RecruitProspect]:
@@ -66,6 +74,9 @@ static func _find_prospects(
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = prospect_seed
+	if guild.world != null and guild.world.is_ready():
+		return _find_in_world(guild, wanted, rng)
+
 	var used := _taken_names(guild)
 	for index in wanted:
 		var discipline := rng.randi() % MemberDiscipline.count()
@@ -80,7 +91,55 @@ static func _find_prospects(
 	return found
 
 
+## 인구에서 후보를 찾는다. **접선처는 연줄로 사람을 찾는다** (SocialReach).
+##
+## 3000명에서 아무나 뽑으면 관계가 없어 판정이 늘 「모르는 사이」로 막히고,
+## 그러면 관계도를 붙인 값이 없다. 그래서 **대표를 중심으로 밖으로 퍼진다.**
+##
+## 관계도가 여기서 처음으로 게임에 쓰였다 — 후보가 누구인지가 아니라
+## **누구를 통해 왔는지**가 정보가 된다 (설계 24.8).
+static func _find_in_world(
+	guild: Guild, wanted: int, rng: RandomNumberGenerator
+) -> Array[RecruitProspect]:
+	var found: Array[RecruitProspect] = []
+	var world := guild.world
+	var taken := _taken_people(guild)
+	var leader := guild.leader_person
+	if leader != PersonRegistry.NO_PERSON:
+		taken[leader] = true
+
+	for index in wanted:
+		var pick := SocialReach.near(world, leader, taken, rng)
+		var person: int = pick[0]
+		if person == PersonRegistry.NO_PERSON:
+			break
+		taken[person] = true
+		var prospect := RecruitProspect.new(
+			"prospect_%d_%d" % [guild.expeditions_settled, index],
+			world.registry.name_of(person),
+			world.registry.discipline_of(person),
+			guild.expeditions_settled
+		)
+		prospect.person = person
+		prospect.introduced_by = pick[1]
+		prospect.standing = RecruitStanding.of(world.registry, world.graph, person, leader)
+		found.append(prospect)
+	return found
+
+
+## 이미 후보로 잡힌 세계의 인물들. 같은 사람이 두 번 명단에 오르면 안 된다.
+static func _taken_people(guild: Guild) -> Dictionary:
+	var taken := {}
+	for prospect in guild.prospects:
+		if prospect.is_in_world():
+			taken[prospect.person] = true
+	return taken
+
+
 ## 이미 쓰이고 있는 이름들. 후보가 대원과 같은 이름으로 나오면 기사에서 구분되지 않는다.
+##
+## **세계에서 뽑을 때는 안 쓴다** — 인구는 이름이 이미 안 겹치고(§24.16.4),
+## 3000명 중 하나가 우연히 대원과 같은 이름이라고 그 사람을 없는 사람으로 만들 수는 없다.
 static func _taken_names(guild: Guild) -> Dictionary:
 	var used := {}
 	for member in guild.members:

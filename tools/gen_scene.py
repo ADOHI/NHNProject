@@ -34,6 +34,8 @@ import urllib.parse
 import urllib.request
 import uuid
 
+from console_utf8 import fix_console_encoding
+
 HOST = "http://127.0.0.1:8000"
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scene")
 
@@ -197,6 +199,9 @@ FULL = "%s. %s. %s. %s. %s. No text, no letters, no logo, no watermark, no user 
 
 
 def main() -> None:
+    # cp949 콘솔에서 이 모듈의 docstring 은 안 찍지만, `gen_layers.py` 가 이 파일의
+    # 함수를 그대로 불러 쓴다. 같은 위험군이라 `tools/console_utf8.py` 를 똑같이 건다.
+    fix_console_encoding()
     ap = argparse.ArgumentParser()
     ap.add_argument("stage", choices=["full"])
     ap.add_argument("--seed", type=int, default=30507)

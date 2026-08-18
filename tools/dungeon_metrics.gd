@@ -11,7 +11,13 @@ extends RefCounted
 ##
 ## board 는 {points, edges, elevations, entrance, kinds} 를 가진 사전이다.
 ## 지금 생성기의 결과든 프로토타입의 결과든 이 모양으로 맞춰서 넘긴다.
-static func measure(board: Dictionary) -> Dictionary:
+##
+## `agility` 는 **누구를 기준으로 「열린 방」을 세는가**다. 예전에는 2 가 이 안에
+## 박혀 있었는데, 그러면 어느 스쿼드를 잰 값인지가 자 안에 숨는다 — 편성이 붙으면
+## 민첩은 대원 평균이라 1 도 나올 수 있고, 민첩 한 칸이 판을 20~49%p 닫는다
+## (`design/17-dungeon-generation.md` §17.38.2 · §17.38.3).
+## **기본값은 게임의 자리값 하나를 가리킨다.** 여기 숫자를 다시 적지 않는다 (§6.5).
+static func measure(board: Dictionary, agility: int = SampleDungeons.SQUAD_AGILITY) -> Dictionary:
 	var count: int = (board["points"] as PackedVector2Array).size()
 	var edges: Array[Vector2i] = board["edges"]
 	var elevations: PackedInt32Array = board["elevations"]
@@ -36,7 +42,7 @@ static func measure(board: Dictionary) -> Dictionary:
 	var costs := required_agility(count, edges, elevations, entrance)
 	var open := 0
 	for index in costs:
-		if int(costs[index]) <= 2:
+		if int(costs[index]) <= agility:
 			open += 1
 
 	var exit_free := 0.0
@@ -56,6 +62,9 @@ static func measure(board: Dictionary) -> Dictionary:
 		"deg3_pct": 100.0 * deg3 / floor_count,
 		"diameter": float(diameter(count, edges)),
 		"reach_pct": 100.0 * float(open) / floor_count,
+		# **누구 기준인지를 값 옆에 붙여 낸다.** 표에 `reach_pct` 만 적히면 다음 사람이
+		# 어느 민첩의 값인지 알 수 없고, 그 표는 §6.3 규칙 4 를 어긴 것이 된다.
+		"reach_agility": float(agility),
 		"exit_free_pct": exit_free,
 	}
 	result.merge(_valuables(board, count, edges, elevations, kinds, degrees, entrance))
@@ -187,6 +196,14 @@ static func required_agility(
 	return best
 
 
+## **막다른 방 판정은 `DungeonGraph.is_dead_end()` 와 같은 것을 말해야 한다** (차수 <= 1).
+##
+## 여기서 그 함수를 부르지 않는 이유는 이 자가 **색인 기반 판**도 재기 때문이다 —
+## 설계안 프로토타입에는 `DungeonGraph` 가 없다. 그래서 `measure()` 의 `deg1_pct` 는
+## 같은 판정을 색인 위에서 한 번 더 구현한 것이다.
+##
+## **둘이 같은 수를 내는지는 테스트가 묶는다** (`test_dead_end_definition.gd`).
+## 200 판에서 어긋난 적이 없지만, 그건 지금 그렇다는 것이지 앞으로도 그렇다는 뜻이 아니다.
 static func degrees_of(count: int, edges: Array[Vector2i]) -> Dictionary:
 	var result := {}
 	for index in count:
@@ -263,13 +280,13 @@ static func path(count: int, edges: Array[Vector2i], start: int, target: int) ->
 	return result
 
 
+## 그 간선이 길 위에 놓여 있는가.
+##
+## **런타임 판정을 그대로 쓴다.** 예전에는 여기에 같은 코드가 한 벌 더 있었는데,
+## 갈리면 화면이 그리는 두 길과 이 자가 재는 두 길이 달라진다.
+## 도구가 `src/` 를 부르는 것은 허용된 방향이다 (`docs/conventions.md` §3.1).
 static func on_path(route: PackedInt32Array, edge: Vector2i) -> bool:
-	for index in range(1, route.size()):
-		var a := route[index - 1]
-		var b := route[index]
-		if (edge.x == a and edge.y == b) or (edge.x == b and edge.y == a):
-			return true
-	return false
+	return DungeonRouteBuilder.on_path(route, edge)
 
 
 ## 지금 생성기의 설계도를 공용 사전 모양으로 옮긴다.

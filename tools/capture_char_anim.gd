@@ -1,5 +1,5 @@
 extends SceneTree
-## 애니메이션 한 바퀴를 PNG 묶음으로 남긴다. `tools/make_gif.py` 가 GIF 로 잇는다.
+## 애니메이션 한 바퀴를 PNG 묶음으로 남긴다. `tools/make_char_gif.py` 가 GIF 로 잇는다.
 ##
 ##     godot --path . -s res://tools/capture_char_anim.gd -- .renders-char-anim/idle
 ##     godot --path . -s res://tools/capture_char_anim.gd -- .renders-char-anim/walk walk

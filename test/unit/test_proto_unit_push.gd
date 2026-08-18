@@ -35,8 +35,8 @@ func _run(field: ProtoUnitField, seconds: float) -> void:
 		field.step(_STEP)
 
 
-func _bordered_grid(cols: int, rows: int) -> ProtoNavGrid:
-	var grid := ProtoNavGrid.new(cols, rows, 32.0)
+func _bordered_grid(cols: int, rows: int) -> NavGrid:
+	var grid := NavGrid.new(cols, rows, 32.0)
 	for column in cols:
 		grid.set_blocked(Vector2i(column, 0), true)
 		grid.set_blocked(Vector2i(column, rows - 1), true)
@@ -48,7 +48,7 @@ func _bordered_grid(cols: int, rows: int) -> ProtoNavGrid:
 
 ## 한 칸 폭 복도. **옆으로 비켜 지나갈 수 없으므로 밀치기가 있으면 반드시 드러난다.**
 func _corridor_field() -> ProtoUnitField:
-	var grid := ProtoNavGrid.new(40, 24, 32.0)
+	var grid := NavGrid.new(40, 24, 32.0)
 	for row in grid.rows:
 		for column in grid.cols:
 			grid.set_blocked(Vector2i(column, row), true)

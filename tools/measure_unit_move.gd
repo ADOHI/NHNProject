@@ -162,8 +162,8 @@ func _tuned(field: ProtoUnitField, key: String, value: float) -> ProtoUnitField:
 # ----------------------------------------------------------------- 판 만들기
 
 
-func _bordered_grid() -> ProtoNavGrid:
-	var grid := ProtoNavGrid.new(_COLS, _ROWS, _CELL)
+func _bordered_grid() -> NavGrid:
+	var grid := NavGrid.new(_COLS, _ROWS, _CELL)
 	for column in _COLS:
 		grid.set_blocked(Vector2i(column, 0), true)
 		grid.set_blocked(Vector2i(column, _ROWS - 1), true)
@@ -187,7 +187,7 @@ func _open_field(count: int) -> ProtoUnitField:
 	return _populate(_bordered_grid(), count)
 
 
-func _populate(grid: ProtoNavGrid, count: int) -> ProtoUnitField:
+func _populate(grid: NavGrid, count: int) -> ProtoUnitField:
 	var field := ProtoUnitField.new(grid, ProtoMoveTuning.new())
 	var columns := 6
 	for index in count:

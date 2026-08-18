@@ -40,6 +40,22 @@ custom_minimum_size = Vector2(0, 14)
 layout_mode = 2
 mouse_filter = 2
 
+[node name="WalkTitle" type="Label" parent="Content/Scroll/Rows"]
+layout_mode = 2
+theme_type_variation = &"Micro"
+text = "걸음 기록 — 판을 채점하는 값이 아니다"
+
+[node name="WalkLabel" type="Label" parent="Content/Scroll/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "아직 안 걸었다"
+
+[node name="GapWalk" type="Control" parent="Content/Scroll/Rows"]
+custom_minimum_size = Vector2(0, 14)
+layout_mode = 2
+mouse_filter = 2
+
 [node name="SummaryLabel" type="Label" parent="Content/Scroll/Rows"]
 unique_name_in_owner = true
 layout_mode = 2

@@ -1,0 +1,54 @@
+{
+  "mode": "quad",
+  "source": "workshop_1l_raw.png",
+  "source_size": [
+    1774,
+    887
+  ],
+  "ink_bbox_in_source": [
+    357,
+    123,
+    1402,
+    808
+  ],
+  "src_quad_nesw": [
+    [
+      879.5,
+      389.0
+    ],
+    [
+      1387.0,
+      598.0
+    ],
+    [
+      877.0,
+      807.0
+    ],
+    [
+      376.0,
+      598.0
+    ]
+  ],
+  "dst_quad_nesw": [
+    [
+      104.0,
+      96.0
+    ],
+    [
+      200.0,
+      144.0
+    ],
+    [
+      104.0,
+      192.0
+    ],
+    [
+      8.0,
+      144.0
+    ]
+  ],
+  "fitted_height_px": 157,
+  "content_height_px": 184,
+  "over_height_cap": false,
+  "edge_ink_ratio": 0.0
+}

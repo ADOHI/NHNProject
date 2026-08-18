@@ -409,7 +409,7 @@ test/unit/
 test/support/char_anim_probe.gd  # 두 테스트가 공유하는 계측 (진폭 · 최고점 · 최대 속력)
 
 tools/capture_char_anim.gd     # t 를 직접 넣어 PNG 100 장
-tools/make_gif.py              # PNG 묶음 → GIF
+tools/make_char_gif.py         # PNG 묶음 → GIF (이 레인 전용. tools/make_gif.py 는 UI 레인 것이다)
 tools/char_frame_bench.tscn    # 잔상 장수 × 인원 프레임 실측 (§25.31)
 tools/check_sprite_parts.py    # SD 변환 결과가 레이맨화될 수 있나 (§25.38)
 ```

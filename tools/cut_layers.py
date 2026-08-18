@@ -25,6 +25,8 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
+from console_utf8 import fix_console_encoding
+
 ROOM_STUDIO = r"C:\Users\adohi\2dAnim\room-studio\src"
 if ROOM_STUDIO not in sys.path:
     sys.path.insert(0, ROOM_STUDIO)
@@ -125,6 +127,10 @@ def cut(name: str) -> str | None:
 
 
 def main() -> None:
+    # 이 파일의 docstring · 주석에 줄표(U+2014)가 섞여 있다. 지금은 --help 로도 안
+    # 찍히지만, 다음 사람이 help= 에 옮기면 바로 cp949 콘솔에서 죽는다. 도구마다
+    # 개별 판단하지 않고 `tools/console_utf8.py` 를 전부에 건다.
+    fix_console_encoding()
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", default="")
     args = ap.parse_args()

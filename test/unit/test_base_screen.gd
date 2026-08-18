@@ -93,7 +93,8 @@ func test_marking_the_intel_staff_dims_the_board_before_leaving() -> void:
 	_press_member(1, "정보실")
 	assert_eq(_screen._guild.gate_disclosure(_screen._deployed), GateDisclosure.Level.MAPPED)
 
-	_press_member(0, "데려간다")
+	# 0 번 대원은 민첩 1 이라 이 게이트에 못 들어간다 (Gate.can_enter). 한 바퀴를 재는 자라 통과하는 편성으로 간다
+	_press_member(1, "데려간다")
 	assert_eq(
 		_screen._guild.gate_disclosure(_screen._deployed),
 		GateDisclosure.Level.SURVEYED,
@@ -114,7 +115,8 @@ func test_full_lap_runs_on_the_screen() -> void:
 	_press_member(2, "공방")
 	_press_member(3, "접선처")
 	assert_true(_press_gate(1, "고른다"))
-	_press_member(0, "데려간다")
+	# 0 번 대원은 민첩 1 이라 이 게이트에 못 들어간다 (Gate.can_enter). 한 바퀴를 재는 자라 통과하는 편성으로 간다
+	_press_member(1, "데려간다")
 
 	var funds := _screen._guild.funds
 	# 이름은 무작위라 우연히 겹칠 수 있다. 목록이 갈렸다는 증거는 씨앗이다.
