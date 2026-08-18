@@ -412,5 +412,12 @@ func _status_text() -> String:
 		return hands
 	return (
 		"%d / %d  시드 %d  소속 %d개  생성 %.1fms  |  %s"
-		% [_person + 1, _world.registry.size(), _seed, _world.factions.populated_count(), _build_msec, hands]
+		% [
+			_person + 1,
+			_world.registry.size(),
+			_seed,
+			_world.factions.populated_count(),
+			_build_msec,
+			hands,
+		]
 	)

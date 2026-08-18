@@ -86,33 +86,35 @@ func _initialize() -> void:
 
 
 func _pick() -> Control:
+	# **반환을 한 곳으로 모은다.** 갈래마다 돌려보내면 갈래가 늘 때마다
+	# 반환문이 늘고, 그 수가 컨벤션(max-returns)에 걸린다.
+	var made: Control = null
 	match _which:
 		"ring":
 			_card = NoiseRadial.CARD
 			_loop = NoiseRadial.LOOP
-			return NoiseRadial.new()
+			made = NoiseRadial.new()
 		"person":
 			_card = NoiseDossier.CARD
 			_loop = NoiseDossier.LOOP
-			return NoiseDossier.new()
+			made = NoiseDossier.new()
 		"noise":
 			_card = NoiseSheet.CARD
 			_loop = NoiseSheet.LOOP
-			return NoiseSheet.new()
+			made = NoiseSheet.new()
 		"slash":
 			_card = SlashSheet.CARD
 			_loop = SlashSheet.LOOP
-			return SlashSheet.new()
+			made = SlashSheet.new()
 		"field":
 			_card = FieldSheet.CARD
 			_loop = FieldSheet.LOOP
-			return FieldSheet.new()
+			made = FieldSheet.new()
 		"amber":
 			_card = AmberSheet.CARD
 			_loop = AmberSheet.LOOP
-			return AmberSheet.new()
-		_:
-			return null
+			made = AmberSheet.new()
+	return made
 
 
 ## 팔레트마다 대표 컷을 한 장씩, 그다음 GIF 용 팔레트로 한 장.
@@ -142,39 +144,55 @@ func _stills() -> bool:
 
 
 func _process(_delta: float) -> bool:
+	# **갈래마다 제 함수로 보낸다.** 한 함수 안에서 다 처리하면 반환문이
+	# 아홉이 되고, 그 수가 컨벤션(max-returns)에 걸린다.
 	_waited += 1
 	if _waited <= SETTLE:
 		_sheet.call("set_clock", 0.0)
 		return false
 	if _tier_sweep:
-		_sheet.set("palette", PICK)
-		_sheet.call("set_clock", STILL_AT)
-		_sheet.set("tiers", _tier)
-		if _posed != 100 + _tier:
-			_posed = 100 + _tier
-			return false
-		_stage.get_texture().get_image().save_png("%s_t%d.png" % [_prefix, _tier])
-		print("%d 단: %s_t%d.png" % [_tier, _prefix, _tier])
-		_tier += 1
-		return _tier > 5
+		return _tier_step()
 	if _place_sweep:
-		_sheet.set("palette", PICK)
-		_sheet.call("set_clock", STILL_AT)
-		_sheet.set("place", _place == 1)
-		if _posed != 200 + _place:
-			_posed = 200 + _place
-			return false
-		_stage.get_texture().get_image().save_png("%s_p%d.png" % [_prefix, _place])
-		print("자리 %d: %s_p%d.png" % [_place, _prefix, _place])
-		_place += 1
-		return _place > 1
+		return _place_step()
 	if not _still_done:
 		_still_done = _stills()
 		return false
 	if _stills_only:
 		print("정지 컷만: %s" % _prefix)
 		return true
+	return _frame_step()
 
+
+## 단수를 하나씩 올려 가며 한 장씩. 다 돌았으면 참.
+func _tier_step() -> bool:
+	_sheet.set("palette", PICK)
+	_sheet.call("set_clock", STILL_AT)
+	_sheet.set("tiers", _tier)
+	if _posed != 100 + _tier:
+		_posed = 100 + _tier
+		return false
+	_stage.get_texture().get_image().save_png("%s_t%d.png" % [_prefix, _tier])
+	print("%d 단: %s_t%d.png" % [_tier, _prefix, _tier])
+	_tier += 1
+	return _tier > 5
+
+
+## 자리를 바꿔 가며 한 장씩. 다 돌았으면 참.
+func _place_step() -> bool:
+	_sheet.set("palette", PICK)
+	_sheet.call("set_clock", STILL_AT)
+	_sheet.set("place", _place == 1)
+	if _posed != 200 + _place:
+		_posed = 200 + _place
+		return false
+	_stage.get_texture().get_image().save_png("%s_p%d.png" % [_prefix, _place])
+	print("자리 %d: %s_p%d.png" % [_place, _prefix, _place])
+	_place += 1
+	return _place > 1
+
+
+## GIF 용 연속 프레임 한 장. 한 바퀴를 다 채웠으면 참.
+func _frame_step() -> bool:
 	if _posed != _saved:
 		_sheet.call("set_clock", float(_saved) / FPS)
 		_posed = _saved

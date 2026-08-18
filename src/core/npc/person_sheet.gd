@@ -437,16 +437,19 @@ static func _inborn_entry(
 	var label := RelationKind.label_for(
 		graph.kind_of(person, other), registry.gender_of(person), registry.gender_of(other)
 	)
-	var entry := SheetField.filled(
-		label,
-		(
-			"%s %d세 호감%+d 유대%d"
-			% [
-				registry.name_of(other),
-				registry.age_of(other),
-				graph.affinity(person, other),
-				graph.bond(person, other),
-			]
+	var entry := (
+		SheetField
+		. filled(
+			label,
+			(
+				"%s %d세 호감%+d 유대%d"
+				% [
+					registry.name_of(other),
+					registry.age_of(other),
+					graph.affinity(person, other),
+					graph.bond(person, other),
+				]
+			)
 		)
 	)
 	# **줄이 상대를 들고 있다.** 눌러서 그 사람으로 가는 길이 여기서 난다 (§20.23.4).
@@ -476,16 +479,19 @@ static func _earned_entry(
 		label = "%s 한쪽만" % label
 	var cause := graph.cause_of(person, other)
 	var mark := "" if ledger == null or not ledger.has(cause) else " [%d]" % cause
-	var entry := SheetField.filled(
-		label,
-		(
-			"%s 호감%+d 유대%d%s"
-			% [
-				registry.name_of(other),
-				graph.affinity(person, other),
-				graph.bond(person, other),
-				mark,
-			]
+	var entry := (
+		SheetField
+		. filled(
+			label,
+			(
+				"%s 호감%+d 유대%d%s"
+				% [
+					registry.name_of(other),
+					graph.affinity(person, other),
+					graph.bond(person, other),
+					mark,
+				]
+			)
 		)
 	)
 	# 태생 줄과 같다 — 얻은 관계도 눌러서 그 사람으로 간다 (§20.23.4).

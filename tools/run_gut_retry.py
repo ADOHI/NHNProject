@@ -30,11 +30,41 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
 
+# 콘솔이 cp949 여도 안 죽는다. 이 저장소의 출력은 한국어이고 줄표(—)를 쓰는데,
+# 윈도우 기본 콘솔 코덱이 그것을 못 실어 **테스트가 통과한 뒤에 러너가 죽었다.**
+# CI 가 그것을 실패로 읽는다 — 초록을 빨강으로 만드는 버그다.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 DEFAULT_GODOT = os.environ.get("GODOT", "godot")
+
+
+def resolve_godot(name):
+    """`godot` 를 실제로 실행 가능한 경로로 편다.
+
+    윈도우에서 `godot` 은 셸 래퍼(`godot` · `godot.cmd`)인 경우가 흔하다.
+    `subprocess` 는 셸을 안 거치므로 확장자 없는 래퍼를 **못 찾는다** —
+    `FileNotFoundError` 가 나고, 그것이 「기계가 또 죽었나」로 오해된다.
+    """
+    if os.path.sep in name or os.path.altsep and os.path.altsep in name:
+        return name
+    found = shutil.which(name)
+    if found is None:
+        return name
+    # .cmd/.bat 래퍼는 셸이 있어야 돈다. 같은 폴더의 콘솔용 exe 를 먼저 찾는다.
+    if os.path.splitext(found)[1].lower() in (".cmd", ".bat"):
+        folder = os.path.dirname(found)
+        for entry in sorted(os.listdir(folder)):
+            low = entry.lower()
+            if low.endswith("_console.exe") or (low.startswith("godot") and low.endswith(".exe")):
+                return os.path.join(folder, entry)
+    return found
 GUT_SCRIPT = "res://addons/gut/gut_cmdln.gd"
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
@@ -107,7 +137,7 @@ def parse_summary(attempt, text):
 
 def run_attempt(index, args):
     attempt = Attempt(index)
-    command = [args.godot, "--headless", "--path", args.project, "-s", GUT_SCRIPT]
+    command = [resolve_godot(args.godot), "--headless", "--path", args.project, "-s", GUT_SCRIPT]
     started = time.time()
     proc = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=args.project

@@ -60,15 +60,18 @@ func _rules() -> Dictionary:
 	return {
 		"pivot": "바닥 마름모의 아래꼭짓점. 캔버스 왼쪽 위에서 잰다",
 		"pivot_reason": "그림이 위로 자라도 땅에 닿는 자리가 안 움직여야 한다",
-		"storey_height_px": snappedf(
-			IsoProjection.cell_height_px() * HideoutBuildingArt.STOREY_CELLS, 0.01
-		),
+		"storey_height_px":
+		snappedf(IsoProjection.cell_height_px() * HideoutBuildingArt.STOREY_CELLS, 0.01),
 		"max_storeys": HideoutBuildingArt.MAX_STOREYS,
 		"margin_px": HideoutBuildingArt.MARGIN_PX,
 		"occlusion": "높이를 tile_height 로 나눈 몫만큼 바로 뒤를 완전히 가린다 (IsoProjection.hidden_cells_behind)",
 		"door_face": "남서쪽 벽(화면에서 왼쪽 아래를 보는 면) 한 곳뿐",
 		"door_reason": "카메라도 건물도 돌지 않는다. 네 방향을 그릴 이유가 없다",
-		"style": "1990s anime cel, high chroma, one small complementary accent area, hard specular highlights",
+		"style":
+		(
+			"1990s anime cel, high chroma, one small complementary accent area,"
+			+ " hard specular highlights"
+		),
 		"fit": "알파 아래끝→기준점 · 가로 가운데 · 가로 배율 (30-hideout §30.10.7). 그리드 발자국에 맞춤",
 	}
 
