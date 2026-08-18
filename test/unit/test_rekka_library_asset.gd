@@ -69,6 +69,17 @@ func test_every_grade_belongs_to_that_kinds_axis() -> void:
 		assert_has(grades, parts[1], "축에 없는 등급: %s" % key)
 
 
+func test_no_key_is_left_with_a_single_post() -> void:
+	# 고를 것이 하나뿐이면 걸음으로 건너뛰어도 소용이 없다 — 그 상황이 두 번 나오는
+	# 순간 같은 글이 그대로 다시 나온다. **5차의 실패는 분량이 아니라 같은 틀이었다**
+	# (19-rekka-voice.md §19.A.1).
+	var counts: Dictionary = {}
+	for key in _library.keys:
+		counts[key] = int(counts.get(key, 0)) + 1
+	for key in counts:
+		assert_gt(int(counts[key]), 1, "%s 에 문안이 하나뿐이다" % key)
+
+
 func test_the_quiet_turn_has_something_to_say() -> void:
 	# 사건이 없는 턴이 제일 문맥이 필요한 턴이다 (19-rekka-voice.md §19.B.1).
 	assert_gt(_library.posts_for(LibraryScript.QUIET_KEY).size(), 1)
