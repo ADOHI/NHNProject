@@ -1,5 +1,28 @@
 # 웹 빌드 & 배포
 
+> ## ★ 2026-08-19 — **웹은 이제 부판이다**
+>
+> 본판은 **PC 스탠드얼론(Windows x86_64)** 이다. 웹은 **데모 배포·디버깅용으로 유지한다**
+> ([`design/01-constraints.md`](design/01-constraints.md) §1.1).
+>
+> **그래서 이 문서의 설정은 전부 그대로 지킨다.** 웹을 안 깨뜨리는 것이 여전히 규칙이다 —
+> 바뀐 것은 **웹이 더 이상 상한을 정하지 않는다**는 것뿐이다.
+> 용량 때문에 에셋을 줄이는 판단은 이제 하지 않는다.
+>
+> ### PC 빌드
+>
+> ```bash
+> godot --headless --path . --export-release "Windows Desktop" build/windows/Geum.exe
+> ```
+>
+> 프리셋은 `export_presets.cfg` 의 `[preset.1]`. 산출물은 `Geum.exe` + `Geum.pck`
+> (`embed_pck=false` — 갱신할 때 `.pck` 만 갈아 끼울 수 있다).
+> **내보내기 경로의 폴더는 미리 만들어야 한다** — 없으면
+> *"주어진 내보내기 경로는 존재하지 않습니다"* 로 실패한다.
+>
+> 실측(2026-08-19): `Geum.exe` 109 MB · `Geum.pck` 31.6 MB.
+> 구동 확인 — `OpenGL API 3.3.0 Compatibility`, 오류 0, 종료 코드 0.
+
 ## 배포 흐름
 
 `main` 푸시 → GitHub Actions(`.github/workflows/deploy-web.yml`) →
