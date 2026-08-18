@@ -68,20 +68,52 @@ func test_the_harmonics_rebuild_the_original_track() -> void:
 		assert_almost_eq(drive.drive_at(at).y, actual.y, 0.15, "세로가 안 맞는다 (t = %.2f)" % at)
 
 
-func test_rotation_and_scale_reach_the_drive() -> void:
-	# **피벗이 아니라 앵커 그 점을 잰다.** 머리는 갸웃하고 눌리므로 정수리가 실제로 움직인다.
+## 그 하모닉의 진폭(축마다). 위상이 어디에 있든 크기는 이것 하나다.
+func _amplitude(drive: SoftDrive, cycles: int) -> Vector2:
+	var i := _harmonic(drive, cycles)
+	if i < 0:
+		return Vector2.ZERO
+	return Vector2(
+		Vector2(drive.cos_amp[i].x, drive.sin_amp[i].x).length(),
+		Vector2(drive.cos_amp[i].y, drive.sin_amp[i].y).length()
+	)
+
+
+func _head_drive(local_point: Vector2) -> SoftDrive:
+	return SoftDrive.from_clip(_idle(), CharPart.Id.HEAD, local_point, AnimFeatures.all_on())
+
+
+func test_the_pivot_sees_exactly_what_the_clip_wrote() -> void:
+	var pivot := _head_drive(Vector2.ZERO)
+	assert_almost_eq(_amplitude(pivot, 1).x, CharIdleClip.HEAD_SWAY, EPS)
+	assert_almost_eq(_amplitude(pivot, 2).y, CharIdleClip.HEAD_RISE, EPS)
+
+
+func test_scale_reaches_the_drive() -> void:
+	# **피벗이 아니라 앵커 그 점을 잰다.** 머리가 눌리면 정수리가 피벗과 다르게 움직인다.
+	#
+	# 피벗이 `HEAD_RISE` 만큼 오르는 동안 머리는 `HEAD_SQUASH` 만큼 눌리므로,
+	# 정수리에서는 그 눌린 양(`머리 높이 x HEAD_SQUASH`)이 **빠진다.**
+	# 이 예측은 클립의 상수에서 나오고, 잰 값은 표본에서 나온다 — 두 길이 만나야 한다.
+	var rig := CharRig.new()
+	var head_height := rig.half_sizes[CharPart.Id.HEAD].y * 2.0
+	var crown := Vector2(0.0, head_height)
+	var want := CharIdleClip.HEAD_RISE - head_height * CharIdleClip.HEAD_SQUASH
+	assert_almost_eq(_amplitude(_head_drive(crown), 2).y, want, 0.02)
+
+
+func test_rotation_reaches_the_drive_and_it_cancels_the_sway() -> void:
+	# **갸웃이 무게이동을 지운다.** 몸이 앞으로 갈 때 머리는 늦어 정수리가 뒤에 남는데
+	# (§25.4.2 의 척추 S 곡선), 그 둘이 정수리에서 거의 상쇄된다.
+	#
+	# **그래서 정수리가 피벗보다 덜 움직인다.** 처음에 반대로 예상했다가 자에 걸렸다 —
+	# 회전이 구동에 안 들어왔으면 둘이 **같았을** 것이므로, 이 차이가 곧 회전의 증거다.
 	var rig := CharRig.new()
 	var crown := Vector2(0.0, rig.half_sizes[CharPart.Id.HEAD].y * 2.0)
-	var pivot := SoftDrive.from_clip(
-		_idle(), CharPart.Id.HEAD, Vector2.ZERO, AnimFeatures.all_on()
-	)
-	var top := SoftDrive.from_clip(_idle(), CharPart.Id.HEAD, crown, AnimFeatures.all_on())
-	var pivot_swing := 0.0
-	var top_swing := 0.0
-	for i in pivot.cycles.size():
-		pivot_swing += pivot.sin_amp[i].length() + pivot.cos_amp[i].length()
-		top_swing += top.sin_amp[i].length() + top.cos_amp[i].length()
-	assert_gt(top_swing, pivot_swing, "정수리가 피벗보다 더 움직여야 갸웃이 구동에 들어온 것이다")
+	var pivot_sway := _amplitude(_head_drive(Vector2.ZERO), 1).x
+	var crown_sway := _amplitude(_head_drive(crown), 1).x
+	assert_lt(crown_sway, pivot_sway * 0.5, "정수리가 피벗만큼 흔들리면 회전이 안 들어온 것이다")
+	assert_gt(crown_sway, 0.0)
 
 
 # --- 이음매 -------------------------------------------------------------------
