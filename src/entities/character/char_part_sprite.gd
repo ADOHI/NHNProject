@@ -50,6 +50,8 @@ var flash := 0.0:
 		if is_equal_approx(value, flash):
 			return
 		flash = value
+		if _morph != null:
+			_morph.set_shader_parameter("flash_amount", value * FLASH_ALPHA)
 		queue_redraw()
 
 var _canvas: CanvasItem = null
@@ -81,6 +83,9 @@ func setup_morph(p_anchors: Array[MorphAnchor]) -> void:
 	_morph = ShaderMaterial.new()
 	_morph.shader = load(MORPH_SHADER)
 	material = _morph
+	_morph.set_shader_parameter("tint", _tint())
+	_morph.set_shader_parameter("flash_color", Color(FLASH, 1.0))
+	_morph.set_shader_parameter("flash_amount", flash * FLASH_ALPHA)
 	_push_shape()
 	apply_morph(PackedVector2Array(), PackedFloat32Array())
 	queue_redraw()
@@ -213,10 +218,13 @@ func _draw() -> void:
 	if mirror:
 		box = Rect2(Vector2(-box.position.x - box.size.x, box.position.y), box.size)
 		canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2(-1.0, 1.0))
-	canvas.draw_texture_rect(texture, box, false, _tint())
+	# **모핑이 켜지면 셰이더가 색까지 짓는다.** modulate 를 주면 `COLOR` 에 이미
+	# 곱해져 들어와서 **두 번 곱해진다** — 오류 없이 그림만 탁해진다 (§31.6.5).
+	canvas.draw_texture_rect(texture, box, false, Color.WHITE if _morph != null else _tint())
 	if mirror:
 		canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	if flash > 0.001:
+	# 번쩍임도 셰이더 안에서 얹힌다. 여기서 또 찍으면 두 겹이 된다.
+	if flash > 0.001 and _morph == null:
 		canvas.draw_texture_rect(texture, box, false, Color(FLASH, flash * FLASH_ALPHA))
 
 

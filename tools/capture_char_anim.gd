@@ -86,6 +86,11 @@ var _flourish := "none"
 ## 파츠 그림이 있는 폴더. 비어 있으면 자리표시자 도형이다 (§25.41).
 var _skin_dir := ""
 
+## **살의 흔들림.** `null` 이면 안 켠다 (`docs/design/31-soft-body.md`).
+##
+## **그림이 있어야 보인다** — 도형에는 UV 가 없다. `skin=` 없이 켜면 아무 일도 안 난다.
+var _morph: MorphRig = null
+
 ## **무너짐 눈금.** `hit` 이 어디까지 갈지를 정한다 (§25.12.6).
 var _stagger := CharHitClip.FALL_AT
 
@@ -146,6 +151,10 @@ func _initialize() -> void:
 			# `stagger45` 처럼 **무너짐 눈금**을 준다 — 경직 30 · 띄우기 60 · 쓰러짐 100 (§28.5).
 			# 눈금이 구간을 정하므로 셋을 나란히 놓으려면 이 낱말 하나면 된다.
 			_stagger = float(token.substr(7))
+		elif token.begins_with("soft"):
+			# `soft` · `soft=0.8` · `soft=1,2.4,0.18` — 세기 · 고유 Hz · 감쇠 (§31.4).
+			# 축 셋을 따로 주는 이유는 §25.5.2 — 겹치면 무엇이 무엇을 만드는지 못 가린다.
+			_morph = _parse_morph(token)
 		elif token.begins_with("skin="):
 			# `skin=<폴더>` — **자리표시자 도형 대신 진짜 파츠 그림으로 찍는다** (§25.41).
 			# 리그도 그 그림에서 나온다. 안 주면 지금까지처럼 도형이다.
@@ -189,6 +198,8 @@ func _initialize() -> void:
 	_view = CharPartsView.new()
 	# **`setup()` 전에 넣어야 한다.** `_make_part()` 가 이 값을 보고 도형이냐 그림이냐를 가른다.
 	_view.skin = skin
+	# 흔들림도 마찬가지다 — `_make_part()` 가 재질을 붙일지 여기서 정한다 (§31.5.3).
+	_view.morph = _rig_morph(rig)
 	_view.weapon = CharWeapon.new(_cells, _span)
 	_view.flourish = CharFlourish.preset(_flourish)
 	# **앞쪽에 여백을 둔다.** 내려치기에서 머리와 검이 앞으로 크게 나가는데 가운데에
@@ -241,6 +252,36 @@ func _initialize() -> void:
 			]
 		)
 	)
+
+
+## `soft=세기,Hz,감쇠` 를 읽는다. 값이 없으면 `MorphRig` 의 기본 눈금이다.
+func _parse_morph(token: String) -> MorphRig:
+	var morph := MorphRig.default_for(CharRig.new())
+	morph.strength = 1.0
+	if not token.begins_with("soft="):
+		return morph
+	var parts := token.substr(5).split(",")
+	morph.strength = float(parts[0])
+	if parts.size() > 1:
+		for anchor in morph.anchors:
+			anchor.hz = float(parts[1])
+	if parts.size() > 2:
+		for anchor in morph.anchors:
+			anchor.damping = float(parts[2])
+	return morph
+
+
+## 앵커 자리는 **리그에서 다시 푼다** — 그림이 오면 파츠 크기가 달라지기 때문이다.
+##
+## 조절판에서 온 Hz · 감쇠 · 세기는 그대로 옮긴다.
+func _rig_morph(rig: CharRig) -> MorphRig:
+	if _morph == null:
+		return null
+	var out := MorphRig.default_for(rig, _morph.strength)
+	for i in out.anchors.size():
+		out.anchors[i].hz = _morph.anchors[i].hz
+		out.anchors[i].damping = _morph.anchors[i].damping
+	return out
 
 
 func _process(_delta: float) -> bool:

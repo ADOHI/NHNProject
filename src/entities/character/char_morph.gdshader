@@ -44,6 +44,20 @@ uniform float anchor_bulge[MAX_ANCHORS];
 // `xy` 가 0 이면 게이트가 없다.
 uniform vec4 anchor_mask[MAX_ANCHORS];
 
+// ## 색을 그리는 쪽이 아니라 **셰이더가 짓는다**
+//
+// `COLOR` 는 들어올 때 이미 `texture(TEXTURE, UV) * modulate` 다. 그래서 다시 곱하면
+// **두 번 곱해져 어두워진다** — 오류는 하나도 안 나고 그림만 탁해진다.
+// `tools/check_morph_pixels.gd` 가 화면에서 재서 잡았다 (§31.6.5).
+//
+// `MODULATE` 로 modulate 만 꺼내려 했지만 이 판에 그 이름이 없다.
+// 그래서 **그리는 쪽이 modulate 를 흰색으로 두고 색을 uniform 으로 넘긴다.**
+uniform vec4 tint : source_color = vec4(1.0);
+
+// 닿는 순간의 번쩍임 색과 짙기. 짙기는 그리는 쪽이 이미 곱해서 준다.
+uniform vec4 flash_color : source_color = vec4(1.0);
+uniform float flash_amount : hint_range(0.0, 1.0) = 0.0;
+
 
 // 그 점이 얼마나 휘나 (0 … 1). 타원 감쇠와 반평면 게이트의 곱이다.
 float anchor_weight(int i, vec2 at) {
@@ -81,8 +95,8 @@ void fragment() {
 	if (warped.x < 0.0 || warped.x > 1.0 || warped.y < 0.0 || warped.y > 1.0) {
 		texel.a = 0.0;
 	}
-	// **`COLOR` 는 들어올 때 버텍스 색(= 그리는 쪽이 준 modulate)이다.**
-	// `MODULATE` 를 쓰려다 이 판에서 「모르는 이름」으로 컴파일이 통째로 실패했다.
-	// 곱한 값이 맞는지는 `tools/check_morph_pixels.gd` 가 화면에서 재서 확인한다.
-	COLOR = texel * COLOR;
+	vec4 painted = texel * tint;
+	// 번쩍임은 **실루엣 안에서만** 얹힌다. 알파를 안 건드려야 도형판과 같은 모양이 남는다.
+	painted.rgb = mix(painted.rgb, flash_color.rgb, flash_amount);
+	COLOR = painted;
 }
