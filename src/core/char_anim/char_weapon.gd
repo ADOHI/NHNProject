@@ -1,0 +1,304 @@
+class_name CharWeapon
+extends RefCounted
+## 손에 따로 붙는 무기. **파츠 일곱 번째가 아니라 든 손의 자식이다.**
+##
+## [`28-combat.md`](../../../docs/design/28-combat.md) §25.7 이 확정했다 —
+## *"레이맨 캐릭터의 손에 무기 스프라이트를 따로 달고, 이 역시도 스프라이트
+## 애니메이션으로만."* 그래서 **무기가 얹힌 상태가 전투 애니메이션의 바탕**이다.
+##
+## **무기는 손 노드의 자식이다.** 손의 트랜스폼을 그대로 물려받으므로
+##
+## * `sample()` 은 무기의 존재를 **모른다.** 파츠는 여섯 그대로다
+## * 손의 피벗이 중심이라(§25.2) **무기가 손을 축으로 돈다**
+## * 손목 각도 = 손의 회전이다. 관절을 새로 만들 필요가 없다
+##
+## ## 모양이 곧 특성이고, 특성이 동작을 정한다
+##
+## 전투 레인이 실측했다 — **아이템 부피가 한 방의 무게다.** 4 칸은 4 타로 적을 띄우고
+## 1 칸은 열 몇 타가 필요하다. **그런데 화면에서 둘이 같은 속도로 같은 궤적을 그리면
+## 화면이 전투 규칙을 부정한다.**
+##
+## **입력이 둘이다** — [`28-combat.md`](../../../docs/design/28-combat.md) §28.2 의
+## 「한 블럭과 방향」에서 **그냥 나온다.**
+##
+## | 축 | 어디서 오나 | 무엇을 정하나 |
+## | --- | --- | --- |
+## | **길이** | **긴 쪽 칸 수** | 궤적 반경 · 가장 가파른 각도 · 검끝이 바닥을 뚫는 위험 |
+## | **무게** | **총 칸 수** | 휘두르는 시간 · 멈춤 · 몸 끌림 · 예비 길이 |
+##
+## **같은 4 칸인데 `3×1` 은 창이고 `2×2` 는 철퇴다.** 새 자료를 하나도 안 만든다.
+##
+## 하나로 뭉쳐 두면 **사분면의 대각선 둘만** 나온다 — 길고 무거운 것(대검)과
+## 짧고 가벼운 것(단검). **길고 가벼운 것과 짧고 무거운 것이 통째로 빠지는데,
+## 그 둘이 액션에서 가장 다르게 생긴 무기다.**
+##
+## 관성은 **여전히 둘의 곱이다** (`I ∝ 질량 × 길이²`). 식을 버린 것이 아니라
+## **입력을 둘로 나눈 것**이다 (`docs/design/25-character-animation.md` §25.20).
+
+## 칸 수의 범위. [`28-combat.md`](../../../docs/design/28-combat.md) 의 아이템 부피다.
+const MIN_CELLS := 1
+const MAX_CELLS := 4
+
+## 1 칸짜리의 길이. 캐릭터 키(141)의 37 % 다.
+const BASE_LENGTH := 52.0
+
+## 길이가 **긴 쪽 칸 수**를 따라 자라는 지수. **1 보다 훨씬 작다** —
+## 4 칸 길이가 4 배 길지는 않다. 화면을 가로지르면 그림이 무너진다.
+const LENGTH_EXPONENT := 0.30
+
+## 무기를 든 손. 그리는 순서의 맨 마지막이라 무엇에도 안 가려진다.
+const HOLDER := CharPart.Id.HAND_NEAR
+
+## 손의 중심에서 자루를 잡은 자리까지. 손 반크기의 비율이다.
+const GRIP := Vector2(0.15, -0.10)
+
+## 자루 쪽에서 잡은 지점이 전체의 몇 할인가. 이 앞쪽이 자루, 뒤쪽이 날이다.
+const GRIP_ALONG := 0.18
+
+## 날 두께의 기준. 무거울수록 두꺼워진다 — **길이보다 두께가 무게를 말한다.**
+const BASE_HALF_WIDTH := 3.4
+
+## **무기의 윤곽.** 자루 끝(`u = 0`)에서 날 끝(`u = 1`)까지, 그 자리의 **반너비 배수**다.
+##
+## **검이 실루엣에서 그냥 네모였다.** 그림 쪽은 끝을 뾰족하게 그리고 코등이를 얹었는데
+## 실루엣 자와 잔상은 **상자**로 쟀다 — 한 값이 두 곳에 있고 그중 하나만 진짜인 것,
+## 이 저장소에서 열 번 넘게 밟은 모양이다 (§25.13.1).
+##
+## 그래서 원피스(`CharRig.TORSO_PROFILE`)·부츠(`CharRig.FOOT_PROFILE`)와 **같은 자리**에 둔다.
+## **접지 · 겹침 · 실루엣에 쓰이는 값은 그림이 아니라 코어의 것이다.**
+##
+## 모양이 셋을 말한다 — **가는 자루**(손이 있을 자리) · **넓은 코등이**(자루와 날의 경계) ·
+## **0 으로 끝나는 날 끝**(뾰족함). 셋 다 실루엣에서만 「검」으로 읽히게 하는 것들이다.
+const OUTLINE: Array[Vector2] = [
+	Vector2(0.000, 0.66),
+	Vector2(0.045, 0.34),
+	Vector2(0.150, 0.34),
+	Vector2(0.168, 1.45),
+	Vector2(0.205, 1.45),
+	Vector2(0.222, 1.00),
+	Vector2(0.820, 0.94),
+	Vector2(1.000, 0.00),
+]
+
+## 코등이가 차지하는 구간(`u`). 그림이 자루 · 코등이 · 날을 이 경계로 칠한다.
+const GUARD_FROM := 0.150
+const GUARD_TO := 0.222
+
+## 쉬는 자세에서 무기가 손에 대해 기울어 있는 각도의 **희망값**.
+##
+## 실제 각도는 `rest_angle()` 이 정한다 — 긴 무기는 이 각도로 내리면 바닥에 박힌다.
+const REST_ANGLE_WISH := -0.55
+
+## 검끝이 바닥에서 최소한 이만큼은 떠 있어야 한다. 자세를 기하로 푸는 기준선이다.
+const TIP_CLEARANCE := 4.0
+
+## 몸 중심에서 손이 뻗는 거리. 리치의 **팔** 몫이다.
+const ARM_REACH := 27.0
+
+## 닿고 싶은 간격. **이 값이 전진 거리를 정한다.**
+##
+## 무기가 짧으면 그만큼 파고들어야 닿는다 — **전진 거리는 길이의 역함수다.**
+## 게임적으로도 맞다: 단검이 붙는 무기고 창이 버티는 무기다.
+const TARGET_GAP := 104.0
+
+## 전진 거리의 위아래 한계. 아래를 0 으로 두면 창이 아예 안 움직여 뻣뻣해 보이고,
+## 위를 안 막으면 단검이 화면을 가로지른다.
+const ADVANCE_MIN := 3.0
+const ADVANCE_MAX := 30.0
+
+## 무게가 더하는 전진. **무거우면 관성으로 더 밀린다.**
+const ADVANCE_FROM_WEIGHT := 9.0
+
+## **히트스톱.** 닿는 순간 멈춰 있는 시간. **무거운 것은 멈춤이 길다.**
+##
+## 25 fps 로 1 칸 약 1 프레임, 4 칸 약 4.5 프레임이다. 처음에 0.02…0.125 로 두었더니
+## 1 칸이 반 프레임도 안 되어 **아무 일도 안 일어났다.**
+const HITSTOP_BASE := 0.045
+const HITSTOP_PER_CELL := 0.045
+
+## **총 칸 수 = 질량.** 1 … 4.
+var cells: int
+
+## **긴 쪽 칸 수 = 길이.** 1 … 4. 총 칸 수를 넘을 수 없다.
+var span: int
+
+
+func _init(p_cells := 1, p_span := -1) -> void:
+	cells = clampi(p_cells, MIN_CELLS, MAX_CELLS)
+	span = cells if p_span < MIN_CELLS else clampi(p_span, MIN_CELLS, cells)
+
+
+## 백팩의 블럭 모양에서 바로 만든다. **§28.2 의 자료를 그대로 먹는다.**
+##
+## `4×1` 은 대검(무겁고 길다) · `2×2` 는 철퇴(무겁고 짧다) · `3×1` 은 창(길고 덜 무겁다).
+static func from_block(width: int, height: int) -> CharWeapon:
+	var w := maxi(width, 1)
+	var h := maxi(height, 1)
+	return CharWeapon.new(w * h, maxi(w, h))
+
+
+## 자루 끝에서 날 끝까지. **긴 쪽 칸 수에서만 나온다.**
+func length() -> float:
+	return BASE_LENGTH * pow(float(span), LENGTH_EXPONENT)
+
+
+## 날 두께. **길이당 질량**에서 나온다 — 같은 무게라도 짧으면 두껍다.
+##
+## 그래서 `2×2` 철퇴가 `4×1` 대검보다 굵게 그려진다. 그림도 표가 아니라 모양에서 나온다.
+func blade_half_width() -> float:
+	var density := float(cells) / float(span)
+	return BASE_HALF_WIDTH * pow(density, 0.5) * pow(float(cells), 0.15)
+
+
+## 1 칸짜리에 대한 **관성 모멘트**의 비. `I ∝ 질량 × 길이²`.
+##
+## **질량은 총 칸 수, 길이는 긴 쪽 칸 수에서 온다.** 그래서 같은 4 칸이라도
+## `4×1` 대검이 `2×2` 철퇴보다 관성이 크다 — 더 멀리 뻗어 있기 때문이다.
+func inertia_ratio() -> float:
+	var reach := length() / BASE_LENGTH
+	return float(cells) * reach * reach
+
+
+## 휘두르는 데 걸리는 시간의 배수.
+##
+## 같은 힘으로 돌리면 각가속도가 `1/I` 이므로 같은 각을 지나는 시간이 `sqrt(I)` 에 비례한다.
+## **1 칸과 4 칸이 3 배 차이 난다** — 전투 레인의 「4 타 대 열 몇 타」와 방향이 맞는다.
+func time_scale() -> float:
+	return sqrt(inertia_ratio())
+
+
+## 히트스톱. 무거울수록 길다.
+##
+## **전투가 이 값으로 때린 쪽과 맞은 쪽을 같이 멈춰야 한다** — 휘두르는 쪽 혼자
+## 멈추는 것은 절반이고, 타격감은 둘이 동시에 설 때 난다 (§25.19.2).
+func hitstop_seconds() -> float:
+	return HITSTOP_BASE + HITSTOP_PER_CELL * float(cells - MIN_CELLS)
+
+
+## **닿는 거리.** 팔 + 무기 길이 + 전진 거리.
+##
+## **전투가 「이 무기로 여기서 닿나」를 이 값으로 판정한다** (§25.18.1).
+## 전진을 포함하는 것이 요점이다 — 짧은 무기는 파고들어서 닿기 때문에,
+## 전진을 빼고 재면 단검이 실제보다 훨씬 짧은 무기가 된다.
+func reach_px() -> float:
+	return ARM_REACH + length() + advance_px()
+
+
+## **한 타에 몸이 실제로 나가는 거리.**
+##
+## 닿는 거리를 일정하게 맞추려는 값이라 **길이의 역함수**이고, 거기에 무게가 더해진다.
+## 그래서 사분면이 하나 더 생긴다 — 창은 안 나가고, 단검은 조금 빠르게,
+## 철퇴는 많이 느리게, 대검은 중간이다.
+func advance_px() -> float:
+	var want := TARGET_GAP - (ARM_REACH + length())
+	return clampf(want, ADVANCE_MIN, ADVANCE_MAX) + ADVANCE_FROM_WEIGHT * drag()
+
+
+## 사람이 읽는 이름. **종류가 아니라 모양에서 나온 것만 말한다** —
+## 도끼냐 둔기냐는 §28.2 가 아직 안 정했다.
+func shape_name() -> String:
+	if cells == span:
+		return "%d칸 곧은 것" % cells
+	return "%d칸 %d칸짜리로 뭉친 것" % [cells, span]
+
+
+## 몸이 무기에 끌려가는 정도 (`0` … `1`). **무게 축이다** — 길이와 무관하다.
+##
+## 창은 길어도 안 끌려가고 철퇴는 짧아도 끌려간다.
+func drag() -> float:
+	return float(cells - MIN_CELLS) / float(MAX_CELLS - MIN_CELLS)
+
+
+## 자루를 잡은 자리 (손의 지역 공간, `+y` 위).
+func grip_offset(rig: CharRig) -> Vector2:
+	var half := rig.half_sizes[HOLDER]
+	return Vector2(GRIP.x * half.x, GRIP.y * half.y)
+
+
+func tip_offset() -> Vector2:
+	return Vector2(length() * (1.0 - GRIP_ALONG), 0.0)
+
+
+func butt_offset() -> Vector2:
+	return Vector2(-length() * GRIP_ALONG, 0.0)
+
+
+## 그 자리(무기 지역 `x`)의 **반너비**(px). 표 밖이면 `0` — 그것이 곧 「무기가 없다」이다.
+##
+## 원피스의 `torso_half_width_at(y)` 와 같은 꼴이다. **폭은 스칼라가 아니라 위치의 함수**라
+## 하나로 뭉뚱그리면 실루엣 판정이 조용히 틀린다 (§25.2.2).
+func half_width_at(x: float) -> float:
+	var span_px := length()
+	if span_px <= 0.0:
+		return 0.0
+	return blade_half_width() * outline_at((x - butt_offset().x) / span_px)
+
+
+## 윤곽표를 선형 보간한다. `u` 는 자루 끝 `0`, 날 끝 `1`.
+func outline_at(u: float) -> float:
+	if u < OUTLINE[0].x or u > OUTLINE[OUTLINE.size() - 1].x:
+		return 0.0
+	for i in range(1, OUTLINE.size()):
+		var to_point := OUTLINE[i]
+		if u > to_point.x:
+			continue
+		var from_point := OUTLINE[i - 1]
+		var span_u := to_point.x - from_point.x
+		if span_u <= 0.0:
+			return maxf(from_point.y, to_point.y)
+		return lerpf(from_point.y, to_point.y, (u - from_point.x) / span_u)
+	return 0.0
+
+
+## 윤곽의 한 구간을 폴리곤으로 편다 (무기 지역 좌표).
+##
+## **그림 · 잔상 · 실루엣이 전부 이 하나에서 나온다.** 따로 적으면 갈린다.
+func outline_span(from_u: float, to_u: float) -> PackedVector2Array:
+	var low := clampf(minf(from_u, to_u), 0.0, 1.0)
+	var high := clampf(maxf(from_u, to_u), 0.0, 1.0)
+	var cuts: Array[float] = [low]
+	for point in OUTLINE:
+		if point.x > low and point.x < high:
+			cuts.append(point.x)
+	cuts.append(high)
+	var butt := butt_offset().x
+	var span_px := length()
+	var points := PackedVector2Array()
+	for u in cuts:
+		points.append(Vector2(butt + u * span_px, -blade_half_width() * outline_at(u)))
+	# **중심선 위의 점은 되돌아올 때 건너뛴다.** 날 끝은 반너비가 0 이라 위아래가 같은
+	# 점이 되고, 겹친 점은 삼각분할을 깨뜨린다 (원피스 윤곽에서 한 번 밟은 것과 같다).
+	for i in range(cuts.size() - 1, -1, -1):
+		var half := blade_half_width() * outline_at(cuts[i])
+		if is_zero_approx(half):
+			continue
+		points.append(Vector2(butt + cuts[i] * span_px, half))
+	return points
+
+
+## 쉬는 자세에서 무기가 실제로 기우는 각도. **길이가 자세를 정한다.**
+##
+## 희망값(`−0.55`)으로 내리면 긴 무기는 바닥에 박힌다. 그래서 기하로 푼 안전한 각도와
+## 견주어 **덜 가파른 쪽**을 쓴다. 손으로 네 번 맞추지 않는다.
+func rest_angle(rig: CharRig) -> float:
+	return maxf(REST_ANGLE_WISH, safe_angle(rig.rest_positions[HOLDER].y))
+
+
+## 손이 `hand_y` 에 있을 때 검끝이 바닥에 안 닿는 **가장 가파른** 각도 (음수).
+##
+## `sin(각) = (손 높이 − 여유) / 길이` 를 뒤집은 것뿐이다. 손이 낮거나 무기가 길면
+## 각이 얕아진다 — **그것이 「긴 무기는 아래로 못 내린다」의 정체다.**
+func safe_angle(hand_y: float) -> float:
+	var reach := length() * (1.0 - GRIP_ALONG)
+	if reach <= 0.0:
+		return 0.0
+	return -asin(clampf((hand_y - TIP_CLEARANCE) / reach, 0.0, 1.0))
+
+
+## 날 끝이 **캐릭터 공간**에서 어디에 있는가 (`+y` 위).
+##
+## 무기가 손의 자식이라 손의 트랜스폼이 그대로 곱해진다. 그 사슬을 여기 한 곳에만
+## 적어 두어야 검증과 화면이 같은 것을 본다 — **둘이 갈리면 조용히 틀린다**(§25.13.1).
+func tip_position(pose: CharPose, rig: CharRig) -> Vector2:
+	var local := grip_offset(rig) + tip_offset().rotated(rest_angle(rig))
+	return pose.core_transform(HOLDER) * local
