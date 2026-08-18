@@ -64,7 +64,29 @@ static func create_run(seed_value: int = 0, size: int = 3, character: int = 0) -
 		"player_squad", "우리 스쿼드", Actor.Kind.PLAYER_SQUAD, SQUAD_THREAT, SQUAD_AGILITY
 	)
 	graph.place_actor(squad, entrance)
-	return DungeonRun.new(blueprint, graph, squad)
+	# 시드를 판에 넘긴다. 귀중품이 어디에 얼마나 놓이는지가 이 값으로 정해진다.
+	var run := DungeonRun.new(blueprint, graph, squad, seed_value)
+	_give_rivals_a_temper(run, rng)
+	return run
+
+
+## 경쟁자에게 기질을 준다.
+##
+## 성향이 없으면 모든 NPC 가 똑같은 목표치에서 똑같이 돌아서 나간다. 그러면
+## 위험도 변화량이 언제나 같은 모양이라 **판마다 다른 이야기가 안 나온다.**
+##
+## 축은 여섯이지만(NpcAxis) 행동에 쓰는 것은 `RECKLESS` 하나뿐이다 —
+## 나머지는 말과 관계의 축이라 조우 절차(§5.8)와 관계도(§5.10)의 것이다
+## (docs/design/33-turn-loop.md §33.4).
+static func _give_rivals_a_temper(run: DungeonRun, rng: RandomNumberGenerator) -> void:
+	for room_id in run.graph.room_ids():
+		for actor in run.graph.get_room(room_id).occupants():
+			if actor.kind != Actor.Kind.NPC_EXPLORER:
+				continue
+			var traits: Array[int] = []
+			for _axis in NpcAxis.count():
+				traits.append(rng.randi_range(NpcAxis.MIN_VALUE, NpcAxis.MAX_VALUE))
+			run.planner.set_temperament(actor.id, traits)
 
 
 static func _entrance_of(blueprint: DungeonBlueprint) -> String:

@@ -25,6 +25,7 @@ enum Kind {
 	STAY,  ## 제자리를 지킨다. 의도를 내지 않은 주체의 기본값이다
 	MOVE,  ## 인접한 방으로 옮긴다
 	SEARCH,  ## 지금 방을 뒤진다
+	ESCAPE,  ## 탈출 지점에서 버틴다. **즉시 나가지지 않는다** (docs/design/05-rules.md §5.9)
 }
 
 ## 누가. Actor 참조가 아니라 id 를 드는 이유는, 의도가 해결 도중 살아 있어야 하고
@@ -61,6 +62,15 @@ static func stay(intent_actor_id: String) -> TurnIntent:
 ## 지금 방을 뒤지려는 의도.
 static func search(intent_actor_id: String) -> TurnIntent:
 	return TurnIntent.new(intent_actor_id, Kind.SEARCH)
+
+
+## 탈출 지점에서 버티려는 의도.
+##
+## **탈출은 즉시가 아니다** (docs/design/05-rules.md §5.9). 몇 턴을 버텨야 완료되고,
+## 그 사이는 판 위에 그대로 서 있다. *"다 챙기고 문 앞에서 죽는 것"* 이 성립하려면
+## 탈출이 한 턴짜리 행동이 아니라 **유지해야 하는 상태**여야 한다.
+static func escape(intent_actor_id: String) -> TurnIntent:
+	return TurnIntent.new(intent_actor_id, Kind.ESCAPE)
 
 
 func is_move() -> bool:
