@@ -1,0 +1,270 @@
+{
+  "buildings": [
+    {
+      "canvas": [
+        208,
+        200
+      ],
+      "facility": 0,
+      "file": "workshop_1l.png",
+      "footprint": [
+        2,
+        2
+      ],
+      "ground_polygon_north_east_south_west": [
+        [
+          104.0,
+          96.0
+        ],
+        [
+          200.0,
+          144.0
+        ],
+        [
+          104.0,
+          192.0
+        ],
+        [
+          8.0,
+          144.0
+        ]
+      ],
+      "ground_size": [
+        192,
+        96
+      ],
+      "hides_cells_behind": 1,
+      "label": "공방",
+      "pivot": [
+        104,
+        192
+      ],
+      "storeys": 1
+    },
+    {
+      "canvas": [
+        208,
+        288
+      ],
+      "facility": 0,
+      "file": "workshop_2l.png",
+      "footprint": [
+        2,
+        2
+      ],
+      "ground_polygon_north_east_south_west": [
+        [
+          104.0,
+          184.0
+        ],
+        [
+          200.0,
+          232.0
+        ],
+        [
+          104.0,
+          280.0
+        ],
+        [
+          8.0,
+          232.0
+        ]
+      ],
+      "ground_size": [
+        192,
+        96
+      ],
+      "hides_cells_behind": 3,
+      "label": "공방",
+      "pivot": [
+        104,
+        280
+      ],
+      "storeys": 2
+    },
+    {
+      "canvas": [
+        256,
+        224
+      ],
+      "facility": 1,
+      "file": "intel_room_1l.png",
+      "footprint": [
+        2,
+        3
+      ],
+      "ground_polygon_north_east_south_west": [
+        [
+          104.0,
+          96.0
+        ],
+        [
+          248.0,
+          144.0
+        ],
+        [
+          104.0,
+          216.0
+        ],
+        [
+          8.0,
+          168.0
+        ]
+      ],
+      "ground_size": [
+        240,
+        120
+      ],
+      "hides_cells_behind": 1,
+      "label": "정보실",
+      "pivot": [
+        104,
+        216
+      ],
+      "storeys": 1
+    },
+    {
+      "canvas": [
+        256,
+        312
+      ],
+      "facility": 1,
+      "file": "intel_room_2l.png",
+      "footprint": [
+        2,
+        3
+      ],
+      "ground_polygon_north_east_south_west": [
+        [
+          104.0,
+          184.0
+        ],
+        [
+          248.0,
+          232.0
+        ],
+        [
+          104.0,
+          304.0
+        ],
+        [
+          8.0,
+          256.0
+        ]
+      ],
+      "ground_size": [
+        240,
+        120
+      ],
+      "hides_cells_behind": 3,
+      "label": "정보실",
+      "pivot": [
+        104,
+        304
+      ],
+      "storeys": 2
+    },
+    {
+      "canvas": [
+        256,
+        224
+      ],
+      "facility": 2,
+      "file": "contact_point_1l.png",
+      "footprint": [
+        3,
+        2
+      ],
+      "ground_polygon_north_east_south_west": [
+        [
+          152.0,
+          96.0
+        ],
+        [
+          248.0,
+          168.0
+        ],
+        [
+          152.0,
+          216.0
+        ],
+        [
+          8.0,
+          144.0
+        ]
+      ],
+      "ground_size": [
+        240,
+        120
+      ],
+      "hides_cells_behind": 1,
+      "label": "접선처",
+      "pivot": [
+        152,
+        216
+      ],
+      "storeys": 1
+    },
+    {
+      "canvas": [
+        256,
+        312
+      ],
+      "facility": 2,
+      "file": "contact_point_2l.png",
+      "footprint": [
+        3,
+        2
+      ],
+      "ground_polygon_north_east_south_west": [
+        [
+          152.0,
+          184.0
+        ],
+        [
+          248.0,
+          256.0
+        ],
+        [
+          152.0,
+          304.0
+        ],
+        [
+          8.0,
+          232.0
+        ]
+      ],
+      "ground_size": [
+        240,
+        120
+      ],
+      "hides_cells_behind": 3,
+      "label": "접선처",
+      "pivot": [
+        152,
+        304
+      ],
+      "storeys": 2
+    }
+  ],
+  "note": "생성물이다. 손으로 고치지 마라 — tools/dump_hideout_art_spec.gd 가 만든다.",
+  "rules": {
+    "door_face": "남서쪽 벽(화면에서 왼쪽 아래를 보는 면) 한 곳뿐",
+    "door_reason": "카메라도 건물도 돌지 않는다. 네 방향을 그릴 이유가 없다",
+    "fit": "알파 아래끝→기준점 · 가로 가운데 · 가로 배율 (30-hideout §30.10.7). 그리드 발자국에 맞춤",
+    "margin_px": 8,
+    "max_storeys": 2,
+    "occlusion": "높이를 tile_height 로 나눈 몫만큼 바로 뒤를 완전히 가린다 (IsoProjection.hidden_cells_behind)",
+    "pivot": "바닥 마름모의 아래꼭짓점. 캔버스 왼쪽 위에서 잰다",
+    "pivot_reason": "그림이 위로 자라도 땅에 닿는 자리가 안 움직여야 한다",
+    "storey_height_px": 88.18,
+    "style": "1990s anime cel, high chroma, one small complementary accent area, hard specular highlights"
+  },
+  "view": {
+    "cell_height_px": 58.79,
+    "pitch_degrees": 30.0,
+    "projection": "dimetric 2:1",
+    "tile_height_px": 48.0,
+    "tile_width_px": 96.0
+  }
+}

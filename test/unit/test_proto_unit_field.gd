@@ -16,7 +16,7 @@ const _STEP := 1.0 / 60.0
 
 ## 테두리가 막힌 빈 방과 그 안에 늘어선 유닛들.
 func _make_field(count: int) -> ProtoUnitField:
-	var grid := ProtoNavGrid.new(40, 24, 32.0)
+	var grid := NavGrid.new(40, 24, 32.0)
 	for column in grid.cols:
 		grid.set_blocked(Vector2i(column, 0), true)
 		grid.set_blocked(Vector2i(column, grid.rows - 1), true)

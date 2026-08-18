@@ -24,7 +24,7 @@ func _initialize() -> void:
 	quit()
 
 
-func _bench(label: String, grid: ProtoNavGrid) -> void:
+func _bench(label: String, grid: NavGrid) -> void:
 	# 벽 거리는 지형당 한 번만 굽는다. 그 한 번이 얼마인지 따로 잰다.
 	var bake_started := Time.get_ticks_usec()
 	grid.clearance_at(Vector2i(1, 1))
@@ -55,8 +55,8 @@ func _bench(label: String, grid: ProtoNavGrid) -> void:
 	)
 
 
-func _open_grid() -> ProtoNavGrid:
-	var grid := ProtoNavGrid.new(_COLS, _ROWS, _CELL)
+func _open_grid() -> NavGrid:
+	var grid := NavGrid.new(_COLS, _ROWS, _CELL)
 	for column in _COLS:
 		grid.set_blocked(Vector2i(column, 0), true)
 		grid.set_blocked(Vector2i(column, _ROWS - 1), true)
@@ -66,7 +66,7 @@ func _open_grid() -> ProtoNavGrid:
 	return grid
 
 
-func _choke_grid() -> ProtoNavGrid:
+func _choke_grid() -> NavGrid:
 	var grid := _open_grid()
 	var gate := _ROWS / 2 - 1
 	for row in range(1, _ROWS - 1):

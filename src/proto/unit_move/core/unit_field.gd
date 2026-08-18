@@ -41,7 +41,7 @@ extends RefCounted
 class MoveOrder:
 	var id: int
 	var target: Vector2
-	var flow: ProtoFlowField
+	var flow: FlowField
 	var slots := PackedVector2Array()
 	var member_ids := PackedInt32Array()
 
@@ -193,7 +193,7 @@ const _CRAWL_RATIO := 0.15
 ## 크게 잡으면 대열이 헐거워지고, 작게 잡으면 마지막 몇 명이 오래 비빈다. 이 값은 그 사이다.
 const _SETTLE_REACH := 2.5
 
-var grid: ProtoNavGrid
+var grid: NavGrid
 var tuning: ProtoMoveTuning
 var agents: Array[ProtoUnitAgent] = []
 var orders: Array[MoveOrder] = []
@@ -289,7 +289,7 @@ var _order_cache: Dictionary = {}
 var _frame := 0
 
 
-func _init(nav_grid: ProtoNavGrid, move_tuning: ProtoMoveTuning) -> void:
+func _init(nav_grid: NavGrid, move_tuning: ProtoMoveTuning) -> void:
 	grid = nav_grid
 	tuning = move_tuning
 
