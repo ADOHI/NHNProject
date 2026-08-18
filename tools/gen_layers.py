@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import os
 
+from console_utf8 import fix_console_encoding
 from gen_scene import build, post, get, run, upload, OUT  # noqa: F401  (같은 배관을 쓴다)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -336,6 +337,10 @@ def layers(lunge: bool = False) -> list[tuple[str, str, tuple[int, int]]]:
 
 
 def main() -> None:
+    # `--ref` 의 help= 문구에 줄표(U+2014)가 있다. cp949 콘솔에서 `--help` 를 그냥
+    # 돌리면 `UnicodeEncodeError` 로 죽는다 — 실제로 `make_plate_normal.py` 가 이렇게
+    # 죽었다. 도구마다 따로 막지 않고 `tools/console_utf8.py` 하나로 막는다.
+    fix_console_encoding()
     ap = argparse.ArgumentParser()
     # **풀샷을 물리지 않는다.** 풀샷 안의 인물은 반드시 다른 겹으로 샌다 —
     # 전경 한가운데에 이빨 드러낸 외눈 괴물이 나온 것이 그 증거다(§21.13.7).

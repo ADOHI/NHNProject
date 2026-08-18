@@ -17,6 +17,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from console_utf8 import fix_console_encoding
+
 try:
     import markdown
 except ImportError:
@@ -216,6 +218,10 @@ def print_to_pdf(browser: str, html_path: Path, pdf_path: Path) -> None:
 
 
 def main(argv: list[str]) -> None:
+    # 지금은 줄표(U+2014) 가 없어 cp949 콘솔에서 안 죽지만, 이 도구도 한국어를
+    # 그대로 콘솔에 찍는다. 다음 사람이 만드는 문구에서 다시 걸리지 않도록
+    # `tools/console_utf8.py` 를 똑같이 건다 (§26.14).
+    fix_console_encoding()
     source = Path(argv[0]).resolve() if len(argv) >= 1 else DEFAULT_SOURCE
     output = Path(argv[1]).resolve() if len(argv) >= 2 else DEFAULT_OUTPUT
 
