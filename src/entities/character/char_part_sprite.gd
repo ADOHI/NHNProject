@@ -23,6 +23,15 @@ const FAR_TINT_AMOUNT := 0.32
 const FLASH := Color(1.0, 0.988, 0.941)
 const FLASH_ALPHA := 0.85
 
+## 모핑 셰이더. **켜졌을 때만 붙는다** — 안 붙어야 지금과 같은 경로로 그려진다 (§31.5.3).
+const MORPH_SHADER := "res://src/entities/character/char_morph.gdshader"
+
+## 모핑이 켜졌을 때 그리는 사각형을 넓히는 비율 (한쪽 변당).
+##
+## 그림이 알파 경계상자로 딱 잘려 있어(§25.41.2) 넓히지 않으면 **밀려난 살이 변에서
+## 잘린다.** 진폭 상한이 반크기의 12 % 이므로 그보다 넉넉해야 한다 (§31.6.2).
+const MORPH_PAD := 0.16
+
 var part := CharPart.Id.HEAD
 var rig: CharRig
 
@@ -45,6 +54,10 @@ var flash := 0.0:
 
 var _canvas: CanvasItem = null
 
+## 이 파츠에 붙은 앵커들. 비어 있으면 모핑이 안 걸린다.
+var _anchors: Array[MorphAnchor] = []
+var _morph: ShaderMaterial = null
+
 
 func setup(p_part: CharPart.Id, p_rig: CharRig, p_texture: Texture2D, p_mirror := false) -> void:
 	part = p_part
@@ -52,6 +65,101 @@ func setup(p_part: CharPart.Id, p_rig: CharRig, p_texture: Texture2D, p_mirror :
 	texture = p_texture
 	mirror = p_mirror
 	queue_redraw()
+
+
+## 이 파츠가 휘는 자리들을 붙인다. **빈 목록이면 재질을 아예 안 붙인다.**
+##
+## 붙여 놓고 0 을 넣는 것과 다르다 — 안 붙어야 그리는 경로가 지금과 **같은 경로**이고,
+## 그래야 「끄면 지금 화면과 픽셀 단위로 같다」가 성립한다 (§31.4 · §31.5.3).
+func setup_morph(p_anchors: Array[MorphAnchor]) -> void:
+	_anchors = p_anchors
+	if _anchors.is_empty() or rig == null:
+		_morph = null
+		material = null
+		queue_redraw()
+		return
+	_morph = ShaderMaterial.new()
+	_morph.shader = load(MORPH_SHADER)
+	material = _morph
+	_push_shape()
+	apply_morph(PackedVector2Array(), PackedFloat32Array())
+	queue_redraw()
+
+
+## 모핑이 켜져 있나. **묻는 자리를 하나로 둔다.**
+func has_morph() -> bool:
+	return _morph != null
+
+
+## **그 순간의 변위와 부풀림을 셰이더에 넣는다.** `shifts` 는 파츠 지역 좌표다.
+##
+## 앵커 순서는 `setup_morph()` 에 준 것과 같다.
+func apply_morph(shifts: PackedVector2Array, bulges: PackedFloat32Array) -> void:
+	if _morph == null:
+		return
+	var uv_shift := PackedVector2Array()
+	var uv_bulge := PackedFloat32Array()
+	for i in _anchors.size():
+		uv_shift.append(uv_delta_of(shifts[i] if i < shifts.size() else Vector2.ZERO))
+		uv_bulge.append(bulges[i] if i < bulges.size() else 0.0)
+	_morph.set_shader_parameter("anchor_shift", uv_shift)
+	_morph.set_shader_parameter("anchor_bulge", uv_bulge)
+
+
+## 앵커의 **모양**(자리 · 반경 · 마스크)을 넣는다. 셋업 때 한 번이면 된다.
+func _push_shape() -> void:
+	var box := base_rect_local()
+	var uv := PackedVector2Array()
+	var radius := PackedVector2Array()
+	var mask := PackedVector4Array()
+	for anchor in _anchors:
+		uv.append(uv_of(anchor.centre))
+		radius.append(Vector2(anchor.radius.x / box.size.x, anchor.radius.y / box.size.y))
+		mask.append(_mask_uv(anchor, box))
+	_morph.set_shader_parameter("anchor_count", _anchors.size())
+	_morph.set_shader_parameter("pad", MORPH_PAD)
+	_morph.set_shader_parameter("anchor_uv", uv)
+	_morph.set_shader_parameter("anchor_radius", radius)
+	_morph.set_shader_parameter("anchor_mask", mask)
+
+
+## 반평면을 UV 공간으로 옮긴다. `xy` 단위법선 · `z` 자리 · `w` 무뎌지는 폭.
+##
+## **좌우 뒤집기가 여기서 한 번 들어온다** (§31.6.3). 파츠 지역 `+x` 가 뒤집힌
+## 그림에서는 텍스처의 `-u` 라, 법선의 가로 성분이 부호를 바꾼다.
+func _mask_uv(anchor: MorphAnchor, box: Rect2) -> Vector4:
+	if anchor.mask_normal.is_zero_approx():
+		return Vector4.ZERO
+	var n := anchor.mask_normal.normalized()
+	var raw := Vector2(n.x * box.size.x, -n.y * box.size.y)
+	var offset := anchor.mask_offset + n.y * box.position.y
+	if mirror:
+		raw.x = -raw.x
+		offset -= n.x * (box.position.x + box.size.x)
+	else:
+		offset -= n.x * box.position.x
+	var length := raw.length()
+	if length <= 0.0:
+		return Vector4.ZERO
+	return Vector4(raw.x / length, raw.y / length, offset / length, anchor.mask_feather / length)
+
+
+## 파츠 지역의 한 점을 **텍스처 UV** 로 옮긴다.
+func uv_of(point: Vector2) -> Vector2:
+	var box := base_rect_local()
+	var u := (point.x - box.position.x) / box.size.x
+	if mirror:
+		u = 1.0 - u
+	return Vector2(u, (-point.y - box.position.y) / box.size.y)
+
+
+## 파츠 지역의 **변위**를 UV 변위로 옮긴다. 자리가 아니라 방향이라 원점을 안 더한다.
+func uv_delta_of(shift: Vector2) -> Vector2:
+	var box := base_rect_local()
+	var du := shift.x / box.size.x
+	if mirror:
+		du = -du
+	return Vector2(du, -shift.y / box.size.y)
 
 
 ## 남의 캔버스에 그린다. 도형판과 같은 얼굴이라 뷰가 둘을 안 가려도 된다 (§25.32).
@@ -67,12 +175,26 @@ func paint_into(target: CanvasItem, at: Transform2D) -> void:
 ##
 ## 두 곳에서 읽으면 갈린다(§25.13.1). 리그가 그림에서 치수를 받아 갔으므로
 ## **여기서는 리그만 믿는다.**
-func draw_rect_local() -> Rect2:
+func base_rect_local() -> Rect2:
 	var half := rig.half_sizes[part]
 	var centre := rig.local_centers[part]
 	# 지역 좌표는 `+y` 가 아래다. 코어(`+y` 위)에서 잡은 중심을 뒤집어 넣는다.
 	return Rect2(
 		Vector2(centre.x - half.x, -centre.y - half.y), Vector2(half.x * 2.0, half.y * 2.0)
+	)
+
+
+## 실제로 찍는 사각형. **모핑이 켜져 있으면 여백만큼 넓다** (§31.6.2).
+##
+## 넓힌 만큼 셰이더가 UV 를 되돌리므로 **그림은 원래 크기로 남는다.**
+## 꺼져 있으면 여백이 없다 — 그래야 지금과 같은 화소가 나온다.
+func draw_rect_local() -> Rect2:
+	var box := base_rect_local()
+	if _morph == null:
+		return box
+	return box.grow_individual(
+		box.size.x * MORPH_PAD, box.size.y * MORPH_PAD, box.size.x * MORPH_PAD,
+		box.size.y * MORPH_PAD
 	)
 
 

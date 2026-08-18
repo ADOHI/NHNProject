@@ -220,7 +220,9 @@ func _refresh() -> void:
 	if _view == null:
 		return
 	var clip := current_clip()
-	_view.apply_pose(clip.sample(_time, _features))
+	var pose := clip.sample(_time, _features)
+	_view.apply_pose(pose)
+	_view.morph_at(clip, _time, _features, pose)
 	_status.text = (
 		"%s   %.2f / %.2f 초   %s"
 		% [clip.clip_name(), _time, clip.loop_seconds(), "멈춤" if _paused else "재생"]
