@@ -23,7 +23,14 @@ func _live_world() -> NpcWorld:
 
 func _live_sheet(world: NpcWorld, person: int) -> Array[SheetSection]:
 	return PersonSheet.build(
-		world.registry, person, world.factions, SheetDisclosure.Level.DEV, world.graph, world.ledger
+		world.registry,
+		person,
+		world.factions,
+		SheetDisclosure.Level.DEV,
+		world.graph,
+		null,
+		PersonRegistry.NO_PERSON,
+		world.ledger
 	)
 
 
