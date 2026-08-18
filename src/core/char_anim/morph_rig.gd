@@ -67,9 +67,13 @@ static func _chest(rig: CharRig) -> MorphAnchor:
 	anchor.mask_normal = Vector2(0.0, 1.0)
 	anchor.mask_offset = 1.05 * half.y
 	anchor.mask_feather = 0.24 * half.y
+	# **눈금은 run 이 정했다.** 아래 §31.6.4 의 표를 보라 — 구동 주파수가 클립마다
+	# 다섯 배 넘게 갈려서, 한 진동자로 idle 과 run 을 다 만족시킬 수 없다.
+	# run 에서 상한을 안 넘는 쪽으로 잡았다. 넘으면 그 구간이 **평평해지고**,
+	# 평평해진 흔들림은 동작을 읽는 데 방해가 된다 (§25.22).
 	anchor.hz = 5.0
 	anchor.damping = 0.30
-	anchor.gain = 1.0
+	anchor.gain = 0.70
 	anchor.bulge = 0.35
 	anchor.limit = LIMIT_RATIO * minf(half.x, half.y)
 	return anchor
@@ -85,9 +89,10 @@ static func _hair(rig: CharRig) -> MorphAnchor:
 	anchor.mask_offset = 1.00 * half.y
 	anchor.mask_feather = 0.23 * half.y
 	# 가슴보다 **느리고 덜 멎는다.** 머리카락이 더 오래 흔들려야 둘이 갈린다.
-	anchor.hz = 3.2
+	# 그리고 **더 크게 흔들린다** — 머리가 크고 머리카락이 무르다.
+	anchor.hz = 4.0
 	anchor.damping = 0.22
-	anchor.gain = 1.15
+	anchor.gain = 1.30
 	anchor.bulge = 0.22
 	anchor.limit = LIMIT_RATIO * minf(half.x, half.y)
 	return anchor
