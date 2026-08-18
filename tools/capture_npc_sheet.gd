@@ -1,9 +1,30 @@
 extends SceneTree
 ## 인물 상세 화면을 몇 장 뽑는다. **레이아웃이 실제로 읽히는지 눈으로 보려는 것이다.**
 ##
-##   godot --path . --resolution 1280x720 -s res://tools/capture_npc_sheet.gd -- .captures/npc_sheet
+##   godot --path . --resolution 1280x720 \
+##     -s res://tools/capture_npc_sheet.gd -- .captures/npc_sheet
+##   godot --path . --resolution 1280x720 \
+##     -s res://tools/capture_npc_sheet.gd -- .captures/npc_sheet hand
 ##
 ## **헤드리스로는 그림이 나오지 않는다** — 창이 있어야 한다 (다른 캡처 도구와 같다).
+##
+## ## 두 벌을 뽑는다
+##
+## | 벌 | 무엇을 보이나 |
+## | --- | --- |
+## | 기본 | **인물 넷** — 성향이 뚜렷한 사람과 무색한 사람, 유명한 사람, 무소속 |
+## | `hand` | **손 여섯** — 조우 탭 · 정보 확인 · 탭 이동 · 커서 · 눌러서 가족으로 · 수치 탭 |
+##
+## `hand` 벌이 §4.1 「클릭만으로 전부 조작 가능」과 §20.25 의 탭 셋이 실제로 도는지
+## 보이는 판정 매체다. **조우 → 내력 → 수치 한 바퀴를 클릭으로만 돈다.**
+##
+## ## 자리를 좌표로 안 박는다
+##
+## 손짓의 자리는 `screen.point_of()` · `screen.linked_point()` 가 **그때 그려진 배치에서**
+## 낸다. 좌표를 박아 두면 배치가 한 번 바뀔 때 대본이 엉뚱한 데를 누르고 —
+## **그림은 여전히 나오므로 아무도 모른다**(설계 20.24.1 의 그 병이 좌표로 온 꼴).
+##
+## 대본이 진짜 줄을 겨누는지는 `test_npc_sheet_hand.gd` 가 **창 없이** 잰다.
 ##
 ## ## 함정 둘 — 둘 다 「A 를 찍었는데 B 가 나온다」 로 끝난다
 ##
@@ -12,7 +33,7 @@ extends SceneTree
 ##    (docs/design/24-npc-relations.md §24.16.2). **생성이 끝날 때까지 기다린 뒤에 찍는다.**
 ## 2. **`queue_redraw()` 한 프레임에 `force_draw()` 하면 직전 화면이 찍힌다.**
 ##    실제로 이걸로 한 칸씩 밀린 그림 넷을 뽑았다 — 첫 장이 화면의 초기 인물이었다.
-##    **인물을 갈아 끼운 다음 프레임에 찍는다.**
+##    **화면을 바꾼 다음 프레임에 찍는다.**
 
 const _SCREEN := "res://src/ui/npc_sheet/npc_sheet_screen.tscn"
 
@@ -21,17 +42,35 @@ const _WAIT_FRAMES := 200
 
 ## 찍을 인물. 골라 놓은 이유는 §24.17.8 의 무작위 뽑기를 재현할 수 없어서다 —
 ## 대신 **성향이 뚜렷한 인물과 무색한 인물을 골라** 딱지 규칙이 둘 다 보이게 한다.
+const _SHOTS := ["vivid", "colorless", "famous", "unaffiliated"]
+
+## `_HAND` 의 줄 자리에 쓰면 「갈 곳이 있는 첫 줄」이라는 뜻.
+const LINKED := -1
+
+## 손이 하는 일 다섯. `[찍을 이름, 손짓, 칸, 줄]`.
 ##
-## `entangled` 와 `onesided` 는 관계 칸을 보려고 넣었다. **관계 칸은 가장 늦게 자라는 칸이라
-## 넘치는지는 가장 엮인 인물에서만 드러난다** — 평범한 인물만 찍으면 터지는 것을 못 본다.
-const _SHOTS := ["vivid", "colorless", "famous", "unaffiliated", "entangled", "onesided"]
+## 줄이 `LINKED` 면 **갈 곳이 있는 첫 줄**이다 — 가족이 몇 명인지는 사람마다 다르므로
+## 몇 번째 줄인지를 박을 수 없다.
+const _HAND := [
+	["hand_1_encounter", "", "", 0],
+	["hand_2_inspect", "inspect", "위협", 0],
+	["hand_3_history", "tab", "내력", int(SheetTab.Kind.HISTORY)],
+	["hand_4_hover", "hover", "관계", LINKED],
+	["hand_5_tapped", "tap", "관계", LINKED],
+	["hand_6_numbers", "tab", "수치", int(SheetTab.Kind.NUMBERS)],
+]
+
+## 가족이 있는 사람을 찾을 때 훑는 최대 인원. 55%가 가족을 가지므로(§24.22.5)
+## 몇 명 안 가서 걸린다.
+const _SEEK := 400
 
 var _out := "res://.captures/npc_sheet"
-var _screen: Control
+var _hand_mode := false
+var _screen: NpcSheetScreen
 var _frames := 0
 var _shot := 0
 
-## 인물을 갈아 끼워 두었고 다음 프레임에 찍으면 되는가.
+## 화면을 바꿔 두었고 다음 프레임에 찍으면 되는가.
 var _armed := false
 
 
@@ -39,8 +78,9 @@ func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		_out = "res://%s" % args[0]
+	_hand_mode = args.size() > 1 and args[1] == "hand"
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_out))
-	_screen = load(_SCREEN).instantiate()
+	_screen = load(_SCREEN).instantiate() as NpcSheetScreen
 	root.add_child(_screen)
 
 
@@ -49,41 +89,102 @@ func _process(_delta: float) -> bool:
 	if _frames < 3:
 		return false
 
-	# 준비가 **끝났는지**를 본다. 인구만 보면 그 뒤에 오는 가족 심기와 사건을 놓쳐
-	# 빈 화면을 찍는다. **NpcWorld.is_ready() 하나가 그 신호다.**
-	var world: NpcWorld = _screen.get("_world")
-	if world == null or not world.is_ready():
+	# 준비가 **끝났는지**를 화면에게 묻는다. 사적 변수를 들여다보던 것을 고쳤다
+	# (설계 20.23) — 도구가 뒷문으로 들어가면 그 문이 막혀도 아무도 모른다.
+	if not _screen.is_ready():
 		if _frames > _WAIT_FRAMES:
-			push_error("세계가 %d 프레임 안에 안 섰다" % _WAIT_FRAMES)
+			push_error("인구 생성이 %d 프레임 안에 끝나지 않았다" % _WAIT_FRAMES)
 			return true
 		return false
 
-	if _shot >= _SHOTS.size():
+	var steps: int = _HAND.size() if _hand_mode else _SHOTS.size()
+	if _shot >= steps:
 		return true
-	# 한 프레임에 갈아 끼우고, 그다음 프레임에 찍는다 (위 함정 2).
+	# 한 프레임에 바꾸고, 그다음 프레임에 찍는다 (위 함정 2).
 	if _armed:
-		_capture(_SHOTS[_shot])
+		_capture(str(_HAND[_shot][0]) if _hand_mode else _SHOTS[_shot])
 		_shot += 1
 		_armed = false
 		return false
-	_screen.call("_show", _pick(world.registry, world.graph, _SHOTS[_shot]))
+	if _hand_mode:
+		_do_hand(_shot)
+	else:
+		_screen.show_person(_pick(_screen.registry(), _SHOTS[_shot]))
 	_armed = true
 	return false
 
 
+## 손짓 한 단계. 첫 단계에서 **가족이 있는 사람**을 찾아 세운다 —
+## 없는 사람 앞에서는 「눌러서 간다」를 보일 수가 없다.
+func _do_hand(step: int) -> void:
+	if step == 0:
+		_seek_kin()
+		_screen.show_tab(SheetTab.Kind.ENCOUNTER)
+		return
+	var what := str(_HAND[step][1])
+	if what == "wheel":
+		_screen.wheel(-1)
+		return
+	if what == "tab":
+		# **탭 띠를 눌러서** 넘어간다. `show_tab()` 을 직접 부르면 탭이 안 눌려도
+		# 그림이 나온다 — 설계 20.24.1 의 그 병이다.
+		_screen.tap(_tab_point(int(_HAND[step][3])))
+		return
+	var where := _aim(str(_HAND[step][2]), int(_HAND[step][3]))
+	if where == NpcSheetScreen.NOWHERE:
+		push_error("대본 %d 단계가 겨눌 줄을 못 찾았다" % step)
+		return
+	match what:
+		"hover":
+			_screen.hover(where)
+		"tap":
+			_screen.tap(where)
+		"inspect":
+			_screen.inspect(where)
+
+
+## 탭 하나의 한복판.
+func _tab_point(tab: int) -> Vector2:
+	var view: PersonSheetView = _screen.get_node("%SheetView")
+	var strip := view.layout().tabs
+	if tab < 0 or tab >= strip.size():
+		push_error("탭 %d 이 없다" % tab)
+		return NpcSheetScreen.NOWHERE
+	return strip[tab].get_center() + view.position
+
+
+## 대본이 겨누는 자리. **그때 그려진 배치에서 낸다.**
+func _aim(section_title: String, field: int) -> Vector2:
+	if field == LINKED:
+		return _screen.linked_point()
+	return _screen.point_of(section_title, field)
+
+
+## 가족이 있는 첫 사람 앞에 선다.
+func _seek_kin() -> void:
+	# 관계는 「내력」 탭에 있으므로 거기서 찾는다. 찾고 나서 조우 탭으로 돌아간다 —
+	# 첫 장은 **화면이 열렸을 때 보이는 것**이어야 한다.
+	_screen.show_tab(SheetTab.Kind.HISTORY)
+	for person in _SEEK:
+		_screen.show_person(person)
+		if _screen.linked_point() != NpcSheetScreen.NOWHERE:
+			return
+	push_error("%d 명 안에 가족이 있는 사람이 없다" % _SEEK)
+
+
 ## 찍고 싶은 성질의 인물을 찾는다. 없으면 0 번을 쓴다.
-func _pick(registry: PersonRegistry, graph: RelationGraph, kind: String) -> int:
+func _pick(registry: PersonRegistry, kind: String) -> int:
 	var best := 0
 	var best_score := -1
 	for person in registry.size():
-		var score := _score(registry, graph, person, kind)
+		var score := _score(registry, person, kind)
 		if score > best_score:
 			best_score = score
 			best = person
 	return best
 
 
-func _score(registry: PersonRegistry, graph: RelationGraph, person: int, kind: String) -> int:
+func _score(registry: PersonRegistry, person: int, kind: String) -> int:
 	match kind:
 		"vivid":
 			return registry.pole_count_of(person)
@@ -91,23 +192,8 @@ func _score(registry: PersonRegistry, graph: RelationGraph, person: int, kind: S
 			return NpcAxis.count() - registry.pole_count_of(person)
 		"famous":
 			return registry.fame_of(person)
-		"entangled":
-			return 0 if graph == null else graph.degree_of(person)
-		"onesided":
-			return _one_way_count(graph, person)
 		_:
 			return 1 if registry.faction_of(person) == PersonRegistry.NO_FACTION else 0
-
-
-## 상대가 나를 모르는 관계의 수. **비대칭이 화면에 드러나는 자리다** (설계 24.21.2).
-func _one_way_count(graph: RelationGraph, person: int) -> int:
-	if graph == null:
-		return 0
-	var found := 0
-	for other in graph.targets_of(person):
-		if not graph.knows(other, person):
-			found += 1
-	return found
 
 
 func _capture(name: String) -> void:

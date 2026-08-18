@@ -33,6 +33,15 @@ var fields: Array[SheetField] = []
 ## 뷰가 이 값으로 빈칸의 높이를 잡으므로 **자료가 들어와도 배치가 안 밀린다.**
 var expected_lines: int
 
+## 도형이 읽는 원자료. 글자로 안 나가는 값이다.
+##
+## **성향 육각형이 이걸 쓴다** (§20.25.3). 육각형이 `+72  무모` 같은 **화면에 적힌
+## 글에서 숫자를 도로 파내면**, 글 서식이 한 번 바뀔 때 도형이 조용히 틀린다 —
+## 그리고 도형은 여전히 그려지므로 아무도 모른다.
+##
+## > **글과 도형이 같은 자료에서 나와야 한다.** 한쪽에서 다른 쪽을 되짚으면 안 된다.
+var numbers := PackedInt32Array()
+
 
 func _init(section_title: String, section_shape: Shape, lines: int = 1) -> void:
 	title = section_title
