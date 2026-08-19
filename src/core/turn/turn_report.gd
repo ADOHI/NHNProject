@@ -43,6 +43,17 @@ var refused_actor_ids: Array[String] = []
 ## 이번 턴에 탈출을 완료한 주체들 (§5.9).
 var escaped_actor_ids: Array[String] = []
 
+## 이번 턴에 푼 조우들의 결말 (docs/design/35-encounter.md §35.2).
+##
+## `encounters` 와 나란하지 않을 수 있다 — 방이 사라진 조우는 결말이 없다.
+var outcomes: Array[EncounterOutcome] = []
+
+## 이번 턴에 제압된 **사람들**. 죽지 않는다 (docs/design/28-combat.md §28.10).
+var subdued_actor_ids: Array[String] = []
+
+## 이번 턴에 죽은 **몬스터들**.
+var slain_actor_ids: Array[String] = []
+
 ## actor_id -> [떠난 방, 도착한 방]. 걸음 기록과 화면 연출이 읽는다.
 var _moves: Dictionary = {}
 
@@ -78,6 +89,14 @@ func encounter_in(room_id: String) -> Encounter:
 	for encounter in encounters:
 		if encounter.room_id == room_id:
 			return encounter
+	return null
+
+
+## 그 방에서 난 조우의 결말. 없으면 `null`.
+func outcome_in(room_id: String) -> EncounterOutcome:
+	for outcome in outcomes:
+		if outcome.room_id == room_id:
+			return outcome
 	return null
 
 

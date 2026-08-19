@@ -38,6 +38,10 @@ var _loot: LootTable
 var _haul: Haul
 var _event_log: EventLog
 
+## 조우 절차 (M5 · docs/design/35-encounter.md). **없으면 조우가 사실로만 남는다** —
+## 그것이 이 파일이 33-turn-loop 레인에서 하던 일이다.
+var _encounters: EncounterResolver
+
 ## 방 id -> 직전 턴 그 방의 조우 참가자 조합.
 ##
 ## **같은 조합이 유지되는 것은 새 사건이 아니다** (§5.8 "전투 지속 → 다음 턴에도 조우").
@@ -48,11 +52,18 @@ var _ongoing: Dictionary = {}
 var _escape_progress: Dictionary = {}
 
 
-func _init(graph: DungeonGraph, loot: LootTable, haul: Haul, event_log: EventLog) -> void:
+func _init(
+	graph: DungeonGraph,
+	loot: LootTable,
+	haul: Haul,
+	event_log: EventLog,
+	encounters: EncounterResolver = null
+) -> void:
 	_graph = graph
 	_loot = loot
 	_haul = haul
 	_event_log = event_log
+	_encounters = encounters
 
 
 ## 한 턴을 푼다. **이 함수의 본문이 곧 규칙의 순서다.**
@@ -186,28 +197,82 @@ func _encounter_event(turn: int, encounter: Encounter, here: Array[Actor]) -> Ga
 # ---------------------------------------------------------------- 3. 상호작용
 
 
-## 탐색 · 획득 · 탈출 진행.
+## 조우 절차 · 탐색 · 획득 · 탈출 진행.
 ##
-## **조우가 난 방은 건너뛴다.** 마주친 방에서 태연히 상자를 뒤지면 안 된다.
-## 조우가 상호작용을 막는 관계이므로 판정이 앞서 있어야 했고, 그래서 2단계가 먼저다.
+## **조우가 먼저다.** 마주친 방에서 태연히 상자를 뒤지면 안 되고,
+## 조우가 상호작용을 막는 관계이므로 판정이 앞서 있어야 했다 (그래서 2단계가 먼저다).
 ##
-## 마주친 뒤에 무엇을 하는가는 §5.8 조우 절차이고 이 레인이 만들지 않는다.
-## **여기서 아무것도 안 하는 것이 그 자리다** (docs/design/33-turn-loop.md §33.3).
+## 33-turn-loop 레인은 여기서 **아무것도 안 하는 것**이 §5.8 의 자리라고 적어 두었다.
+## 그 자리를 M5 가 채웠다 — `_resolve_encounters()` (docs/design/35-encounter.md §35.1.3).
+##
+## 조우에 낀 주체는 뒤지지도 버티지도 못한다. **방이 아니라 주체로 가른다** —
+## 도주에 성공한 자는 이미 다른 방에 서 있고, 방으로 가르면 그 방을 뒤지게 된다.
 func _resolve_interactions(report: TurnReport, actors: Array[Actor], plan: Dictionary) -> void:
+	_resolve_encounters(report, plan)
 	for actor in actors:
 		var intent: TurnIntent = plan.get(actor.id)
 		if intent == null:
 			continue
+		if report.encounter_of(actor.id) != null:
+			# **E7 — 탈출 중 공격받음.** 조우가 난 턴은 진행이 오르지 않는다.
+			# 되돌리지는 않는다 (docs/design/33-turn-loop.md §33.8).
+			continue
 		var room_id := _graph.find_actor_room(actor)
 		if room_id.is_empty():
 			continue
-		var blocked := report.encounter_in(room_id) != null
 		match intent.kind:
 			TurnIntent.Kind.SEARCH:
-				if not blocked:
-					_search(report, actor, room_id)
+				_search(report, actor, room_id)
 			TurnIntent.Kind.ESCAPE:
-				_advance_escape(report, actor, room_id, blocked)
+				_advance_escape(report, actor, room_id)
+
+
+## 조우가 난 방마다 §5.8 의 절차를 푼다.
+##
+## **방의 사람들을 전부 먼저 훑은 뒤에 판정을 시작한다.** 조우를 하나씩 풀면서
+## 훑으면 앞 조우에서 도망친 자가 뒷 조우의 참가자로 잡힌다 — 그 순간
+## 「동시에 푼다」가 「먼저 적힌 방부터 푼다」가 된다 (docs/design/03-core-loop.md §3.6).
+func _resolve_encounters(report: TurnReport, plan: Dictionary) -> void:
+	if _encounters == null:
+		return
+	var scenes: Array = []
+	for encounter in report.encounters:
+		var room := _graph.get_room(encounter.room_id)
+		if room != null:
+			scenes.append([encounter, room.occupants()])
+
+	var stances := _stances(plan)
+	var retreats := _retreats(report)
+	var present: Array[String] = []
+	for scene in scenes:
+		var encounter: Encounter = scene[0]
+		var here: Array[Actor] = scene[1]
+		var outcome := _encounters.resolve(report.turn, encounter, here, stances, retreats)
+		report.outcomes.append(outcome)
+		report.events.append_array(outcome.events)
+		present.append_array(encounter.participant_ids)
+		for actor_id in outcome.escape_reset_ids:
+			# **E5 — 탈출 지점에서 물러나면 처음부터다** (§35.3.2).
+			_escape_progress.erase(actor_id)
+	_encounters.end_turn(present)
+
+
+## 주체 id -> 이번 턴에 낸 태세. 의도를 안 낸 주체는 목록에 없고 대치로 읽힌다.
+func _stances(plan: Dictionary) -> Dictionary:
+	var stances: Dictionary = {}
+	for actor_id in plan:
+		var intent: TurnIntent = plan[actor_id]
+		if intent != null:
+			stances[actor_id] = intent.stance
+	return stances
+
+
+## 주체 id -> 이번 턴에 떠나온 방. **도주는 온 곳으로 간다** (§35.2.2).
+func _retreats(report: TurnReport) -> Dictionary:
+	var retreats: Dictionary = {}
+	for actor_id in report.moved_actor_ids:
+		retreats[actor_id] = report.moved_from(actor_id)
+	return retreats
 
 
 ## 방을 뒤진다. **먼저 온 사람이 가져갔으면 빈손이다.**
@@ -223,18 +288,15 @@ func _search(report: TurnReport, actor: Actor, room_id: String) -> void:
 
 ## 탈출 지점에서 한 턴 버틴다.
 ##
-## **E7 — 탈출 중 공격받음.** §5.6 이 방향만 정해 뒀다: *"탈출은 즉시가 아니다.
-## 소요 턴은 가변"*. 이 레인은 그중 하나만 잠정으로 박는다 —
-## **조우가 난 턴은 진행이 오르지 않는다.** 버티지 못했다는 뜻이다.
-## 되돌리지는 않는다. 되돌리면 조우가 잦은 판에서 탈출이 영영 안 끝난다.
+## **E7 — 탈출 중 공격받음.** 조우가 난 턴은 여기까지 오지 않는다 —
+## 부르는 쪽이 걸러 낸다. 되돌리지는 않는다. 되돌리면 조우가 잦은 판에서
+## 탈출이 영영 안 끝난다 (docs/design/33-turn-loop.md §33.8).
 ##
 ## 탈출 지점이 아니면 아무 일도 없다. 의도는 약속이지 결과가 아니다.
-func _advance_escape(report: TurnReport, actor: Actor, room_id: String, blocked: bool) -> void:
+func _advance_escape(report: TurnReport, actor: Actor, room_id: String) -> void:
 	var room := _graph.get_room(room_id)
 	if room == null or room.kind != Room.Kind.EXIT:
 		report.refused_actor_ids.append(actor.id)
-		return
-	if blocked:
 		return
 	_escape_progress[actor.id] = escape_progress_of(actor.id) + 1
 
@@ -249,9 +311,11 @@ func _advance_escape(report: TurnReport, actor: Actor, room_id: String, blocked:
 ## 나가면 판 자체가 끝나므로 지울 다음 턴이 없고, 지우면 화면이 마지막으로 한 번 더
 ## 그릴 때 빈 방을 가리킨다. 판정은 `report.escaped_actor_ids` 로 이미 났다.
 ##
-## **사망은 여기 없다.** 전투 판정(§5.5)이 미정이라 "언제 죽는가"가 없다.
-## 규칙 자체는 `Haul.settle_death()` 에 서 있다.
+## **무너진 자의 정산이 여기 있다.** 33-turn-loop 레인이
+## *"`Haul.settle_death()` 은 있고 부르는 곳이 없다 — 전투가 붙는 레인이 부른다"*
+## 고 남긴 자리를 M5 가 채웠다 (docs/design/35-encounter.md §35.2.3).
 func _settle_results(report: TurnReport, actors: Array[Actor]) -> void:
+	_settle_encounters(report)
 	for actor in actors:
 		if escape_progress_of(actor.id) < ESCAPE_TURNS:
 			continue
@@ -262,6 +326,79 @@ func _settle_results(report: TurnReport, actors: Array[Actor]) -> void:
 		_escape_progress.erase(actor.id)
 		if not actor.is_player():
 			_graph.remove_actor(actor)
+
+
+## 무너진 자를 정산한다. **판에서 치우는 것은 여기 한 곳뿐이다.**
+##
+## 조우 해결기가 3단계에서 치우면 같은 단계의 뒷부분이 없는 주체를 훑게 된다.
+## 그래서 저쪽은 **적어 보내기만** 하고 이쪽이 판을 고친다 (§35.1.3).
+func _settle_encounters(report: TurnReport) -> void:
+	for outcome in report.outcomes:
+		for actor_id in outcome.slain_ids:
+			_settle_broken(report, outcome, actor_id, true)
+		for actor_id in outcome.subdued_ids:
+			_settle_broken(report, outcome, actor_id, false)
+
+
+## 하나를 정산한다.
+##
+## | 무엇 | 어떻게 | 근거 |
+## | --- | --- | --- |
+## | 몬스터 | **죽는다.** 판에서 지운다 | docs/design/28-combat.md §28.10 |
+## | 사람 | **제압된다.** 짐을 잃고 빈손으로 판에서 나간다 | §28.10 「약탈만 하고 보내주기」 |
+## | 플레이어 | 짐을 잃는다. **판에서 안 지운다** — 화면이 마지막으로 한 번 더 그린다 | §5.3 |
+func _settle_broken(
+	report: TurnReport, outcome: EncounterOutcome, actor_id: String, slain: bool
+) -> void:
+	var actor := _find_actor(actor_id)
+	if actor == null:
+		return
+	var room := _graph.get_room(_graph.find_actor_room(actor))
+	var lost := _haul.settle_death(actor_id)
+	_share_spoils(outcome, lost)
+	report.events.append(
+		GameEvent.new(report.turn, GameEvent.Kind.DOWNED, actor, room, lost, outcome.victor_ids)
+	)
+	if slain:
+		report.slain_actor_ids.append(actor_id)
+	else:
+		report.subdued_actor_ids.append(actor_id)
+	if not actor.is_player():
+		_graph.remove_actor(actor)
+
+
+## 뺏은 것을 이긴 편이 나눈다. **나머지는 사라진다** — 던전에 흘린 것이다.
+##
+## 몬스터는 못 가져간다. 짐을 드는 것은 탐험가뿐이고(`Haul` 주석),
+## 몬스터가 값을 들면 그것을 다시 뺏을 방법이 없다.
+func _share_spoils(outcome: EncounterOutcome, value: int) -> void:
+	if value <= 0:
+		return
+	var takers: Array[Actor] = []
+	for actor_id in outcome.victor_ids:
+		var actor := _find_actor(actor_id)
+		if actor != null and actor.kind != Actor.Kind.MONSTER:
+			takers.append(actor)
+	if takers.is_empty():
+		return
+	var share := value / takers.size()
+	if share <= 0:
+		return
+	for actor in takers:
+		_haul.add(actor.id, share)
+		outcome.spoils[actor.id] = outcome.spoil_of(actor.id) + share
+
+
+## 판 위에서 그 id 를 찾는다. 없으면 `null` — 이미 나갔거나 지워진 것이다.
+func _find_actor(actor_id: String) -> Actor:
+	for room_id in _graph.room_ids():
+		var room := _graph.get_room(room_id)
+		if room == null:
+			continue
+		for actor in room.occupants():
+			if actor.id == actor_id:
+				return actor
+	return null
 
 
 # ---------------------------------------------------------------- 5. 사건 기록
