@@ -401,10 +401,7 @@ func _apply_expedition_state() -> void:
 func _check_finish() -> void:
 	if _expedition == null or _run == null or not _run.finished:
 		return
-	if _run.defeated:
-		_finish_expedition(ExpeditionReport.Outcome.DOWNED)
-		return
-	_finish_expedition(ExpeditionReport.Outcome.ESCAPED)
+	_finish_expedition(ExpeditionReport.outcome_for(_run.defeated))
 
 
 ## 지면 아래쪽 여백에 찍히는 한 줄. 신문의 쪽수 자리다.

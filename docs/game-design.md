@@ -51,6 +51,7 @@
 | **32** | **[렉카 피드](design/32-rekka-feed.md)** | **사건 → 문장 → 화면. M6** | **구현됨** |
 | **33** | **[턴 루프](design/33-turn-loop.md)** | **동시 해결기 · NPC 탐험가 · E1~E9. M2 · M4** | **구현됨** |
 | **34** | **[시스템](design/34-systems.md)** | **씬 전환 · 저장. `src/systems/`** | **구현됨** |
+| **35** | **[조우 절차](design/35-encounter.md)** | **전투 · 협상 · 도주 분기. M5 · E3·E5 확정** | **구현됨** |
 | **36** | **[정산](design/36-settlement.md)** | **한 판의 끝. M7 · M10** | **구현됨** |
 
 > **아지트 레인 이어받기:** [`handoff/hideout.md`](handoff/hideout.md) → `30` §30.13–§30.14.
