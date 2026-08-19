@@ -344,7 +344,7 @@ func _resolve_fight(outcome: EncounterOutcome, here: Array[Actor], room: Room) -
 ## | 편 | 언제 |
 ## | --- | --- |
 ## | 몬스터 | 언제나 하나. **몬스터끼리는 안 싸운다** |
-## | 연합 | 둘 이상이 협력을 골랐을 때 (E9) |
+## | 연합 | 협력을 고른 자들 (E9). **혼자 골라도 옆 사람은 안 친다** — 몬스터를 보고 있다 |
 ## | 협상 | 협상이 성립한 자들. **서로 안 치기로 했으므로 한 편이다** |
 ## | 그 밖 | 각자 혼자 |
 func _form_sides(outcome: EncounterOutcome, here: Array[Actor]) -> Dictionary:
@@ -407,13 +407,24 @@ func _note_fight(outcome: EncounterOutcome, victors: Array[Actor], room: Room) -
 		pushed += int(outcome.pressure_dealt[actor_id])
 	if pushed <= 0:
 		return
-	var lead: Actor = victors[0]
+	var lead := _lead_of(victors)
 	var losers: Array[String] = []
 	for actor_id in outcome.pressure_dealt:
 		losers.append(str(actor_id))
 	outcome.events.append(
 		GameEvent.new(outcome.turn, GameEvent.Kind.FOUGHT, lead, room, pushed, losers)
 	)
+
+
+## 이긴 편에서 기사의 주인공이 될 주체. **탐험가를 앞세운다.**
+##
+## 몬스터를 주인공으로 세우면 *"먼지 망령이 스쿼드를 밀어붙였다"* 가 되어
+## 기사가 사람 이야기가 아니게 된다 (`Encounter.lead_actor_id()` 이 같은 것을 한다).
+func _lead_of(victors: Array[Actor]) -> Actor:
+	for actor in victors:
+		if actor.kind != Actor.Kind.MONSTER:
+			return actor
+	return victors[0]
 
 
 # ---------------------------------------------------------------- 관계도
@@ -431,16 +442,27 @@ func _mark_relations(outcome: EncounterOutcome, here: Array[Actor]) -> void:
 	if outcome.allied_ids.size() >= 2:
 		_mark(outcome, RelationEvent.Kind.COOPERATION, outcome.allied_ids)
 	_mark_strikes(outcome, explorers)
-	if not outcome.subdued_ids.is_empty() and not outcome.victor_ids.is_empty():
+	var plunderer := _first_explorer_among(outcome.victor_ids, here)
+	if not outcome.subdued_ids.is_empty() and not plunderer.is_empty():
 		outcome.marks.append(
-			EncounterMark.new(
-				RelationEvent.Kind.PLUNDER, outcome.victor_ids[0], outcome.subdued_ids
-			)
+			EncounterMark.new(RelationEvent.Kind.PLUNDER, plunderer, outcome.subdued_ids)
 		)
 	if outcome.marks.is_empty() and outcome.was_bloodless():
 		# **못 본 척 지나감** — §5.10 이 친밀도 변화를 미정으로 남긴 칸이다.
 		# 아무 일도 안 일어난 것 자체가 사건이라는 것은 §24.5 가 이미 정해 뒀다.
 		_mark(outcome, RelationEvent.Kind.PASS_BY, _ids_of(explorers))
+
+
+## 이긴 편에서 관계도에 이름을 올릴 자. **몬스터는 관계를 갖지 않는다.**
+##
+## 몬스터가 사람을 눕히고 짐을 흩뜨린 것은 사건이지만 **관계 사건은 아니다** —
+## `RelationGraph` 는 인물끼리의 것이고(§24.2), 몬스터를 그 자리에 넣으면
+## 세계에 없는 인물 번호를 만들어야 한다.
+func _first_explorer_among(ids: Array[String], here: Array[Actor]) -> String:
+	for actor in here:
+		if actor.kind != Actor.Kind.MONSTER and ids.has(actor.id):
+			return actor.id
+	return ""
 
 
 ## 한쪽만 친 경우를 남긴다. **선제 공격**, 그리고 어제의 동료였다면 **배신**.

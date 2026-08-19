@@ -394,6 +394,7 @@
 | `src/core/turn/encounter_stakes.gd` | **E5** — 방이 판돈과 확률을 어떻게 바꾸는가 |
 | `src/core/turn/encounter_plan.gd` | NPC 하나의 선택 **과 근거** |
 | `src/core/turn/encounter_planner.gd` | 성향 x 상황 -> `EncounterPlan` |
+| `src/core/turn/encounter_mark.gd` | 관계도로 나가는 표시 하나. **판과 세계를 잇는 유일한 통로** |
 | `src/core/turn/encounter_outcome.gd` | 한 조우의 결말. 화면 · 피드 · 관계도가 읽는다 |
 | `src/core/turn/encounter_resolver.gd` | **본체.** 분기마다 함수 |
 
@@ -405,6 +406,7 @@
 | `src/core/turn/turn_resolver.gd` | 3단계가 조우를 건너뛰지 않고 푼다 |
 | `src/core/turn/turn_report.gd` | 결말을 실어 나른다 |
 | `src/core/dungeon/dungeon_run.gd` | 태세 제출 · 패배 상태 |
+| `src/ui/dungeon_board/dungeon_screen.gd` | 패배를 `DOWNED` 로 정산에 넘긴다 (§35.8) |
 
 **안 만드는 것.**
 
@@ -513,7 +515,13 @@ godot --headless --path . -s res://tools/survey_encounter.gd
 | E3 | **채웠다** — 동시 공격이 기본형, 한쪽만 쳤을 때만 벌점 |
 | E5 | **채웠다** — 방은 분기를 안 바꾸고 판돈과 확률을 바꾼다 |
 | E8 | 배신이 표현된다. 관계도로 나가는 표시까지 |
-| 검증 | GUT **2102/2102** · 스크립트 **184** · 린트 통과 · 글리프 0건 |
+| 검증 | GUT **2138/2138** · 스크립트 **186** · 린트 통과 · 글리프 0건 (main 병합 후) |
+
+> **기계가 한 번 거짓말을 했다.** 같은 커밋에서 한 번은 `2137/2138`, 두 번은
+> `2138/2138` 이 나왔다. 어느 시험이 졌는지는 요약에 안 잡혔고, 그 전에는
+> `RelationGraph.bond()` 가 *"Cannot convert argument 2 from int to int"* 로 죽었다 —
+> **이 레인이 안 건드린 코드**다. `docs/test-stability.md` 가 적은 그 증상이다.
+> **폭사율도 눈에 띄게 올랐다** — 여덟 번 중 다섯이 죽은 판이 있었다.
 
 ### ★ 통합자가 해야 할 것 — **공용 문서**
 
@@ -527,6 +535,23 @@ godot --headless --path . -s res://tools/survey_encounter.gd
 
 그리고 [`game-design.md`](../game-design.md) 의 문서 지도에 **§35 한 줄**을 넣어 달라.
 33-turn-loop 레인도 같은 것을 부탁하고 갔다 (§33.8) — **§33 도 아직 안 올라가 있다.**
+
+### main 을 당겨 받고 고친 것 하나 — **정산이 패배를 탈출로 읽었다**
+
+작업 중에 정산 레인(§36)이 main 에 들어왔다. 당겨 받고 보니 자리가 하나 어긋나 있었다.
+
+`DungeonScreen._check_escape()` 가 `DungeonRun.finished` 만 보고
+`ExpeditionReport.Outcome.ESCAPED` 로 정산을 걸었다. **이 레인이 `finished` 를
+세우는 길을 하나 더 만들었으므로**(제압), 그대로 두면 **털리고 나온 판이
+탈출 성공으로 정산된다.**
+
+정산 레인이 그 자리를 비워 두고 갔다 —
+*"전투 판정이 붙으면 여기를 `DOWNED` 로 부르면 된다"* (§36).
+그래서 `_check_finish()` 로 이름을 바꾸고 `_run.defeated` 로 갈랐다.
+
+> **화면 배선이라 단위 시험이 없다.** `DungeonRun.defeated` 자체는 잠겨 있고
+> (`test_encounter_resolver.gd`), 안 잠긴 것은 화면의 `if` 두 줄이다.
+> 흐름 캡처(`tools/capture_flow.gd`)가 덮는 자리이므로 **통합자가 한 번 봐 달라.**
 
 ### 열려 있는 것 — **일부러 안 채운 것**
 

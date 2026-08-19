@@ -113,7 +113,7 @@ func _ready() -> void:
 	_board.player_acted.connect(_publish_turn)
 	# **탈출은 즉시가 아니다** (05 5.9). 탈출구에서 버티는 것은 판이 세고, 다 버티면
 	# `DungeonRun.finished` 가 선다. 정산은 그 신호를 듣는 것이지 스스로 판정하지 않는다.
-	_board.player_acted.connect(_check_escape)
+	_board.player_acted.connect(_check_finish)
 	# **판과 피드는 서로의 내부를 들여다보지 않는다.** 여기서 한 줄로 잇는다 (32 32.5.3).
 	_feed_view.room_selected.connect(_board.highlight_room)
 	resized.connect(_layout_feed)
@@ -390,9 +390,19 @@ func _apply_expedition_state() -> void:
 	_size_slider.editable = false
 
 
-## 탈출이 끝났는가. 끝났으면 정산으로 넘어간다.
-func _check_escape() -> void:
+## 판이 끝났는가. 끝났으면 정산으로 넘어간다.
+##
+## **끝나는 길이 둘이다.** 탈출해서 나가거나(§5.9), 조우에서 제압당하거나
+## (docs/design/35-encounter.md §35.2.3). 둘 다 `DungeonRun.finished` 를 세우므로
+## 여기서 갈라야 한다 — 안 가르면 **털리고 나온 판이 탈출 성공으로 정산된다.**
+##
+## 이 자리는 정산 레인이 비워 두고 간 것이다 —
+## *"전투 판정이 붙으면 여기를 `DOWNED` 로 부르면 된다"* (§36).
+func _check_finish() -> void:
 	if _expedition == null or _run == null or not _run.finished:
+		return
+	if _run.defeated:
+		_finish_expedition(ExpeditionReport.Outcome.DOWNED)
 		return
 	_finish_expedition(ExpeditionReport.Outcome.ESCAPED)
 

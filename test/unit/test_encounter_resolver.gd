@@ -276,6 +276,22 @@ func test_two_who_help_each_other_face_the_monster_together() -> void:
 	assert_not_null(_marked(outcome, RelationEvent.Kind.COOPERATION))
 
 
+func test_each_for_themselves_lets_the_monster_hit_both() -> void:
+	# §5.6 E9 의 뒷면이다 — 협력을 안 고르면 **몬스터가 양쪽을 친다.**
+	# 그리고 몬스터가 이긴 판은 **관계도에 아무것도 안 남긴다** —
+	# `RelationGraph` 는 인물끼리의 것이라(§24.2) 몬스터가 설 자리가 없다.
+	var run := Fixtures.run("vault")
+	Fixtures.rival(run, "vault", "rival", 4, 3)
+	Fixtures.monster(run, "vault", "beast", 30)
+
+	run.resolve_turn()
+	var outcome := _outcome(run)
+
+	assert_true(outcome.subdued_ids.has("squad"), "스쿼드가 안 눕었다")
+	assert_true(outcome.subdued_ids.has("rival"), "경쟁자가 안 눕었다")
+	assert_null(_marked(outcome, RelationEvent.Kind.PLUNDER), "몬스터가 관계도에 올랐다")
+
+
 func test_turning_on_yesterdays_partner_is_betrayal() -> void:
 	# §5.6 E8 — 협력과 배신. **조우가 여러 턴에 걸치므로 자리가 생겼다** (§35.4.2).
 	var run := Fixtures.run("vault")
