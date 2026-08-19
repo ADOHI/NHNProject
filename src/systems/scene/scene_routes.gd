@@ -13,6 +13,7 @@ enum Screen {
 	TITLE,  ## 타이틀 — 부팅이 닿는 첫 화면
 	BASE,  ## 주둔지 — 아웃게임 한 바퀴가 도는 곳
 	DUNGEON,  ## 던전 — 판 · 피드 · 상태를 한 화면에서 본다
+	SETTLEMENT,  ## 정산 — 한 판이 여기서 닫힌다. 자동 저장이 걸리는 자리
 	HIDEOUT,  ## 아지트 조감 — 아이소 격자 위의 시설
 	NPC_SHEET,  ## 인물 열람기 — 개발용
 	BACKPACK,  ## 소지품 — 개발용
@@ -22,6 +23,7 @@ const _PATHS: Array[String] = [
 	"res://src/ui/title/title_screen.tscn",
 	"res://src/ui/base/base_screen.tscn",
 	"res://src/ui/dungeon_board/dungeon_screen.tscn",
+	"res://src/ui/settlement/settlement_screen.tscn",
 	"res://src/ui/hideout/hideout_screen.tscn",
 	"res://src/ui/npc_sheet/npc_sheet_screen.tscn",
 	"res://src/ui/backpack/backpack_screen.tscn",
@@ -32,6 +34,7 @@ const _LABELS: Array[String] = [
 	"타이틀",
 	"주둔지",
 	"던전",
+	"정산",
 	"아지트",
 	"인물 열람기",
 	"소지품",

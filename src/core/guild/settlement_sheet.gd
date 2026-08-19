@@ -65,12 +65,13 @@ func texts() -> Array[String]:
 	return found
 
 
-## 이 칸에 손실이 하나라도 있는가. 화면이 칸의 강조를 정할 때 쓴다.
-func has_loss() -> bool:
+## 손실을 말하는 줄이 몇인가. 화면이 자리를 물릴 때와 시험이 셀 때 쓴다.
+func loss_count() -> int:
+	var found := 0
 	for entry in lines:
 		if entry.is_loss():
-			return true
-	return false
+			found += 1
+	return found
 
 
 # ---------------------------------------------------------------- 칸 넷

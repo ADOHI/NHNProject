@@ -123,12 +123,12 @@ func test_members_are_never_lost_even_when_downed() -> void:
 func test_failure_loses_loot_and_gear() -> void:
 	var sheet := _settled(_guild(), ExpeditionReport.Outcome.DOWNED)[_STAKE]
 	assert_true(_joined(sheet).contains("전부 상실"))
-	assert_true(sheet.has_loss(), "실패한 판의 이 칸에는 손실이 있다")
+	assert_gt(sheet.loss_count(), 0, "실패한 판의 이 칸에는 손실이 있다")
 
 
 func test_success_keeps_gear() -> void:
 	var sheet := _settled(_guild(), ExpeditionReport.Outcome.ESCAPED)[_STAKE]
-	assert_false(sheet.has_loss(), "탈출한 판에서는 잃은 것이 없다")
+	assert_eq(sheet.loss_count(), 0, "탈출한 판에서는 잃은 것이 없다")
 
 
 ## 실패의 대가는 페널티가 아니라 시간이다 (§14.6 — 세계 갱신).
