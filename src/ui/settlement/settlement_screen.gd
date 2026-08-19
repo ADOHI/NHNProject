@@ -144,6 +144,10 @@ func _settle() -> void:
 	if _is_demo:
 		_note = "꾸며 세운 판이다 — 저장하지 않는다"
 		return
+	if _report == null:
+		# 오지 않은 원정을 「이미 정산됐다」고 말하면 그것이 거짓말이 된다.
+		_note = "돌아온 원정이 없다 — 정산할 것이 없다"
+		return
 	if not _settled_now:
 		_note = "이미 정산된 원정이다 — 다시 걸지 않았다"
 		return
