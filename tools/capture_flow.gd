@@ -15,6 +15,12 @@ extends SceneTree
 ##
 ## 주둔지 화면은 진짜 세이브(`user://save/guild.json`)를 읽는다.
 ## 저장된 진행이 있으면 「이어서 한다」로, 없으면 새 길드로 뜬다 — **둘 다 정상이다.**
+##
+## ## ⚠ 이 도구는 **진짜 세이브에 쓴다**
+##
+## 정산 단계를 지나면 자동 저장이 걸린다 (docs/design/36-settlement.md §36.6).
+## 그것이 이 도구가 덮는 것의 절반이다 — 저장이 흐름 위에서 실제로 도는지는
+## 진짜 경로로 돌지 않으면 확인되지 않는다. 대신 **돌릴 때마다 원정 한 번이 쌓인다.**
 
 const _OUT_DIR := "res://.captures"
 
@@ -26,11 +32,23 @@ const _OUT_DIR := "res://.captures"
 const _SETTLE_SECONDS := 1.4
 
 ## 한 단계 — **무엇이 뜨기를 기다려서 · 찍고 · 무엇을 누르는가.**
+##
+## `shot` 이 비면 안 찍는다. 편성처럼 **누르기만 하는 단계**가 있고,
+## 그것까지 찍으면 같은 화면이 넉 장 나온다.
+##
+## `optional` 은 **없어도 넘어가는 단계**다. 편성은 정원과 아지트 레벨에 따라
+## 몇 명까지 되는지가 달라지므로(GuildBalance.squad_capacity), 세 번째 대원은
+## 있을 수도 없을 수도 있다. **없는 것과 고장난 것을 가르려고 표시한다** —
+## 표시가 없는 단계에서 단추를 못 찾으면 그것은 흐름이 끊긴 것이다.
 const _STEPS: Array[Dictionary] = [
 	{"want": "TitleScreen", "shot": "01_title", "press": "들어간다"},
-	{"want": "BaseScreen", "shot": "02_base", "press": "던전 판 보기"},
-	{"want": "DungeonScreen", "shot": "03_dungeon", "press": "주둔지로"},
-	{"want": "BaseScreen", "shot": "04_returned", "press": ""},
+	{"want": "BaseScreen", "shot": "02_base", "press": "데려간다"},
+	{"want": "BaseScreen", "shot": "", "press": "데려간다", "optional": true},
+	{"want": "BaseScreen", "shot": "", "press": "데려간다", "optional": true},
+	{"want": "BaseScreen", "shot": "03_deployed", "press": "원정을 나간다"},
+	{"want": "DungeonScreen", "shot": "04_dungeon", "press": "원정을 접는다"},
+	{"want": "SettlementScreen", "shot": "05_settlement", "press": "주둔지로"},
+	{"want": "BaseScreen", "shot": "06_returned", "press": ""},
 ]
 
 var _step := 0
@@ -63,11 +81,15 @@ func _process(delta: float) -> bool:
 	_waited += delta
 	if _waited < _SETTLE_SECONDS:
 		return false
-	_save(String(step["shot"]))
+	var shot := String(step["shot"])
+	if not shot.is_empty():
+		_save(shot)
 	var press := String(step["press"])
 	if not press.is_empty() and not _press(press):
-		push_warning("누를 버튼을 못 찾았다: %s" % press)
-		return true
+		if not bool(step.get("optional", false)):
+			push_warning("누를 버튼을 못 찾았다: %s" % press)
+			return true
+		print("flow: 건너뛴다 — %s (없어도 되는 단계)" % press)
 	_step += 1
 	_found = null
 	if _step >= _STEPS.size():

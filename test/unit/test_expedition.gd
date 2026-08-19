@@ -234,3 +234,34 @@ func test_failed_run_pays_nothing_but_still_advances() -> void:
 	var result := expedition.settle()
 	assert_eq(result.funds_gained, 0)
 	assert_true(result.base_progress_gained > 0)
+
+
+# ---------------------------------------------------------------- 번호가 판을 건넌다
+
+
+## **저장을 건너온 장부와 겹치지 않는다.**
+##
+## 원정 번호는 이 프로세스의 카운터로 매기는데 그 카운터는 **껐다 켜면 0 으로 돌아가고**
+## 정산 장부는 세이브에 남는다 (Guild.to_dict — settled_ids). 겹치면
+## `mark_settled` 가 막아서 **정산이 조용히 안 걸린다** — 오류도 안 난다.
+func test_a_new_expedition_avoids_ids_already_in_the_ledger() -> void:
+	var guild := _guild()
+	var first: Expedition = ExpeditionScript.new(guild, _gate())
+	# 지난 판이 쓰고 간 번호가 장부에 남아 있는 상태를 그대로 만든다.
+	guild.mark_settled(first.id)
+	var next: Expedition = ExpeditionScript.new(guild, _gate())
+	assert_false(guild.has_settled(next.id), "장부에 있는 번호를 다시 쓰면 안 된다")
+
+
+## 그래서 **불러온 길드로도 정산이 걸린다.** 위 시험이 지키는 것의 진짜 이유다.
+func test_settling_still_works_on_a_guild_that_came_back_from_a_save() -> void:
+	var guild := _guild()
+	var before: Expedition = ExpeditionScript.new(guild, _gate())
+	guild.mark_settled(before.id)
+	var funds := guild.funds
+
+	var expedition := _start(guild, _able(guild))
+	expedition.enter()
+	expedition.finish(ExpeditionReport.Outcome.ESCAPED)
+	assert_not_null(expedition.settle(), "장부에 걸려 정산이 조용히 안 걸리면 안 된다")
+	assert_gt(guild.funds, funds)

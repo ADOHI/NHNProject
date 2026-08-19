@@ -89,6 +89,10 @@ var _campaign_seed := 0
 var _note := ""
 var _sheets: Array[SettlementSheet] = []
 
+## 칸이 서는 자리. 창이 커지면 칸도 같이 커져야 한다 (`_fit_sheets`).
+var _sheet_scroll: ScrollContainer
+var _sheet_grid: GridContainer
+
 
 func _ready() -> void:
 	# Theme 은 루트에 한 번만 문다. 자식에게 그대로 흘러내린다.
@@ -232,23 +236,37 @@ func _headline() -> String:
 
 ## 칸들이 서는 자리. 세로로만 굴러간다 — 가로로 굴러가면 넷을 한눈에 볼 수 없다.
 func _sheet_column() -> ScrollContainer:
-	var box := ScrollContainer.new()
-	box.name = "Sheets"
-	box.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_sheet_scroll = ScrollContainer.new()
+	_sheet_scroll.name = "Sheets"
+	_sheet_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_sheet_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_sheet_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
-	var grid := GridContainer.new()
-	grid.name = "Grid"
-	grid.columns = _SHEET_COLUMNS
-	grid.add_theme_constant_override("h_separation", UiTokens.SPACE_STEP)
-	grid.add_theme_constant_override("v_separation", UiTokens.SPACE_STEP)
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_sheet_grid = GridContainer.new()
+	_sheet_grid.name = "Grid"
+	_sheet_grid.columns = _SHEET_COLUMNS
+	_sheet_grid.add_theme_constant_override("h_separation", UiTokens.SPACE_STEP)
+	_sheet_grid.add_theme_constant_override("v_separation", UiTokens.SPACE_STEP)
+	_sheet_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# **칸 수를 화면이 알지 않는다.** 코어가 몇 칸을 내든 그만큼 세운다.
 	for sheet in _sheets:
-		grid.add_child(_sheet_panel(sheet))
-	box.add_child(grid)
-	return box
+		_sheet_grid.add_child(_sheet_panel(sheet))
+	_sheet_scroll.add_child(_sheet_grid)
+	_sheet_scroll.resized.connect(_fit_sheets)
+	_fit_sheets.call_deferred()
+	return _sheet_scroll
+
+
+## 칸이 지면을 채우게 한다. **글이 적다고 지면이 반쯤 비면 안 된다** —
+## 신문은 남는 자리를 두지 않는다.
+##
+## `ScrollContainer` 는 굴러가는 축으로 자식을 늘려 주지 않는다. 늘려 주면 굴러갈 것이
+## 언제나 창 크기여서 스크롤이 성립하지 않기 때문이다. 그래서 **최소 높이를 창 높이로
+## 밀어 준다** — 내용이 더 길면 그쪽이 이기므로 굴러가는 성질은 그대로 남는다.
+func _fit_sheets() -> void:
+	if _sheet_grid == null or _sheet_scroll == null:
+		return
+	_sheet_grid.custom_minimum_size.y = _sheet_scroll.size.y
 
 
 ## 칸 하나. `PressPanel` 이 종이와 괘선을 맡고 여기서는 글만 쌓는다.

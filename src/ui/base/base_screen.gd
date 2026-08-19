@@ -72,6 +72,9 @@ var _expedition: Expedition = null
 ## 지나간 원정들의 한 줄 기록.
 var _log: Array[String] = []
 
+## 진짜 원정을 내보내는 단추. 편성이 서고 민첩이 될 때만 켜진다.
+var _launch_button: Button
+
 var _guild_panel: BaseGuildPanel
 var _member_panel: BaseMemberPanel
 var _gate_panel: BaseGatePanel
@@ -166,13 +169,16 @@ func _header() -> HBoxContainer:
 	var board := BaseWidgets.button("던전 판 보기")
 	board.pressed.connect(_on_board_pressed)
 	row.add_child(board)
+	_launch_button = BaseWidgets.button("원정을 나간다", false)
+	_launch_button.pressed.connect(_on_launch_pressed)
+	row.add_child(_launch_button)
 	var title := BaseWidgets.button("타이틀로")
 	title.pressed.connect(_on_title_pressed)
 	row.add_child(title)
 	return row
 
 
-## 고른 게이트를 들고 던전 화면으로 간다.
+## 고른 게이트의 **판을 구경하러** 간다. 원정은 아니다 — 아무것도 걸리지 않는다.
 ##
 ## **어느 씬인지 여기서 적지 않는다.** 화면 이름만 말하고 경로는 장부가 안다
 ## (docs/design/34-systems.md §34.3.1). 넘기는 값의 열쇠는 받는 쪽이 든다.
@@ -180,18 +186,38 @@ func _on_board_pressed() -> void:
 	var gate := _current_gate()
 	if gate == null:
 		return
-	(
-		Router
-		. go_to(
-			SceneRoutes.Screen.DUNGEON,
-			{
-				DungeonScreen.ENTRY_SEED: gate.dungeon_seed,
-				DungeonScreen.ENTRY_SIZE: gate.dungeon_size(),
-				DungeonScreen.ENTRY_CHARACTER: gate.dungeon_character,
-				DungeonScreen.ENTRY_GATE_NAME: gate.display_name,
-			}
-		)
-	)
+	Router.go_to(SceneRoutes.Screen.DUNGEON, _gate_entry(gate))
+
+
+## **진짜 원정을 내보낸다.** 편성한 대로 들어가고, 나올 때는 정산을 거친다
+## (docs/design/36-settlement.md §36.5).
+##
+## 아래 배선 칸(BaseExpeditionPanel)과 나란히 두는 것은 의도다 — 그쪽은 화면 없이
+## 정산 코어를 확인하는 자리이고, 이쪽이 사람이 실제로 도는 길이다 (§36.5.5).
+func _on_launch_pressed() -> void:
+	var gate := _current_gate()
+	if _expedition != null or gate == null or not _can_enter():
+		return
+	var expedition := Expedition.new(_guild, gate)
+	if not expedition.deploy(_deployed) or expedition.enter() == null:
+		return
+	var entry := _gate_entry(gate)
+	# **원정 한 장이 화면 셋을 건너간다** (§36.5.1). 던전 화면은 이 셋을 읽지 않고
+	# 정산 화면에 그대로 넘긴다.
+	entry[SettlementScreen.ENTRY_EXPEDITION] = expedition
+	entry[SettlementScreen.ENTRY_CAMPAIGN_SEED] = _campaign_seed
+	entry[SettlementScreen.ENTRY_SAVE_PATH] = save_path
+	Router.go_to(SceneRoutes.Screen.DUNGEON, entry)
+
+
+## 던전 화면이 판을 짜는 데 필요한 값들. 열쇠는 받는 쪽이 든다.
+func _gate_entry(gate: Gate) -> Dictionary:
+	return {
+		DungeonScreen.ENTRY_SEED: gate.dungeon_seed,
+		DungeonScreen.ENTRY_SIZE: gate.dungeon_size(),
+		DungeonScreen.ENTRY_CHARACTER: gate.dungeon_character,
+		DungeonScreen.ENTRY_GATE_NAME: gate.display_name,
+	}
 
 
 func _on_title_pressed() -> void:
@@ -220,6 +246,9 @@ func _scroll(content: Control, width: int) -> ScrollContainer:
 
 func _refresh() -> void:
 	var locked := _expedition != null
+	# 아래 칸에서 한 바퀴가 돌고 있는 동안에는 진짜 원정을 못 내보낸다 —
+	# 같은 길드로 두 원정이 동시에 돌면 편성이 두 곳에서 다투게 된다.
+	_launch_button.disabled = locked or not _can_enter()
 	_guild_panel.refresh(_guild, _deployed)
 	_member_panel.refresh(_guild, _deployed, locked)
 	_gate_panel.refresh(_gates, _guild.gate_disclosure(_deployed), _selected_gate, locked)
