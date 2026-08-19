@@ -13,6 +13,12 @@ extends GutTest
 ##
 ## 다가오는 속력은 이동 레인의 `max_speed` 에서 온다. 그 수가 옮겨지면 여기도 같이
 ## 옮겨져야 하므로 **수를 적지 않고 관계를 적는다** (§28.20.50).
+##
+## **출시 코드는 이제 그 관계를 못 적는다.** `src/core/` 가 `src/proto/` 를 부르면
+## 방향이 거꾸로라 프로토를 출시 빌드에서 뺄 수가 없어서
+## (`docs/refactoring-2026-08-19.md` §1.2), 값은 `SparringField.DEFAULT_APPROACH_SPEED`
+## 에 베껴 박혔다. **그래서 관계를 붙드는 자리가 여기다** — 시험은 빌드에 안 들어가므로
+## 프로토를 불러도 되고, 베낀 것이 어긋나면 여기가 빨개진다.
 
 const BoutScript := preload("res://src/core/combat/sparring_bout.gd")
 const TuningScript := preload("res://src/core/combat/break_tuning.gd")
@@ -38,8 +44,14 @@ func test_enemies_walk_in_by_default() -> void:
 func test_the_walking_speed_comes_from_the_movement_lane() -> void:
 	# **수를 지어내지 않는다.** 계단의 평평한 쪽이라 아무 수나 되는데,
 	# 그러면 **고를 이유가 있는 수**를 고른다 (§28.20.50).
+	#
+	# 출시 코드가 프로토를 부르지 않게 되면서 값은 베껴졌다. **베낀 것이 어긋났는지를
+	# 붙드는 자리가 여기다** — 이동 레인이 `max_speed` 를 옮기면 이 단정이 깨지고,
+	# 그때 `SparringField.DEFAULT_APPROACH_SPEED` 를 같이 옮긴다.
 	var moving := ProtoMoveTuning.new()
-	assert_eq(FieldScript.new().approach_speed, moving.default_of("max_speed"))
+	var copied: float = FieldScript.DEFAULT_APPROACH_SPEED
+	assert_eq(copied, moving.default_of("max_speed"), "베낀 값이 이동 레인과 어긋났다")
+	assert_eq(FieldScript.new().approach_speed, copied, "출고 값이 상수 그대로다")
 
 
 func test_the_downed_leave_by_default() -> void:
