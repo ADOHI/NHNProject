@@ -12,9 +12,19 @@ extends GutTest
 ## | E4 | 공격 대상이 그 턴에 도망감 |
 ## | E6 | 협상 중 제3자 난입 |
 ## | E9 | 몬스터방에서 탐험가끼리 조우 |
+## | **E3** | **서로를 동시에 공격 — 보류였다가 채워졌다** |
+## | **E5** | **특수방에서 마주쳤을 때 — 보류였다가 채워졌다** |
 ##
-## **E3 · E5 는 시험이 없다. 그것이 의도다** — §5.6 이 보류로 남겼고,
-## *"지금 정하면 구현 중에 어차피 뒤집힌다"* 고 적었다.
+## ## E3 · E5 는 여기 없었다. **지금은 있다**
+##
+## §5.6 이 둘을 보류로 남기며 *"해당 부분을 구현하는 시점에 이 표로 돌아와 채운다"* 고
+## 적었고, 33-turn-loop 레인은 *"E3·E5 는 시험이 없다. 그것이 의도다"* 라고 남겼다.
+## **M5 가 그 시점이다.** 채운 답과 근거는 docs/design/35-encounter.md §35.3 에 있다.
+##
+## | | 채운 답 |
+## | --- | --- |
+## | E3 | **동시 공격이 전투의 기본형이다.** 예외는 한쪽만 쳤을 때이고 그때만 벌점이 붙는다 |
+## | E5 | **방은 분기를 바꾸지 않는다.** 판돈과 확률을 바꾼다 |
 
 const Fixtures := preload("res://test/support/turn_fixtures.gd")
 
@@ -152,12 +162,16 @@ func test_e4_the_one_who_fled_is_not_there_anymore() -> void:
 func test_staying_together_is_not_a_new_event() -> void:
 	# §5.8 — "전투 지속 → 다음 턴에도 조우 상태". 이어지는 상태는 새 사건이 아니다.
 	# 안 그러면 몬스터방에 서 있는 동안 매 턴 같은 기사가 나간다.
+	#
+	# **태세를 박아 둔다.** M5 가 붙은 뒤로 태세를 안 내면 성향이 대신 고르고,
+	# 불리한 경쟁자는 그 자리에서 도망친다 (docs/design/35-encounter.md §35.4).
+	# 여기서 재려는 것은 조우가 **이어지는가**이지 무엇을 고르는가가 아니다.
 	var run := Fixtures.run("hall")
 	Fixtures.rival(run, "hall")
 
-	run.submit_intent(TurnIntent.stay("rival"))
+	Fixtures.hold(run, "rival", EncounterChoice.Kind.NEGOTIATE)
 	var first := run.resolve_turn()
-	run.submit_intent(TurnIntent.stay("rival"))
+	Fixtures.hold(run, "rival", EncounterChoice.Kind.NEGOTIATE)
 	var second := run.resolve_turn()
 
 	assert_eq(_encountered(first).size(), 1, "처음 마주친 것이 사건이 아니다")
@@ -171,11 +185,11 @@ func test_e6_a_third_one_joining_is_a_new_encounter() -> void:
 	var run := Fixtures.run("hall")
 	Fixtures.rival(run, "hall")
 	Fixtures.rival(run, "vault", "second")
-	run.submit_intent(TurnIntent.stay("rival"))
+	Fixtures.hold(run, "rival", EncounterChoice.Kind.NEGOTIATE)
 	run.submit_intent(TurnIntent.stay("second"))
 	run.resolve_turn()
 
-	run.submit_intent(TurnIntent.stay("rival"))
+	Fixtures.hold(run, "rival", EncounterChoice.Kind.NEGOTIATE)
 	run.submit_intent(TurnIntent.move("second", "hall"))
 	var report := run.resolve_turn()
 
@@ -241,3 +255,80 @@ func test_an_encounter_blocks_searching_that_room() -> void:
 
 	assert_eq(run.haul.carried_by("squad"), 0, "마주친 방에서 상자를 뒤졌다")
 	assert_eq(run.loot.value_at("vault"), Fixtures.VAULT_VALUE, "귀중품이 사라졌다")
+
+
+# ---------------------------------------------------------------- E3
+
+
+func test_e3_striking_at_the_same_time_is_force_against_force() -> void:
+	# §5.6 E3 이 *"전투는 주고받기식이 아니다"* 라고 적은 것이 그대로 답이다.
+	# **동시 공격에 보정을 얹지 않는다.** 힘이 같으면 아무도 안 밀린다.
+	var run := Fixtures.run("vault")
+	Fixtures.rival(run, "vault", "rival", 8, 3)
+	Fixtures.hold(run, "squad", EncounterChoice.Kind.FIGHT)
+	Fixtures.hold(run, "rival", EncounterChoice.Kind.FIGHT)
+
+	var outcome := run.resolve_turn().outcomes[0]
+
+	assert_eq(outcome.pressure_on("squad"), 0, "동시에 쳤는데 한쪽이 기습당했다")
+	assert_eq(outcome.pressure_on("rival"), 0)
+	assert_true(outcome.continues, "교착인데 조우가 안 이어진다")
+
+
+func test_e3_the_one_who_did_not_strike_loses_the_advantage() -> void:
+	# **반대로 만들었다면** 서로 치는 것이 특별한 사건이 되고 안 치는 쪽이 기본이 되어
+	# 아무도 안 치는 판이 됐을 것이다 (docs/design/35-encounter.md §35.3.1).
+	var run := Fixtures.run("vault")
+	Fixtures.rival(run, "vault", "rival", 6, 3)
+	Fixtures.hold(run, "rival", EncounterChoice.Kind.FIGHT)
+
+	var outcome := run.resolve_turn().outcomes[0]
+
+	assert_true(outcome.victor_ids.has("rival"), "약한 쪽이 혼자 쳤는데 못 이겼다")
+	assert_true(outcome.pressure_on("squad") > 0, "등을 보였는데 대가가 없다")
+
+
+# ---------------------------------------------------------------- E5
+
+
+func test_e5_the_room_does_not_take_a_choice_away() -> void:
+	# 분기를 방마다 가르면 조우마다 **다른 게임**을 배워야 하고,
+	# 동시 선택의 심리전이 방 지식 암기 문제가 된다 (§35.3.2).
+	var run := Fixtures.run("gate")
+	Fixtures.rival(run, "gate", "rival", 4, 3)
+	Fixtures.hold(run, "squad", EncounterChoice.Kind.NEGOTIATE)
+	Fixtures.hold(run, "rival", EncounterChoice.Kind.NEGOTIATE)
+
+	var report := run.resolve_turn()
+
+	assert_eq(report.outcomes[0].negotiated_ids.size(), 2, "탈출 지점이라 협상이 막혔다")
+
+
+func test_e5_cooperating_where_there_is_no_monster_is_just_a_fight() -> void:
+	# **협력을 여는 것은 방이 아니라 몬스터다.** 방 종류로 열면 몬스터가 이미 죽은
+	# 몬스터방에서도 열리고, 그러면 무엇과 협력한다는 말인가.
+	var run := Fixtures.run("deep")
+	Fixtures.rival(run, "deep", "rival", 4, 3)
+	Fixtures.hold(run, "squad", EncounterChoice.Kind.COOPERATE)
+	Fixtures.hold(run, "rival", EncounterChoice.Kind.COOPERATE)
+
+	var outcome := run.resolve_turn().outcomes[0]
+
+	assert_eq(outcome.choice_of("squad"), EncounterChoice.Kind.FIGHT, "협력할 상대가 없는데 협력으로 남았다")
+	assert_true(outcome.allied_ids.is_empty())
+	assert_true(outcome.pressure_on("rival") > 0, "각자 싸우는데 아무 일도 안 났다")
+
+
+func test_e5_backing_off_at_the_exit_costs_the_wait() -> void:
+	# §5.9 — *"다 챙기고 문 앞에서 죽는 것"* 이 절정이다.
+	# **문 앞에서 물러나는 데 대가가 없으면 절정이 없다.**
+	var run := Fixtures.run("gate")
+	Fixtures.rival(run, "hall")
+	run.submit_intent(TurnIntent.stay("rival"))
+	run.hold_at_exit()
+
+	run.submit_intent(TurnIntent.stay("squad").facing(EncounterChoice.Kind.FLEE))
+	run.submit_intent(TurnIntent.move("rival", "gate").facing(EncounterChoice.Kind.NEGOTIATE))
+	run.resolve_turn()
+
+	assert_eq(run.escape_progress(), 0, "문 앞에서 물러났는데 버틴 것이 남았다")

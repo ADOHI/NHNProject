@@ -68,6 +68,23 @@ static func monster(
 	return actor
 
 
+## 태세를 붙인 제자리 의도를 낸다.
+##
+## 조우가 이어지는 턴에는 갈 곳도 뒤질 것도 없이 **고르기만** 한다
+## (docs/design/05-rules.md §5.8 *"전투 지속 -> 다음 턴에도 조우 상태"*).
+static func hold(made: DungeonRun, actor_id: String, stance: EncounterChoice.Kind) -> void:
+	made.submit_intent(TurnIntent.stay(actor_id).facing(stance))
+
+
+## 판 위에서 그 id 를 찾는다. 조우 시험이 참가자를 손으로 집을 때 쓴다.
+static func actor(made: DungeonRun, actor_id: String) -> Actor:
+	for room_id in made.graph.room_ids():
+		for found in made.graph.get_room(room_id).occupants():
+			if found.id == actor_id:
+				return found
+	return null
+
+
 ## 성향 여섯을 한 축만 세워 만든다. 나머지는 중립이다.
 ##
 ## 행동에 쓰이는 축은 `RECKLESS` 하나뿐이므로(§33.4), 시험도 그것만 흔든다.

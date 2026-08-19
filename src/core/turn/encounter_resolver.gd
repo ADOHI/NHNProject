@@ -303,6 +303,11 @@ func _retreat_room(actor: Actor, came_from: String) -> String:
 ## 둘 다 전투를 골랐으면 둘 다 1.0 이라 힘 대 힘이고, 한쪽만 쳤을 때만 차이가 난다
 ## (§35.3.1).
 func _resolve_fight(outcome: EncounterOutcome, here: Array[Actor], room: Room) -> void:
+	if outcome.was_bloodless():
+		# **아무도 치지 않았다.** 대치와 결렬만 남은 방에서 싸움이 나면
+		# 「가만히 서 있었더니 맞았다」가 되어 태세를 고를 이유가 사라진다.
+		# 몬스터는 언제나 전투를 내므로 몬스터가 있는 방은 여기 안 걸린다.
+		return
 	var sides := _form_sides(outcome, here)
 	if sides.size() < 2:
 		return
@@ -344,8 +349,9 @@ func _resolve_fight(outcome: EncounterOutcome, here: Array[Actor], room: Room) -
 ## | 그 밖 | 각자 혼자 |
 func _form_sides(outcome: EncounterOutcome, here: Array[Actor]) -> Dictionary:
 	var cooperators := _who_chose(outcome, here, EncounterChoice.Kind.COOPERATE)
-	var allied := cooperators.size() >= 2
-	if allied:
+	if cooperators.size() >= 2:
+		# **협력은 둘 이상이어야 성립한다.** 혼자 고른 것은 그냥 각자 싸우는 것이고,
+		# 그래도 **다른 탐험가를 치지는 않는다** — 몬스터를 보고 있기 때문이다.
 		for actor in cooperators:
 			outcome.allied_ids.append(actor.id)
 
@@ -356,7 +362,7 @@ func _form_sides(outcome: EncounterOutcome, here: Array[Actor]) -> Dictionary:
 		var key := actor.id
 		if actor.kind == Actor.Kind.MONSTER:
 			key = "*monsters"
-		elif allied and outcome.choice_of(actor.id) == EncounterChoice.Kind.COOPERATE:
+		elif outcome.choice_of(actor.id) == EncounterChoice.Kind.COOPERATE:
 			key = "*allied"
 		elif outcome.negotiated_ids.has(actor.id):
 			key = "*talked"
@@ -438,21 +444,48 @@ func _mark_relations(outcome: EncounterOutcome, here: Array[Actor]) -> void:
 
 
 ## 한쪽만 친 경우를 남긴다. **선제 공격**, 그리고 어제의 동료였다면 **배신**.
+##
+## **사람을 치는 것은 `FIGHT` 뿐이다.** 협력은 몬스터를 향한 것이라
+## 협력을 고른 자는 옆 사람을 친 것이 아니다 (§5.8 의 넷째 분기).
+## 이것을 안 가르면 어제의 동료와 오늘도 함께 싸운 사람이 **배신자로 기록된다.**
 func _mark_strikes(outcome: EncounterOutcome, explorers: Array[Actor]) -> void:
 	var unarmed: Array[String] = []
 	for actor in explorers:
-		if not EncounterChoice.means_harm(outcome.choice_of(actor.id)):
+		if outcome.choice_of(actor.id) != EncounterChoice.Kind.FIGHT:
 			unarmed.append(actor.id)
 	for actor in explorers:
-		if not EncounterChoice.means_harm(outcome.choice_of(actor.id)):
+		if outcome.choice_of(actor.id) != EncounterChoice.Kind.FIGHT:
 			continue
-		var betrayed := _intersect(allies_of(actor.id), _ids_of(explorers), actor.id)
+		var betrayed := _betrayed_by(outcome, actor, explorers)
 		if not betrayed.is_empty():
 			outcome.marks.append(EncounterMark.new(RelationEvent.Kind.BETRAYAL, actor.id, betrayed))
 			continue
 		var struck := _ids_except_list(unarmed, actor.id)
 		if not struck.is_empty():
 			outcome.marks.append(EncounterMark.new(RelationEvent.Kind.AMBUSH, actor.id, struck))
+
+
+## 어제의 동료 중 **오늘 같은 편이 아닌** 자들. 그들을 친 것이 배신이다.
+##
+## 오늘도 같은 편이면 배신이 아니다 — 협력이 여러 턴 이어지는 것이 정상이고,
+## 그것을 배신으로 세면 **함께 싸울수록 사이가 나빠진다.**
+func _betrayed_by(
+	outcome: EncounterOutcome, actor: Actor, explorers: Array[Actor]
+) -> Array[String]:
+	var found: Array[String] = []
+	for other in explorers:
+		if other.id == actor.id or not allies_of(actor.id).has(other.id):
+			continue
+		if _still_together(outcome, actor.id, other.id):
+			continue
+		found.append(other.id)
+	return found
+
+
+func _still_together(outcome: EncounterOutcome, one: String, other: String) -> bool:
+	if outcome.negotiated_ids.has(one) and outcome.negotiated_ids.has(other):
+		return true
+	return outcome.allied_ids.has(one) and outcome.allied_ids.has(other)
 
 
 func _mark(outcome: EncounterOutcome, kind: RelationEvent.Kind, ids: Array[String]) -> void:
@@ -534,13 +567,5 @@ func _ids_except_list(ids: Array[String], actor_id: String) -> Array[String]:
 	var found: Array[String] = []
 	for id in ids:
 		if id != actor_id:
-			found.append(id)
-	return found
-
-
-func _intersect(left: Array[String], right: Array[String], skip: String) -> Array[String]:
-	var found: Array[String] = []
-	for id in left:
-		if id != skip and right.has(id):
 			found.append(id)
 	return found
