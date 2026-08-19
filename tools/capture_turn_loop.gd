@@ -47,7 +47,7 @@ func _initialize() -> void:
 	if args.size() > 0:
 		_prefix = args[0]
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://%s" % _prefix))
-	_main = load("res://src/main/main.tscn").instantiate()
+	_main = load("res://src/ui/dungeon_board/dungeon_screen.tscn").instantiate()
 	root.add_child(_main)
 
 

@@ -29,7 +29,7 @@ func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		_prefix = args[0]
-	_main = load("res://src/main/main.tscn").instantiate()
+	_main = load("res://src/ui/dungeon_board/dungeon_screen.tscn").instantiate()
 	root.add_child(_main)
 
 

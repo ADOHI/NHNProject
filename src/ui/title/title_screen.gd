@@ -7,8 +7,8 @@ extends Control
 ##   「금」은 신문지에 눌러 찍은 금박이다. 값싼 종이는 박을 붙들지 못한다.
 ##   그래서 **금은 반드시 금이 간다.**
 ##
-## 이 씬은 `main.tscn` 에 붙어 있지 않다. 부팅 흐름에 끼우는 것은 통합자가 한다
-## (docs/design/21-title.md §21.7).
+## 이 씬은 **부팅이 닿는 첫 화면이다.** `main` 이 여기로 넘긴다
+## (docs/design/34-systems.md §34.5) — 21.7 이 통합자에게 남겨 둔 자리를 채운 것이다.
 ##
 ## ---
 ##
@@ -65,6 +65,16 @@ const _DEMON_ANGLES: Array[float] = [258.0, 292.0, 316.0]
 const _DEMON_SCALES: Array[float] = [1.34, 0.78, 0.56]
 const _DEMON_RINGS: Array[float] = [0.50, 0.66, 0.80]
 
+## 내려가는 문. **금을 누르는 것과 갈라 두었다** —
+## 21.5 가 「금을 누르면 그 자리의 박이 떨어진다」를 확정해 두었으므로
+## 금 위의 클릭을 시작 버튼으로 쓰면 그 규칙과 다툰다.
+##
+## **조형은 잠정이다** (§21.9 — *"메뉴 항목의 형태와 반응 미정"*).
+## 여기 있는 것은 흐름이 서 있다는 것을 화면에서 확인하기 위한 최소한이고,
+## 타이틀 레인이 메뉴를 정하면 이 한 줄만 그것으로 바뀐다.
+const _ENTER_TEXT := "들어간다"
+const _ENTER_SIZE := 22
+
 var _paper: ColorRect
 var _glyph: FoilGlyph
 var _plate: PressPlate
@@ -79,10 +89,42 @@ var _beat := Beat.STAMPING
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	# 이 씬이 이제 트리의 뿌리다. 예전에는 `main` 이 물려 준 테마를 받았는데
+	# 씬을 갈아 끼우면 그것이 따라오지 않으므로 여기서 문다.
+	theme = UiTheme.get_theme()
 	_build()
+	_build_door()
 	_lay_out()
 	resized.connect(_lay_out)
+	descend_requested.connect(_descend)
 	_stamp()
+
+
+## 내려간다. **어느 씬인지 여기서 적지 않는다** — 화면 이름만 말한다
+## (docs/design/34-systems.md §34.3.1).
+func _descend() -> void:
+	if _beat == Beat.DESCENDING:
+		return
+	_beat = Beat.DESCENDING
+	Router.go_to(SceneRoutes.Screen.BASE)
+
+
+## 문 하나. **다른 겹을 다 덮은 뒤에 놓는다** — 눌려야 하므로 맨 위여야 한다.
+func _build_door() -> void:
+	var door := Button.new()
+	door.text = _ENTER_TEXT
+	door.focus_mode = Control.FOCUS_NONE
+	door.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	door.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	door.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	door.offset_bottom = -float(UiTokens.SPACE_RIFT) * 2.0
+	# 기본 크기로 두면 화면에서 가장 중요한 것이 가장 작다.
+	# 테마의 `SUB`(「지금 어디인가」) 단과 같은 22 로 올린다 — 그쪽은 Label 변형이라
+	# Button 에는 안 붙으므로 값만 맞춘다.
+	door.add_theme_font_size_override("font_size", _ENTER_SIZE)
+	door.pressed.connect(func() -> void: Sfx.play(SfxEvent.Kind.UI_PRESS))
+	door.pressed.connect(descend_requested.emit)
+	add_child(door)
 
 
 func _gui_input(event: InputEvent) -> void:

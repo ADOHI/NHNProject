@@ -75,3 +75,24 @@ func retain_only(member_ids: Array[String]) -> void:
 	for member_id in _slots.keys():
 		if not member_ids.has(member_id):
 			_slots.erase(member_id)
+
+
+# ---------------------------------------------------------------- 저장
+
+
+## 배치표를 사전으로. 열쇠가 대원 식별자라 그대로 사람이 읽을 수 있다.
+func to_dict() -> Dictionary:
+	return _slots.duplicate()
+
+
+## 사전에서 되돌린다. **`assign()` 을 거친다** —
+## 손으로 고친 파일이 정원을 넘겨 놓았어도 규칙이 그것을 막는다.
+## 넘친 배치는 조용히 빠지고, 그 대원은 어디에도 없는 상태로 선다.
+static func from_dict(data: Dictionary) -> FacilityAssignment:
+	var assignment := FacilityAssignment.new()
+	for member_id in data:
+		var kind := int(data[member_id])
+		if kind < 0 or kind >= Facility.count():
+			continue
+		assignment.assign(String(member_id), kind as Facility.Kind)
+	return assignment
