@@ -62,7 +62,7 @@ func _initialize() -> void:
 	if args.size() > 0:
 		_out_path = "res://%s" % args[0]
 		_room_path = args.slice(1)
-	var scene := "res://src/main/main.tscn"
+	var scene := "res://src/ui/dungeon_board/dungeon_screen.tscn"
 	if _room_path.has("showcase"):
 		scene = "res://src/ui/style/style_showcase.tscn"
 	_film = _room_path.has("film")

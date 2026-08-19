@@ -88,11 +88,23 @@ func forget() -> void:
 	_stack.clear()
 
 
+## **프레임 끝으로 미룬다.** 여기서 바로 갈아 끼우면 안 되는 자리가 실제로 있다 —
+## 부팅 씬의 `_ready()` 안에서 부르면 엔진이 이렇게 답한다.
+##
+##     Parent node is busy adding/removing children, `remove_child()` can't be called
+##
+## 노드가 트리에 붙는 중에 그 노드를 떼려 하기 때문이다. 부르는 쪽마다
+## `call_deferred` 를 기억하게 두면 언젠가 한 곳이 빠지고, **그 한 곳만 부팅이 죽는다.**
+## 그래서 미루는 것을 여기 한 곳에 둔다.
 func _swap(screen: int, path: String) -> bool:
+	_change.call_deferred(path, screen)
+	return true
+
+
+func _change(path: String, screen: int) -> void:
 	var error := get_tree().change_scene_to_file(path)
 	if error != OK:
 		push_warning("씬 전환 오류 %d: %s" % [error, path])
 		route_failed.emit(screen, "전환 오류 %d" % error)
-		return false
+		return
 	screen_changed.emit(screen)
-	return true

@@ -21,6 +21,7 @@ config/icon="res://icon.svg"
 
 GameConfig="*res://src/autoload/game_config.gd"
 Sfx="*res://src/systems/audio/sfx_player.gd"
+Router="*res://src/systems/scene/scene_router.gd"
 
 [display]
 
