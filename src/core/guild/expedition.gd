@@ -83,6 +83,15 @@ func deploy(member_ids: Array[String]) -> bool:
 	return true
 
 
+## 이 원정을 보낸 길드.
+##
+## **정산 화면이 길드를 따로 받지 않게 하려고 연다** (docs/design/36-settlement.md §36.5.2).
+## 원정과 길드를 따로 넘기면 둘이 어긋날 자리가 생긴다 — 정산은 A 길드에 걸리고
+## 화면은 B 길드를 그리는 종류의 버그다. **읽기만 한다. 갈아 끼우지 않는다.**
+func guild() -> Guild:
+	return _guild
+
+
 ## 데려가는 대원들.
 func deployed_ids() -> Array[String]:
 	return _deployed_ids.duplicate()
