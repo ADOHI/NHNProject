@@ -256,4 +256,96 @@ godot --path . -s res://tools/capture_flow.gd
 
 ## 34.7 인계
 
-*(작업이 끝날 때 채운다)*
+### 34.7.1 생긴 것
+
+| 파일 | 무엇 |
+| --- | --- |
+| `src/systems/scene/scene_routes.gd` | 화면 이름 ↔ 씬 경로 장부. **`res://…tscn` 문자열이 사는 유일한 곳** |
+| `src/systems/scene/scene_route_stack.gd` | 지나온 길 · 되돌아갈 곳 · 넘기는 값. **순수 클래스** |
+| `src/systems/scene/scene_router.gd` | 오토로드 `Router`. 얇다 — 판단은 위 둘이 하고 전환 한 줄만 여기 있다 |
+| `src/systems/save/save_result.gd` | 불러오기의 결과와 **사유** |
+| `src/systems/save/game_save.gd` | 봉투 — 버전과 모양. 파일을 안 만진다 |
+| `src/systems/save/save_store.gd` | `user://` 에 쓰고 읽는다 |
+| `src/ui/dungeon_board/dungeon_screen.gd/.tscn` | **옛 `main`.** 던전 화면이 제 씬으로 내려왔다 |
+| `tools/capture_flow.gd` | 진짜 부팅 경로로 띄워 흐름을 눌러 돌고 단계마다 한 장씩 남긴다 |
+
+코어에 붙은 것 — `Guild` · `GuildMember` · `FacilityAssignment` · `RecruitProspect` 의
+`to_dict()` / `from_dict()`.
+
+`project.godot` 에 오토로드 한 줄이 늘었다 (`Router`). **하나만 더했다** —
+저장은 오토로드가 아니다.
+
+### 34.7.2 지금 실제로 이어지는 흐름
+
+```
+main (부팅) → 타이틀 ──「들어간다」──→ 주둔지 ──「던전 판 보기」──→ 던전
+                                        ↑                            │
+                                        └────────「주둔지로」──────────┘
+```
+
+`godot --path . -s res://tools/capture_flow.gd` 로 돌려 확인했다.
+넘긴 게이트가 던전 지면 아래 한 줄에 그대로 찍혔고(`붉은 지하도 • 조판 628092967`),
+되돌아간 뒤 라우터의 길이 `타이틀 > 주둔지` 로 **되감겨** 있었다 (§34.3.2).
+
+주둔지는 열 때 저장을 읽고, 정산 뒤에 쓴다. 첫 판에는 기록 칸에
+*"저장된 진행이 없다 — 새로 시작한다"* 가 한 줄 뜬다 — **그것이 정상이다.**
+
+### 34.7.3 안 한 것 — **다음 사람이 여기서 시작한다**
+
+| 안 한 것 | 왜 | 어디서 이어받나 |
+| --- | --- | --- |
+| **세계의 관계 변화 저장** | 크기 (§34.4.1) | 봉투 버전을 2로 올리고 **씨앗 이후의 변경분**만 담아라 |
+| **진행 중인 던전 한 판 저장** | 익스트랙션에서 한 판을 되감아 주면 손실 규칙이 무너진다 | 정말 필요하면 「나가면 포기」로 못 박는 편이 낫다 |
+| **주둔지의 원정과 던전 화면을 합치는 것** | **기능 변경이라 이 레인의 일이 아니다** | 인게임 레인. 길은 이미 놓여 있다 — `Router` 에 화면 이름만 말하면 된다 |
+| **전환 연출** | 흐름이 먼저다 (§34.3.5) | `Router.screen_changed` 에 붙여라 |
+| **아지트 · 인물 열람기 · 소지품으로 가는 길** | 장부에는 올려 뒀지만 **부르는 화면이 아직 없다** | 그 화면을 여는 자리에서 `Router.go_to()` 한 줄 |
+| **「새 게임」 단추** | 지울 것인지 묻는 화면이 없다 | `SaveStore.erase()` 와 `Router.forget()` 이 이미 있다 |
+
+### 34.7.4 손대는 사람이 알아야 할 것 셋
+
+1. **씬을 옮기면 `scene_routes.gd` 를 같이 고쳐라.** 안 고치면 실행해도 오류가 안 난다 —
+   화면이 그냥 안 바뀐다. `test_scene_routes.gd` 가 그것을 잡는다
+2. **`Router.go_to()` 는 프레임 끝에 갈아 끼운다.** `_ready()` 안에서 바로 바꾸면
+   *"Parent node is busy adding/removing children"* 로 죽어서 미뤄 두었다.
+   그래서 `go_to()` 가 `true` 를 돌려준 것은 **목적지가 있다**는 뜻이지
+   **이미 바뀌었다**는 뜻이 아니다
+3. **시험에서 `go_to()` 를 부르지 마라.** GUT 러너가 선 씬이 사라진다.
+   되돌아가기 규칙은 `SceneRouteStack` 으로, 전환 자체는 `tools/capture_flow.gd` 로 본다
+
+### 34.7.5 통합자에게
+
+이 레인은 공용 문서 셋(`11-decisions.md` · `ai-usage.md` · `architecture.md`)과
+`game-design.md` 의 지도 표를 **건드리지 않았다.** 넣어야 할 것은 이렇다.
+
+- `architecture.md` — `src/systems/scene/` · `src/systems/save/` 항목,
+  오토로드 표에 `Router`, 그리고 **`main.tscn` 절을 「진입점」으로 되돌린 것**
+- `11-decisions.md` — 세이브 v1 의 범위(§34.4.1)와 자동 저장 지점 하나(§34.4.5)
+- `game-design.md` 지도 — §34 한 줄
+- `refactoring-2026-08-19.md` §4 진행 기록 — ③이 끝났다는 줄
+
+---
+
+## 34.8 검증 기록
+
+```bash
+rm -rf .godot                                        # 씬을 옮겼으므로 캐시를 지운다
+godot --headless --path . --import
+godot --headless --path . --quit-after 120
+GODOT=<godot> python tools/run_gut_retry.py --expect-tests 2046
+python tools/run_lint_retry.py
+godot --headless --path . -s res://tools/check_glyphs.gd
+godot --path . -s res://tools/capture_flow.gd        # 창 하나로 네 장
+```
+
+**시험은 1986 에서 2046 으로 늘었다 (+60).** 리팩토링 부분(§34.5)은 수를 안 바꾸고,
+늘어난 것은 전부 새로 만든 것의 시험이다.
+
+| 새 시험 | 수 | 무엇을 지키나 |
+| --- | --- | --- |
+| `test_scene_routes.gd` | 7 | **장부의 경로가 실제로 산다** — 씬을 옮기고 장부를 안 고친 것을 잡는다 |
+| `test_scene_route_stack.gd` | 14 | 되감기 · 넘긴 값이 한 번만 나오는 것 · 깊이 상한 |
+| `test_scene_router.gd` | 5 | 화면 전부가 목적지로 풀린다 |
+| `test_guild_save_dict.gd` | 12 | 코어의 왕복. JSON 을 거쳐도 같은가 |
+| `test_game_save.gd` | 8 | 버전 · 깨진 모양 · 사유가 언제나 있는가 |
+| `test_save_store.gd` | 10 | 파일 왕복 · **깨진 파일을 안 지우는 것** |
+| `test_base_screen.gd` | +4 | 이어받기 · 정산 뒤 저장 · 깨진 세이브에도 안 죽는 것 |
