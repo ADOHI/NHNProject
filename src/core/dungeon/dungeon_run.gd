@@ -52,6 +52,14 @@ var memory: BoardMemory
 ## NPC 탐험가와 몬스터의 의도를 정한다 (M4).
 var planner: NpcPlanner
 
+## NPC 가 조우에서 무엇을 고를지 정한다 (docs/design/35-encounter.md §35.4).
+##
+## 친밀도를 넣는 곳이기도 하다 — `set_affinity()`. 판은 관계도를 직접 안 읽는다.
+var encounter_planner: EncounterPlanner
+
+## 조우 절차 본체 (M5 · §5.8).
+var encounters: EncounterResolver
+
 ## 행동 페이즈. 다섯 단계를 순서대로 푼다.
 var resolver: TurnResolver
 
@@ -67,8 +75,14 @@ var turn: int = 1
 ## 지금 국면. 화면은 `TurnPhase.accepts_input()` 하나만 보고 입력을 막는다.
 var phase: TurnPhase.Kind = TurnPhase.Kind.PLANNING
 
-## 판이 끝났는가. 플레이어가 탈출하면 선다 (§5.3 정산).
+## 판이 끝났는가. 플레이어가 탈출하거나 **제압당하면** 선다 (§5.3 정산).
 var finished := false
+
+## 제압당해 끝났는가. **탈출과 다르다** — 들고 있던 것을 전부 잃었다.
+##
+## docs/design/28-combat.md §28.10 — *"대원은 잃지 않는다. 백팩만 잃어버림."*
+## 그래서 이것은 게임 오버가 아니라 **손실**이고, 루프는 계속 돈다.
+var defeated := false
 
 ## 이번 턴에 도착해서 읽은 인접 위험도의 변화량. **화면이 그대로 띄운다.**
 ##
@@ -102,8 +116,10 @@ func _init(
 	loot = LootTable.for_graph(dungeon_graph, rng)
 	haul = Haul.new()
 	memory = BoardMemory.new()
-	resolver = TurnResolver.new(graph, loot, haul, event_log)
 	planner = NpcPlanner.new(graph, loot, haul)
+	encounter_planner = EncounterPlanner.new(planner, haul, run_seed)
+	encounters = EncounterResolver.new(graph, loot, haul, encounter_planner, run_seed)
+	resolver = TurnResolver.new(graph, loot, haul, event_log, encounters)
 	# 스쿼드가 아직 안 놓인 판도 있다(테스트 픽스처). 그때는 첫 이동이 시작 방을 메운다.
 	walk.begin_at(player_room_id())
 	memory.note(player_room_id(), adjacent_threat())
@@ -190,6 +206,22 @@ func submit_intent(intent: TurnIntent) -> bool:
 	return true
 
 
+## 조우가 나면 쓸 태세를 낸다 (§35.1.2).
+##
+## 이미 낸 의도가 있으면 거기 붙이고, 없으면 **제자리를 지키며 그 태세로 맞는다.**
+## 태세만 내는 길이 따로 있어야 하는 이유는, 조우가 이어지는 턴에는
+## 갈 곳도 뒤질 것도 없이 **고르기만** 하기 때문이다 (§5.8 *"전투 지속"*).
+func submit_stance(stance: EncounterChoice.Kind) -> bool:
+	if not accepts_input():
+		return false
+	var intent: TurnIntent = _intents.get(player.id)
+	if intent == null:
+		intent = TurnIntent.stay(player.id)
+		_intents[player.id] = intent
+	intent.stance = stance
+	return true
+
+
 func clear_intent(actor_id: String) -> void:
 	_intents.erase(actor_id)
 
@@ -219,6 +251,10 @@ func resolve_turn() -> TurnReport:
 	_note_memory()
 	phase = TurnPhase.Kind.PLANNING
 	if report.escaped_actor_ids.has(player.id):
+		finished = true
+	if report.subdued_actor_ids.has(player.id):
+		# **제압은 탈출의 반대편이다.** 판은 똑같이 끝나지만 손에 남는 것이 없다.
+		defeated = true
 		finished = true
 	turn_resolved.emit(report)
 	if report.did_move(player.id):

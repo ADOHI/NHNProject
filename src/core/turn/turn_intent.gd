@@ -38,6 +38,21 @@ var kind: Kind
 ## 어디로. MOVE 가 아니면 언제나 비어 있다.
 var target_room_id: String
 
+## 조우가 나면 쓸 태세. **조우가 안 나면 아무 일도 안 한다** (docs/design/35-encounter.md §35.1.2).
+##
+## 조우 선택을 위해 계획 페이즈를 하나 더 만들면 턴이 두 겹이 되고,
+## docs/design/03-core-loop.md §3.6 의 「이동 -> 조우 -> 상호작용」 순서가 깨진다.
+## 그래서 의도에 한 칸을 붙인다.
+##
+##     "금고로 간다. 거기서 누굴 만나면 도망친다."
+##
+## **이 모양이 §5.8 의 「상대의 선택을 모름」보다 한 걸음 더 간다** —
+## 상황조차 모르는 채로 고른다. 그래서 인접 방 위험도 숫자(§13.5)가 조우에서도 값을 갖는다.
+##
+## 기본값 `STAND` 는 **안 골랐다**는 뜻이다. 그때 누가 대신 고르는지는
+## `EncounterResolver._collect_choices()` 가 정한다 — NPC 는 성향이, 플레이어는 아무도.
+var stance: EncounterChoice.Kind = EncounterChoice.Kind.STAND
+
 
 func _init(intent_actor_id: String, intent_kind: Kind, target: String = "") -> void:
 	actor_id = intent_actor_id
@@ -71,6 +86,14 @@ static func search(intent_actor_id: String) -> TurnIntent:
 ## 탈출이 한 턴짜리 행동이 아니라 **유지해야 하는 상태**여야 한다.
 static func escape(intent_actor_id: String) -> TurnIntent:
 	return TurnIntent.new(intent_actor_id, Kind.ESCAPE)
+
+
+## 태세를 붙여 자기를 돌려준다. **의도와 태세를 함께 낸다** (§35.1.2).
+##
+##     TurnIntent.move("squad", "vault").facing(EncounterChoice.Kind.FLEE)
+func facing(stance_kind: EncounterChoice.Kind) -> TurnIntent:
+	stance = stance_kind
+	return self
 
 
 func is_move() -> bool:
