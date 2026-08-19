@@ -21,7 +21,8 @@
 
 `char-anim` · `dungeon-gen` · `npc-relations` · `sound` · `hideout` · `lighting-2d` ·
 `portraits` · `combat` · `ui-kit-2` · `test-stability` · 이동 연구 · 타이틀 시차 ·
-`soft-body` · `rekka-feed`. 테스트 **623 → 1898**.
+`soft-body` · `rekka-feed` · `turn-loop` · `decouple-proto` · `systems-flow`.
+테스트 **623 → 2046**.
 
 **본판이 PC 스탠드얼론으로 바뀌었다** (2026-08-19). 웹은 데모·디버깅용으로 남는다
 → [`design/01-constraints.md`](design/01-constraints.md) §1.1.
@@ -39,7 +40,7 @@
 
 ```
 src/
-├── autoload/game_config.gd     # 전역 설정 · 실행 환경 판별 (유일한 싱글톤)
+├── autoload/game_config.gd     # 전역 설정 · 실행 환경 판별 (오토로드 셋 중 하나)
 ├── core/                       # 노드 비의존 순수 로직. 전부 RefCounted
 │   ├── dungeon/                # 판 — 방 · 위험도 · 고도 · 절차 생성
 │   │   └── generation/         # 생성 파이프라인 (샘플링 → 삼각분할 → 간선 → 지형 → 구역 → 종류)
@@ -58,9 +59,12 @@ src/
 │   │   └── motion/             # 동작 곡선 다섯 (잔상 · 정지 · 전단 · 내리침 · 눌림)
 │   └── text/korean_josa.gd     # 조사 처리
 ├── entities/character/         # 리그를 노드로 세우는 층. 자리표시자 도형 ↔ 진짜 그림
-├── systems/audio/              # 소리를 실제로 내는 층 (`core/sfx/` 는 무엇을 낼지만 정한다)
+├── systems/                    # **엔진에 닿는 층.** `conventions.md §1` 이 정한 셋이 이제 다 찼다
+│   ├── audio/                  # 소리를 실제로 내는 층 (`core/sfx/` 는 무엇을 낼지만 정한다)
+│   ├── scene/                  # **씬 전환** — 경로 장부 · 되돌아갈 곳(순수) · 오토로드 `Router`
+│   └── save/                   # **저장** — `user://save/`. 코어가 사전을 내고 여기가 파일을 맡는다
 ├── ui/
-│   ├── dungeon_board/          # 판 화면
+│   ├── dungeon_board/          # 판 화면 — **`main` 에서 내려온 던전 씬이 여기 산다**
 │   ├── base/                   # 길드 아지트 화면
 │   ├── hideout/                # 아지트 아이소 화면
 │   ├── backpack/               # 백팩 격자 화면
@@ -75,13 +79,13 @@ src/
 │   ├── char_anim/              # 애니메이션 조절판
 │   ├── lighting/               # 2D 조명 조사
 │   └── sfx/                    # 효과음 데모
-└── main/                       # 부트 씬 (진입점)
+└── main/                       # 부트 씬. **진입점 그 자체다** — 테마를 물리고 타이틀로 물러난다
 
 assets/fonts/song_myung/        # SongMyung Regular (SIL OFL) — 한글 글리프
 assets/audio/sfx/               # CC0 녹음물 65개 + CREDITS.md (**굽는 재료.** 빌드에서 제외)
 assets/audio/sfx_baked/         # 미리 구운 소리 166벌 — 게임이 싣는 것은 이쪽
 assets/rekka/rekka_library.tres # 렉카 문안 88편 (열쇠 34종, 전부 둘 이상)
-test/unit/                      # GUT 단위 테스트 (현재 166 스크립트 / 1898 통과)
+test/unit/                      # GUT 단위 테스트 (현재 180 스크립트 / 2046 통과)
 test/support/                   # 생성기를 안 믿고 따로 검사하는 자들
 tools/                          # 전부 빌드에 포함되지 않는다
   capture_*.gd                  # 화면 캡처 (창을 한 번 띄워 여러 장을 몰아 뽑는다)
@@ -192,8 +196,9 @@ web/shell.html                  # 웹 빌드용 커스텀 HTML 셸
 **새 시스템을 만들면 그 상태를 이 패널에 노출한다.**
 
 판과 패널은 서로의 내부를 들여다보지 않는다.
-`main.gd` 가 `DungeonRun` 을 만들어 둘에게 나눠 주고,
-판은 `player_acted` 시그널로 알린다.
+**던전 씬**(`src/ui/dungeon_board/dungeon_screen.gd`)이 `DungeonRun` 을 만들어
+둘에게 나눠 주고, 판은 `player_acted` 시그널로 알린다.
+(2026-08-19 전에는 `main.gd` 가 그 자리였다 — 아래 `main.tscn` 절 참고.)
 
 ### 한글 폰트
 
@@ -208,9 +213,24 @@ Godot 기본 폰트에는 한글 글리프가 없어 그대로 두면 UI 가 전
 **1회차에만** 발생한다(폰트 데이터 생성 전에 테마가 로드된다). 2회차 0건, exit code 0.
 배포 워크플로는 export 전에 별도 import 패스를 돌리므로 영향이 없다.
 
-### `GameConfig` (오토로드)
+### 오토로드 셋
 
-`project.godot` 에 등록된 유일한 싱글톤이다. 노출하는 것은 세 가지뿐이다.
+`project.godot` 에 등록된 싱글톤은 **셋뿐이다.** 그 절제를 지킨다 —
+전역이 늘면 무엇이 무엇을 아는지 추적이 안 된다.
+
+| 오토로드 | 하는 일 |
+| --- | --- |
+| `GameConfig` | 빌드 전체에서 안 변하는 값과 실행 환경 판별 (아래) |
+| `Sfx` | 소리를 실제로 낸다 (`src/systems/audio/`) |
+| `Router` | **씬을 갈아 끼운다** (`src/systems/scene/`) — 얇다. 판단은 순수 클래스가 한다 |
+
+> **`Router.go_to()` 는 프레임 끝에 갈아 끼운다.** `_ready()` 안에서 즉시 바꾸면
+> `Parent node is busy adding/removing children` 로 죽는다.
+> 반환값 `true` 는 **「목적지가 있다」**이지 **「이미 바뀌었다」가 아니다.**
+
+#### `GameConfig`
+
+노출하는 것은 세 가지뿐이다.
 
 | 멤버 | 내용 |
 | --- | --- |
@@ -224,12 +244,15 @@ Godot 기본 폰트에는 한글 글리프가 없어 그대로 두면 UI 가 전
 
 ### `main.tscn` / `main.gd`
 
-지금은 **빌드가 실제로 구동되는지 확인하는 화면**이다.
-브라우저에서 제목·버전·렌더러·플랫폼이 보이면 웹 빌드가 정상이라는 뜻이다.
-배포 검증에 실제로 쓰이고 있다 ([web-build.md](web-build.md) 참고).
+**2026-08-19 에 진입점으로 돌아왔다.** 이 문서가 *"콘텐츠가 생기면 이 씬은 진입점
+역할만 남긴다"* 고 적어 둔 대로다. 310줄짜리 던전 화면이던 것이
+`src/ui/dungeon_board/dungeon_screen.gd` 로 내려갔고, 여기 남은 것은
+**테마를 물리고 타이틀로 물러나는 것**뿐이다.
 
-콘텐츠가 생기면 이 씬은 **진입점 역할만** 남긴다.
-(어떤 씬을 띄울지 결정 → 해당 씬으로 전환) 플레이 로직을 여기에 쌓지 않는다.
+`project.godot` 의 `run/main_scene` 은 **그대로** `res://src/main/main.tscn` 이다 —
+부팅 경로는 안 바뀌었다.
+
+> **플레이 로직을 여기에 다시 쌓지 마라.** 한 번 쌓였고 한 번 내렸다.
 
 ---
 
