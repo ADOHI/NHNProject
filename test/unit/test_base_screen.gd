@@ -9,12 +9,33 @@ extends GutTest
 
 const BaseScreenScene := preload("res://src/ui/base/base_screen.tscn")
 
+## **시험 전용 세이브 자리.** 진짜 세이브를 읽으면 그 파일의 내용에 따라
+## 초록과 빨강이 갈린다 — 기계마다 다른 결과가 나오는 시험은 시험이 아니다.
+const SAVE_PATH := "user://test_save/base_screen_test.json"
+
 var _screen: BaseScreen
 
 
 func before_each() -> void:
-	_screen = BaseScreenScene.instantiate()
-	add_child_autofree(_screen)
+	_erase_save()
+	_screen = _open()
+
+
+func after_each() -> void:
+	_erase_save()
+
+
+## 화면 하나를 연다. **`add_child()` 전에 저장 자리를 정한다** — `_ready()` 가 그때 돈다.
+func _open() -> BaseScreen:
+	var screen: BaseScreen = BaseScreenScene.instantiate()
+	screen.save_path = SAVE_PATH
+	add_child_autofree(screen)
+	return screen
+
+
+func _erase_save() -> void:
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
 
 
 # ---------------------------------------------------------------- 눌러 주는 손
@@ -130,9 +151,11 @@ func test_full_lap_runs_on_the_screen() -> void:
 	assert_true(_press_inside(_screen, "탈출 성공"))
 	assert_eq(int(_screen._expedition.stage), int(Expedition.Stage.RETURNED))
 
+	var lines := _screen._log.size()
 	assert_true(_press_inside(_screen, "정산한다"))
 	assert_true(_screen._guild.funds > funds, "갔다 오니 자금이 늘어 있다")
-	assert_eq(_screen._log.size(), 1, "기록이 한 줄 쌓인다")
+	# 정산 한 줄 + 저장 한 줄. 저장은 정산 뒤 이 한 자리에서만 돈다 (설계 34.4.5).
+	assert_eq(_screen._log.size(), lines + 2, "정산과 저장이 각각 한 줄씩 쌓인다")
 
 	assert_true(_press_inside(_screen, "다음 원정"))
 	assert_null(_screen._expedition)
@@ -143,3 +166,50 @@ func test_full_lap_runs_on_the_screen() -> void:
 func test_cannot_enter_without_choosing_anyone() -> void:
 	assert_false(_press_inside(_screen, "들어간다"), "아무도 안 고르면 잠겨 있다")
 	assert_null(_screen._expedition)
+
+
+# ---------------------------------------------------------------- 진행이 남는가
+
+
+func test_a_fresh_screen_says_there_was_nothing_to_load() -> void:
+	# 조용히 새로 시작하면 사용자는 자기 진행이 어디로 갔는지 모른다 (설계 34.4.4).
+	assert_eq(_screen._log.size(), 1)
+	assert_string_contains(_screen._log[0], "새로 시작")
+
+
+func test_settling_writes_a_save_that_comes_back() -> void:
+	_press_member(2, "공방")
+	assert_true(_press_gate(1, "고른다"))
+	_press_member(1, "데려간다")
+	assert_true(_press_inside(_screen, "들어간다"))
+	assert_true(_press_inside(_screen, "탈출 성공"))
+	assert_true(_press_inside(_screen, "정산한다"))
+
+	var loaded := SaveStore.new(SAVE_PATH).read(false)
+	assert_true(loaded.is_ok(), loaded.message())
+	assert_eq(loaded.guild.funds, _screen._guild.funds)
+	assert_eq(loaded.guild.expeditions_settled, _screen._guild.expeditions_settled)
+
+
+func test_a_saved_guild_is_picked_up_on_open() -> void:
+	_screen._guild.add_funds(4321)
+	_screen._guild.display_name = "이어받은 길드"
+	assert_eq(SaveStore.new(SAVE_PATH).write(_screen._guild, _screen._campaign_seed), OK)
+
+	var again := _open()
+	assert_eq(again._guild.display_name, "이어받은 길드")
+	assert_eq(again._guild.funds, _screen._guild.funds)
+	assert_string_contains(again._log[0], "이어서 한다")
+
+
+func test_a_broken_save_starts_a_new_game_and_says_why() -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_PATH.get_base_dir()))
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	file.store_string("이건 세이브가 아니다 {{{")
+	file.close()
+
+	var again := _open()
+	assert_not_null(again._guild, "깨진 세이브가 게임을 죽이면 안 된다")
+	assert_false(again._guild.members.is_empty())
+	assert_string_contains(again._log[0], "깨졌다")
+	assert_true(FileAccess.file_exists(SAVE_PATH), "깨진 파일을 지우지 않는다")
