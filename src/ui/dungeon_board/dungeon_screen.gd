@@ -22,6 +22,11 @@ const ENTRY_SIZE := "dungeon_size"
 const ENTRY_CHARACTER := "dungeon_character"
 const ENTRY_GATE_NAME := "gate_name"
 
+## 진짜 원정을 업고 왔는가는 `SettlementScreen.ENTRY_EXPEDITION` 하나로 안다.
+##
+## **나머지 값은 읽지 않는다. 들고 있다가 정산 화면에 그대로 넘긴다**
+## (docs/design/36-settlement.md §36.5.1) — 씨앗 · 저장 자리는 이 화면의 관심사가 아니다.
+
 ## 첫 판의 시드. 이후에는 생성 버튼이 새 시드를 뽑는다.
 const FIRST_SEED := 1
 
@@ -50,6 +55,15 @@ var _run: DungeonRun = null
 
 ## 이 판의 렉카 피드. **판마다 새로 만든다** — 접두어와 닉네임 고리가 다시 섞여야 한다.
 var _feed: RekkaFeed = null
+
+## 지금 업고 있는 원정. 없으면 이 화면은 예전처럼 **판을 구경하는 화면**이다.
+##
+## 업고 있으면 두 가지가 달라진다 — 판을 새로 못 찍고(원정이 든 판과 갈린다),
+## 나가는 문이 **중도 회수**가 된다 (§36.5.3).
+var _expedition: Expedition = null
+
+## 정산 화면에 그대로 넘길 값. 받은 그대로 두고 기사만 얹는다.
+var _entry: Dictionary = {}
 var _debug_visible := false
 
 ## 보스까지의 두 길을 그리고 있는가.
@@ -97,6 +111,9 @@ func _ready() -> void:
 	_board.struck.connect(_sound_on_strike)
 	# 행동이 끝나면 그 턴이 기사가 된다. 계획 페이즈에 읽으라고 만든 장치다 (08 8.1).
 	_board.player_acted.connect(_publish_turn)
+	# **탈출은 즉시가 아니다** (05 5.9). 탈출구에서 버티는 것은 판이 세고, 다 버티면
+	# `DungeonRun.finished` 가 선다. 정산은 그 신호를 듣는 것이지 스스로 판정하지 않는다.
+	_board.player_acted.connect(_check_escape)
 	# **판과 피드는 서로의 내부를 들여다보지 않는다.** 여기서 한 줄로 잇는다 (32 32.5.3).
 	_feed_view.room_selected.connect(_board.highlight_room)
 	resized.connect(_layout_feed)
@@ -112,8 +129,10 @@ func _ready() -> void:
 	_update_size_label()
 	_apply_debug_state()
 	_apply_routes_state()
+	_apply_expedition_state()
 	# 혼자 띄웠으면 돌아갈 곳이 없다. **눌러도 아무 일이 없는 버튼을 두지 않는다.**
-	_back_button.visible = Router.can_go_back()
+	# 원정을 업고 있으면 돌아갈 곳과 무관하게 나가는 문이 있어야 한다 — 그것이 회수다.
+	_back_button.visible = _expedition != null or Router.can_go_back()
 	# 화면이 뜨는 것 자체가 **첫 판을 찍는 것**이다. 켜자마자 인쇄기가 한 번 지나간다.
 	# 첫 프레임에 완성된 지면이 그냥 놓여 있으면, 이 화면이 인쇄물이라는 전제가
 	# 글로만 남고 몸짓으로는 한 번도 나타나지 않는다.
@@ -125,21 +144,47 @@ func _ready() -> void:
 ## **넘어온 값이 없으면 아무것도 안 바꾼다** — 이 씬을 혼자 띄웠을 때
 ## 지금까지와 똑같이 도는 것이 이 함수의 유일한 조건이다.
 func _take_entry() -> void:
-	var entry := Router.take_payload()
-	if entry.is_empty():
+	_entry = Router.take_payload()
+	if _entry.is_empty():
 		return
-	_seed = int(entry.get(ENTRY_SEED, _seed))
-	_character = DungeonCatalog.wrapped(int(entry.get(ENTRY_CHARACTER, _character)))
-	_gate_name = String(entry.get(ENTRY_GATE_NAME, ""))
-	if entry.has(ENTRY_SIZE):
+	_seed = int(_entry.get(ENTRY_SEED, _seed))
+	_character = DungeonCatalog.wrapped(int(_entry.get(ENTRY_CHARACTER, _character)))
+	_gate_name = String(_entry.get(ENTRY_GATE_NAME, ""))
+	if _entry.has(ENTRY_SIZE):
 		_size_slider.value = clampi(
-			int(entry[ENTRY_SIZE]), SampleDungeons.SIZE_MIN, SampleDungeons.SIZE_MAX
+			int(_entry[ENTRY_SIZE]), SampleDungeons.SIZE_MIN, SampleDungeons.SIZE_MAX
 		)
+	_expedition = _entry.get(SettlementScreen.ENTRY_EXPEDITION) as Expedition
 
 
-## 주둔지로 돌아간다. 라우터가 지나온 길을 알고 있으므로 여기서 목적지를 적지 않는다.
+## 나가는 문. **원정을 업고 있으면 그냥 못 돌아간다** (docs/design/36-settlement.md §36.5.3).
+##
+## 익스트랙션에서 한 판을 무를 수 있으면 손실 규칙이 통째로 무너진다.
+## 그래서 원정이 걸려 있을 때 이 단추는 **중도 회수**이고, 정산을 거쳐 나간다.
+## 업은 것이 없으면 예전 그대로 — 라우터가 지나온 길을 안다.
 func _go_back() -> void:
+	if _expedition != null:
+		_finish_expedition(ExpeditionReport.Outcome.RECALLED)
+		return
 	Router.back()
+
+
+## 원정을 끝내고 정산 화면으로 넘긴다. **결말이 이 화면으로 들어오는 유일한 문이다.**
+##
+## 전투 판정이 붙으면(docs/design/05-rules.md §5.5 — 미정) 여기를
+## `DOWNED` 로 부르면 된다. 정산 쪽에는 분기가 없다 — 보고서가 성패를 알고
+## `GuildBalance` 가 값을 정한다 (§36.5.4).
+func _finish_expedition(outcome: ExpeditionReport.Outcome) -> void:
+	if _expedition == null:
+		return
+	var going := _expedition
+	# **먼저 비운다.** 정산으로 넘어가는 사이에 이 화면이 한 번 더 이 함수를 부르면
+	# 같은 원정이 두 번 결말을 낸다 — 전환은 프레임 끝에 일어나므로 그 틈이 실제로 있다.
+	_expedition = null
+	going.finish(outcome)
+	var payload := _entry.duplicate()
+	payload[SettlementScreen.ENTRY_FEED] = _feed
+	Router.go_to(SceneRoutes.Screen.SETTLEMENT, payload)
 
 
 ## 지면을 깐다. 판의 이동•배율을 그대로 받아 잉크 얼룩이 지도와 함께 흐른다.
@@ -191,6 +236,10 @@ func _unhandled_input(event: InputEvent) -> void:
 ## 시드를 무작위로 뽑되 화면에 표시한다. 이상한 판이 나왔을 때
 ## 시드가 없으면 다시 볼 수 없다 (docs/design/17-dungeon-generation.md §17.7).
 func _generate_new() -> void:
+	# **원정 중에는 판을 못 바꾼다.** 바꾸면 원정이 든 판과 화면의 판이 갈리고,
+	# 그때 나온 턴 수가 전리품이 된다 — 조용히 틀린 값이 정산에 들어간다.
+	if _expedition != null:
+		return
 	_seed = randi() % 1000000
 	# 성격도 함께 돈다. 다섯을 다 보려면 다섯 번 누른다 (_character 주석 참고).
 	_character = DungeonCatalog.wrapped(_character + 1)
@@ -203,7 +252,13 @@ func _generate_new() -> void:
 
 func _build_run() -> void:
 	# 판은 여기서 만들어 화면 셋에 나눠 준다. 화면끼리 서로의 내부를 들여다보지 않는다.
-	var run := SampleDungeons.create_run(_seed, int(_size_slider.value), _character)
+	#
+	# **원정을 업고 왔으면 그 판을 물려받는다.** 같은 생성기 · 같은 씨앗이라 그림은
+	# 똑같지만(Gate.create_run), 판을 하나 더 만들면 화면이 세는 턴과 정산이 읽는 턴이
+	# 갈린다 — 그 턴 수가 전리품이 되므로(GuildBalance.loot_for) 조용히 틀린 값이 된다.
+	var run := _expedition.run if _expedition != null else null
+	if run == null:
+		run = SampleDungeons.create_run(_seed, int(_size_slider.value), _character)
 	_plan = run.blueprint
 	_run = run
 	# 소금으로 시드를 준다. 판이 바뀌면 접두어와 닉네임 배열도 바뀌어야 한다
@@ -321,6 +376,25 @@ func _apply_routes_state() -> void:
 	_board.show_boss_routes = _routes_visible
 	_board.redraw()
 	_routes_button.text = "두 길 닫기 (F2)" if _routes_visible else "두 길 (F2)"
+
+
+## 원정을 업고 있을 때 달라지는 것들.
+##
+## 판을 새로 못 찍는 이유는 `_generate_new()` 에 적었다. **잠근 단추를 그냥 두지 않고
+## 끈다** — 눌리는데 아무 일도 안 일어나는 것이 가장 나쁘다.
+func _apply_expedition_state() -> void:
+	if _expedition == null:
+		return
+	_back_button.text = "원정을 접는다"
+	_generate_button.disabled = true
+	_size_slider.editable = false
+
+
+## 탈출이 끝났는가. 끝났으면 정산으로 넘어간다.
+func _check_escape() -> void:
+	if _expedition == null or _run == null or not _run.finished:
+		return
+	_finish_expedition(ExpeditionReport.Outcome.ESCAPED)
 
 
 ## 지면 아래쪽 여백에 찍히는 한 줄. 신문의 쪽수 자리다.

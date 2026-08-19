@@ -28,10 +28,7 @@ enum Stage {
 	SETTLED,  ## 정산까지 끝났다
 }
 
-## 원정 번호를 겹치지 않게 매기는 카운터.
-##
-## 정산 장부의 열쇠이므로 겹치면 두 번째 원정이 정산되지 않는다.
-## 길드의 원정 횟수로 매기면 같은 게이트에 두 번 들어갈 때 겹칠 수 있어 따로 센다.
+## 원정 번호를 겹치지 않게 매기는 카운터. **이것만으로는 모자란다** (`_new_id`).
 static var _next_number: int = 0
 
 ## 정산 장부의 열쇠.
@@ -61,8 +58,36 @@ var _deployed_ids: Array[String] = []
 func _init(guild: Guild, target_gate: Gate) -> void:
 	_guild = guild
 	gate = target_gate
-	_next_number += 1
-	id = "exp_%d" % _next_number
+	id = _new_id(guild)
+
+
+## 정산 장부의 열쇠. **저장을 건너 살아남아야 한다.**
+##
+## ## 여기서 실제로 물렸다
+##
+## 예전에는 이 파일의 정적 카운터만으로 매겼다. 그 카운터는 **프로세스마다 0 으로
+## 되돌아가는데 장부는 세이브에 남는다** (Guild.to_dict — `settled_ids`).
+## 그래서 게임을 껐다 켜고 원정을 나가면 **지난 판이 쓰던 번호를 그대로 다시 쓰고**,
+## `Guild.mark_settled` 가 그것을 「이미 정산됨」으로 막았다.
+##
+## **오류는 안 났다. 정산이 조용히 안 걸렸을 뿐이다** — 화면은 「이미 정산된 원정이다」를
+## 띄우고 자금은 그대로였다. 이 저장소가 가장 무서워하는 종류의 버그다
+## (docs/design/36-settlement.md §36.5.6).
+##
+## ## 고친 방법
+##
+## **길드가 마친 원정 수를 앞에 붙인다.** 그 수는 세이브에 남으므로 번호가 판을 건너
+## 이어진다. 그래도 겹치면 **장부에 물어보고 비킨다** — 저장 시점이 나중에 늘어나도
+## (§34.4.5 는 지금 한 곳뿐이다) 이쪽이 안 깨진다.
+static func _new_id(guild: Guild) -> String:
+	var settled := 0 if guild == null else guild.expeditions_settled
+	# 장부에 이 앞자리로 적힌 것은 많아야 settled 개다. 한 번 더 돌면 반드시 빈 번호가 나온다.
+	for _attempt in settled + 1:
+		_next_number += 1
+		var candidate := "exp_%d_%d" % [settled, _next_number]
+		if guild == null or not guild.has_settled(candidate):
+			return candidate
+	return "exp_%d_%d" % [settled, _next_number]
 
 
 # ---------------------------------------------------------------- 편성
@@ -81,6 +106,15 @@ func deploy(member_ids: Array[String]) -> bool:
 	squad = formed
 	_deployed_ids = member_ids.duplicate()
 	return true
+
+
+## 이 원정을 보낸 길드.
+##
+## **정산 화면이 길드를 따로 받지 않게 하려고 연다** (docs/design/36-settlement.md §36.5.2).
+## 원정과 길드를 따로 넘기면 둘이 어긋날 자리가 생긴다 — 정산은 A 길드에 걸리고
+## 화면은 B 길드를 그리는 종류의 버그다. **읽기만 한다. 갈아 끼우지 않는다.**
+func guild() -> Guild:
+	return _guild
 
 
 ## 데려가는 대원들.
