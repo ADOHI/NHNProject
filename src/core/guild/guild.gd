@@ -373,3 +373,78 @@ func mark_settled(expedition_id: String) -> bool:
 	_settled_ids[expedition_id] = true
 	expeditions_settled += 1
 	return true
+
+
+# ---------------------------------------------------------------- 저장
+
+
+## 길드를 통째로 사전으로 낸다. **영구인 것만 담는다** (설계 6.1).
+##
+## `world` 는 안 담는다 — 인구 3000명과 관계를 전부 쓰면 세이브가 게임보다 커진다.
+## 세계는 씨앗 하나로 결정적으로 다시 서므로(설계 24.16.7) 씨앗은 바깥 봉투가 든다
+## (docs/design/34-systems.md §34.4.1).
+func to_dict() -> Dictionary:
+	var member_rows: Array = []
+	for member in members:
+		member_rows.append(member.to_dict())
+	var prospect_rows: Array = []
+	for prospect in prospects:
+		prospect_rows.append(prospect.to_dict())
+	return {
+		"display_name": display_name,
+		"funds": funds,
+		"base_level": base_level,
+		"base_progress": base_progress,
+		"expeditions_settled": expeditions_settled,
+		"leader_person": leader_person,
+		"home_faction": home_faction,
+		"members": member_rows,
+		"prospects": prospect_rows,
+		"assignment": assignment.to_dict(),
+		"settled_ids": _settled_ids.keys(),
+	}
+
+
+## 사전에서 되돌린다. **대원 명단이 없으면 길드가 아니다** — null 을 돌려준다.
+##
+## `npc_world` 를 주면 대원과 후보가 다시 세계의 인물이 되고 영입 판정이 다시 선다.
+## 안 주면 이름뿐인 사람들로 서고, 화면이 그 사실을 사유로 말한다
+## (RecruitProspect.blocked_reason).
+static func from_dict(data: Dictionary, npc_world: NpcWorld = null) -> Guild:
+	if not data.has("members") or not (data["members"] is Array):
+		return null
+	var guild := Guild.new(String(data.get("display_name", "이름 없는 길드")))
+	guild.funds = int(data.get("funds", GuildBalance.STARTING_FUNDS))
+	guild.base_level = int(data.get("base_level", GuildBalance.STARTING_BASE_LEVEL))
+	guild.base_progress = int(data.get("base_progress", 0))
+	guild.expeditions_settled = int(data.get("expeditions_settled", 0))
+	guild.leader_person = int(data.get("leader_person", PersonRegistry.NO_PERSON))
+	guild.home_faction = int(data.get("home_faction", PersonRegistry.NO_FACTION))
+	for row in data["members"]:
+		var member := GuildMember.from_dict(row as Dictionary)
+		if member != null:
+			guild.add_member(member)
+	for row in data.get("prospects", []):
+		var prospect := RecruitProspect.from_dict(row as Dictionary)
+		if prospect != null:
+			guild.prospects.append(prospect)
+	guild.assignment = FacilityAssignment.from_dict(data.get("assignment", {}) as Dictionary)
+	# 길드에서 이미 빠진 대원의 배치가 파일에 남아 있을 수 있다.
+	guild.assignment.retain_only(guild.member_ids())
+	for expedition_id in data.get("settled_ids", []):
+		guild._settled_ids[String(expedition_id)] = true
+	guild._rebind_world(npc_world)
+	return guild
+
+
+## 불러온 길드를 세계에 다시 딛는다. **판정은 다시 잰다** —
+## 관계는 세계가 들고 있고 이쪽은 인물 번호만 들고 있다.
+func _rebind_world(npc_world: NpcWorld) -> void:
+	if npc_world == null or not npc_world.is_ready():
+		return
+	world = npc_world
+	for prospect in prospects:
+		if prospect.is_in_world() and leader_person != PersonRegistry.NO_PERSON:
+			prospect.standing = RecruitStanding.of(
+				npc_world.registry, npc_world.graph, prospect.person, leader_person
+			)

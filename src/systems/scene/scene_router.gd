@@ -30,9 +30,7 @@ var _stack := SceneRouteStack.new()
 func go_to(screen: int, payload: Dictionary = {}) -> bool:
 	var path := resolve(screen)
 	if path.is_empty():
-		var reason := (
-			"장부에 없는 화면" if not SceneRoutes.is_known(screen) else "씬 파일이 없다"
-		)
+		var reason := "장부에 없는 화면" if not SceneRoutes.is_known(screen) else "씬 파일이 없다"
 		push_warning("전환 실패 (%d): %s" % [screen, reason])
 		route_failed.emit(screen, reason)
 		return false

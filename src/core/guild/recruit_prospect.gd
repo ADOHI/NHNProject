@@ -82,3 +82,36 @@ func is_in_world() -> bool:
 
 func summary() -> String:
 	return "%s (%s)" % [display_name, MemberDiscipline.label(discipline)]
+
+
+# ---------------------------------------------------------------- 저장
+
+
+## 후보를 사전으로. **`standing` 은 담지 않는다** —
+## 세계에서 계산되는 파생값이라, 담아 두면 세계와 어긋난 판정이 살아남는다.
+## 불러올 때 다시 잰다 (Guild.from_dict).
+func to_dict() -> Dictionary:
+	return {
+		"id": id,
+		"display_name": display_name,
+		"discipline": int(discipline),
+		"found_at_expedition": found_at_expedition,
+		"person": person,
+		"introduced_by": introduced_by,
+	}
+
+
+static func from_dict(data: Dictionary) -> RecruitProspect:
+	var prospect_id := String(data.get("id", ""))
+	if prospect_id.is_empty():
+		return null
+	var discipline_kind := clampi(int(data.get("discipline", 0)), 0, MemberDiscipline.count() - 1)
+	var prospect := RecruitProspect.new(
+		prospect_id,
+		String(data.get("display_name", prospect_id)),
+		discipline_kind as MemberDiscipline.Kind,
+		int(data.get("found_at_expedition", 0))
+	)
+	prospect.person = int(data.get("person", PersonRegistry.NO_PERSON))
+	prospect.introduced_by = int(data.get("introduced_by", PersonRegistry.NO_PERSON))
+	return prospect

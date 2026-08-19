@@ -66,3 +66,39 @@ func summary() -> String:
 	return (
 		"%s (%s) 전투 %d 민첩 %d" % [display_name, MemberDiscipline.label(discipline), threat, agility]
 	)
+
+
+# ---------------------------------------------------------------- 저장
+
+
+## 자기를 사전으로 낸다. **세이브 코드가 이 클래스의 내부를 뒤지지 않게 한다** —
+## 저장 형식이 게임 규칙을 오염시키면 안 된다 (docs/design/34-systems.md §34.4.2).
+func to_dict() -> Dictionary:
+	return {
+		"id": id,
+		"display_name": display_name,
+		"discipline": int(discipline),
+		"threat": threat,
+		"agility": agility,
+		"person": person,
+	}
+
+
+## 사전에서 되돌린다. **식별자가 없으면 대원이 아니다** — null 을 돌려준다.
+##
+## 나머지는 없어도 만든다. 옛 세이브에 없던 항목이 생겼을 때 파일 전체를
+## 못 읽게 되는 것보다, 그 항목만 기본값으로 서는 편이 낫다.
+static func from_dict(data: Dictionary) -> GuildMember:
+	var member_id := String(data.get("id", ""))
+	if member_id.is_empty():
+		return null
+	var discipline_kind := clampi(int(data.get("discipline", 0)), 0, MemberDiscipline.count() - 1)
+	var member := GuildMember.new(
+		member_id,
+		String(data.get("display_name", member_id)),
+		discipline_kind as MemberDiscipline.Kind,
+		int(data.get("threat", -1)),
+		int(data.get("agility", -1))
+	)
+	member.person = int(data.get("person", PersonRegistry.NO_PERSON))
+	return member
