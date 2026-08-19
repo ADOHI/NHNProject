@@ -73,6 +73,7 @@ const _DEMON_RINGS: Array[float] = [0.50, 0.66, 0.80]
 ## 여기 있는 것은 흐름이 서 있다는 것을 화면에서 확인하기 위한 최소한이고,
 ## 타이틀 레인이 메뉴를 정하면 이 한 줄만 그것으로 바뀐다.
 const _ENTER_TEXT := "들어간다"
+const _ENTER_SIZE := 22
 
 var _paper: ColorRect
 var _glyph: FoilGlyph
@@ -116,7 +117,11 @@ func _build_door() -> void:
 	door.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	door.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	door.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	door.offset_bottom = -float(UiTokens.SPACE_RIFT)
+	door.offset_bottom = -float(UiTokens.SPACE_RIFT) * 2.0
+	# 기본 크기로 두면 화면에서 가장 중요한 것이 가장 작다.
+	# 테마의 `SUB`(「지금 어디인가」) 단과 같은 22 로 올린다 — 그쪽은 Label 변형이라
+	# Button 에는 안 붙으므로 값만 맞춘다.
+	door.add_theme_font_size_override("font_size", _ENTER_SIZE)
 	door.pressed.connect(func() -> void: Sfx.play(SfxEvent.Kind.UI_PRESS))
 	door.pressed.connect(descend_requested.emit)
 	add_child(door)
