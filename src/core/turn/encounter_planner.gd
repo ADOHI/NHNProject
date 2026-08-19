@@ -44,7 +44,27 @@ const AXIS_DIVISOR := 10
 const DOWN_WEIGHT := 10
 
 ## 힘이 정확히 같을 때 협상이 갖는 값. 여기서 힘의 차만큼 깎인다.
-const PARITY_BASE := 20
+##
+## **낮춰 잡는다.** 이 값이 크면 성향과 무관하게 전부 협상을 골라
+## 무모/신중 축이 조우에서 아무 일도 안 하게 된다. 실제로 20 에서 그랬다.
+const PARITY_BASE := 12
+
+## 도주를 고르는 값. **도주는 공짜가 아니다** — 방과 턴을 내준다.
+##
+## 이것이 없으면 조금이라도 신중한 NPC 가 **이길 수 있는 싸움에서도 물러나고**,
+## 그 다음 턴에 길 찾기가 그를 같은 방으로 다시 밀어 넣는다.
+## 실제로 그 왕복을 봤다 — 한 경쟁자가 열 턴 동안 같은 방을 드나들었다.
+## 회피가 판단이 되려면 **물러나는 데 값이 있어야** 한다 (docs/design/33-turn-loop.md §33.4
+## 가 「정지」로 겪은 것과 같은 결함이고, 여기서는 「왕복」으로 나타났다).
+const FLIGHT_COST := 8
+
+## 고를 수 없는 선택지의 점수. 대치와 「협력할 상대가 없는 협력」이 이 값을 받는다.
+const NO_SCORE := -999
+
+## 어떤 점수보다도 낮은 시작값. **`-1 << 30` 은 못 쓴다** —
+## GDScript 의 `<<` 는 음수 피연산자를 거부하고, 그때 나는 것은 실행 오류가 아니라
+## **파스 오류**라 그 파일에 의존하는 것이 전부 안 뜬다.
+const BELOW_ANY := -1000000
 
 ## 성향 축이 점수에 실리는 배수. 축마다 성질이 달라 따로 둔다.
 const PULL_STRONG := 4
@@ -84,7 +104,7 @@ func plan_for(
 ) -> EncounterPlan:
 	var situation := _situation(actor, here, stakes, allies, downs)
 	var scores: Array[int] = []
-	var top := -1 << 30
+	var top := BELOW_ANY
 	for slot in EncounterChoice.count():
 		var score := _score_of(slot as EncounterChoice.Kind, situation)
 		scores.append(score)
@@ -178,7 +198,7 @@ func _terms_of(kind: EncounterChoice.Kind, s: Dictionary) -> Array:
 			return _cooperate_terms(s)
 		_:
 			# 대치는 **안 고른 것**이므로 NPC 가 고를 것이 못 된다 (§35.1.2).
-			return [["", -999]]
+			return [["", NO_SCORE]]
 
 
 func _fight_terms(s: Dictionary) -> Array:
@@ -187,7 +207,8 @@ func _fight_terms(s: Dictionary) -> Array:
 		["유리하다" if force >= 0 else "불리하다", force * FORCE_WEIGHT],
 		["뺏을 것이 있다", int(s["rival_load"]) * LOAD_WEIGHT],
 		["판돈이 크다", int(s["pot"])],
-		["무모하다", int(s["reckless"]) * PULL_MID / AXIS_DIVISOR],
+		# **축이 양쪽에 걸린다** — 전투를 밀고 도주를 깎는다. 그래서 한쪽 무게를 작게 준다.
+		["무모하다", int(s["reckless"]) * PULL_WEAK / AXIS_DIVISOR],
 		["악하다", -int(s["good"]) * PULL_WEAK / AXIS_DIVISOR],
 		["사이가 나쁘다", -int(s["affinity"]) * PULL_MID / AXIS_DIVISOR],
 		["지쳤다", -int(s["downs"]) * DOWN_WEIGHT],
@@ -200,10 +221,13 @@ func _fight_terms(s: Dictionary) -> Array:
 
 
 func _negotiate_terms(s: Dictionary) -> Array:
+	if int(s["rival_count"]) <= 0:
+		# **말을 걸 상대가 없다.** 몬스터만 있는 방에서 협상은 선택지가 아니다.
+		return [["", NO_SCORE]]
 	var gap: int = absi(int(s["mine"]) - int(s["rivals"]))
 	return [
 		["대등하다", PARITY_BASE - gap * PULL_WEAK],
-		["나눌 것이 있다", int(s["pot"]) * PULL_WEAK],
+		["나눌 것이 있다", int(s["pot"])],
 		["선하다", int(s["good"]) * PULL_MID / AXIS_DIVISOR],
 		["사이가 좋다", int(s["affinity"]) * PULL_STRONG / AXIS_DIVISOR],
 		["말로 푼다", int(s["honest"]) * PULL_WEAK / AXIS_DIVISOR],
@@ -217,9 +241,10 @@ func _flee_terms(s: Dictionary) -> Array:
 	return [
 		["불리하다" if force >= 0 else "유리하다", force * FORCE_WEIGHT],
 		["잃을 것이 많다", int(s["my_load"]) * LOAD_WEIGHT],
-		["신중하다", -int(s["reckless"]) * PULL_STRONG / AXIS_DIVISOR],
+		["신중하다", -int(s["reckless"]) * PULL_WEAK / AXIS_DIVISOR],
 		["이미 한 번 눕었다", int(s["downs"]) * DOWN_WEIGHT],
 		["도망칠 만한 방이다", int(s["flight_bonus"]) / PULL_STRONG],
+		["", -FLIGHT_COST],
 	]
 
 
@@ -227,7 +252,7 @@ func _cooperate_terms(s: Dictionary) -> Array:
 	if int(s["monsters"]) <= 0 or int(s["rival_count"]) <= 0:
 		# 협력할 상대나 상대할 몬스터가 없다. `EncounterChoice.settle()` 이
 		# 어차피 전투로 내리므로 여기서 고르게 두면 근거만 이상해진다.
-		return [["", -999]]
+		return [["", NO_SCORE]]
 	return [
 		["몬스터가 세다", int(s["monsters"]) * PULL_MID],
 		["의리가 있다", int(s["loyal"]) * PULL_STRONG / AXIS_DIVISOR],
