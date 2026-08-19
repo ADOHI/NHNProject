@@ -73,10 +73,23 @@ Godot 기본 셸은 회색 배경에 진행 막대 하나가 전부다. 웹 제�
 `$GODOT_PROJECT_NAME`, `$GODOT_HEAD_INCLUDE` 플레이스홀더가 반드시 있어야 한다.
 익스포트 시 Godot 이 이 문자열을 치환한다. 하나라도 빠지면 빌드는 되지만 실행되지 않는다.
 
-### `exclude_filter = "test/*, addons/gut/*"`
+### `exclude_filter`
 
-테스트 코드와 GUT(약 3MB)를 빌드에서 뺀다.
+`export_filter="all_resources"` 라 **빼겠다고 적지 않은 것은 전부 실린다.**
 웹 빌드는 다운로드 용량이 곧 이탈률이므로 게임에 쓰이지 않는 파일은 담지 않는다.
+
+| 빼는 것 | 왜 |
+| --- | --- |
+| `test/*` · `addons/gut/*` | 테스트 코드와 GUT(약 3MB). 게임이 안 쓴다 |
+| `assets/audio/sfx/*` | CC0 원본 녹음은 **굽는 재료**다. 게임이 싣는 것은 `assets/audio/sfx_baked/` (`docs/design/29-sound.md`) |
+| `src/proto/*` | **버리려고 만든 프로토타입** — 이동 · 애니 조절판 · 조명 · 효과음 데모 |
+
+`src/proto/*` 는 2026-08-19 에 더했다 (`docs/refactoring-2026-08-19.md` §5.2).
+**파일을 지운 것이 아니라 내보내기에서만 뺀 것**이라 에디터와 헤드리스에서는 그대로
+돌아야 한다 — `tools/capture_unit_move.gd` 같은 도구가 그 씬을 연다.
+
+두 프리셋(Web · Windows Desktop)의 목록은 **같게 유지한다.** 한쪽에만 더하면
+웹에서만 나거나 PC 에서만 나는 차이가 생기고, 그것이 제일 늦게 발견된다.
 
 ### `html/canvas_resize_policy = 2`
 
