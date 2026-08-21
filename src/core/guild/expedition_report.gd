@@ -19,6 +19,7 @@ enum Outcome {
 
 const _OUTCOME_LABELS := ["탈출 성공", "쓰러짐", "중도 회수"]
 
+## 원정 번호. 정산 장부의 열쇠다 (Guild.mark_settled).
 var id: String
 
 var gate_id: String
@@ -85,6 +86,22 @@ static func outcome_for(defeated: bool) -> Outcome:
 
 static func outcome_label(value: Outcome) -> String:
 	return _OUTCOME_LABELS[clampi(int(value), 0, _OUTCOME_LABELS.size() - 1)]
+
+
+## 판이 스스로 끝났을 때 그것이 어떤 끝인가.
+##
+## **끝나는 길이 둘인데 둘 다 `DungeonRun.finished` 를 세운다** — 탈출해서 나가거나
+## (docs/design/05-rules.md §5.9), 조우에서 제압당하거나 (§35.2.3).
+## **안 가르면 털리고 나온 판이 탈출 성공으로 정산된다.**
+##
+## 화면이 아니라 여기 있는 이유: 이것은 그리는 방법이 아니라 **규칙**이다
+## (`conventions.md` §3.1). 화면에 두면 `Router.go_to()` 가 씬을 갈아 끼우는 통에
+## 헤드리스로 못 덮는다 — 실제로 그 자리가 한 번 비어 있었다.
+##
+## **중도 회수(`RECALLED`)는 여기서 안 나온다.** 그것은 판이 끝난 것이 아니라
+## 사람이 그만둔 것이라 호출자가 직접 고른다.
+static func outcome_for(defeated: bool) -> Outcome:
+	return Outcome.DOWNED if defeated else Outcome.ESCAPED
 
 
 ## 전리품을 들고 나왔는가.

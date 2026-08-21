@@ -55,63 +55,30 @@ const SHOCK := 8
 ## 판마다 그 1/50 쯤을 준 것이고, 근거는 §24.30.5 의 실측표다.
 const WORLD_EVENTS := 10
 
-## 원정 한 번이 같이 간 사람들 사이에 남기는 것.
-##
-## 성패를 안 가린다 — **같이 갔다는 사실 자체가 유대**다 (§24.12
-## *"유대는 같이 다니면 오른다"*). 실패의 대가는 유대가 아니라 후유증 쪽에 있다.
-const TOGETHER := RelationEvent.Kind.COOPERATION
-
 
 ## 원정 하나를 세계에 반영한다. 세계가 없으면 아무 일도 안 한다.
+##
+## **여기는 옮기는 자리다. 무슨 일이 벌어지는지는 `WorldStep` 이 안다** —
+## 되감기도 같은 함수를 지나야 불러온 세계가 저장한 세계와 같다
+## (docs/design/37-meta-loop.md §37.5.3).
 ##
 ## 돌려주는 것은 **후유증을 입은 인원 수**다. 화면과 도구가 그것을 센다.
 static func apply(guild: Guild, report: ExpeditionReport, tick: int = 0) -> int:
 	if guild == null or report == null or guild.world == null or not guild.world.is_ready():
 		return 0
 
-	var world := guild.world
 	var went := _people_of(guild, report.deployed_ids)
 	if went.is_empty():
 		return 0
 
-	# 내가 던전에 있는 동안 세계도 돈다. **내 원정보다 이쪽이 훨씬 크다.**
-	world.tick(WORLD_EVENTS)
-
-	var resolver := RelationResolver.new(world.registry, world.graph, world.ledger)
-	_bind_together(resolver, went, _people_of(guild, report.garrison_ids))
-
-	if report.outcome != ExpeditionReport.Outcome.DOWNED:
-		return 0
-	for person in went:
-		_shock(world, person, tick)
-	return went.size()
-
-
-## 같이 간 사람들을 엮는다. **쌍마다 한 번씩** — 셋이 갔으면 세 쌍이다.
-##
-## 한 사람을 행위자로 두고 나머지를 대상으로 묶으면 **대상끼리는 안 엮인다.**
-## 스쿼드 정원이 셋이라(GuildBalance) 쌍이 많아야 셋이고, 그 값이면 제곱이 싸다.
-##
-## 남은 대원은 목격자다 — 아지트에서 소식을 듣는다.
-static func _bind_together(
-	resolver: RelationResolver, went: PackedInt32Array, stayed: PackedInt32Array
-) -> void:
-	for one in went.size():
-		for other in range(one + 1, went.size()):
-			resolver.resolve(TOGETHER, went[one], PackedInt32Array([went[other]]), stayed)
-
-
-## 한 사람의 후유증. **나가는 선의 호감만 내린다.**
-##
-## 유대는 안 건드린다 — 엮인 정도가 줄어드는 것이 아니라 **보는 눈이 나빠지는** 것이다.
-## 태생 관계도 호감은 내려간다 (§24.18 이 막는 것은 유대와 유형뿐이다).
-static func _shock(world: NpcWorld, person: int, tick: int) -> void:
-	var damage := shock_for(world.registry.traits_of(person))
-	if damage <= 0:
-		return
-	var cause := world.ledger.record(RelationEvent.Kind.AFTERMATH, person, PackedInt32Array([tick]))
-	for other in world.graph.targets_of(person):
-		world.graph.adjust(person, other, -damage, 0, RelationKind.Kind.NONE, cause)
+	var step := WorldStep.new(
+		WORLD_EVENTS,
+		went,
+		_people_of(guild, report.garrison_ids),
+		report.outcome == ExpeditionReport.Outcome.DOWNED,
+		tick
+	)
+	return guild.world_progress.advance(guild.world, step)
 
 
 ## 이 성향이 실제로 입는 크기. **손잡이와 결과 사이에 든 층이다.**

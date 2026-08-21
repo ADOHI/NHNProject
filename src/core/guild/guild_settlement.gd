@@ -127,9 +127,24 @@ static func _find_in_world(
 	return found
 
 
-## 이미 후보로 잡힌 세계의 인물들. 같은 사람이 두 번 명단에 오르면 안 된다.
+## 이미 우리 쪽인 세계의 인물들. 같은 사람이 두 번 명단에 오르면 안 된다.
+##
+## ## 대원도 센다 — **영입이 걸리게 되면서 드러났다**
+##
+## 예전에는 후보만 셌다. 데려오는 함수가 없던 동안에는 그것으로 충분했다 —
+## 후보는 영원히 후보였으므로 명단을 떠날 일이 없었다.
+##
+## **영입이 생기니 데려온 사람이 명단에서 빠지고, 다음 판에 그 사람이 후보로 다시 나왔다.**
+## 스무 판을 이어 돌려 봤더니 같은 이름 둘이 서른네 번 들어와 대원이 5명에서 39명이 됐다
+## (docs/design/37-meta-loop.md §37.10.4). **인덱스가 곧 그 사람이므로**(설계 24.24)
+## 같은 사람이 두 몸으로 길드에 앉아 있는 상태다.
+##
+## 오류는 안 났다. 명단에 같은 이름이 여럿 뜰 뿐이다.
 static func _taken_people(guild: Guild) -> Dictionary:
 	var taken := {}
+	for member in guild.members:
+		if member.is_in_world():
+			taken[member.person] = true
 	for prospect in guild.prospects:
 		if prospect.is_in_world():
 			taken[prospect.person] = true

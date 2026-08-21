@@ -9,7 +9,11 @@ extends VBoxContainer
 ## 그래서 가운데 기둥에서 "데려간다" 를 켜는 순간 **여기가 비는 것이 보인다** —
 ## 편성과 배치가 같은 인원을 놓고 다툰다는 §22.4 가 문장이 아니라 움직임이 된다.
 ##
-## 이 패널은 길드를 읽기만 한다. 아무것도 바꾸지 않는다 (conventions.md §3.1).
+## 이 패널은 길드를 읽기만 한다. **바꾸는 것은 화면이 코어에게 시킨다**
+## (conventions.md §3.3 — call down, signal up).
+
+## 이 후보를 데려와 달라. 화면이 `GuildRecruit.hire` 를 부른다.
+signal recruit_pressed(prospect_id: String)
 
 
 ## 길드 상태를 다시 그린다.
@@ -24,6 +28,7 @@ func refresh(guild: Guild, absent: Array[String]) -> void:
 	for kind in Facility.all():
 		add_child(_facility_box(guild, kind as Facility.Kind, absent))
 	add_child(_prospect_box(guild))
+	add_child(_news_box(guild))
 
 
 ## 길드 상태. 성장 세 축 중 **주둔지 축이 전부 여기 있다**
@@ -85,8 +90,49 @@ func _prospect_box(guild: Guild) -> BaseBox:
 		box.line("아직 없음", BaseWidgets.INK_DIM)
 		return box
 	for prospect in guild.prospects:
-		box.line(prospect.summary(), _prospect_ink(prospect))
+		box.body.add_child(_prospect_row(prospect))
 		box.line(_prospect_note(guild, prospect), BaseWidgets.INK_DIM)
+	return box
+
+
+## 후보 한 줄 — 이름과 **데려오는 단추.**
+##
+## 단추는 데려올 수 있을 때만 켜진다. 잠긴 채로 두는 이유는 아래 줄이 **왜 안 되는지**를
+## 이미 말하고 있기 때문이다 — 단추를 숨기면 그 사유가 무엇에 대한 말인지 안 읽힌다.
+func _prospect_row(prospect: RecruitProspect) -> HBoxContainer:
+	var row := BaseWidgets.row()
+	var take := BaseWidgets.button("데려온다", prospect.can_recruit())
+	take.pressed.connect(_on_recruit_pressed.bind(prospect.id))
+	row.add_child(take)
+	var name_label := BaseWidgets.label(
+		prospect.summary(), BaseWidgets.SIZE_BODY, _prospect_ink(prospect)
+	)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(name_label)
+	return row
+
+
+func _on_recruit_pressed(prospect_id: String) -> void:
+	recruit_pressed.emit(prospect_id)
+
+
+## 세계 소식. **판을 돌면 세계가 달라진다는 것이 화면에 나타나는 자리다** (설계 15.2.1).
+##
+## 문장은 코어가 만든다 (`WorldNews`) — 고르는 규칙도 조사도 화면의 일이 아니다.
+## 세계가 안 물려 있으면 그 사실을 적는다. **빈 칸을 남기지 않는다.**
+func _news_box(guild: Guild) -> BaseBox:
+	var box := BaseBox.new("세계 소식")
+	if guild.world == null or not guild.world.is_ready():
+		box.line("세계가 안 물려 있다", BaseWidgets.INK_DIM)
+		return box
+	box.line("세계가 %d틱 돌았다" % guild.world_progress.tick_count(), BaseWidgets.INK_DIM)
+	var news := WorldNews.gather(
+		guild.world, GuildCircle.known_of(guild), GuildCircle.own_of(guild)
+	)
+	if news.is_empty():
+		box.line("아는 얼굴 소식은 없다", BaseWidgets.INK_DIM)
+	for line in news:
+		box.line(line)
 	return box
 
 

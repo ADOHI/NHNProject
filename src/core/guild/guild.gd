@@ -55,6 +55,14 @@ var expeditions_settled: int = 0
 ## 인물과 관계의 세계. **null 이면 후보가 이름뿐인 사람으로 나온다.**
 var world: NpcWorld = null
 
+## 세계가 씨앗 이후 **걸어온 길.** 세이브가 담는 「변경분」이 이것이다
+## (docs/design/37-meta-loop.md §37.5, docs/design/34-systems.md §34.7.3).
+##
+## **길드가 드는 이유**는 그 길을 만드는 것이 길드의 원정이기 때문이다.
+## `NpcWorld` 는 자기가 몇 번 돌았는지 모른다 — 알 필요가 없고, 알면
+## `src/core/npc/` 가 아웃게임을 알게 된다.
+var world_progress := WorldProgress.new()
+
 ## 이 길드를 대표하는 세계의 인물. 영입 판정이 「후보가 이 사람을 어떻게 보는가」를 묻는다.
 var leader_person: int = PersonRegistry.NO_PERSON
 

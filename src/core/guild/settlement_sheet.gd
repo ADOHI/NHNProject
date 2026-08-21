@@ -21,6 +21,9 @@ extends RefCounted
 ##
 ## docs/design/36-settlement.md §36.4.
 
+## 정산 화면에 붙는 세계 소식 줄 수. **정산은 요약이다** — 아지트가 더 길게 낸다.
+const _NEWS_LINES := 3
+
 ## 이 칸의 제목.
 var title: String
 
@@ -47,6 +50,9 @@ static func build(
 	sheets.append(_stake_sheet(report))
 	sheets.append(_guild_sheet(result, guild))
 	sheets.append(_squad_sheet(report, result, guild))
+	var world_sheet := _world_sheet(result, guild)
+	if world_sheet != null:
+		sheets.append(world_sheet)
 	return sheets
 
 
@@ -169,6 +175,34 @@ static func _squad_sheet(
 			sheet.line("후유증 %d명 — 죽지는 않았지만 사람을 못 믿게 됐다" % result.shocked, SettlementLine.Tone.LOSS)
 		else:
 			sheet.line("후유증 없음", SettlementLine.Tone.DIM)
+	return sheet
+
+
+## ⑤ 세계 — **내가 던전에 있는 동안 바깥에서도 무슨 일이 있었다.**
+##
+## docs/design/15-world.md §15.1 「던전 1회 = 세계 1틱」이 화면에 나타나는 유일한 자리다.
+## 이것이 없으면 3000명이 움직이는데 플레이어는 한 줄도 못 본다 (설계 37.2.1 ②).
+##
+## **실패의 대가가 여기 있다** ([14](14-squad.md) §14.6) — 나는 제자리인데
+## NPC 들만 한 틱 성장했다. 별도의 페널티 시스템이 없는 이유가 이 칸이다.
+##
+## 세계가 안 물려 있으면 **칸을 아예 안 낸다.** 빈 칸을 남기면 무언가 고장 난 것처럼 보인다.
+static func _world_sheet(result: SettlementResult, guild: Guild) -> SettlementSheet:
+	if guild == null or guild.world == null or not guild.world.is_ready():
+		return null
+	var sheet := SettlementSheet.new("세계")
+	if result != null:
+		sheet.line(
+			"내가 들어가 있는 동안 세계도 한 틱 돌았다 — 지금까지 %d틱" % guild.world_progress.tick_count(),
+			SettlementLine.Tone.DIM
+		)
+	var news := WorldNews.gather(
+		guild.world, GuildCircle.known_of(guild), GuildCircle.own_of(guild), _NEWS_LINES
+	)
+	if news.is_empty():
+		sheet.line("아는 얼굴 소식은 없다", SettlementLine.Tone.DIM)
+	for line in news:
+		sheet.line(line)
 	return sheet
 
 

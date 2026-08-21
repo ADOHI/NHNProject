@@ -138,6 +138,7 @@ func _build_layout() -> void:
 	page.add_child(columns)
 
 	_guild_panel = BaseGuildPanel.new()
+	_guild_panel.recruit_pressed.connect(_on_recruit_pressed)
 	columns.add_child(_scroll(_guild_panel, _GUILD_WIDTH))
 
 	_member_panel = BaseMemberPanel.new()
@@ -298,6 +299,20 @@ func _on_deploy_toggled(member_id: String) -> void:
 		_deployed.erase(member_id)
 	elif _deployed.size() < _guild.squad_capacity():
 		_deployed.append(member_id)
+	_refresh()
+
+
+## 후보를 데려온다. **관계도가 처음으로 보상을 주는 자리다** (설계 14.5).
+##
+## 판정도 사유도 코어가 든다 — 화면은 눌린 것을 넘기고 다시 그린다.
+## 원정이 돌고 있는 동안에는 막는다. 편성이 끝난 뒤에 인원이 늘면
+## 「데려갈 자」와 「남길 자」가 어긋난다 (Expedition.garrison_ids).
+func _on_recruit_pressed(prospect_id: String) -> void:
+	if _expedition != null:
+		return
+	var hired := GuildRecruit.hire(_guild, prospect_id)
+	if hired != null:
+		_log.append("%s 를 데려왔다" % hired.display_name)
 	_refresh()
 
 
