@@ -45,18 +45,22 @@ for _stream in (sys.stdout, sys.stderr):
 
 DEFAULT_ROOTS = ["src", "test", "tools"]
 
-# 이 줄들이 보이면 도구가 **판정을 냈다**는 뜻이다. 없으면 판정을 못 낸 것이고,
-# 그것은 우리 코드의 문제가 아니라 프로세스가 중간에 죽었다는 뜻이다.
-# `gdlint` 는 `Success` / `: Error: ` / `Failure: N problems`,
-# `gdformat --check` 는 `would be left unchanged` / `would reformat` 를 낸다.
-VERDICT_MARKS = (
-    ": Error: ",
-    "Success",
-    "Failure: ",
-    "would be left unchanged",
-    "would reformat",
-    "would be reformatted",
-)
+# **판정은 종료 코드로 읽는다. 출력 문자열로 읽지 않는다.**
+#
+# 처음에는 출력에서 `Success` · `Failure: ` 같은 표시를 찾았는데 **구멍이 있었다** —
+# `gdlint` 는 **파싱조차 못 한 파일에도** `Failure: 1 problem found` 를 낸다.
+# 그것을 「판정 났다」로 읽고, 문제 줄은 `: Error: ` 로만 뽑으니 **0건으로 삼켰다.**
+# 파싱이 안 되는 파일이 조용히 통과했고, **CI 가 잡을 때까지 몰랐다** (2026-08-21).
+#
+# 종료 코드는 그 함정이 없다.
+#
+# | 코드 | 뜻 |
+# | --- | --- |
+# | 0 | 깨끗하다 |
+# | 1 | **지적이 있다** (파싱 실패 포함) |
+# | 그 밖 | 폭사 — 재시도한다 |
+EXIT_CLEAN = 0
+EXIT_PROBLEMS = 1
 
 
 def resolve(name):
@@ -74,8 +78,15 @@ def run_once(command):
     return proc, (proc.stdout or "") + (proc.stderr or "")
 
 
-def gave_verdict(text):
-    return any(mark in text for mark in VERDICT_MARKS)
+def first_meaningful(text, path):
+    """지적 줄을 못 뽑았을 때 **무슨 일이 났는지** 한 줄로 보여 준다."""
+    skip = str(path)
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.rstrip(":") == skip:
+            continue
+        return stripped
+    return "출력이 비었다"
 
 
 def check_file(tool, flags, path, attempts):
@@ -83,12 +94,21 @@ def check_file(tool, flags, path, attempts):
     crashes = 0
     for _ in range(attempts):
         proc, text = run_once([tool] + flags + [str(path)])
-        if proc is not None and gave_verdict(text):
+        if proc is None:
+            crashes += 1
+            continue
+        if proc.returncode == EXIT_CLEAN:
+            return [], crashes, True
+        if proc.returncode == EXIT_PROBLEMS:
             problems = [
                 ln.strip()
                 for ln in text.splitlines()
                 if ": Error: " in ln or ln.startswith("would reformat")
             ]
+            # **줄을 못 뽑았어도 지적은 지적이다.** 여기서 빈 목록을 돌려주면
+            # 파싱 실패가 조용히 통과한다 — 실제로 그렇게 통과했었다.
+            if not problems:
+                problems = ["%s: %s" % (path, first_meaningful(text, path))]
             return problems, crashes, True
         crashes += 1
     return [], crashes, False

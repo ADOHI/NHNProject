@@ -104,8 +104,9 @@ func _play(seed_value: int) -> Array:
 			break
 		dumped.append(_message_for(turn))
 		var entry := _feed.record_turn(_run, _turn_events)
-		_posts.append("---- %d. 시드 %d 턴 %d ----
-%s" % [_posts.size() + 1, seed_value, turn, entry.text])
+		_posts.append(
+			"---- %d. 시드 %d 턴 %d ----\n%s" % [_posts.size() + 1, seed_value, turn, entry.text]
+		)
 		# **스쿼드가 나가면 판이 끝난다.** 계획 페이즈가 없는 턴의 기사는
 		# 플레이어가 아무것도 결정할 수 없는 글이다. 심사자 둘이 각각
 		# "24편 중 10편이 내가 이미 던전 밖인 시점의 방송" 을 최대 결함으로 짚었다.
