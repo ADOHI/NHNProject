@@ -10,19 +10,20 @@
 **전투 시험대**(백팩 격자·체이닝·대련), **효과음**, **아지트 아이소 격자**,
 **UI 킷**이 각각 서 있다.
 
-> **2026-08-19 — 턴이 돈다.** 계획/행동 페이즈와 동시 해결기가 섰고
-> NPC 탐험가가 판 위를 움직인다 ([33](design/33-turn-loop.md)).
-> §16.4 가 *"이 프로젝트에서 가장 어렵다"* 고 적은 구간이 닫혔다.
+> **2026-08-21 — 루프가 닫혔다.** 턴이 돌고([33](design/33-turn-loop.md)),
+> 조우가 갈리고([35](design/35-encounter.md)), 한 판이 정산으로 끝나고
+> ([36](design/36-settlement.md)), **세계가 한 틱 돌아 저장을 건넌다**
+> ([37](design/37-meta-loop.md)).
 >
-> **남은 큰 구멍은 조우 절차(M5)다** — 조우가 **발생했다는 것까지만** 판정하고
-> 그 뒤(전투/협상/도주 분기)는 자리만 나 있다.
+> **「절대 자르지 않는 여섯」이 전부 섰다.** 남은 것은 M11 의 전용 편성 화면과
+> M8 의 장비뿐이고, 둘 다 **없어서 안 돌아가는 것이 아니라 전용 화면이 없는 것**이다.
 
-### 2026-08-18~19 통합 — 레인 열넷을 접었다
+### 2026-08-18~21 통합 — 레인 열아홉을 접었다
 
 `char-anim` · `dungeon-gen` · `npc-relations` · `sound` · `hideout` · `lighting-2d` ·
 `portraits` · `combat` · `ui-kit-2` · `test-stability` · 이동 연구 · 타이틀 시차 ·
-`soft-body` · `rekka-feed` · `turn-loop` · `decouple-proto` · `systems-flow`.
-테스트 **623 → 2046**.
+`soft-body` · `rekka-feed` · `turn-loop` · `decouple-proto` · `systems-flow` ·
+`encounter` · `settlement` · `world-loop`. 테스트 **623 → 2183**.
 
 **본판이 PC 스탠드얼론으로 바뀌었다** (2026-08-19). 웹은 데모·디버깅용으로 남는다
 → [`design/01-constraints.md`](design/01-constraints.md) §1.1.
@@ -48,7 +49,8 @@ src/
 │   ├── turn/                   # **동시 해결기 (M2)** — 이동 → 조우 → 상호작용 → 결과 → 기록
 │   ├── gate/                   # 게이트 = 열린 문. 아웃게임 대상
 │   ├── guild/                  # 길드 아지트 — 대원 · 스쿼드 · 시설 · 원정 · 정산 · 수치표
-│   ├── npc/                    # **세계 3000명** — 인구 생성 · 가족 · 관계 · 사건 · 유명세 · 인물 상세
+│   │                           #   + **세계가 걸어온 길**(`WorldStep`·`WorldProgress`) · 영입(`GuildRecruit`)
+│   ├── npc/                    # **세계 3000명** — 인구 · 가족 · 관계 · 사건 · 유명세 · 상세 · **뉴스**
 │   ├── combat/                 # 전투 시험대 — 백팩 격자 · 체이닝 · 브레이크 · 대련
 │   ├── char_anim/              # **레이맨 절차 애니메이션** — 파츠 여섯 · 클립 아홉 · **소프트바디(닫힌 해)**
 │   ├── hideout/                # 아지트 아이소 격자 — 건물 · 배치 · 배회
@@ -62,7 +64,7 @@ src/
 ├── systems/                    # **엔진에 닿는 층.** `conventions.md §1` 이 정한 셋이 이제 다 찼다
 │   ├── audio/                  # 소리를 실제로 내는 층 (`core/sfx/` 는 무엇을 낼지만 정한다)
 │   ├── scene/                  # **씬 전환** — 경로 장부 · 되돌아갈 곳(순수) · 오토로드 `Router`
-│   └── save/                   # **저장** — `user://save/`. 코어가 사전을 내고 여기가 파일을 맡는다
+│   └── save/                   # **저장** — `user://save/`. 봉투 **v2** — 세계가 걸어온 길까지 담는다
 ├── ui/
 │   ├── dungeon_board/          # 판 화면 — **`main` 에서 내려온 던전 씬이 여기 산다**
 │   ├── base/                   # 길드 아지트 화면
@@ -86,7 +88,7 @@ assets/fonts/song_myung/        # SongMyung Regular (SIL OFL) — 한글 글리�
 assets/audio/sfx/               # CC0 녹음물 65개 + CREDITS.md (**굽는 재료.** 빌드에서 제외)
 assets/audio/sfx_baked/         # 미리 구운 소리 166벌 — 게임이 싣는 것은 이쪽
 assets/rekka/rekka_library.tres # 렉카 문안 88편 (열쇠 34종, 전부 둘 이상)
-test/unit/                      # GUT 단위 테스트 (현재 182 스크립트 / 2081 통과)
+test/unit/                      # GUT 단위 테스트 (현재 190 스크립트 / 2183 통과)
 test/support/                   # 생성기를 안 믿고 따로 검사하는 자들
 tools/                          # 전부 빌드에 포함되지 않는다
   capture_*.gd                  # 화면 캡처 (창을 한 번 띄워 여러 장을 몰아 뽑는다)
