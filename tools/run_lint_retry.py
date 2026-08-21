@@ -62,6 +62,17 @@ DEFAULT_ROOTS = ["src", "test", "tools"]
 EXIT_CLEAN = 0
 EXIT_PROBLEMS = 1
 
+# **도구가 스스로 터진 것은 지적이 아니다.**
+#
+# `gdlint`·`gdformat` 은 내부에서 파이썬 예외가 나도 종료 코드 1 로 끝난다.
+# 종료 코드만 믿으면 그것이 「지적」으로 세어져 **없는 문제로 빨개진다** —
+# 이 기계는 도구를 무작위로 죽이므로(§5) 그 오검출이 실제로 났다.
+#
+# 가르는 법: 파이썬 역추적이 있고 **판정 줄이 하나도 없으면** 도구가 터진 것이다.
+# 파싱 실패(`No terminal matches ...`)는 역추적이 없으므로 **계속 지적으로 남는다** —
+# §7.8 이 잡은 그 구멍을 다시 열지 않는다.
+CRASH_MARK = "Traceback (most recent call last)"
+
 
 def resolve(name):
     found = shutil.which(name)
@@ -105,8 +116,12 @@ def check_file(tool, flags, path, attempts):
                 for ln in text.splitlines()
                 if ": Error: " in ln or ln.startswith("would reformat")
             ]
+            if not problems and CRASH_MARK in text:
+                # 도구가 스스로 터졌다. 판정을 못 받은 것이므로 다시 돌린다.
+                crashes += 1
+                continue
             # **줄을 못 뽑았어도 지적은 지적이다.** 여기서 빈 목록을 돌려주면
-            # 파싱 실패가 조용히 통과한다 — 실제로 그렇게 통과했었다.
+            # 파싱 실패가 조용히 통과한다 — 실제로 그렇게 통과했었다 (§7.8).
             if not problems:
                 problems = ["%s: %s" % (path, first_meaningful(text, path))]
             return problems, crashes, True
