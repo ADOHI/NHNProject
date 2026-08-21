@@ -92,12 +92,16 @@ SettlementScreen._settle()
 
 | # | 만드는 것 | 사는 곳 |
 | --- | --- | --- |
-| ① | **세계가 저장을 건넌다** — 봉투 v2 | `src/core/npc/world_step.gd` · `world_progress.gd`, `src/systems/save/` |
+| ① | **세계가 저장을 건넌다** — 봉투 v2 | `src/core/guild/world_step.gd` · `world_progress.gd`, `src/systems/save/` |
 | ② | **뉴스** — 세계에서 난 일이 아웃게임에 보인다 | `src/core/npc/world_news.gd`, 아지트 · 정산 화면 |
 | ③ | **편성 화면** (M11) | `src/ui/muster/` |
-| ④ | **영입** (M12) | `Guild.recruit()`, 영입 화면 |
+| ④ | **영입** (M12) | `src/core/guild/guild_recruit.gd`, 아지트의 후보 칸 |
 
-**위부터 한다.** 못 하는 것이 생기면 자리를 내고 §37.10 에 적는다.
+**위부터 한다.** 못 하는 것이 생기면 자리를 내고 §37.11.3 에 적는다.
+
+> **①이 `src/core/npc/` 가 아니라 `src/core/guild/` 에 산 이유** — 한 틱이
+> 후유증 크기를 물어야 하고(`ExpeditionAftermath.shock_for`) 그것은 길드 쪽에 있다.
+> 반대로 놓으면 **`src/core/npc/` 가 아웃게임을 알게 된다.**
 
 ---
 
