@@ -364,4 +364,87 @@ godot --headless --path . -s res://tools/survey_meta_loop.gd
 
 ## 37.11 인계
 
-(작업이 끝나면 채운다)
+### 37.11.1 생긴 것
+
+| 파일 | 무엇 |
+| --- | --- |
+| `src/core/guild/world_step.gd` | **한 틱이 하는 일.** 정산도 되감기도 이 함수 하나를 지난다 |
+| `src/core/guild/world_progress.gd` | 걸어온 틱들. 세이브가 담는 「변경분」 |
+| `src/core/npc/world_news.gd` | 세계 사건 하나를 한 줄로. **고르는 규칙이 전부다** |
+| `src/core/guild/guild_circle.gd` | 아는 얼굴 / 내 사람. 뉴스가 둘을 다르게 쓴다 |
+| `src/core/guild/guild_recruit.gd` | **영입 실행.** 지금까지 없던 함수 |
+| `tools/survey_meta_loop.gd` | 이어 돌리고 **껐다 켜고 이어 돌린다** |
+| `test/unit/test_world_progress.gd` · `test_world_news.gd` · `test_guild_recruit.gd` | 위들 |
+
+손댄 것 —
+
+| 파일 | 무엇 |
+| --- | --- |
+| `src/core/guild/expedition_aftermath.gd` | **원정을 `WorldStep` 으로 옮기는 자리**가 됐다. 규칙은 그쪽으로 내려갔다 |
+| `src/core/guild/guild.gd` | `world_progress` 한 칸 |
+| `src/core/guild/guild_settlement.gd` | `_taken_people` 이 **대원도 센다** (§37.10.4) |
+| `src/core/guild/settlement_sheet.gd` | 「세계」 칸 하나 — §36.8 덕에 화면은 안 고쳤다 |
+| `src/systems/save/game_save.gd` | 봉투 **v2** · `KEY_WORLD` · 되감기 |
+| `src/ui/base/guild_panel.gd` · `base_screen.gd` | 세계 소식 칸 · 「데려온다」 단추 |
+
+### 37.11.2 지금 실제로 이어지는 것
+
+```
+주둔지 ──원정──→ 던전 ──탈출/회수──→ 정산 ──→ 주둔지
+                                       │
+                                       ├ 세계가 한 틱 돈다 (사건 10건 + 내 원정)
+                                       ├ 걸어온 길에 적힌다  ─────→ 세이브 v2
+                                       ├ 「세계」 칸에 소식이 뜬다
+                                       └ 접선처가 후보를 찾는다 ──→ 아지트에서 데려온다
+```
+
+**껐다 켜도 이어진다** — §37.10.3 이 두 길을 걸어 맞춰 봤다.
+
+### 37.11.3 안 한 것 — **다음 사람이 여기서 시작한다**
+
+| 안 한 것 | 왜 | 어디서 이어받나 |
+| --- | --- | --- |
+| **M11 전용 편성 화면** | 아지트의 가운데 기둥이 이미 편성을 돌리고 있고([22](22-guild-base.md) §22.4), 앞의 셋이 **안 이어져 있던 것**이라 먼저였다. 화면 하나를 새로 세우는 것은 창을 띄워 검수해야 하는 일이라 남은 시간에 밀어 넣지 않았다 | `src/ui/muster/`. **정원과 계열 수를 화면에 박지 마라** — Q33 · Q17 이 미결이다. `Guild.squad_capacity()` 와 `MemberDiscipline.count()` 를 읽어라 |
+| **인원이 늘면 기둥이 길어지는 것** | 영입이 걸리기 전에는 대원이 늘 다섯이었다 | 실측에서 20판에 5명 → 8명이다(§37.10.4). **정원은 4에서 안 는다** — 늘어난 인원은 시설로 가고, 그것이 §22.4 의 다툼을 키운다. 편성 화면이 설 때 같이 볼 것 |
+| **영입 비용** | Q29 미결. **자원을 안 물린다** — 이 게임의 화폐는 관계다 (§6.1) | `GuildRecruit.hire` 에 한 줄 |
+| **데려온 대원의 능력치** | Q17 미결 | 지금은 **계열 기본값**이다. 세계가 사람마다 다른 전투/민첩을 이미 들고 있어(`PersonRegistry`) 그것을 쓰면 되고, 고칠 곳은 `GuildRecruit.hire` 의 한 줄이다 |
+| **이탈** | [14](14-squad.md) §14.5 가 미정으로 뒀다 | — |
+| **뉴스에 연줄을 적는 것** | 지금 줄은 「누가 누구에게 무엇을」까지다 | `RelationGraph` 로 *"내 대원의 형이"* 를 붙일 수 있다. `BaseGuildPanel._introducer` 가 본보기다 |
+| **세이브의 걸어온 길을 접는 것** | 스무 판에 정수 200개라 아직 작다 | 회차가 길어져 커지면 **틱을 묶어 접어라**. 형식은 `WorldStep.to_dict` 한 곳이다 |
+
+### 37.11.4 손대는 사람이 알아야 할 것 넷
+
+1. **세계 틱을 화면에서 부르지 마라.** 정산(`GuildSettlement.apply`) 안에서 돈다.
+   화면에 줄을 하나 더 넣으면 **두 번 돌거나 정산 없이 도는 길**이 생긴다
+2. **한 틱이 하는 일은 `WorldStep.apply_to` 한 곳이다.** 여기서 갈라지면
+   **불러온 세계가 저장한 세계와 다른데 아무 오류도 안 난다**
+3. **세이브 형식을 고치면 `WorldStep.to_dict` 와 `GameSave.KEY_WORLD` 를 같이 봐라.**
+   봉투 v1 을 계속 읽는 길은 남겨 둬야 한다
+4. **후보를 뽑는 규칙을 손대면 대원을 세는지 확인해라** (§37.10.4).
+   안 세면 같은 사람이 두 몸으로 앉고, **오류는 안 난다**
+
+### 37.11.5 통합자에게 — 공용 문서에 넣을 것
+
+이 레인은 `11-decisions.md` · `ai-usage.md` · `architecture.md` ·
+`game-design.md` 지도 표 · `05-rules.md` · `10-content-scope.md` ·
+`16-build-order.md` 를 **하나도 안 건드렸다.** 넣어야 할 것은 이렇다.
+
+- **`architecture.md`** — `src/core/guild/` 에 `WorldStep` · `WorldProgress` ·
+  `GuildCircle` · `GuildRecruit`, `src/core/npc/` 에 `WorldNews`,
+  그리고 **세이브 봉투가 v2 가 된 것**(세계가 걸어온 길을 담는다)
+- **`11-decisions.md`** —
+  ① 세계 변화를 **간선이 아니라 걸어온 길로** 저장한다 (§37.5.1),
+  ② 뉴스는 **렉카 문안 자산을 안 쓴다** — 없는 등급을 지어내야 해서다 (§37.6.1),
+  ③ **내가 한 일은 뉴스가 아니다** (§37.6),
+  ④ 영입에 **자원을 안 물린다** — 화폐는 관계다 (§37.8)
+- **`game-design.md` 지도** — §37 한 줄
+- **`16-build-order.md` §16.0** — **C 순번 중 M13 · M12 가 끝났다.**
+  M11 은 전용 화면이 남았다(아지트 기둥으로는 돈다). §16.0.2 의 C 는 아직 안 닫혔다
+- **`10-content-scope.md` §10.1** — M13 · M12 를 ◐ 에서 ✅ 로
+- **`12-open-questions.md`** — **Q28 은 지우지 마라.** 답이 아니라 **재는 조건**이 바뀌었다
+  (§37.10.5) — NPC 에게 전투력이 생기는 때 다시 잰다
+- **`24-npc-relations.md` §24.30** — 세계 틱이 **저장을 건넌다**는 줄.
+  거기 실측표는 「한 프로세스 안에서」 잰 것이다
+- **`test-stability.md`** — 이 레인이 겪은 것: 스위트가 3회 전부 폭사한 적 있고
+  (`ACCESS_VIOLATION` · `HEAP_CORRUPTION`), 단정 실패 없이
+  *"Cannot convert argument 2 from int to int"* 가 두 번 났다가 다시 돌리니 사라졌다
