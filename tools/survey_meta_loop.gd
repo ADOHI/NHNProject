@@ -1,10 +1,18 @@
 extends SceneTree
-## 판을 이어 돌리면 세계가 실제로 움직이나. 그리고 **그것이 저장을 건너나.**
+## 판을 이어 돌리면 세계가 실제로 움직이나. 그리고 **껐다 켜고 이어 돌려도 그대로인가.**
 ##
 ## docs/design/37-meta-loop.md §37.10.
 ##
 ## **한 판만 보면 안 보인다.** 세계 틱은 여러 판을 이어 돌려야 드러나고,
-## 저장을 건너는지는 **껐다 켜는 것을 흉내 내야** 드러난다.
+## 저장을 건너는지는 **껐다 켜고 그 뒤로 더 돌려 봐야** 드러난다 —
+## 저장 직후를 비교하는 것만으로는 「불러온 세계 위에서 다음 판이 제대로 도는가」를 못 잰다.
+##
+## ## 결과가 두 길에서 같아야 한다
+##
+##     곧장 스무 판
+##     열 판 -> 저장 -> 껐다 켬 -> 열 판 더
+##
+## 이 둘이 갈리면 ①이 안 고쳐진 것이다 (§37.2.1).
 ##
 ##   godot --headless --path . -s res://tools/survey_meta_loop.gd
 
@@ -13,6 +21,9 @@ const _POPULATION := 3000
 
 ## 몇 판을 돌리나. 한 회차가 스무 판 남짓이다 (설계 24.30.5).
 const _RUNS := 20
+
+## 껐다 켜는 지점. 절반쯤에서 끊어야 앞뒤가 둘 다 보인다.
+const _BREAK_AT := 10
 
 ## 쓰러지는 비율. 성공만 돌리면 후유증이 안 보인다.
 const _DOWN_RATE := 0.35
@@ -35,48 +46,100 @@ func _initialize() -> void:
 	print("\n-- 판을 돌리면 세계가 움직이나 --")
 	print("%-10s %8s %8s %10s %8s %8s" % ["판", "관계", "사건", "대원호감", "후보", "영입가능"])
 	_row(world, guild, 0)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = _SEED
 	for run in _RUNS:
-		_settle(guild, rng, run)
+		_settle(guild, run)
 		if (run + 1) % 5 == 0:
 			_row(world, guild, run + 1)
 
 	_report_news(world, guild)
-	_report_save(guild)
+	_report_resume(guild)
+	_report_recruit()
 	_report_growth(world, guild)
 	quit()
 
 
-## 껐다 켜는 것을 흉내 낸다. **§37.2.1 ①이 무엇이었는지가 여기서 보인다.**
-func _report_save(guild: Guild) -> void:
+# ---------------------------------------------------------------- 껐다 켜고 이어 돌린다
+
+
+## **이것이 이 도구의 핵심이다.** 저장 직후만 비교하면 반쪽이다 —
+## 불러온 세계 위에서 **다음 판이 제대로 도는가**를 봐야 루프가 닫힌 것이다.
+func _report_resume(straight: Guild) -> void:
+	print("\n-- 껐다 켜고 이어 돌려도 같은가 --")
+
+	var world := NpcWorld.create(_SEED, _POPULATION)
+	var guild := Guild.create_starting(_SEED, "새벽 길드", world)
+	_staff(guild)
+	for run in _BREAK_AT:
+		_settle(guild, run)
+
 	var store := SaveStore.new(_SAVE_PATH)
-	var error := store.write(guild, _SEED)
-	if error != OK:
-		print("\n저장하지 못했다 (오류 %d)" % error)
+	if store.write(guild, _SEED) != OK:
+		print("저장하지 못했다")
 		return
 	var loaded := store.read()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(_SAVE_PATH))
 	if not loaded.is_ok():
-		print("\n불러오지 못했다 — %s" % loaded.message())
+		print("불러오지 못했다 — %s" % loaded.message())
 		return
+	# **불러온 세계 위에서 남은 판을 돌린다.** 여기가 진짜 물음이다.
+	for run in range(_BREAK_AT, _RUNS):
+		_settle(loaded.guild, run)
+
+	print("%-24s %8s %8s %8s %8s" % ["", "관계", "사건", "자금", "진척"])
+	_resume_row("곧장 %d판" % _RUNS, straight.world, straight)
+	_resume_row("%d판 · 껐다 켬 · %d판" % [_BREAK_AT, _RUNS - _BREAK_AT], loaded.world, loaded.guild)
+
+	var same := (
+		straight.world.graph.size() == loaded.world.graph.size()
+		and straight.world.ledger.size() == loaded.world.ledger.size()
+		and straight.funds == loaded.guild.funds
+		and straight.base_progress == loaded.guild.base_progress
+	)
+	print("두 길의 결과가 %s" % ["**갈렸다 — 루프가 안 닫혔다**", "같다"][int(same)])
 
 	# 봉투 v1 이 하던 것 — 씨앗에서 처녀 세계를 세우고 끝이다.
 	var pristine := NpcWorld.create(_SEED, _POPULATION)
-
-	print("\n-- 세계가 저장을 건너나 --")
-	print("%-22s %8s %8s %10s" % ["", "관계", "사건", "대원호감"])
-	_save_row("저장 직전", guild.world, guild)
-	_save_row("불러온 뒤 (봉투 v2)", loaded.world, loaded.guild)
-	_save_row("되감기 없이 (봉투 v1)", pristine, loaded.guild)
 	print(
 		(
-			"틱 %d회 · 세계 사건 %d건이 세이브에 남았다"
-			% [guild.world_progress.tick_count(), guild.world_progress.events_rolled()]
+			"참고: 되감기가 없으면 불러온 세계가 관계 %d · 사건 %d 로 돌아간다 (판 0)"
+			% [pristine.graph.size(), pristine.ledger.size()]
 		)
 	)
-	var same := guild.world.graph.size() == loaded.world.graph.size()
-	print("불러온 세계가 저장한 세계와 %s" % ["다르다 — 되감기가 깨졌다", "같다"][int(same)])
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(_SAVE_PATH))
+
+
+func _resume_row(label: String, world: NpcWorld, guild: Guild) -> void:
+	print(
+		(
+			"%-24s %8d %8d %8d %8d"
+			% [label, world.graph.size(), world.ledger.size(), guild.funds, guild.base_progress]
+		)
+	)
+
+
+# ---------------------------------------------------------------- 영입
+
+
+## **후보가 실제로 대원이 되나** (설계 37.8). 판정만 서고 데려오는 함수가 없던 자리다.
+func _report_recruit() -> void:
+	var world := NpcWorld.create(_SEED, _POPULATION)
+	var guild := Guild.create_starting(_SEED, "새벽 길드", world)
+	_staff(guild)
+	var before := guild.members.size()
+	var hired := PackedStringArray()
+	for run in _RUNS:
+		_settle(guild, run)
+		for prospect in guild.prospects.duplicate():
+			var member := GuildRecruit.hire(guild, prospect.id)
+			if member != null:
+				hired.append("%s(판 %d)" % [member.display_name, run + 1])
+
+	print("\n-- 영입이 걸리나 (%d판 동안 보이는 대로 데려온다) --" % _RUNS)
+	print("대원 %d명 -> %d명" % [before, guild.members.size()])
+	print("데려온 사람   %s" % ("없다" if hired.is_empty() else " ".join(hired)))
+	print("스쿼드 정원 %d — **정원이 늘지 않으면 인원이 늘어도 한 판에 다 못 나간다**" % guild.squad_capacity())
+
+
+# ---------------------------------------------------------------- 뉴스와 성장
 
 
 ## 뉴스가 실제로 무엇을 내는가. **읽어 보지 않으면 문장이 말이 되는지 알 수 없다.**
@@ -120,6 +183,9 @@ func _report_growth(world: NpcWorld, guild: Guild) -> void:
 	print("내 대원      %s" % " ".join(ours))
 
 
+# ---------------------------------------------------------------- 한 판
+
+
 ## 시설에 사람을 넣는다. **안 넣으면 접선처가 후보를 한 명도 안 찾아낸다** —
 ## `GuildBalance.prospects_for(0)` 이 0 이라 영입 칸이 통째로 안 열린다.
 func _staff(guild: Guild) -> void:
@@ -135,7 +201,19 @@ func _staff(guild: Guild) -> void:
 		guild.assignment.assign(ids[slot], places[slot])
 
 
-func _settle(guild: Guild, rng: RandomNumberGenerator, run: int) -> void:
+## 이 판이 어떻게 끝나나. **판 번호에서 뽑는다** —
+## 난수 발생기를 들고 다니면 두 길이 같은 순서를 못 걷고, 그러면 비교가 성립하지 않는다.
+func _outcome_for(run: int) -> ExpeditionReport.Outcome:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _SEED + run * 7919
+	return (
+		ExpeditionReport.Outcome.DOWNED
+		if rng.randf() < _DOWN_RATE
+		else ExpeditionReport.Outcome.ESCAPED
+	)
+
+
+func _settle(guild: Guild, run: int) -> void:
 	var everyone := guild.member_ids()
 	var went: Array[String] = []
 	for slot in mini(guild.squad_capacity(), everyone.size()):
@@ -144,14 +222,11 @@ func _settle(guild: Guild, rng: RandomNumberGenerator, run: int) -> void:
 	for member_id in everyone:
 		if not went.has(member_id):
 			stayed.append(member_id)
-	var outcome := (
-		ExpeditionReport.Outcome.DOWNED
-		if rng.randf() < _DOWN_RATE
-		else ExpeditionReport.Outcome.ESCAPED
-	)
 	var gate := Gate.new("gate_0", "붉은 회랑", GateRank.Kind.C, _SEED + run)
 	GuildSettlement.apply(
-		guild, ExpeditionReport.new("exp_%d" % run, gate, outcome, 5, went, stayed), _SEED + run
+		guild,
+		ExpeditionReport.new("exp_%d" % run, gate, _outcome_for(run), 5, went, stayed),
+		_SEED + run
 	)
 
 
@@ -167,15 +242,6 @@ func _row(world: NpcWorld, guild: Guild, run: int) -> void:
 				guild.prospects.size(),
 				_open_prospects(guild),
 			]
-		)
-	)
-
-
-func _save_row(label: String, world: NpcWorld, guild: Guild) -> void:
-	print(
-		(
-			"%-22s %8d %8d %10.1f"
-			% [label, world.graph.size(), world.ledger.size(), _squad_affinity(world, guild)]
 		)
 	)
 

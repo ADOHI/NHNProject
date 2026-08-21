@@ -158,3 +158,53 @@ func test_the_hired_survive_a_save() -> void:
 	assert_eq(same.person, 41)
 	assert_eq(same.display_name, "닿은 사람")
 	assert_eq(back.prospects.size(), 0)
+
+
+# ---------------------------------------------------------------- 두 번 오지 않는다
+
+
+## **영입이 걸리게 되면서 드러난 결함이다** (§37.10.4).
+##
+## 데려온 사람은 명단에서 빠지는데, 접선처는 「이미 후보인 사람」만 피하고 있었다.
+## 그래서 다음 판에 **방금 데려온 그 사람이 다시 후보로 나왔다** —
+## 스무 판에 대원이 5명에서 39명이 됐고 같은 이름 둘이 서른네 번 들어왔다.
+func test_someone_already_hired_is_never_offered_again() -> void:
+	var world := NpcWorld.create(_SEED, 400)
+	var guild := Guild.create_starting(_SEED, "시험 길드", world)
+	for member_id in guild.member_ids():
+		guild.assignment.assign(member_id, Facility.Kind.CONTACT_POINT)
+
+	for run in 8:
+		var report := ExpeditionReport.new(
+			"exp_%d" % run,
+			Gate.new("gate_0", "붉은 회랑", GateRank.Kind.C, _SEED + run),
+			ExpeditionReport.Outcome.ESCAPED,
+			5,
+			[] as Array[String],
+			guild.member_ids()
+		)
+		GuildSettlement.apply(guild, report, _SEED + run)
+		# **명단에 남아 있는 후보는 다시 나오는 것이 맞다** — 아직 우리 쪽이 아니다.
+		# 물음은 「대원이 된 사람이 후보로 되돌아오나」다.
+		var ours := _member_people(guild)
+		for prospect in guild.prospects.duplicate():
+			if not prospect.is_in_world():
+				continue
+			assert_false(ours.has(prospect.person), "대원인 사람이 후보로 다시 나왔다")
+			GuildRecruit.hire(guild, prospect.id)
+
+	# 인물 번호가 겹치는 대원이 없어야 한다 — **인덱스가 곧 그 사람이다** (설계 24.24).
+	var world_members := 0
+	for member in guild.members:
+		if member.is_in_world():
+			world_members += 1
+	assert_eq(_member_people(guild).size(), world_members, "같은 사람이 두 몸으로 앉아 있다")
+
+
+## 지금 대원인 세계 인물들.
+func _member_people(guild: Guild) -> Dictionary:
+	var people := {}
+	for member in guild.members:
+		if member.is_in_world():
+			people[member.person] = true
+	return people
