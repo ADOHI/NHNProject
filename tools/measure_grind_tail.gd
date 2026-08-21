@@ -65,8 +65,11 @@ const _GRID_ROWS: Array[int] = [14, 18, 24, 30, 36]
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	var mode := args[0] if args.size() > 0 else "spawn"
-	if mode == "one":
-		_run_one(args[1] if args.size() > 2 else "spawn", int(args[2]) if args.size() > 2 else 0)
+	if mode == "one" or mode == "trace":
+		var axis := args[1] if args.size() > 2 else "spawn"
+		var value := int(args[2]) if args.size() > 2 else 0
+		var cap := int(args[3]) * 60 if args.size() > 3 else _CAP_FRAMES
+		_run_one(axis, value, cap, mode == "trace")
 		quit()
 		return
 	var from := int(args[1]) if args.size() > 1 else 0
@@ -130,12 +133,15 @@ func _target_of(seed_value: int) -> Vector2:
 
 
 ## 판 하나를 다시 굴리고 **끝에 무엇이 남았는지** 유닛마다 뱉는다.
-func _run_one(mode: String, seed_value: int) -> void:
+##
+## `trace` 를 켜면 **초마다 누가 `MOVING` 인지**를 함께 뱉는다. 한계 순환인지 아주 느린
+## 수렴인지는 끝 상태 한 장으로는 못 가른다 - 시간에 따라 누가 깨어 있는지를 봐야 한다.
+func _run_one(mode: String, seed_value: int, cap: int, trace: bool) -> void:
 	var target := _target_of(seed_value) if mode == "target" else _TARGET
 	var jitter := 0.0 if mode == "target" or seed_value == 0 else 0.5
 	var count := seed_value if mode == "count" else _COUNT
 	var field := _crowd_field(count, _COLS, _ROWS, jitter, seed_value)
-	_measure("%s %d" % [mode, seed_value], field, target)
+	_measure("%s %d" % [mode, seed_value], field, target, cap, trace)
 	print("")
 	print("| 번호 | 상태 | 남은거리 | 정체 | 비빔 | 눌림 | 재시도 | 막은놈 | 양보 | 대기 | 문 |")
 	print("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
@@ -189,7 +195,13 @@ func _crowd_field(
 
 
 ## 판 하나를 굴리고 **언제 멎었는지**를 한 줄로 뱉는다.
-func _measure(label: String, field: ProtoUnitField, target: Vector2) -> void:
+func _measure(
+	label: String,
+	field: ProtoUnitField,
+	target: Vector2,
+	cap: int = _CAP_FRAMES,
+	trace: bool = false
+) -> void:
 	field.issue_move(field.all_ids(), target)
 	var first_zero := -1
 	var last_moving := -1
@@ -197,7 +209,7 @@ func _measure(label: String, field: ProtoUnitField, target: Vector2) -> void:
 	var at_test := 0
 	var quiet := 0
 	var frame := 0
-	while frame < _CAP_FRAMES:
+	while frame < cap:
 		field.step(_STEP)
 		frame += 1
 		var moving := field.moving_count()
@@ -212,6 +224,8 @@ func _measure(label: String, field: ProtoUnitField, target: Vector2) -> void:
 			quiet += 1
 		if frame == _TEST_FRAMES:
 			at_test = moving
+		if trace and frame % 60 == 0:
+			_trace_line(field, frame)
 		if quiet >= _QUIET_FRAMES and frame >= _TEST_FRAMES:
 			break
 	var holding := 0
@@ -241,3 +255,33 @@ func _measure(label: String, field: ProtoUnitField, target: Vector2) -> void:
 
 func _to_seconds(frame: int) -> float:
 	return -1.0 if frame < 0 else float(frame) * _STEP
+
+
+## **초마다 깨어 있는 유닛과 그 사정.** 한계 순환이면 같은 번호가 되풀이해서 나온다.
+func _trace_line(field: ProtoUnitField, frame: int) -> void:
+	var awake := PackedStringArray()
+	var holding := 0
+	for agent in field.agents:
+		if agent.state == ProtoUnitAgent.State.HOLDING:
+			holding += 1
+			continue
+		if not agent.is_moving():
+			continue
+		(
+			awake
+			. append(
+				(
+					"%d(d%.1f c%d g%d p%d b%d%s)"
+					% [
+						agent.id,
+						agent.position.distance_to(agent.goal),
+						agent.creep_frames,
+						agent.grind_frames,
+						agent.press_frames,
+						agent.blocker_id,
+						"y" if agent.is_yielding() else "",
+					]
+				)
+			)
+		)
+	print("TRACE\t%.1f\t양보 %d\t%s" % [float(frame) * _STEP, holding, " ".join(awake)])
