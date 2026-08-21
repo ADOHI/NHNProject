@@ -24,6 +24,7 @@ func refresh(guild: Guild, absent: Array[String]) -> void:
 	for kind in Facility.all():
 		add_child(_facility_box(guild, kind as Facility.Kind, absent))
 	add_child(_prospect_box(guild))
+	add_child(_news_box(guild))
 
 
 ## 길드 상태. 성장 세 축 중 **주둔지 축이 전부 여기 있다**
@@ -87,6 +88,26 @@ func _prospect_box(guild: Guild) -> BaseBox:
 	for prospect in guild.prospects:
 		box.line(prospect.summary(), _prospect_ink(prospect))
 		box.line(_prospect_note(guild, prospect), BaseWidgets.INK_DIM)
+	return box
+
+
+## 세계 소식. **판을 돌면 세계가 달라진다는 것이 화면에 나타나는 자리다** (설계 15.2.1).
+##
+## 문장은 코어가 만든다 (`WorldNews`) — 고르는 규칙도 조사도 화면의 일이 아니다.
+## 세계가 안 물려 있으면 그 사실을 적는다. **빈 칸을 남기지 않는다.**
+func _news_box(guild: Guild) -> BaseBox:
+	var box := BaseBox.new("세계 소식")
+	if guild.world == null or not guild.world.is_ready():
+		box.line("세계가 안 물려 있다", BaseWidgets.INK_DIM)
+		return box
+	box.line("세계가 %d틱 돌았다" % guild.world_progress.tick_count(), BaseWidgets.INK_DIM)
+	var news := WorldNews.gather(
+		guild.world, GuildCircle.known_of(guild), GuildCircle.own_of(guild)
+	)
+	if news.is_empty():
+		box.line("아는 얼굴 소식은 없다", BaseWidgets.INK_DIM)
+	for line in news:
+		box.line(line)
 	return box
 
 

@@ -42,6 +42,7 @@ func _initialize() -> void:
 		if (run + 1) % 5 == 0:
 			_row(world, guild, run + 1)
 
+	_report_news(world, guild)
 	_report_save(guild)
 	_report_growth(world, guild)
 	quit()
@@ -76,6 +77,17 @@ func _report_save(guild: Guild) -> void:
 	var same := guild.world.graph.size() == loaded.world.graph.size()
 	print("불러온 세계가 저장한 세계와 %s" % ["다르다 — 되감기가 깨졌다", "같다"][int(same)])
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(_SAVE_PATH))
+
+
+## 뉴스가 실제로 무엇을 내는가. **읽어 보지 않으면 문장이 말이 되는지 알 수 없다.**
+func _report_news(world: NpcWorld, guild: Guild) -> void:
+	print("\n-- 아지트에 뜨는 소식 (%d판 뒤) --" % _RUNS)
+	var news := WorldNews.gather(world, GuildCircle.known_of(guild), GuildCircle.own_of(guild))
+	if news.is_empty():
+		print("아는 얼굴 소식은 없다")
+	for line in news:
+		print("  %s" % line)
+	print("사건 %d건 중에서 골랐다 (아는 얼굴 %d명)" % [world.ledger.size(), GuildCircle.known_of(guild).size()])
 
 
 ## Q28 — **세계가 플레이어를 앞질러 가나** (설계 15.5).
