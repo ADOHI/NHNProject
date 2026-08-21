@@ -683,6 +683,12 @@ func _review_moving(agent: ProtoUnitAgent, arrive: float, crawl: float) -> void:
 	if distance < agent.creep_best - 0.5:
 		agent.creep_best = distance
 		agent.creep_frames = 0
+		# **나아갔으면 예산을 되돌려 준다.** 예산은 "기다려 봐야 소용없다"를 세는 값이고,
+		# 여태껏보다 가까워진 것은 그 반대의 증거다. 줄을 서서 한 몸씩 나아가는 유닛은
+		# 나아갈 때마다 여기서 되돌려 받으므로 예산이 쌓이지 않는다.
+		# **기록이 단조롭다는 것이 이 되돌림을 안전하게 만든다** - `creep_best` 는 줄기만
+		# 하므로 되돌림의 횟수도 「처음 거리 나누기 0.5」로 묶인다(`resume` 주석).
+		agent.hold_retries = 0
 	else:
 		agent.creep_frames += 1
 	var progress := agent.goal_distance - distance
@@ -710,9 +716,24 @@ func _review_moving(agent: ProtoUnitAgent, arrive: float, crawl: float) -> void:
 		# 그 몸이 남의 길을 막고 있을 수 있어 밀려도 된다.
 		if distance < agent.radius * _SETTLE_REACH:
 			agent.settle(ProtoUnitAgent.State.STOPPED)
+		elif agent.hold_retries >= _HOLD_RETRIES:
+			# **예산이 다 떨어졌다. 여기서 그만둔다.**
+			#
+			# 이 입구에 예산이 없던 것이 §23.11.5 의 교착이다. 기다림은 `_review_hold` 가
+			# 앞이 트이면 곧바로 풀어 주므로, 앞이 트였는데도 나아가지 못하는 유닛은
+			# **기다림과 이동을 영원히 오간다.** 실제로 열린 방 40 에서 시작 자리를 흔든
+			# 298 판 중 16 판이 그렇게 안 멎었고, 그 유닛의 `hold_retries` 는 60 초 뒤에도
+			# 0 이었다 - `_watch_grinding` 을 한 번도 안 거쳤으니 그쪽 예산이 못 셌다.
+			#
+			# **예산은 같은 것을 쓴다.** 둘 다 "되돌아올 수 있는 정지를 몇 번 해 보나"이고,
+			# 나아가면 위에서 되돌려 받으므로 줄을 서서 가는 유닛은 여기 안 걸린다.
+			# **`BLOCKED` 가 아니라 `STOPPED` 다** - 갈 길이 없는 것이 아니라 여기서
+			# 그만두는 것이고, 그 몸이 남의 길을 막고 있을 수 있어 밀려도 된다.
+			agent.settle(ProtoUnitAgent.State.STOPPED)
 		else:
 			# **여기가 전파의 유일한 입구다.** 매 프레임 돌리면 그 자체가 지터가 된다.
 			# 기다림이 확정되는 순간 한 번만, 앞의 사슬에 비키라고 말한다.
+			agent.hold_retries += 1
 			agent.hold()
 			hold_confirms += 1
 			propagate_moves += ProtoUnitPush.propagate(self, agent)
