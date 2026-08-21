@@ -267,21 +267,35 @@ func _trace_line(field: ProtoUnitField, frame: int) -> void:
 			continue
 		if not agent.is_moving():
 			continue
-		(
-			awake
-			. append(
-				(
-					"%d(d%.1f c%d g%d p%d b%d%s)"
-					% [
-						agent.id,
-						agent.position.distance_to(agent.goal),
-						agent.creep_frames,
-						agent.grind_frames,
-						agent.press_frames,
-						agent.blocker_id,
-						"y" if agent.is_yielding() else "",
-					]
-				)
-			)
-		)
+		awake.append(_awake_note(field, agent))
 	print("TRACE\t%.1f\t양보 %d\t%s" % [float(frame) * _STEP, holding, " ".join(awake)])
+
+
+## 깨어 있는 유닛 하나의 사정. **자리를 누가 차지하고 있는지도 함께 뽑는다.**
+##
+## 아무도 안 막는데(`b0`) 못 가는 유닛이 있으면 막은 것은 앞이 아니라 **자리**다.
+func _awake_note(field: ProtoUnitField, agent: ProtoUnitAgent) -> String:
+	var squatter := INF
+	var squatter_id := 0
+	for other in field.agents:
+		if other.id == agent.id:
+			continue
+		var gap := other.position.distance_to(agent.goal)
+		if gap < squatter:
+			squatter = gap
+			squatter_id = other.id
+	return (
+		"%d(d%.1f c%d g%d p%d b%d h%d 자리%d@%.1f%s)"
+		% [
+			agent.id,
+			agent.position.distance_to(agent.goal),
+			agent.creep_frames,
+			agent.grind_frames,
+			agent.press_frames,
+			agent.blocker_id,
+			agent.hold_retries,
+			squatter_id,
+			squatter,
+			"y" if agent.is_yielding() else "",
+		]
+	)
